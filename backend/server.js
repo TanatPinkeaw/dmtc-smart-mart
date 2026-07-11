@@ -1846,15 +1846,24 @@ app.get('/api/seed-data', async (req, res) => {
 });
 
 // =========================================
-// API สร้างผู้จัดการคนแรก (สำหรับใช้งานบน Cloud)
+// API สร้างผู้จัดการคนแรก (เข้ารหัสผ่านเรียบร้อย!)
 // =========================================
 app.get('/api/create-admin', async (req, res) => {
   try {
-    // เพิ่มบัญชีผู้จัดการ
+    // 1. เข้ารหัสผ่านคำว่า '1234'
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash('1234', salt);
+
+    // 2. ลบ Admin ตัวเก่าที่รหัสผ่านพังๆ ออกไปก่อน
+    await pool.query("DELETE FROM users WHERE username = 'admin'");
+
+    // 3. สร้าง Admin ตัวใหม่ที่รหัสผ่านถูกเข้ารหัสแล้ว
     await pool.query(
-      "INSERT IGNORE INTO users (username, password, full_name, role, is_active) VALUES ('admin', '1234', 'ผู้จัดการระบบ', 'ADMIN', 1)"
+      "INSERT INTO users (username, password, full_name, role, is_active) VALUES (?, ?, 'ผู้จัดการระบบ', 'ADMIN', 1)",
+      ['admin', hashedPassword]
     );
-    res.json({ message: "สร้างบัญชีสำเร็จ! 🎉 ให้เข้าสู่ระบบด้วย Username: admin / Password: 1234" });
+
+    res.json({ message: "สร้างบัญชีสำเร็จ! 🎉 รหัสผ่านถูกเข้ารหัสเรียบร้อย ให้เข้าสู่ระบบด้วย Username: admin / Password: 1234" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
