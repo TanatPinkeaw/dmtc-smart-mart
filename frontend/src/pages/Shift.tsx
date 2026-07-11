@@ -15,6 +15,11 @@ export default function Shift() {
       navigate('/dashboard');
       return;
     }
+    // ⭐️ เพิ่มการเช็ค: ถ้าไม่มี user.id ให้เตะกลับไปหน้า Login ทันที
+    if (!user || !user.id) {
+      navigate('/login');
+      return;
+    }
 
     const checkCurrentShift = async () => {
       try {
