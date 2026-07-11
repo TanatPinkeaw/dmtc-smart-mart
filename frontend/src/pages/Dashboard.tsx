@@ -28,26 +28,26 @@ export default function Dashboard() {
 
   const handleLogout = () => { localStorage.clear(); navigate('/login'); };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 font-sans text-lg font-bold text-gray-500">กำลังโหลดข้อมูล...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-pink-50 font-sans text-lg font-bold text-gray-500">กำลังโหลดข้อมูล...</div>;
 
   return (
     // ปรับ Padding ในมือถือให้เล็กลง (p-4 md:p-6)
-    <div className="min-h-screen bg-gray-100 font-sans p-4 md:p-6">
+    <div className="min-h-screen bg-pink-50 font-sans p-4 md:p-6">
       
       {/* Header (เรียงเป็นแนวตั้งในมือถือ, แนวนอนในคอม) */}
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-2xl shadow-sm mb-6 gap-4">
-        <div className="flex items-center gap-2 md:gap-3 text-indigo-600">
+        <div className="flex items-center gap-2 md:gap-3 text-pink-600">
           <LayoutDashboard size={24} className="md:w-7 md:h-7" />
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">สรุปยอดขายประจำวัน</h1>
         </div>
         
         {/* แผงปุ่มด้านขวา */}
         <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full md:w-auto justify-between md:justify-end">
-          <button onClick={() => navigate('/pos')} className="flex items-center gap-1 md:gap-2 text-gray-600 hover:text-blue-600 font-medium bg-gray-50 hover:bg-blue-50 px-3 py-2 rounded-xl transition text-sm md:text-base">
+          <button onClick={() => navigate('/pos')} className="flex items-center gap-1 md:gap-2 text-gray-600 hover:text-pink-600 font-medium bg-pink-50 hover:bg-pink-50 px-3 py-2 rounded-xl transition text-sm md:text-base">
             <ArrowLeft size={16} /> <span className="hidden sm:inline">กลับไปหน้า POS</span><span className="sm:hidden">ไป POS</span>
           </button>
           
-          <div className="hidden md:block border-l h-8 border-gray-300 mx-2"></div>
+          <div className="hidden md:block border-l h-8 border-pink-200 mx-2"></div>
           
           <span className="font-medium text-gray-600 text-sm md:text-base truncate max-w-[120px] sm:max-w-none">{user.full_name}</span>
           
@@ -65,10 +65,10 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             
             {/* Card ยอดขายรวม */}
-            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-5 md:p-6 rounded-3xl shadow-lg text-white">
+            <div className="bg-pink-600 p-5 md:p-6 rounded-2xl shadow-sm text-white">
               <div className="flex justify-between items-start mb-2 md:mb-4">
                 <div>
-                  <p className="text-indigo-100 font-medium mb-1 text-sm md:text-base">ยอดขายรวมวันนี้</p>
+                  <p className="text-pink-100 font-medium mb-1 text-sm md:text-base">ยอดขายรวมวันนี้</p>
                   {/* ลดขนาด Font ในมือถือ (text-3xl) */}
                   <h2 className="text-3xl md:text-4xl font-bold">฿{Number(summary?.total_sales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
                 </div>
@@ -76,11 +76,11 @@ export default function Dashboard() {
                   <TrendingUp size={24} className="md:w-7 md:h-7" />
                 </div>
               </div>
-              <p className="text-xs text-indigo-100 opacity-80">* ข้อมูลรีเซ็ตทุกเที่ยงคืน</p>
+              <p className="text-xs text-pink-100 opacity-80">* ข้อมูลรีเซ็ตทุกเที่ยงคืน</p>
             </div>
 
             {/* Card จำนวนบิล */}
-            <div className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-pink-100">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <p className="text-gray-500 font-medium mb-1 text-sm md:text-base">จำนวนบิลทั้งหมด</p>
@@ -93,28 +93,28 @@ export default function Dashboard() {
             </div>
 
             {/* Card เงินสด */}
-            <div className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-pink-100">
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2 text-gray-500 font-medium text-sm md:text-base">
                   <Banknote size={18} className="text-emerald-500 md:w-5 md:h-5" /> ยอดรับเงินสด
                 </div>
                 <span className="font-bold text-gray-800 text-lg md:text-xl">฿{Number(summary?.cash_sales || 0).toLocaleString()}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 mt-3 md:mt-4">
+              <div className="w-full bg-pink-100 rounded-full h-2 mt-3 md:mt-4">
                 <div className="bg-emerald-400 h-2 rounded-full" style={{ width: summary?.total_sales ? `${(summary.cash_sales / summary.total_sales) * 100}%` : '0%' }}></div>
               </div>
             </div>
 
             {/* Card เงินโอน */}
-            <div className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-pink-100">
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2 text-gray-500 font-medium text-sm md:text-base">
-                  <CreditCard size={18} className="text-purple-500 md:w-5 md:h-5" /> ยอดรับเงินโอน (QR)
+                  <CreditCard size={18} className="text-fuchsia-500 md:w-5 md:h-5" /> ยอดรับเงินโอน (QR)
                 </div>
                 <span className="font-bold text-gray-800 text-lg md:text-xl">฿{Number(summary?.qr_sales || 0).toLocaleString()}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 mt-3 md:mt-4">
-                <div className="bg-purple-400 h-2 rounded-full" style={{ width: summary?.total_sales ? `${(summary.qr_sales / summary.total_sales) * 100}%` : '0%' }}></div>
+              <div className="w-full bg-pink-100 rounded-full h-2 mt-3 md:mt-4">
+                <div className="bg-fuchsia-400 h-2 rounded-full" style={{ width: summary?.total_sales ? `${(summary.qr_sales / summary.total_sales) * 100}%` : '0%' }}></div>
               </div>
             </div>
 
@@ -122,7 +122,7 @@ export default function Dashboard() {
         </div>
 
         {/* ================= ขวา: สินค้าขายดี Top 10 ================= */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 md:p-6 flex flex-col h-full">
+        <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-5 md:p-6 flex flex-col h-full">
           <div className="flex items-center gap-2 mb-4 md:mb-6">
             <Package className="text-orange-500 w-5 h-5 md:w-6 md:h-6" />
             <h2 className="text-lg md:text-xl font-bold text-gray-800">10 อันดับสินค้าขายดี</h2>
@@ -134,12 +134,12 @@ export default function Dashboard() {
               <p className="text-center text-gray-400 mt-10 text-sm">ยังไม่มีข้อมูลการขายในวันนี้</p>
             ) : (
               topProducts.map((product, index) => (
-                <div key={product.product_id} className="flex items-center justify-between p-2 md:p-3 hover:bg-gray-50 rounded-xl transition">
+                <div key={product.product_id} className="flex items-center justify-between p-2 md:p-3 hover:bg-pink-50 rounded-xl transition">
                   <div className="flex items-center gap-3 md:gap-4">
                     <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                       index === 0 ? 'bg-yellow-100 text-yellow-600' :
                       index === 1 ? 'bg-gray-200 text-gray-600' :
-                      index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 text-blue-600'
+                      index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-pink-50 text-pink-600'
                     }`}>
                       {index + 1}
                     </div>
@@ -148,7 +148,7 @@ export default function Dashboard() {
                       <p className="text-xs md:text-sm text-gray-500">ขายแล้ว {product.total_quantity} ชิ้น</p>
                     </div>
                   </div>
-                  <div className="font-bold text-blue-600 text-sm md:text-base">
+                  <div className="font-bold text-pink-600 text-sm md:text-base">
                     ฿{Number(product.total_revenue).toLocaleString()}
                   </div>
                 </div>
