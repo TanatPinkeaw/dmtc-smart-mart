@@ -1860,6 +1860,38 @@ app.get('/api/create-admin', async (req, res) => {
   }
 });
 
+// =========================================
+// API เวทมนตร์ สร้างตารางฐานข้อมูลอัตโนมัติบน Cloud
+// =========================================
+app.get('/api/init-db', async (req, res) => {
+  try {
+    const queries = [
+      `CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(50) UNIQUE, password VARCHAR(255), full_name VARCHAR(100), role VARCHAR(20) DEFAULT 'CASHIER', is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE TABLE IF NOT EXISTS categories (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100))`,
+      `CREATE TABLE IF NOT EXISTS products (id INT AUTO_INCREMENT PRIMARY KEY, barcode VARCHAR(50), name VARCHAR(255), category_id INT, price DECIMAL(10,2), cost DECIMAL(10,2) DEFAULT 0, stock INT DEFAULT 0, image_url TEXT, is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE TABLE IF NOT EXISTS suppliers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), contact_info TEXT)`,
+      `CREATE TABLE IF NOT EXISTS purchases (id INT AUTO_INCREMENT PRIMARY KEY, supplier_id INT, user_id INT, total_amount DECIMAL(10,2), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE TABLE IF NOT EXISTS purchase_items (id INT AUTO_INCREMENT PRIMARY KEY, purchase_id INT, product_id INT, quantity INT, unit_cost DECIMAL(10,2), subtotal DECIMAL(10,2))`,
+      `CREATE TABLE IF NOT EXISTS shifts (id INT AUTO_INCREMENT PRIMARY KEY, cashier_id INT, opening_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, closing_time TIMESTAMP NULL, opening_cash DECIMAL(10,2), expected_cash DECIMAL(10,2), actual_cash DECIMAL(10,2), difference DECIMAL(10,2), status VARCHAR(20) DEFAULT 'OPEN')`,
+      `CREATE TABLE IF NOT EXISTS members (id INT AUTO_INCREMENT PRIMARY KEY, student_id VARCHAR(50) UNIQUE, full_name VARCHAR(100), points INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE TABLE IF NOT EXISTS sales (id INT AUTO_INCREMENT PRIMARY KEY, cashier_id INT, member_id INT, total_amount DECIMAL(10,2), payment_method VARCHAR(50), amount_received DECIMAL(10,2), change_amount DECIMAL(10,2), status VARCHAR(50) DEFAULT 'COMPLETED', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE TABLE IF NOT EXISTS sale_items (id INT AUTO_INCREMENT PRIMARY KEY, sale_id INT, product_id INT, quantity INT, price DECIMAL(10,2), subtotal DECIMAL(10,2))`,
+      `CREATE TABLE IF NOT EXISTS settings (id INT AUTO_INCREMENT PRIMARY KEY, store_name VARCHAR(255) DEFAULT 'ร้านค้าสหกรณ์', tax_id VARCHAR(50), address TEXT, receipt_footer TEXT)`
+    ];
+
+    for (let q of queries) {
+      await pool.query(q);
+    }
+    
+    // ตั้งค่าชื่อร้านเริ่มต้น
+    await pool.query("INSERT IGNORE INTO settings (id, store_name) VALUES (1, 'ร้านค้าสหกรณ์')");
+
+    res.json({ message: "สร้างตารางสำเร็จครบ 11 ตาราง! 🎉 โครงสร้างฐานข้อมูลพร้อมลุยแล้ว" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
