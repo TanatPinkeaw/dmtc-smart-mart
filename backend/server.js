@@ -1852,7 +1852,7 @@ app.get('/api/create-admin', async (req, res) => {
   try {
     // เพิ่มบัญชีผู้จัดการ
     await pool.query(
-      "INSERT IGNORE INTO users (username, password, full_name, role, is_active) VALUES ('admin', '1234', 'ผู้จัดการระบบ', 'ADMIN', 1)"
+      "INSERT IGNORE INTO users (username, password, full_name, role, is_active) VALUES ('admin', 'admin', 'ผู้จัดการระบบ', 'ADMIN', 1)"
     );
     res.json({ message: "สร้างบัญชีสำเร็จ! 🎉 ให้เข้าสู่ระบบด้วย Username: admin / Password: 1234" });
   } catch (error) {
