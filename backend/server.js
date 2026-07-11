@@ -487,9 +487,9 @@ app.post('/api/shifts/open', async (req, res) => {
   }
 
   try {
-    // เช็คว่าแคชเชียร์คนนี้มีกะที่เปิดค้างไว้หรือไม่
+    // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
     const [existing] = await pool.query(
-      'SELECT id FROM shifts WHERE cashier_id = ? AND status = "OPEN"',
+      "SELECT id FROM shifts WHERE cashier_id = ? AND status = 'OPEN'",
       [cashier_id]
     );
     
@@ -526,12 +526,11 @@ app.post('/api/shifts/open', async (req, res) => {
 app.get('/api/shifts/current', async (req, res) => {
   const { cashier_id } = req.query;
   try {
+    // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
     const [rows] = await pool.query(
-      'SELECT * FROM shifts WHERE cashier_id = ? AND status = "OPEN"', 
+      "SELECT * FROM shifts WHERE cashier_id = ? AND status = 'OPEN'", 
       [cashier_id]
     );
-    // ⭐️ ไฮไลท์: เปลี่ยนจากการพ่น Error 404 เป็นการส่งค่า null กลับไปเฉยๆ
-    // วิธีนี้ทำให้หน้าเว็บรู้ว่าไม่มีกะ โดยที่ไม่ต้องโวยวายขึ้นตัวแดงใน Console ครับ!
     if (rows.length === 0) return res.json(null); 
     
     res.json(rows[0]);
@@ -539,7 +538,6 @@ app.get('/api/shifts/current', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 /**
  * @swagger
  * /api/shifts/close:
@@ -571,9 +569,9 @@ app.post('/api/shifts/close', async (req, res) => {
   const { cashier_id, actual_cash, note } = req.body;
 
   try {
-    // 1. หากะที่กำลังเปิดอยู่
+    // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
     const [shifts] = await pool.query(
-      'SELECT id, opening_cash, opened_at FROM shifts WHERE cashier_id = ? AND status = "OPEN"',
+      "SELECT id, opening_cash, opened_at FROM shifts WHERE cashier_id = ? AND status = 'OPEN'",
       [cashier_id]
     );
 
@@ -583,7 +581,6 @@ app.post('/api/shifts/close', async (req, res) => {
 
     const currentShift = shifts[0];
 
-    // 2. คำนวณหายอดขาย "เงินสด" ทั้งหมดที่เกิดขึ้นในกะนี้
     const [sales] = await pool.query(
       `SELECT SUM(total_amount) as total_cash_sales 
        FROM sales 
@@ -592,12 +589,9 @@ app.post('/api/shifts/close', async (req, res) => {
     );
 
     const totalCashSales = sales[0].total_cash_sales || 0;
-    
-    // 3. คำนวณยอดเงิน (Expected = เงินตั้งต้น + ยอดขายเงินสด)
     const expected_cash = Number(currentShift.opening_cash) + Number(totalCashSales);
     const difference = Number(actual_cash) - expected_cash;
 
-    // 4. บันทึกการปิดกะ
     await pool.query(
       `UPDATE shifts 
        SET expected_cash = ?, actual_cash = ?, difference = ?, status = 'CLOSED', closed_at = CURRENT_TIMESTAMP, note = ?
