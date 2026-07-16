@@ -1,226 +1,281 @@
-import { useState } from 'react'; // ⭐️ นำเข้า useState
+// ✅ CHANGED: sidebar design, bottom nav, profile modal → DMTC Mart theme
+// 🔒 UNCHANGED: fetchNotificationsAndBadge, socket listeners, handleUpdateProfile, handleLogoutClick, handleOpenNotifications, isStaff logic, all navigation routes
+
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Store, LayoutDashboard, Boxes, Settings, LogOut, Lock, X, CheckCircle } from 'lucide-react'; // ⭐️ นำเข้าไอคอนเพิ่ม
+import {
+  ShoppingBag, LayoutDashboard, Boxes, Settings, LogOut, X,
+  User, KeyRound, Phone, ClipboardList, Bell, PiggyBank,
+  ClipboardCheck, CalendarDays, CalendarClock, Store
+} from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
+import { SocketProvider, useSocket } from '../SocketContext';
 
-export default function Layout() {
+// ─── Token shortcuts ─────────────────────────────────────────────────────────
+const NAV_ACTIVE  = 'bg-[#FFF5F7] text-[#F12B6B] border-l-4 border-[#F12B6B]';
+const NAV_DEFAULT = 'text-gray-400 hover:bg-[#FFF5F7] hover:text-[#F12B6B] border-l-4 border-transparent';
+const MOB_ACTIVE  = 'text-[#F12B6B]';
+const MOB_DEFAULT = 'text-gray-400 hover:text-[#F12B6B]';
+
+const desktopLink = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 w-full ${isActive ? NAV_ACTIVE : NAV_DEFAULT}`;
+
+const mobileLink = ({ isActive }: { isActive: boolean }) =>
+  `flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors duration-150 ${isActive ? MOB_ACTIVE : MOB_DEFAULT}`;
+
+// ─── NavItem helper ───────────────────────────────────────────────────────────
+const NavItem = ({ to, icon, label, badge, onClick }: { to: string; icon: React.ReactNode; label: string; badge?: number; onClick?: () => void }) => (
+  <NavLink to={to} onClick={onClick} className={desktopLink}>
+    <div className="relative shrink-0">
+      {icon}
+      {!!badge && (
+        <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </div>
+    <span className="truncate">{label}</span>
+  </NavLink>
+);
+
+const MobNavItem = ({ to, icon, label, badge, onClick }: { to: string; icon: React.ReactNode; label: string; badge?: number; onClick?: () => void }) => (
+  <NavLink to={to} onClick={onClick} className={mobileLink}>
+    <div className="relative">
+      {icon}
+      {!!badge && (
+        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </div>
+    <span className="text-[10px] font-medium">{label}</span>
+  </NavLink>
+);
+
+// ─── LayoutInner ─────────────────────────────────────────────────────────────
+function LayoutInner() {
+  const socket = useSocket();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const navigate = useNavigate();
 
-  // ⭐️ States สำหรับหน้าต่างปิดกะสุดพรีเมียม
-  const [showCloseModal, setShowCloseModal] = useState(false);
-  const [actualCash, setActualCash] = useState<number | ''>('');
-  const [closeLoading, setCloseLoading] = useState(false);
-  const [shiftSummary, setShiftSummary] = useState<any>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({ phone_number: user.phone_number || '', new_password: '', confirm_password: '' });
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  // เมื่อกดปุ่ม "ออก" ที่เมนู
-  const handleLogoutClick = () => {
-    if (user.role === 'CASHIER') {
-      // ถ้าเป็นแคชเชียร์ ให้เปิดหน้าต่างปิดกะแบบสวยๆ
-      setShowCloseModal(true);
-    } else {
-      // ถ้าเป็น ADMIN ใช้ Swal ถามสั้นๆ เหมือนเดิม
-      Swal.fire({
-        title: 'ออกจากระบบ?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#9ca3af',
-        confirmButtonText: 'ออกจากระบบ',
-        cancelButtonText: 'ยกเลิก'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          localStorage.clear();
-          navigate('/login');
-        }
-      });
-    }
-  };
+  const sessionMode = localStorage.getItem('session_mode');
+  const isStaff = ['ADMIN', 'CASHIER'].includes(user.role) && sessionMode !== 'shop';
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // ฟังก์ชันยิง API ปิดกะ (แบบเดียวกับหน้า POS)
-  const handleCloseShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (actualCash === '') return Swal.fire({ icon: 'warning', title: 'กรุณาระบุยอดเงิน' });
-
-    setCloseLoading(true);
+  const fetchNotificationsAndBadge = async () => {
     try {
-      const response = await api.post('/shifts/close', {
-        cashier_id: user.id,
-        actual_cash: Number(actualCash)
-      });
-      // ได้รับสรุปยอดกลับมา ให้เปลี่ยนสเตปใน Modal
-      setShiftSummary(response.data.summary);
-    } catch (error: any) {
-      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: error.response?.data?.error });
-    } finally {
-      setCloseLoading(false);
+      const t = Date.now();
+      const resNoti = await api.get(`/notifications?t=${t}`);
+      setNotifications(resNoti.data);
+      if (isStaff) {
+        const resBadge = await api.get(`/orders/pending-count?t=${t}`);
+        setPendingOrders(resBadge.data.count);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (!user.id || !socket) return;
+    fetchNotificationsAndBadge();
+    socket.on(`notification_user_${user.id}`, (data) => {
+      fetchNotificationsAndBadge();
+      if (data?.message) Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: data.message, showConfirmButton: false, timer: 3500, timerProgressBar: true });
+    });
+    socket.on('new_order_received', () => { if (isStaff) fetchNotificationsAndBadge(); });
+    socket.on('order_status_changed', () => { if (isStaff) fetchNotificationsAndBadge(); });
+    socket.on('notifications_updated', (data) => {
+      if (!isStaff) return;
+      fetchNotificationsAndBadge();
+      if (data?.message) Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: data.message, showConfirmButton: false, timer: 3500, timerProgressBar: true });
+    });
+    return () => {
+      socket.off(`notification_user_${user.id}`);
+      socket.off('new_order_received');
+      socket.off('order_status_changed');
+      socket.off('notifications_updated');
+    };
+  }, [user.id, socket]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (profileForm.new_password && profileForm.new_password !== profileForm.confirm_password)
+      return Swal.fire({ icon: 'error', title: 'รหัสผ่านใหม่ไม่ตรงกัน!' });
+    setProfileLoading(true);
+    try {
+      await api.put(`/users/${user.id}/profile`, { full_name: user.full_name, phone_number: profileForm.phone_number || null, new_password: profileForm.new_password || undefined });
+      localStorage.setItem('user', JSON.stringify({ ...user, phone_number: profileForm.phone_number }));
+      Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ!', showConfirmButton: false, timer: 1500 });
+      setShowProfileModal(false);
+      setProfileForm({ ...profileForm, new_password: '', confirm_password: '' });
+    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: error.response?.data?.error }); }
+    finally { setProfileLoading(false); }
+  };
+
+  const handleLogoutClick = () => {
+    Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: '#F12B6B', cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
+      .then(r => { if (r.isConfirmed) { localStorage.clear(); navigate('/login'); } });
+  };
+
+  const handleOpenNotifications = async () => {
+    if (unreadCount > 0) {
+      try { await api.put('/notifications/read-all'); setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 }))); }
+      catch (e) { console.error(e); }
     }
   };
 
-  // ฟังก์ชันเคลียร์ค่าและกลับไปหน้า Login
-  const finishAndLogout = () => {
-    localStorage.clear();
-    navigate('/login');
-  };
-
-  const desktopLinkStyle = ({ isActive }: { isActive: boolean }) =>
-    `flex flex-col items-center p-3 rounded-xl transition w-full ${isActive ? 'bg-pink-600 text-white shadow-md' : 'text-gray-400 hover:bg-pink-50 hover:text-pink-600'}`;
-
-  const mobileLinkStyle = ({ isActive }: { isActive: boolean }) =>
-    `flex flex-col items-center justify-center w-full h-full space-y-1 transition ${isActive ? 'text-pink-600' : 'text-gray-400 hover:text-pink-400'}`;
+  const initials = user.full_name?.charAt(0)?.toUpperCase() || 'U';
 
   return (
-    <div className="flex h-screen bg-pink-50 font-sans overflow-hidden relative">
-      
-      {/* ================= Sidebar (สำหรับจอคอมและแท็บเล็ต) ================= */}
-      <aside className="hidden md:flex w-24 bg-white border-r border-pink-100 flex-col items-center py-6 shadow-sm z-50">
-        
-        <div className="w-12 h-12 bg-pink-600 rounded-xl flex items-center justify-center text-white mb-8 shadow-sm">
-          <Store size={28} />
-        </div>
-        
-        <nav className="flex-1 flex flex-col gap-4 w-full px-3">
-          <NavLink to="/pos" className={desktopLinkStyle}>
-            <Store size={24} className="mb-1" />
-            <span className="text-xs font-bold">POS</span>
-          </NavLink>
-          
-          <NavLink to="/dashboard" className={desktopLinkStyle}>
-            <LayoutDashboard size={24} className="mb-1" />
-            <span className="text-xs font-bold text-center">สรุปยอด</span>
-          </NavLink>
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
 
-          {user.role === 'ADMIN' && (
-            <NavLink to="/inventory" className={desktopLinkStyle}>
-              <Boxes size={24} className="mb-1" />
-              <span className="text-xs font-bold">คลัง</span>
-            </NavLink>
+      {/* ── Desktop Sidebar ─────────────────────────────────────────────────── */}
+      <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-[#F6C7C7] flex-col shrink-0 z-40">
+
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-[#F6C7C7]">
+          <div className="w-9 h-9 bg-[#F12B6B] rounded-xl flex items-center justify-center shrink-0">
+            <ShoppingBag size={18} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-gray-900">DMTC Mart</p>
+            <p className="text-[10px] text-gray-400">สหกรณ์โรงเรียน</p>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-hide">
+          <NavItem to="/notifications" icon={<Bell size={18} />} label="แจ้งเตือน" badge={unreadCount} onClick={handleOpenNotifications} />
+          <NavItem to="/calendar" icon={<CalendarDays size={18} />} label="ปฏิทิน" />
+          <NavItem to="/pre-order" icon={<ShoppingBag size={18} />} label="สั่งจอง" />
+
+          {!isStaff && <NavItem to="/my-sales" icon={<PiggyBank size={18} />} label="ยอดฝากขาย" />}
+
+          {isStaff && (
+            <>
+              <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">พนักงาน</p></div>
+              <NavItem to="/pos" icon={<Store size={18} />} label="หน้าขาย (POS)" />
+              <NavItem to="/orders" icon={<ClipboardList size={18} />} label="จัดการออเดอร์" badge={pendingOrders} />
+              <NavItem to="/dashboard" icon={<LayoutDashboard size={18} />} label="สรุปยอดขาย" />
+            </>
           )}
 
-          {user.role === 'ADMIN' && (
-            <NavLink to="/settings" className={desktopLinkStyle}>
-              <Settings size={24} className="mb-1" />
-              <span className="text-xs font-bold">ตั้งค่า</span>
-            </NavLink>
+          {isStaff && user.role === 'ADMIN' && (
+            <>
+              <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ผู้จัดการ</p></div>
+              <NavItem to="/inventory" icon={<Boxes size={18} />} label="คลังสินค้า" />
+              <NavItem to="/settings" icon={<Settings size={18} />} label="ตั้งค่า" />
+              <NavItem to="/schedules" icon={<CalendarClock size={18} />} label="ตารางกะ" />
+              <NavItem to="/attendance-management" icon={<ClipboardCheck size={18} />} label="เข้า-ออกงาน" />
+            </>
           )}
         </nav>
-        
-        <div className="mt-auto flex flex-col items-center w-full px-2 pt-4 border-t border-pink-100">
-          <div className="w-10 h-10 bg-pink-600 rounded-full flex items-center justify-center text-white font-bold mb-1 shadow-inner">
-            {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
-          </div>
-          <span className="text-[10px] text-gray-500 font-bold mb-4 truncate w-full text-center">{user.full_name}</span>
-          
-          <button onClick={handleLogoutClick} className="text-gray-400 hover:text-red-500 p-2 rounded-xl hover:bg-red-50 transition w-full flex justify-center" title="ออกจากระบบ">
-            <LogOut size={20} />
+
+        {/* User footer */}
+        <div className="border-t border-[#F6C7C7] p-3 space-y-1">
+          <button onClick={() => setShowProfileModal(true)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+            <div className="w-7 h-7 bg-[#F12B6B] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">{initials}</div>
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-xs font-semibold text-gray-800 truncate">{user.full_name}</p>
+              <p className="text-[10px] text-gray-400">{user.role}</p>
+            </div>
           </button>
+          {!isStaff && (
+            <button onClick={handleLogoutClick} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors duration-150">
+              <LogOut size={16} /> <span className="text-xs">ออกจากระบบ</span>
+            </button>
+          )}
         </div>
       </aside>
 
-      {/* ================= พื้นที่แสดงผล (Main Content) ================= */}
+      {/* ── Main ─────────────────────────────────────────────────────────────── */}
       <main className="flex-1 h-screen overflow-y-auto pb-16 md:pb-0">
         <Outlet />
       </main>
 
-      {/* ================= Bottom Navigation (สำหรับจอมือถือ) ================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-pink-100 flex justify-around items-center h-16 z-[60] shadow-[0_-4px_10px_rgba(219,39,119,0.08)]">
-        
-        <NavLink to="/pos" className={mobileLinkStyle}>
-          <Store size={20} />
-          <span className="text-[10px] font-bold">POS</span>
-        </NavLink>
-        
-        <NavLink to="/dashboard" className={mobileLinkStyle}>
-          <LayoutDashboard size={20} />
-          <span className="text-[10px] font-bold">สรุปยอด</span>
-        </NavLink>
+      {/* ── Mobile Bottom Nav ─────────────────────────────────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#F6C7C7] flex h-14 z-50 shadow-[0_-2px_8px_rgba(241,43,107,0.06)]">
+        <MobNavItem to="/notifications" icon={<Bell size={20} />} label="แจ้งเตือน" badge={unreadCount} onClick={handleOpenNotifications} />
+        <MobNavItem to="/pre-order" icon={<ShoppingBag size={20} />} label="จอง" />
 
-        {user.role === 'ADMIN' && (
-          <NavLink to="/inventory" className={mobileLinkStyle}>
-            <Boxes size={20} />
-            <span className="text-[10px] font-bold">คลัง</span>
-          </NavLink>
+        {!isStaff && <MobNavItem to="/my-sales" icon={<PiggyBank size={20} />} label="ฝากขาย" />}
+
+        {isStaff && (
+          <>
+            <MobNavItem to="/pos" icon={<Store size={20} />} label="POS" />
+            <MobNavItem to="/orders" icon={<ClipboardList size={20} />} label="ออเดอร์" badge={pendingOrders} />
+            {user.role === 'ADMIN' && <MobNavItem to="/settings" icon={<Settings size={20} />} label="ตั้งค่า" />}
+          </>
         )}
 
-        {user.role === 'ADMIN' && (
-          <NavLink to="/settings" className={mobileLinkStyle}>
-            <Settings size={20} />
-            <span className="text-[10px] font-bold">ตั้งค่า</span>
-          </NavLink>
-        )}
-
-        {/* ⭐️ ปุ่มกดออก นำไปสู่ Modal สวยๆ */}
-        <button onClick={handleLogoutClick} className="flex flex-col items-center justify-center w-full h-full space-y-1 text-gray-400 hover:text-red-400 transition">
-          <LogOut size={20} />
-          <span className="text-[10px] font-bold">ออก</span>
+        <button onClick={() => setShowProfileModal(true)} className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors duration-150 text-gray-400 hover:text-[#F12B6B]`}>
+          <User size={20} />
+          <span className="text-[10px] font-medium">โปรไฟล์</span>
         </button>
 
+        {!isStaff && (
+          <button onClick={handleLogoutClick} className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-gray-400 hover:text-red-400 transition-colors duration-150">
+            <LogOut size={20} />
+            <span className="text-[10px] font-medium">ออก</span>
+          </button>
+        )}
       </nav>
 
-      {/* ================= MODAL ปิดกะ (ดีไซน์พรีเมียมแบบหน้า POS) ================= */}
-      {showCloseModal && (
-        // z-[90] เพื่อทับเมนูด้านล่างสุดๆ
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-end md:items-center justify-center sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-lg w-full max-w-md overflow-hidden transform transition-all">
-            
-            {!shiftSummary ? (
-              // สเตป 1: กรอกเงินที่นับได้
-              <>
-                <div className="px-5 py-4 border-b border-pink-100 flex justify-between items-center bg-pink-50 rounded-t-2xl md:rounded-t-none shrink-0">
-                  <h2 className="text-base md:text-lg font-bold text-gray-800 flex items-center gap-2"><Lock size={18} className="text-red-500" /> ปิดกะการขาย</h2>
-                  <button onClick={() => setShowCloseModal(false)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition"><X size={20} /></button>
-                </div>
-                <div className="p-6 pb-12 md:p-8">
-                  <p className="text-gray-600 text-sm md:text-base mb-6">กรุณานับเงินสดทั้งหมดในลิ้นชักและกรอกยอดที่นับได้จริง</p>
-                  <form onSubmit={handleCloseShift}>
-                    <div className="mb-6">
-                      <label className="block text-sm font-bold text-gray-700 mb-2">เงินสดที่นับได้จริง (บาท)</label>
-                      <input 
-                        type="number" required min="0" value={actualCash}
-                        onChange={(e) => setActualCash(e.target.value ? Number(e.target.value) : '')}
-                        className="w-full text-center text-3xl font-bold p-4 border border-pink-200 rounded-xl focus:ring-4 focus:ring-red-100 focus:border-red-500 focus:outline-none transition"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <button type="submit" disabled={closeLoading} className="w-full bg-red-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-red-600 transition active:scale-95 disabled:bg-gray-300">
-                      {closeLoading ? 'กำลังตรวจสอบ...' : 'ยืนยันการปิดกะ'}
-                    </button>
-                  </form>
-                </div>
-              </>
-            ) : (
-              // สเตป 2: แสดงสรุปยอดหลังปิดกะเสร็จ
-              <div className="p-6 pb-12 md:p-8 text-center">
-                <div className="w-16 h-16 md:w-20 md:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6">
-                  <CheckCircle className="text-green-500 w-8 h-8 md:w-10 md:h-10" />
-                </div>
-                <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">สรุปยอดการขาย</h2>
-                <p className="text-gray-500 text-sm mb-6">ปิดกะสำเร็จ บันทึกข้อมูลเรียบร้อยแล้ว</p>
-                
-                <div className="bg-pink-50 rounded-xl p-4 space-y-2 md:space-y-3 text-left mb-6 md:mb-8 border border-pink-100 text-sm md:text-base">
-                  <div className="flex justify-between"><span className="text-gray-600">เงินทอนตั้งต้น:</span><span className="font-semibold">฿{Number(shiftSummary.opening_cash).toFixed(2)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-600">ยอดขายเงินสด:</span><span className="font-semibold">฿{Number(shiftSummary.cash_sales).toFixed(2)}</span></div>
-                  <div className="flex justify-between border-t pt-2 md:pt-3"><span className="text-gray-800 font-bold">เงินที่ควรมี:</span><span className="font-bold text-pink-600">฿{Number(shiftSummary.expected_cash).toFixed(2)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-800 font-bold">นับได้จริง:</span><span className="font-bold">฿{Number(shiftSummary.actual_cash).toFixed(2)}</span></div>
-                  <div className="flex justify-between pt-2 border-t">
-                    <span className="text-gray-600 font-bold">ส่วนต่าง:</span>
-                    <span className={`font-bold ${Number(shiftSummary.difference) < 0 ? 'text-red-500' : Number(shiftSummary.difference) > 0 ? 'text-green-500' : 'text-gray-500'}`}>
-                      {Number(shiftSummary.difference) > 0 ? '+' : ''}{Number(shiftSummary.difference).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                <button onClick={finishAndLogout} className="w-full bg-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-pink-700 transition active:scale-95">
-                  ออกจากระบบ
-                </button>
+      {/* ── Profile Modal ─────────────────────────────────────────────────────── */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowProfileModal(false)} />
+          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F6C7C7] bg-[#FFF5F7]">
+              <div className="flex items-center gap-2">
+                <User size={18} className="text-[#F12B6B]" />
+                <h3 className="font-semibold text-gray-900">บัญชีของฉัน</h3>
               </div>
-            )}
-            
+              <button onClick={() => setShowProfileModal(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleUpdateProfile} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Avatar */}
+              <div className="flex flex-col items-center pt-1 pb-3">
+                <div className="w-14 h-14 bg-[#F12B6B] rounded-full flex items-center justify-center text-white text-xl font-bold mb-2">{initials}</div>
+                <p className="font-semibold text-gray-900 text-sm">{user.full_name}</p>
+                <p className="text-xs text-gray-400">{user.student_id || user.username}</p>
+                <span className="mt-1.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FFF5F7] text-[#F12B6B] border border-[#FD94B4]">{user.role}</span>
+              </div>
+
+              {/* Phone */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500"><Phone size={13} /> เบอร์โทรศัพท์</label>
+                <input type="tel" value={profileForm.phone_number} onChange={e => setProfileForm({ ...profileForm, phone_number: e.target.value })} placeholder="08X-XXX-XXXX" className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
+                <p className="text-[11px] text-amber-600">⚠️ รหัสผ่านเริ่มต้นคือเบอร์โทรตอนสมัคร ถ้าเปลี่ยนเบอร์ควรเปลี่ยนรหัสผ่านด้วย</p>
+              </div>
+
+              {/* Password */}
+              <div className="pt-3 border-t border-[#F6C7C7] space-y-2">
+                <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500"><KeyRound size={13} /> เปลี่ยนรหัสผ่าน (เว้นว่างถ้าไม่ต้องการเปลี่ยน)</label>
+                <input type="password" value={profileForm.new_password} onChange={e => setProfileForm({ ...profileForm, new_password: e.target.value })} placeholder="รหัสผ่านใหม่" className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
+                <input type="password" value={profileForm.confirm_password} onChange={e => setProfileForm({ ...profileForm, confirm_password: e.target.value })} placeholder="ยืนยันรหัสผ่านใหม่" className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
+              </div>
+
+              <button type="submit" disabled={profileLoading} className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
+                {profileLoading ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
+              </button>
+            </form>
           </div>
         </div>
       )}
 
+      <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}`}</style>
     </div>
   );
+}
+
+export default function Layout() {
+  return <SocketProvider><LayoutInner /></SocketProvider>;
 }

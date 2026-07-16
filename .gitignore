@@ -1,2 +1,16 @@
-node_modules/
+# ไฟล์ตั้งค่าความลับ
 .env
+
+# โฟลเดอร์ Library
+node_modules/
+
+# โฟลเดอร์รูปภาพ/สลิปที่ผู้ใช้รันขึ้นมา
+uploads/
+
+# โฟลเดอร์ Build
+dist/
+build/
+
+# ไฟล์ระบบ (Mac / Windows)
+.DS_Store
+Thumbs.db

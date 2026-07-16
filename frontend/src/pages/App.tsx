@@ -8,8 +8,8 @@ import Settings from './pages/Settings';
 import Preorder from './pages/PreOrder'; 
 import OrderManagement from './pages/OrderManagement'; // ⭐️ 1. นำเข้าหน้าตรวจสลิป/จัดการออเดอร์
 import Schedules from './pages/Schedules'; // ⭐️ หน้าตั้งตารางเวลาทำงาน (ADMIN)
-import AttendanceManagement from './pages/AttendanceManagement';
-import StaffCalendar from './pages/StaffCalendar';
+import AttendanceManagement from './pages/AttendanceManagement'; // ⭐️ หน้าจัดการเข้า-ออกงาน (ADMIN only)
+import StaffCalendar from './pages/StaffCalendar'; // ⭐️ ปฏิทินวันหยุด+ตารางงาน (ทุก role)
 import Layout from './components/Layout';
 import Notifications from './pages/Notifications'; // 👈 นำเข้าหน้าใหม่
 import VendorSales from './pages/VendorSales'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
@@ -35,7 +35,7 @@ function App() {
           <Route path="/schedules" element={<Schedules />} />
           <Route path="/attendance-management" element={<AttendanceManagement />} />
           <Route path="/calendar" element={<StaffCalendar />} />
-          <Route path="/schedules" element={<Schedules />} />
+          {/* /schedules route ซ่อนไว้ — ยังเข้าได้ด้วย URL ตรง แต่ไม่มีลิงก์ใน nav */}
           <Route path="/notifications" element={<Notifications />} /> {/* 👈 เพิ่มบรรทัดนี้ */}
           <Route path="/my-sales" element={<VendorSales />} /> {/* ⭐️ ยอดฝากขายของฉัน */}
           <Route path="/settings" element={<Settings />} />
