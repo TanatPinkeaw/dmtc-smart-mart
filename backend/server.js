@@ -4214,7 +4214,7 @@ app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req
       }
     });
   } catch (err) {
-    res.status(500).json({ error: getErrorMessage(err) });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -4235,7 +4235,7 @@ app.get('/api/audit-logs/:id', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async 
 
     res.json(logs[0]);
   } catch (err) {
-    res.status(500).json({ error: getErrorMessage(err) });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -4286,7 +4286,164 @@ app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => 
     res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
     res.send('﻿' + csv); // BOM for Excel UTF-8
   } catch (err) {
-    res.status(500).json({ error: getErrorMessage(err) });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ⭐️ EXPORT รายงานยอดขาย/รายได้เป็น CSV (เปิดใน Google Sheets/Excel คำนวณต่อได้)
+// level=item  (รายชิ้น — ละเอียดสุด, ทำ pivot ได้), bill (รายบิล), daily (สรุปรายวัน)
+// ครอบทั้งบิลหน้าร้าน (POS) และพรีออเดอร์ที่ COMPLETED แล้ว; ไม่รวมบิลที่ถูก void
+app.get('/api/reports/export/sales-csv', requireRole('ADMIN'), async (req, res) => {
+  const { start_date, end_date, level = 'item' } = req.query;
+
+  // แปลง array-of-rows -> CSV string (ใส่ " ครอบทุกช่อง กัน , ในข้อมูล)
+  const toCsv = (headers, rows) =>
+    [headers, ...rows]
+      .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+  // WHERE ช่วงวันที่ (ถ้าไม่ส่งมา = ทั้งหมด)
+  const hasRange = !!(start_date && end_date);
+
+  try {
+    let headers, dataRows, filenameTag;
+
+    if (level === 'daily') {
+      // สรุปรายวัน: รวมทั้ง POS + พรีออเดอร์ต่อวัน
+      const params = [];
+      let wSale = "s.status = 'COMPLETED'";
+      let wOrder = "o.status = 'COMPLETED'";
+      if (hasRange) {
+        wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+        wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+        params.push(start_date, end_date, start_date, end_date);
+      }
+      const [rows] = await pool.query(`
+        SELECT day, SUM(bill_count) AS bills, SUM(total_sales) AS total_sales,
+               SUM(cash_sales) AS cash_sales, SUM(qr_sales) AS qr_sales
+        FROM (
+          SELECT DATE(s.created_at) AS day, COUNT(*) AS bill_count,
+                 SUM(s.total_amount) AS total_sales,
+                 SUM(CASE WHEN s.payment_method='CASH' THEN s.total_amount ELSE 0 END) AS cash_sales,
+                 SUM(CASE WHEN s.payment_method='QR' THEN s.total_amount ELSE 0 END) AS qr_sales
+          FROM sales s WHERE ${wSale} GROUP BY DATE(s.created_at)
+          UNION ALL
+          SELECT DATE(o.completed_at) AS day, COUNT(*) AS bill_count,
+                 SUM(o.total_amount) AS total_sales,
+                 SUM(CASE WHEN o.payment_method='CASH' THEN o.total_amount ELSE 0 END) AS cash_sales,
+                 SUM(CASE WHEN o.payment_method='QR' THEN o.total_amount ELSE 0 END) AS qr_sales
+          FROM orders o WHERE ${wOrder} GROUP BY DATE(o.completed_at)
+        ) t
+        GROUP BY day ORDER BY day DESC
+      `, params);
+      headers = ['วันที่', 'จำนวนบิล', 'ยอดขายรวม', 'เงินสด', 'โอน/QR'];
+      dataRows = rows.map(r => [
+        r.day instanceof Date ? r.day.toISOString().slice(0, 10) : r.day,
+        r.bills, Number(r.total_sales).toFixed(2),
+        Number(r.cash_sales).toFixed(2), Number(r.qr_sales).toFixed(2),
+      ]);
+      filenameTag = 'daily';
+
+    } else if (level === 'bill') {
+      // รายบิล
+      const params = [];
+      let wSale = "s.status = 'COMPLETED'";
+      let wOrder = "o.status = 'COMPLETED'";
+      if (hasRange) {
+        wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+        wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+        params.push(start_date, end_date, start_date, end_date);
+      }
+      const [rows] = await pool.query(`
+        SELECT * FROM (
+          SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'POS' AS channel, s.id AS bill_no,
+                 (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id=s.id) AS item_count,
+                 s.discount_amount, s.total_amount, s.payment_method,
+                 cs.full_name AS party, s.created_at AS sort_at
+          FROM sales s LEFT JOIN users cs ON s.cashier_id=cs.id
+          WHERE ${wSale}
+          UNION ALL
+          SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'พรีออเดอร์' AS channel, o.id AS bill_no,
+                 (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) AS item_count,
+                 0 AS discount_amount, o.total_amount, o.payment_method,
+                 cust.full_name AS party, o.completed_at AS sort_at
+          FROM orders o LEFT JOIN users cust ON o.user_id=cust.id
+          WHERE ${wOrder}
+        ) t ORDER BY sort_at DESC
+      `, params);
+      headers = ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'จำนวนรายการ', 'ส่วนลด', 'ยอดสุทธิ', 'ชำระโดย', 'แคชเชียร์/ลูกค้า'];
+      dataRows = rows.map(r => [
+        r.dt, r.channel, r.bill_no, r.item_count,
+        Number(r.discount_amount).toFixed(2), Number(r.total_amount).toFixed(2),
+        r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
+        r.party || '-',
+      ]);
+      filenameTag = 'bill';
+
+    } else {
+      // item (ค่าเริ่มต้น) — รายชิ้น ละเอียดสุด พร้อมคอลัมน์ช่วยคำนวณรายได้สหกรณ์
+      const params = [];
+      let wSale = "s.status = 'COMPLETED'";
+      let wOrder = "o.status = 'COMPLETED'";
+      if (hasRange) {
+        wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+        wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+        params.push(start_date, end_date, start_date, end_date);
+      }
+      // coop_income: สินค้าฝากขาย = subtotal*gp% ; สินค้าสหกรณ์เอง = subtotal - ทุน
+      const coopIncome = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal * p.gp_rate/100 ELSE it.subtotal - p.cost*it.quantity END`;
+      const vendorEarn = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal - it.subtotal*p.gp_rate/100 ELSE 0 END`;
+      const [rows] = await pool.query(`
+        SELECT * FROM (
+          SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'POS' AS channel, s.id AS bill_no, p.name AS product, c.name AS category,
+                 it.quantity, it.price, it.subtotal, (p.cost*it.quantity) AS cost_total,
+                 p.gp_rate, ${coopIncome} AS coop_income,
+                 COALESCE(v.full_name,'สหกรณ์') AS vendor, ${vendorEarn} AS vendor_earn,
+                 s.payment_method, s.created_at AS sort_at
+          FROM sale_items it
+          JOIN sales s ON it.sale_id=s.id
+          JOIN products p ON it.product_id=p.id
+          LEFT JOIN categories c ON p.category_id=c.id
+          LEFT JOIN users v ON p.vendor_id=v.id
+          WHERE ${wSale}
+          UNION ALL
+          SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'พรีออเดอร์' AS channel, o.id AS bill_no, p.name AS product, c.name AS category,
+                 it.quantity, it.price, it.subtotal, (p.cost*it.quantity) AS cost_total,
+                 p.gp_rate, ${coopIncome} AS coop_income,
+                 COALESCE(v.full_name,'สหกรณ์') AS vendor, ${vendorEarn} AS vendor_earn,
+                 o.payment_method, o.completed_at AS sort_at
+          FROM order_items it
+          JOIN orders o ON it.order_id=o.id
+          JOIN products p ON it.product_id=p.id
+          LEFT JOIN categories c ON p.category_id=c.id
+          LEFT JOIN users v ON p.vendor_id=v.id
+          WHERE ${wOrder}
+        ) t ORDER BY sort_at DESC
+      `, params);
+      headers = ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'สินค้า', 'หมวดหมู่', 'จำนวน', 'ราคา/ชิ้น',
+        'ยอดรวมรายการ', 'ทุนรวม', 'GP%', 'รายได้สหกรณ์(ประมาณ)', 'เจ้าของฝากขาย', 'ยอดเจ้าของได้', 'ชำระโดย'];
+      dataRows = rows.map(r => [
+        r.dt, r.channel, r.bill_no, r.product, r.category || '-', r.quantity,
+        Number(r.price).toFixed(2), Number(r.subtotal).toFixed(2), Number(r.cost_total).toFixed(2),
+        Number(r.gp_rate).toFixed(2), Number(r.coop_income).toFixed(2), r.vendor,
+        Number(r.vendor_earn).toFixed(2),
+        r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
+      ]);
+      filenameTag = 'item';
+    }
+
+    const csv = toCsv(headers, dataRows);
+    const range = hasRange ? `_${start_date}_to_${end_date}` : ''; // ⭐️ HTTP header ต้อง ASCII ห้ามมีไทย
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="sales-${filenameTag}${range}.csv"`);
+    res.send('﻿' + csv); // BOM ให้ Excel อ่านภาษาไทยถูก
+  } catch (err) {
+    console.error('[sales-csv export] ERROR:', err.code || '', err.sqlMessage || err.message); // ⭐️ โชว์ error จริงใน terminal
+    res.status(500).json({ error: err.sqlMessage || err.message });
   }
 });
 

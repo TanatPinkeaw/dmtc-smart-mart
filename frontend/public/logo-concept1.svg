@@ -1,0 +1,42 @@
+<svg viewBox="0 0 200 185" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DMTC Mart logo">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EBCB6B"/>
+      <stop offset="0.55" stop-color="#D4AF37"/>
+      <stop offset="1" stop-color="#B0871F"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="none" stroke="url(#gold)" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- ดอกบัว 5 กลีบ สมมาตรรอบแกน x=100 (ตรงกับกึ่งกลางล้อ) -->
+    <path d="M100,116 C87,98 87,72 100,50 C113,72 113,98 100,116 Z" transform="rotate(-63 100 116)"/>
+    <path d="M100,116 C87,98 87,72 100,50 C113,72 113,98 100,116 Z" transform="rotate(63 100 116)"/>
+    <path d="M100,116 C85,92 85,56 100,30 C115,56 115,92 100,116 Z" transform="rotate(-30 100 116)"/>
+    <path d="M100,116 C85,92 85,56 100,30 C115,56 115,92 100,116 Z" transform="rotate(30 100 116)"/>
+    <path d="M100,116 C85,92 85,56 100,30 C115,56 115,92 100,116 Z"/>
+    <!-- เปลวปัญญาในกลีบกลาง -->
+    <path d="M100,66 C107,79 107,92 100,102 C93,92 93,79 100,66 Z" stroke-width="2.8"/>
+
+    <!-- รถเข็น: ตะกร้าสมมาตรรอบ x=100 -->
+    <path d="M62,120 L138,120 L125,152 L75,152 Z"/>
+    <!-- ด้ามจับ + ห่วง (อยู่ซ้ายตามลักษณะรถเข็นจริง) -->
+    <path d="M62,120 L48,112"/>
+    <circle cx="43" cy="109.5" r="5"/>
+    <!-- ขาต่อล้อ -->
+    <path d="M82,152 L86,161"/>
+    <path d="M118,152 L114,161"/>
+    <!-- ล้อ: กึ่งกลาง = x100 -->
+    <circle cx="86" cy="168" r="6.5"/>
+    <circle cx="114" cy="168" r="6.5"/>
+  </g>
+
+  <!-- เส้นในตะกร้า + ดุมล้อ: สีเทา -->
+  <g fill="none" stroke="#9AA0A6" stroke-width="3.2" stroke-linecap="round">
+    <path d="M80,130 Q100,134 120,130"/>
+    <path d="M78,140 Q100,144 122,140"/>
+  </g>
+  <g fill="#9AA0A6">
+    <circle cx="86" cy="168" r="2.2"/>
+    <circle cx="114" cy="168" r="2.2"/>
+  </g>
+</svg>

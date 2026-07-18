@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock } from 'lucide-react';
+import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 import { useSocket } from '../SocketContext';
@@ -55,6 +55,8 @@ export default function Settings() {
 
   const [startDate, setStartDate] = useState(getLocalDate());
   const [endDate, setEndDate] = useState(getLocalDate());
+  const [exportLevel, setExportLevel] = useState<'item' | 'bill' | 'daily'>('item'); // ⭐️ ระดับความละเอียด CSV
+  const [exporting, setExporting] = useState(false);
   const [viewingBillItems, setViewingBillItems] = useState<any[] | null>(null);
   const [viewingBillInfo, setViewingBillInfo] = useState<any | null>(null);
   const [vendors, setVendors] = useState<any[]>([]);
@@ -97,6 +99,28 @@ export default function Settings() {
   }, [activeTab, socket, startDate, endDate]); // 👈 เพิ่ม dependencies ให้คร
 
   const fetchStoreSettings = async () => { const res = await api.get('/settings/store'); setStoreInfo(res.data); };
+  // ⭐️ Export ยอดขาย/รายได้เป็น CSV (โหลดผ่าน api = แนบ JWT) แล้วสั่งดาวน์โหลดไฟล์
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/reports/export/sales-csv', {
+        params: { start_date: startDate, end_date: endDate, level: exportLevel },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales-${exportLevel}_${startDate}_ถึง_${endDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setExporting(false);
+    }
+  };
   // ⭐️ FIX — โหลดคิวคำขอรีเซ็ตรหัสผ่าน
   const fetchPasswordResets = async () => { const res = await api.get('/admin/password-resets'); setPasswordResets(res.data); };
   const handleCopyResetLink = async (token: string) => {
@@ -330,6 +354,27 @@ export default function Settings() {
                   </div>
                   <button onClick={fetchSalesHistory} className="bg-[#F12B6B] text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-[#FF467E] w-full mt-2 lg:mt-0 lg:w-auto text-center">ค้นหา</button>
                 </div>
+              </div>
+
+              {/* ⭐️ Export CSV — เลือกระดับความละเอียดแล้วดาวน์โหลด ไปเปิดใน Google Sheets/Excel คำนวณต่อได้ */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-white border border-[#F6C7C7] rounded-xl p-2.5">
+                <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 px-1"><Download size={14} className="text-[#F12B6B]" /> ส่งออกข้อมูล (ช่วงวันที่ที่เลือกด้านบน)</span>
+                <select
+                  value={exportLevel}
+                  onChange={e => setExportLevel(e.target.value as 'item' | 'bill' | 'daily')}
+                  className="text-sm border border-[#F6C7C7] rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-[#F12B6B] bg-[#FFF5F7] font-medium text-gray-700 sm:ml-auto"
+                >
+                  <option value="item">รายชิ้น (ละเอียดสุด — ทำ pivot ได้)</option>
+                  <option value="bill">รายบิล</option>
+                  <option value="daily">สรุปรายวัน</option>
+                </select>
+                <button
+                  onClick={handleExportCsv}
+                  disabled={exporting}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
+                >
+                  <Download size={15} /> {exporting ? 'กำลังสร้างไฟล์...' : 'ดาวน์โหลด CSV'}
+                </button>
               </div>
               {/* ⭐️ FIX: เดิม table มีแค่ hidden md:block ไม่มี mobile fallback เลย — บนมือถือหน้านี้ว่างเปล่า
                   ไม่เห็นประวัติการขายเลย เพิ่ม card list สำหรับ mobile (< md) ตรงนี้ */}
