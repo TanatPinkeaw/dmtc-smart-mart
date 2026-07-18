@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, LogOut, Camera, Banknote } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
@@ -13,7 +15,7 @@ export default function Shift() {
   const [denomCounts, setDenomCounts] = useState<Record<number, number | ''>>({});
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const isAdmin = user.role === 'ADMIN';
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -49,10 +51,10 @@ export default function Shift() {
     setCheckInLoading(true);
     try {
       const fd = new FormData(); fd.append('photo', checkInPhoto);
-      const uploadRes = await api.post('/attendance/upload-photo', fd);
+      const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/attendance/check-in', { check_in_photo: uploadRes.data.photo_url });
       navigate('/dashboard');
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckInLoading(false); }
   };
 
@@ -63,10 +65,10 @@ export default function Shift() {
     setLoading(true);
     try {
       const fd = new FormData(); fd.append('photo', checkInPhoto);
-      const uploadRes = await api.post('/attendance/upload-photo', fd);
+      const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/shifts/open', { cashier_id: user.id, opening_cash: openingCash, cash_breakdown: denomCounts, open_photo: uploadRes.data.photo_url });
       navigate('/pos');
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
   };
 

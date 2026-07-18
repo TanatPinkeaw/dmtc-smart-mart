@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Wallet, Package, TrendingUp, PiggyBank } from 'lucide-react';
 import api from '../api';
 import { useSocket } from '../SocketContext';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 
 interface VendorSummary {
   vendor_id: number; student_id: string; full_name: string;
@@ -20,7 +21,7 @@ export default function VendorSales() {
   const [items, setItems] = useState<VendorDetailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const socket = useSocket();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
   useEffect(() => {
     fetchData();

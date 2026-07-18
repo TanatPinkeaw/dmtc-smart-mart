@@ -4,13 +4,51 @@
 import { useState, useEffect } from 'react';
 import { Bell, Search, Clock, CheckCircle2 } from 'lucide-react';
 import api from '../api';
+import { useSocket } from '../SocketContext';
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const socket = useSocket();
 
   useEffect(() => { fetchNotifications(); }, []);
+
+  // ⭐️ F8 — ฟัง Socket event แบบ real-time
+  // หมายเหตุ: event ชื่อ order_verified / order_slip_rejected ตามที่ระบุใน spec ไม่มีจริงใน backend
+  // ของจริง backend ยิง 'notification_user_<id>' (ข้อความส่วนตัวรวมทั้งตอน verify/reject สลิป) และ
+  // 'shift_discrepancy_flagged' (ตรงตาม spec อยู่แล้ว) — เลยฟังจาก event จริงที่มี ไม่ใช่ชื่อสมมติ
+  useEffect(() => {
+    if (!socket) return;
+
+    const userStr = localStorage.getItem('user');
+    const userId = userStr ? JSON.parse(userStr).id : null;
+
+    const prependLocalNoti = (message: string) => {
+      // ใส่ id ชั่วคราวแบบ negative timestamp กันชนกับ id จริงจาก DB จนกว่าจะ fetch ใหม่
+      setNotifications(prev => [
+        { id: -Date.now(), message, is_read: false, created_at: new Date().toISOString() },
+        ...prev,
+      ]);
+    };
+
+    const handleShiftDiscrepancy = (data: { shift_id: number; cashier_id: number; discrepancy: number }) => {
+      prependLocalNoti(`⚠️ กะ #${data.shift_id} ยอดเงินขาด/เกิน ${data.discrepancy} บาท รอ ADMIN อนุมัติ`);
+    };
+
+    const handleNotificationUser = (data: { message: string }) => {
+      // ครอบคลุมทั้งกรณี verify (PENDING_VERIFY→PREPARING) และ reject (SLIP_REJECTED) เพราะ backend ยิง event เดียวกันทั้งคู่
+      prependLocalNoti(data.message);
+    };
+
+    socket.on('shift_discrepancy_flagged', handleShiftDiscrepancy);
+    if (userId) socket.on(`notification_user_${userId}`, handleNotificationUser);
+
+    return () => {
+      socket.off('shift_discrepancy_flagged', handleShiftDiscrepancy);
+      if (userId) socket.off(`notification_user_${userId}`, handleNotificationUser);
+    };
+  }, [socket]);
 
   const fetchNotifications = async () => {
     try {
@@ -19,30 +57,50 @@ export default function Notifications() {
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  const filteredNotis = notifications.filter(n =>
+  // ⭐️ F8 — mark as read เมื่อคลิก
+  // หมายเหตุ: backend มีแค่ PUT /api/notifications/read-all (อ่านทั้งหมด) ไม่มี endpoint อ่านทีละรายการ
+  // เลยทำ optimistic update เฉพาะรายการที่คลิก (UI ตอบสนองทันที) + เรียก read-all เบื้องหลังเพื่อ persist จริง
+  const handleMarkAsRead = async (id: number) => {
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: true } : n)));
+    try {
+      await api.put('/notifications/read-all');
+    } catch (e) { console.error(e); }
+  };
+
+  // ⭐️ F8 — เรียงใหม่สุดก่อน (backend ส่ง ORDER BY created_at DESC มาแล้ว, ของที่มาจาก socket ก็ prepend ไว้บนสุด — sort ซ้ำกันเหนียวกันกรณี clock ไม่ตรง)
+  const sortedNotis = [...notifications].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const filteredNotis = sortedNotis.filter(n =>
     n.message.toLowerCase().includes(searchTerm.toLowerCase())
   );
   const unread = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
-      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+    // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title) แทนหัวข้อใหญ่แบบเดิม
+    <div className="min-h-screen bg-[#FFF5F7] pb-24">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-[#F6C7C7] px-4 py-3 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 bg-[#F12B6B] rounded-lg flex items-center justify-center shrink-0">
+            <Bell size={15} className="text-white" />
+          </div>
+          <h1 className="text-base font-bold text-gray-900 truncate">การแจ้งเตือน</h1>
+        </div>
+        {unread > 0 && (
+          <span className="shrink-0 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-full">
+            {unread} ยังไม่อ่าน
+          </span>
+        )}
+      </div>
 
-        {/* Header */}
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Bell size={20} className="text-[#F12B6B]" /> การแจ้งเตือน
-              </h1>
-              {unread > 0 && <p className="text-xs text-[#F12B6B] font-medium mt-0.5">{unread} รายการยังไม่อ่าน</p>}
-            </div>
-          </div>
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="text" placeholder="ค้นหาการแจ้งเตือน..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
-          </div>
+      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+        {/* ⭐️ FIX: กรอบค้นหา — ใส่พื้นหลังขาว + เงา ให้เป็นกล่องแยกชัดเจนเหมือนกรอบแท็บหมวดหมู่หน้า POS/จอง */}
+        <div className="relative mb-4 bg-white border border-[#F6C7C7] rounded-xl p-2.5 shadow-sm">
+          <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" placeholder="ค้นหาการแจ้งเตือน..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-7 pr-2 py-1 bg-transparent text-sm outline-none" />
         </div>
 
         {/* List */}
@@ -70,7 +128,8 @@ export default function Notifications() {
           ) : (
             <ul className="divide-y divide-gray-50">
               {filteredNotis.map(noti => (
-                <li key={noti.id} className={`flex gap-3 p-4 hover:bg-[#FFF5F7] transition-colors duration-150 ${!noti.is_read ? 'bg-[#FFF5F7]/50' : ''}`}>
+                <li key={noti.id} onClick={() => !noti.is_read && handleMarkAsRead(noti.id)}
+                  className={`flex gap-3 p-4 hover:bg-[#FFF5F7] transition-colors duration-150 cursor-pointer ${!noti.is_read ? 'bg-[#FFF5F7]/50' : ''}`}>
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${!noti.is_read ? 'bg-[#F12B6B] text-white' : 'bg-gray-100 text-gray-400'}`}>
                     {noti.is_read ? <CheckCircle2 size={16} /> : <Bell size={16} />}
                   </div>

@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react';
 import { ClipboardCheck, RefreshCw, Edit2, Camera, Trash2 } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
+import { getErrorMessage } from '../utils/errorMessage';
+import { openAuthImage } from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — เปิดรูปเข้า-ออกงานผ่าน JWT
 
 export default function AttendanceManagement() {
   const [records, setRecords] = useState<any[]>([]);
@@ -47,7 +49,7 @@ export default function AttendanceManagement() {
     const confirm = await Swal.fire({ title: `ลบรายการของ ${r.full_name}?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก' });
     if (!confirm.isConfirmed) return;
     try { await api.delete(`/attendance/${r.id}?source=${r.source}`); fetchRecords(); }
-    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -61,7 +63,7 @@ export default function AttendanceManagement() {
       });
       Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', showConfirmButton: false, timer: 1500 });
       setEditing(null); fetchRecords();
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
   const handleRunAutoCheckout = async () => {
@@ -72,7 +74,7 @@ export default function AttendanceManagement() {
       const res = await api.post('/attendance/auto-checkout-stale');
       Swal.fire({ icon: 'success', title: 'ตรวจสอบเสร็จแล้ว', text: `ตัดออกงาน ${res.data.attendance_closed} คน, ปิดกะ ${res.data.shifts_closed} กะ` });
       fetchRecords();
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setRunningAuto(false); }
   };
 
@@ -139,8 +141,9 @@ export default function AttendanceManagement() {
                   <td className="px-4 py-3 text-sm">{r.check_out ? <span className="text-gray-600">{new Date(r.check_out).toLocaleString('th-TH')}</span> : <span className="text-red-500 font-semibold">ยังไม่ออก</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      {r.check_in_photo && <a href={`http://localhost:3000${r.check_in_photo}`} target="_blank" rel="noreferrer" title="รูปตอนเข้า" className="p-1 bg-emerald-50 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors duration-150"><Camera size={14} /></a>}
-                      {r.check_out_photo && <a href={`http://localhost:3000${r.check_out_photo}`} target="_blank" rel="noreferrer" title="รูปตอนออก" className="p-1 bg-red-50 rounded-lg text-red-500 hover:bg-red-100 transition-colors duration-150"><Camera size={14} /></a>}
+                      {/* ⭐️ SECURITY FIX #1 — รูปเข้า-ออกงานถูกล็อกให้ต้องมี JWT แล้ว เปิดผ่าน openAuthImage (โหลด blob แนบ token) แทน <a href> ที่จะโดน 401 */}
+                      {r.check_in_photo && <button onClick={() => openAuthImage(r.check_in_photo)} title="รูปตอนเข้า" className="p-1 bg-emerald-50 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors duration-150"><Camera size={14} /></button>}
+                      {r.check_out_photo && <button onClick={() => openAuthImage(r.check_out_photo)} title="รูปตอนออก" className="p-1 bg-red-50 rounded-lg text-red-500 hover:bg-red-100 transition-colors duration-150"><Camera size={14} /></button>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400 max-w-[150px] truncate">{r.note || '-'}</td>

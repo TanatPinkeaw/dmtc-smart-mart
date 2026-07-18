@@ -6,11 +6,14 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   ShoppingBag, LayoutDashboard, Boxes, Settings, LogOut, X,
   User, KeyRound, Phone, ClipboardList, Bell, PiggyBank,
-  ClipboardCheck, CalendarDays, CalendarClock, Store
+  ClipboardCheck, CalendarDays, CalendarClock, Store, BarChart3, Menu
 } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 import { SocketProvider, useSocket } from '../SocketContext';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 // ─── Token shortcuts ─────────────────────────────────────────────────────────
 const NAV_ACTIVE  = 'bg-[#FFF5F7] text-[#F12B6B] border-l-4 border-[#F12B6B]';
@@ -56,13 +59,18 @@ const MobNavItem = ({ to, icon, label, badge, onClick }: { to: string; icon: Rea
 // ─── LayoutInner ─────────────────────────────────────────────────────────────
 function LayoutInner() {
   const socket = useSocket();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileForm, setProfileForm] = useState({ phone_number: user.phone_number || '', new_password: '', confirm_password: '' });
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  // ⭐️ FIX: bottom nav มือถือเดิมมีแค่ POS/ออเดอร์/(ตั้งค่าเฉพาะ ADMIN) — ขาดหน้า Dashboard, Schedules,
+  // Summary, Inventory, AttendanceManagement ที่ desktop sidebar มีครบ ทำให้กด staff เข้าหน้าพวกนี้จากมือถือไม่ได้เลย
+  // เพิ่มปุ่ม "เมนู" เปิด bottom sheet รวมหน้าที่เหลือแทน ให้ครบตาม role เหมือน desktop
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [profileForm, setProfileForm] = useState({ phone_number: user.phone_number || '' });
   const [profileLoading, setProfileLoading] = useState(false);
 
   const sessionMode = localStorage.getItem('session_mode');
@@ -105,22 +113,37 @@ function LayoutInner() {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (profileForm.new_password && profileForm.new_password !== profileForm.confirm_password)
-      return Swal.fire({ icon: 'error', title: 'รหัสผ่านใหม่ไม่ตรงกัน!' });
+    // ⭐️ SECURITY FIX (#4) — เปลี่ยนรหัสผ่านย้ายไปโมดัล "เปลี่ยนรหัสผ่าน" (ยืนยันรหัสเดิม) ทางเดียว
+    //   ฟอร์มนี้อัปเดตแค่เบอร์โทร
     setProfileLoading(true);
     try {
-      await api.put(`/users/${user.id}/profile`, { full_name: user.full_name, phone_number: profileForm.phone_number || null, new_password: profileForm.new_password || undefined });
+      await api.put(`/users/${user.id}/profile`, { full_name: user.full_name, phone_number: profileForm.phone_number || null });
       localStorage.setItem('user', JSON.stringify({ ...user, phone_number: profileForm.phone_number }));
       Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ!', showConfirmButton: false, timer: 1500 });
       setShowProfileModal(false);
-      setProfileForm({ ...profileForm, new_password: '', confirm_password: '' });
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: error.response?.data?.error }); }
+    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
     finally { setProfileLoading(false); }
   };
 
   const handleLogoutClick = () => {
     Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: '#F12B6B', cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
-      .then(r => { if (r.isConfirmed) { localStorage.clear(); navigate('/login'); } });
+      .then(async (r) => {
+        if (r.isConfirmed) {
+          try {
+            // ⭐️ Sprint 2 — B5: Call logout endpoint
+            await api.post('/auth/logout');
+          } catch (err) {
+            console.error('Logout error:', err);
+          } finally {
+            // Clear localStorage and redirect
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('session_mode');
+            navigate('/login');
+          }
+        }
+      });
   };
 
   const handleOpenNotifications = async () => {
@@ -138,11 +161,9 @@ function LayoutInner() {
       {/* ── Desktop Sidebar ─────────────────────────────────────────────────── */}
       <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-[#F6C7C7] flex-col shrink-0 z-40">
 
-        {/* Brand */}
+        {/* Brand — ⭐️ FIX: ใช้โลโก้จริงของร้านแทนกล่องไอคอน ShoppingBag เดิม */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-[#F6C7C7]">
-          <div className="w-9 h-9 bg-[#F12B6B] rounded-xl flex items-center justify-center shrink-0">
-            <ShoppingBag size={18} className="text-white" />
-          </div>
+          <img src="/logo-192.png" alt="DMTC Mart" className="w-9 h-9 rounded-xl shrink-0 object-contain" />
           <div>
             <p className="text-sm font-bold text-gray-900">DMTC Mart</p>
             <p className="text-[10px] text-gray-400">สหกรณ์โรงเรียน</p>
@@ -152,8 +173,9 @@ function LayoutInner() {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-hide">
           <NavItem to="/notifications" icon={<Bell size={18} />} label="แจ้งเตือน" badge={unreadCount} onClick={handleOpenNotifications} />
-          <NavItem to="/calendar" icon={<CalendarDays size={18} />} label="ปฏิทิน" />
-          <NavItem to="/pre-order" icon={<ShoppingBag size={18} />} label="สั่งจอง" />
+
+          {/* ⭐️ PreOrder only for MEMBER (not for Cashier/Admin) */}
+          {!isStaff && <NavItem to="/pre-order" icon={<ShoppingBag size={18} />} label="สั่งจอง" />}
 
           {!isStaff && <NavItem to="/my-sales" icon={<PiggyBank size={18} />} label="ยอดฝากขาย" />}
 
@@ -163,15 +185,17 @@ function LayoutInner() {
               <NavItem to="/pos" icon={<Store size={18} />} label="หน้าขาย (POS)" />
               <NavItem to="/orders" icon={<ClipboardList size={18} />} label="จัดการออเดอร์" badge={pendingOrders} />
               <NavItem to="/dashboard" icon={<LayoutDashboard size={18} />} label="สรุปยอดขาย" />
+              {/* ⭐️ CASHIER ดูตารางกะได้ด้วย (อ่านอย่างเดียว — แก้ไข/ลบทำได้เฉพาะ ADMIN ในหน้านี้เอง) */}
+              <NavItem to="/schedules" icon={<CalendarClock size={18} />} label="ตารางกะ" />
             </>
           )}
 
           {isStaff && user.role === 'ADMIN' && (
             <>
               <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ผู้จัดการ</p></div>
+              <NavItem to="/summary" icon={<BarChart3 size={18} />} label="สรุปข้อมูล" />
               <NavItem to="/inventory" icon={<Boxes size={18} />} label="คลังสินค้า" />
               <NavItem to="/settings" icon={<Settings size={18} />} label="ตั้งค่า" />
-              <NavItem to="/schedules" icon={<CalendarClock size={18} />} label="ตารางกะ" />
               <NavItem to="/attendance-management" icon={<ClipboardCheck size={18} />} label="เข้า-ออกงาน" />
             </>
           )}
@@ -210,7 +234,12 @@ function LayoutInner() {
           <>
             <MobNavItem to="/pos" icon={<Store size={20} />} label="POS" />
             <MobNavItem to="/orders" icon={<ClipboardList size={20} />} label="ออเดอร์" badge={pendingOrders} />
-            {user.role === 'ADMIN' && <MobNavItem to="/settings" icon={<Settings size={20} />} label="ตั้งค่า" />}
+            {/* ⭐️ FIX: เดิมมีแค่ปุ่ม "ตั้งค่า" โผล่เฉพาะ ADMIN ส่วนหน้าอื่น (Dashboard, Schedules, Summary,
+                Inventory, AttendanceManagement) ไม่มีทางเข้าจากมือถือเลย — รวมเป็นปุ่ม "เมนู" เดียวแทน */}
+            <button onClick={() => setShowMobileMenu(true)} className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-gray-400 hover:text-[#F12B6B] transition-colors duration-150">
+              <Menu size={20} />
+              <span className="text-[10px] font-medium">เมนู</span>
+            </button>
           </>
         )}
 
@@ -227,6 +256,43 @@ function LayoutInner() {
         )}
       </nav>
 
+      {/* ── Mobile Menu Drawer (หน้าที่เหลือให้ครบตาม role เหมือน desktop sidebar) ────── */}
+      {showMobileMenu && (
+        <div className="md:hidden fixed inset-0 z-[90] flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)} />
+          <div className="relative bg-white rounded-t-2xl shadow-xl w-full max-h-[75dvh] overflow-hidden flex flex-col animate-fade-in">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F6C7C7] bg-[#FFF5F7] shrink-0">
+              <h3 className="font-semibold text-gray-900">เมนูเพิ่มเติม</h3>
+              <button onClick={() => setShowMobileMenu(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
+            </div>
+            <div className="p-3 space-y-1 overflow-y-auto">
+              <NavLink to="/dashboard" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                <LayoutDashboard size={18} /> สรุปยอดขาย
+              </NavLink>
+              <NavLink to="/schedules" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                <CalendarClock size={18} /> ตารางกะ
+              </NavLink>
+              {user.role === 'ADMIN' && (
+                <>
+                  <NavLink to="/summary" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                    <BarChart3 size={18} /> สรุปข้อมูล
+                  </NavLink>
+                  <NavLink to="/inventory" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                    <Boxes size={18} /> คลังสินค้า
+                  </NavLink>
+                  <NavLink to="/attendance-management" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                    <ClipboardCheck size={18} /> เข้า-ออกงาน
+                  </NavLink>
+                  <NavLink to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                    <Settings size={18} /> ตั้งค่า
+                  </NavLink>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Profile Modal ─────────────────────────────────────────────────────── */}
       {showProfileModal && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
@@ -240,7 +306,7 @@ function LayoutInner() {
               <button onClick={() => setShowProfileModal(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
             </div>
 
-            <form onSubmit={handleUpdateProfile} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleUpdateProfile} className="p-5 space-y-4 max-h-[80dvh] overflow-y-auto">
               {/* Avatar */}
               <div className="flex flex-col items-center pt-1 pb-3">
                 <div className="w-14 h-14 bg-[#F12B6B] rounded-full flex items-center justify-center text-white text-xl font-bold mb-2">{initials}</div>
@@ -256,12 +322,19 @@ function LayoutInner() {
                 <p className="text-[11px] text-amber-600">⚠️ รหัสผ่านเริ่มต้นคือเบอร์โทรตอนสมัคร ถ้าเปลี่ยนเบอร์ควรเปลี่ยนรหัสผ่านด้วย</p>
               </div>
 
-              {/* Password */}
-              <div className="pt-3 border-t border-[#F6C7C7] space-y-2">
-                <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500"><KeyRound size={13} /> เปลี่ยนรหัสผ่าน (เว้นว่างถ้าไม่ต้องการเปลี่ยน)</label>
-                <input type="password" value={profileForm.new_password} onChange={e => setProfileForm({ ...profileForm, new_password: e.target.value })} placeholder="รหัสผ่านใหม่" className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
-                <input type="password" value={profileForm.confirm_password} onChange={e => setProfileForm({ ...profileForm, confirm_password: e.target.value })} placeholder="ยืนยันรหัสผ่านใหม่" className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
+              {/* Change Password Button */}
+              <div className="pt-3 border-t border-[#F6C7C7]">
+                <button
+                  type="button"
+                  onClick={() => { setShowProfileModal(false); setShowChangePasswordModal(true); }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
+                >
+                  <KeyRound size={16} /> เปลี่ยนรหัสผ่าน
+                </button>
               </div>
+
+              {/* ⭐️ SECURITY FIX (#4) — ลบช่องเปลี่ยนรหัสซ้ำที่ตั้งรหัสใหม่ได้โดยไม่ยืนยันรหัสเดิม
+                  เหลือทางเดียวคือปุ่ม "เปลี่ยนรหัสผ่าน" ด้านบน (โมดัลที่บังคับกรอกรหัสเดิม) */}
 
               <button type="submit" disabled={profileLoading} className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
                 {profileLoading ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
@@ -269,6 +342,14 @@ function LayoutInner() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── Change Password Modal ─────────────────────────────── */}
+      {showChangePasswordModal && (
+        <ChangePasswordModal
+          userId={user.id}
+          onClose={() => setShowChangePasswordModal(false)}
+        />
       )}
 
       <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}`}</style>

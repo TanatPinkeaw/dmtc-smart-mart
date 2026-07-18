@@ -6,6 +6,8 @@ import { Boxes, Search, Plus, Minus, Trash2, PackagePlus, Truck, X } from 'lucid
 import api from '../api';
 import Swal from '../swal';
 import { useSocket } from '../SocketContext';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 
 interface Product { id: number; barcode: string; name: string; stock: number; cost: number; }
 interface Supplier { id: number; name: string; }
@@ -19,7 +21,7 @@ export default function Inventory() {
   const [selectedSupplier, setSelectedSupplier] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [isReceiveOpen, setIsReceiveOpen] = useState(false);
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const socket = useSocket();
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function Inventory() {
       await api.post('/purchases', { supplier_id: selectedSupplier || null, user_id: user.id, items: receiveList.map(i => ({ product_id: i.id, quantity: i.receive_quantity, unit_cost: i.new_unit_cost })) });
       Swal.fire({ icon: 'success', title: 'รับสินค้าเข้าคลังสำเร็จ!', showConfirmButton: false, timer: 1500 });
       setReceiveList([]); setSelectedSupplier(''); fetchProducts(); setIsReceiveOpen(false);
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.response?.data?.error }); }
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
   };
 

@@ -1,15 +1,240 @@
 const express = require('express');
+const helmet = require('helmet'); // ⭐️ SECURITY FIX (#8) — security headers
 const cors = require('cors');
 const pool = require('./db');
-const { swaggerUi, specs } = require('./swagger');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
-const { exec } = require('child_process');
+const crypto = require('crypto');
 const cron = require('node-cron');
-const upload = multer({ dest: 'uploads/' });
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');  // ← เพิ่มบรรทัดนี้
+const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
+const { slipUpload, shiftPhotoUpload } = require('./multer-config');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
+
+// ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
+// รอบเดียวก็โดนล็อกยาว) NODE_ENV=production ยังคงเข้มเท่าเดิม, ค่าอื่นๆ (development/undefined) ผ่อนให้
+// หมายเหตุ: ไม่ได้ปิด rate limit ไปเลยแม้ตอน dev เพราะยังอยากให้ทดสอบพฤติกรรม 429 ได้เหมือนเดิม แค่เพดานสูงขึ้น
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// ⭐️ Task 7 — Login: กัน brute-force รหัสผ่าน
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: IS_PRODUCTION ? 5 : 50, // ⭐️ B4 — prod เข้ม 5 ครั้ง/15นาที, dev ผ่อนเป็น 50
+  message: { error: 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ⭐️ Task 7 — Checkout: กันยิงถี่ผิดปกติ (DoS/บั๊กหน้าเว็บกดซ้ำ) ต่อ user ที่ login แล้ว (fallback เป็น IP ถ้าไม่มี user)
+const checkoutLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: IS_PRODUCTION ? 30 : 100, // ⭐️ B4 — prod เข้ม 30 ครั้ง/นาที, dev ผ่อนเป็น 100
+  keyGenerator: (req) => req.user?.id?.toString() || ipKeyGenerator(req),  // ← เปลี่ยนเป็นนี้
+  message: { error: 'ทำรายการขายถี่เกินไป กรุณารอสักครู่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ⭐️ SECURITY FIX (วิกฤต #2) — forgot-password ยืนยันตัวตนด้วย student_id + เบอร์โทร (ทั้งคู่เดาง่าย)
+// เดิมไม่มี rate limit = ยิงเดาเบอร์รัวๆ เพื่อยึดบัญชีได้ จำกัด 3 ครั้ง/ชม./IP
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: IS_PRODUCTION ? 3 : 30,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  message: { error: 'ขอรีเซ็ตรหัสผ่านบ่อยเกินไป กรุณารอ 1 ชั่วโมงแล้วลองใหม่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const {
+  checkoutValidator, productValidator, orderValidator,
+  shiftCloseValidator, userRegisterValidator,
+} = require('./validators');
+const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
+const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
+const { createBackup, restoreBackup } = require('./backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
+
+// ⭐️ Sprint 0 — A4: evaluated once at module load = ตอนที่ process นี้ boot ขึ้นมาจริงๆ
+// ใช้เป็นลายนิ้วมือของ "process ที่กำลังรันอยู่ตอนนี้" — ถ้า frontend เห็นค่านี้เปลี่ยนระหว่าง session
+// (poll ทุก 1 นาที) แปลว่า backend ถูก restart ไปแล้วตั้งแต่โหลดหน้าเว็บครั้งล่าสุด ควร reload
+const BUILD_INFO = {
+  timestamp: new Date().toISOString(),
+  git_hash: process.env.GIT_HASH || 'dev-local',
+};
+
+// ⭐️ Sprint 2 — B8: Timezone Helpers (Bangkok UTC+7)
+const TZ_BANGKOK = 'Asia/Bangkok';
+const TZ_UTC = 'UTC';
+
+// Helper: Get today's date in Bangkok timezone
+function getTodayBangkok() {
+  const now = new Date();
+  const bangkokTime = new Date(now.toLocaleString('en-US', { timeZone: TZ_BANGKOK }));
+  return new Date(bangkokTime.getFullYear(), bangkokTime.getMonth(), bangkokTime.getDate());
+}
+
+// Helper: Get yesterday's date in Bangkok timezone
+function getYesterdayBangkok() {
+  const today = getTodayBangkok();
+  today.setDate(today.getDate() - 1);
+  return today;
+}
+
+// Helper: Convert Date to YYYY-MM-DD string
+function dateToString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper: Format timestamp for display (Bangkok time)
+function formatBangkokTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleString('th-TH', {
+    timeZone: TZ_BANGKOK,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+// ⭐️ Sprint 2 — C4: Password Policy Validation
+function validatePasswordStrength(password) {
+  const errors = [];
+
+  if (!password) {
+    return { valid: false, errors: ['Password is required'], strength: 'weak', score: 0 };
+  }
+
+  let score = 0;
+
+  // Length
+  if (password.length >= 8) score++;
+  else errors.push('At least 8 characters');
+
+  if (password.length >= 12) score++;
+  if (password.length >= 16) score++;
+
+  // Uppercase
+  if (/[A-Z]/.test(password)) score++;
+  else errors.push('At least 1 uppercase letter (A-Z)');
+
+  // Lowercase
+  if (/[a-z]/.test(password)) score++;
+  else errors.push('At least 1 lowercase letter (a-z)');
+
+  // Numbers
+  if (/[0-9]/.test(password)) score++;
+  else errors.push('At least 1 number (0-9)');
+
+  // Special chars (bonus)
+  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score++;
+
+  // Determine strength
+  let strength = 'weak';
+  if (score <= 2) strength = 'weak';
+  else if (score <= 4) strength = 'fair';
+  else if (score <= 6) strength = 'good';
+  else strength = 'strong';
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    strength,
+    score
+  };
+}
+
+function calculateStrength(password) {
+  let score = 0;
+
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (password.length >= 16) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score++;
+
+  // Score: 0-2=weak, 3-4=fair, 5-6=good, 7+=strong
+  if (score <= 2) return 'weak';
+  if (score <= 4) return 'fair';
+  if (score <= 6) return 'good';
+  return 'strong';
+}
+
+// ⭐️ Refactor — เดิม legacyUpload (image-only filter) ถูกใช้กับ /api/members/import ด้วย ทั้งที่
+// endpoint นั้นรับไฟล์ CSV ไม่ใช่รูปภาพ — filter เก่าจึงเตะไฟล์ CSV ทุกไฟล์ทิ้งด้วย error "อนุญาตเฉพาะ
+// ไฟล์รูปภาพ" (import CSV ใช้งานไม่ได้เลยตั้งแต่ต้น) แยก multer เฉพาะสำหรับ CSV ออกมาให้ถูกต้อง
+const csvUpload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ALLOWED_CSV_MIMES = ['text/csv', 'application/vnd.ms-excel', 'application/csv', 'text/plain'];
+    if (!ALLOWED_CSV_MIMES.includes(file.mimetype) && !file.originalname.toLowerCase().endsWith('.csv')) {
+      return cb(new Error('อนุญาตเฉพาะไฟล์ CSV เท่านั้น'));
+    }
+    cb(null, true);
+  },
+});
+
+// ⭐️ Task 5A — validates req.body against a Joi schema, sets req.validatedBody on success
+function validateRequest(schema) {
+  return (req, res, next) => {
+    const { error, value } = schema.validate(req.body, { abortEarly: false, stripUnknown: true });
+    if (error) {
+      const messages = error.details.map(d => d.message).join('; ');
+      return res.status(400).json({ error: 'Validation failed', details: messages });
+    }
+    req.validatedBody = value;
+    req.body = value; // ⭐️ existing handlers destructure req.body directly; keep them working unmodified with sanitized/coerced values
+    next();
+  };
+}
+
+// ⭐️ Sprint 2 — B7: withTransaction Helper
+// Purpose: Get connection, BEGIN TRANSACTION, execute callback(conn), COMMIT on success, ROLLBACK on error
+// Usage: await withTransaction(pool, async (conn) => { /* your DB operations */ })
+async function withTransaction(pool, callback) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await callback(conn);
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+// ⭐️ Sprint 2 — B9: Image Dimension Validation
+async function validateImageDimensions(filePath, minWidth, minHeight, maxWidth, maxHeight) {
+  try {
+    const metadata = await sharp(filePath).metadata();
+    const { width, height } = metadata;
+
+    if (width < minWidth || height < minHeight) {
+      throw new Error(`Image too small: ${width}×${height} (min ${minWidth}×${minHeight})`);
+    }
+
+    if (width > maxWidth || height > maxHeight) {
+      throw new Error(`Image too large: ${width}×${height} (max ${maxWidth}×${maxHeight})`);
+    }
+
+    return { width, height };
+  } catch (err) {
+    throw new Error(`Image validation failed: ${err.message}`);
+  }
+}
 
 // 1. นำเข้า http และ socket.io
 const http = require('http');
@@ -17,49 +242,162 @@ const { Server } = require('socket.io');
 
 require('dotenv').config();
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error('❌ ไม่พบ JWT_SECRET ใน .env — ห้ามรันระบบโดยไม่มีค่านี้');
+// ⭐️ Task 6 — ตรวจ environment variable ที่จำเป็นทั้งหมดก่อนบูท ไม่ใช่แค่ JWT_SECRET
+// (เดิม db.js มี fallback รหัสผ่านเริ่มต้น 'rootpassword' ซ่อนอยู่ — ถ้า DB_PASSWORD หายจาก .env
+//  ระบบจะบูทต่อแบบเงียบๆ ด้วยรหัสผ่านอ่อนแอแทนที่จะพัง เอาออกแล้ว ดู db.js)
+const REQUIRED_ENV = ['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error(`❌ ไม่พบ environment variable ที่จำเป็น: ${missingEnv.join(', ')} — ห้ามรันระบบโดยไม่มีค่านี้`);
   process.exit(1);
+}
+console.log('✓ All required environment variables loaded');
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// ⭐️ Sprint 2 — B6: Idempotency Middleware
+const idempotencyCache = new Map(); // In-memory cache for idempotent responses
+const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+function idempotencyMiddleware(req, res, next) {
+  // Only apply to POST, PUT, DELETE requests
+  if (!['POST', 'PUT', 'DELETE'].includes(req.method)) return next();
+
+  const idempotencyKey = req.headers['idempotency-key'];
+  if (!idempotencyKey) return next();
+
+  // Check if we have a cached response for this key
+  const cachedEntry = idempotencyCache.get(idempotencyKey);
+  if (cachedEntry) {
+    const isExpired = Date.now() - cachedEntry.timestamp > IDEMPOTENCY_TTL;
+    if (!isExpired && (cachedEntry.status < 400 || cachedEntry.status === 400)) {
+      // Return cached response (2xx or 4xx only, not 5xx)
+      return res.status(cachedEntry.status).json(cachedEntry.response);
+    } else if (isExpired) {
+      // Remove expired entry
+      idempotencyCache.delete(idempotencyKey);
+    }
+  }
+
+  // Intercept res.json to cache the response
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (res.statusCode < 500 && idempotencyKey) {
+      idempotencyCache.set(idempotencyKey, {
+        response: data,
+        status: res.statusCode,
+        timestamp: Date.now()
+      });
+    }
+    return originalJson(data);
+  };
+
+  next();
 }
 
 const app = express();
+
+// ⭐️ DEPLOY FIX (#7) — prod รันหลัง nginx/reverse proxy ต้องเชื่อ X-Forwarded-For 1 ชั้น
+// ไม่งั้น rate limiter เห็น IP เดียว (ของ proxy) = login limiter ล็อกคนทั้งระบบพร้อมกัน
+if (IS_PRODUCTION) app.set('trust proxy', 1);
+
+// ⭐️ SECURITY FIX (#8) — security headers (ป้องกัน clickjacking/MIME sniffing ฯลฯ)
+// เป็น API ล้วน (ไม่เสิร์ฟ HTML) ปิด CSP; รูปโหลดข้ามโดเมนผ่าน XHR ตั้ง CORP เป็น cross-origin
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // 2. สร้าง HTTP Server ครอบ Express
 const server = http.createServer(app);
 
 // 3. ตั้งค่า Socket.io 
+// ⭐️ Task 9 — ล็อก origin เป็น FRONTEND_URL เดียว (เดิม "*" อนุญาตทุกโดเมน)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const io = new Server(server, {
   cors: {
-    origin: "*", // ช่วง Dev อนุญาตให้ React (พอร์ตอื่น) เข้าถึงได้
+    origin: FRONTEND_URL,
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
   }
 });
 
-// 4. แทรค io เข้าไปใน req (ไม้ตายลับ!) 
+// ⭐️ Task 1A — ปฏิเสธ socket ที่ไม่มี/ไม่ผ่าน JWT ก่อนให้เชื่อมต่อ (เดิม: รับทุก connection โดยไม่เช็คเลย)
+io.use((socket, next) => {
+  try {
+    // ⭐️ SECURITY FIX (#5) — เดิม log JSON.stringify(handshake.auth) = พ่น JWT ลง log ตรงๆ เอาออก
+    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+    if (!token) {
+      return next(new Error('Missing JWT token'));
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    socket.user = decoded; // { id, role, full_name }
+    console.log(`[DEBUG SOCKET AUTH] Token verified - user_id=${decoded.id}, role=${decoded.role}`);
+    next();
+  } catch (err) {
+    console.log(`[DEBUG SOCKET AUTH] ERROR: ${err.message}`);
+    next(new Error('Invalid or expired token'));
+  }
+});
+
+// 4. แทรค io เข้าไปใน req (ไม้ตายลับ!)
 // ทำให้เราสั่ง Socket ส่งข้อมูลจากใน API ได้เลย เช่น ตอนกดจ่ายเงินสำเร็จ
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-app.use(cors());
+// ⭐️ Task 9 — ล็อก origin เป็น FRONTEND_URL เดียว (เดิม cors() ไม่ใส่ options = สะท้อนกลับทุก origin)
+app.use(cors({
+  origin: FRONTEND_URL,
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
+
 app.use(express.json());
 
-// ⭐️ เพิ่ม 2 บรรทัดนี้ เพื่อให้ฝั่ง Frontend ดึงรูปสลิปไปแสดงได้
+// ⭐️ Task 12 — logging middleware: ทุก request บันทึก method/path/status/duration
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const log = `${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} ${duration}ms`;
+    if (res.statusCode >= 400) console.error(log);
+    else console.log(log);
+  });
+  next();
+});
+
+// ⭐️ Sprint 2 — B6: Idempotency middleware
+app.use(idempotencyMiddleware);
+
+// ⭐️ SECURITY FIX (วิกฤต #1) — เดิมเสิร์ฟ /uploads แบบ static "ก่อน" ชั้นตรวจ JWT = ใครก็เปิดดู
+// สลิปโอนเงิน/รูปเข้างานได้ถ้าเดาชื่อไฟล์ (ชื่อไฟล์เดาง่ายมาก) ลบทิ้ง แล้วเปลี่ยนไปเสิร์ฟผ่าน
+// GET /api/media (มี authenticateToken คุมอยู่แล้วเพราะไม่ได้อยู่ใน PUBLIC_PATHS) ดูโค้ดด้านล่าง
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =========================================
 // AUTH MIDDLEWARE — ตรวจ JWT ทุก request ยกเว้น path ที่ระบุไว้
 // =========================================
 const PUBLIC_PATHS = [
   '/api/auth/login',
+  '/api/auth/refresh',
   '/api/users/register',   // สมัครสมาชิกหน้าเคาน์เตอร์ (ยังไม่มี token)
   '/api/docs',
   '/api/init-db',          // bootstrap เท่านั้น — guard ด้วย SETUP_KEY แทน JWT (ดูด้านล่าง)
   '/api/seed-data',
   '/api/create-admin',
+  '/api/health',            // ⭐️ Task 12 — uptime monitor ต้องเรียกได้โดยไม่ต้องมี JWT
+  '/api/version',           // ⭐️ Sprint 0 — A4 — frontend poll เช็ค stale backend, ต้องเรียกได้แม้ token จะหมดอายุ/ยังไม่ login
+  '/api/auth/forgot-password', // ⭐️ Task 13 — ยังไม่ login จึงยังไม่มี token
+  '/api/auth/reset-password',
+  '/api/auth/reset-token',
+  '/api/products',          // ⭐️ F4 — Public shopping endpoints (can browse without auth)
+  '/api/categories',        // ⭐️ F4 — Public shopping endpoints (can browse without auth)
+  // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
+  //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
 
 // ป้องกัน endpoint bootstrap ทั้ง 3 ตัว ด้วย key ลับใน .env
@@ -80,11 +418,25 @@ function authenticateToken(req, res, next) {
 
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'ไม่ได้รับอนุญาต กรุณาเข้าสู่ระบบ' });
+
+  // ⭐️ F4 — Debug token verification
+  if (!token) {
+    console.warn(`[AUTH] No token found for ${req.method} ${req.path}`);
+    return res.status(401).json({ error: 'ไม่ได้รับอนุญาต กรุณาเข้าสู่ระบบ' });
+  }
 
   jwt.verify(token, JWT_SECRET, (err, payload) => {
-    if (err) return res.status(403).json({ error: 'Token ไม่ถูกต้องหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+    if (err) {
+      // ⭐️ Task 8 — แยก 401 (หมดอายุ ต้อง login ใหม่) ออกจาก 403 (token ผิด/ปลอม)
+      if (err.name === 'TokenExpiredError') {
+        console.warn(`[AUTH] Token expired for ${req.method} ${req.path}`);
+        return res.status(401).json({ error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+      }
+      console.error(`[AUTH] Token verification failed for ${req.method} ${req.path}: ${err.message}`);
+      return res.status(403).json({ error: 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
+    }
     req.user = payload; // { id, role, full_name }
+    console.debug(`[AUTH] Token verified for user_id=${payload.id}, role=${payload.role}`);
     next();
   });
 }
@@ -99,6 +451,57 @@ function requireRole(...roles) {
 }
 
 app.use(authenticateToken);
+
+// ⭐️ Sprint 2 — B5: Token Refresh Helpers
+function generateAccessToken(user) {
+  return jwt.sign(
+    { id: user.id, role: user.role, full_name: user.full_name },
+    JWT_SECRET,
+    { expiresIn: '8h' } // ⭐️ Changed from 15m to 8h to reduce token refresh frequency during work hours
+  );
+}
+
+function generateRefreshToken(user) {
+  return jwt.sign(
+    { id: user.id, type: 'refresh' },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+
+function verifyRefreshToken(token) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return decoded.type === 'refresh' ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      db: 'connected',
+      uptime: process.uptime(),
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'degraded',
+      db: 'disconnected',
+      error: err.message,
+    });
+  }
+});
+
+// ⭐️ SECURITY FIX (วิกฤต #3) — ลบ /api/auth/debug-token ทิ้ง เดิมเปิดสาธารณะ + คืน JWT ใช้งานได้จริง
+//    และบอกความยาว JWT_SECRET = ช่วยคนโจมตี ไม่ควรมีบน production
+
+app.get('/api/version', (req, res) => {
+  res.json(BUILD_INFO);
+});
 
 // ⭐️ ตรวจสอบสต๊อกใกล้หมด (เกณฑ์ <=10 ชิ้น ตาม /api/inventory/low-stock) แล้วสร้างแจ้งเตือนระบบ
 // แจ้งเฉพาะตอนสต๊อก "ตกลงมาต่ำกว่าเกณฑ์ครั้งแรก" (ข้าม threshold) กันแจ้งซ้ำทุกบิลที่ตัดสต๊อก
@@ -170,30 +573,42 @@ async function checkPromotionUsageLimit(queryFn, promo, memberId) {
 // ตั้งค่าเหตุการณ์ (Events) ของ Socket.io
 // =========================================
 io.on('connection', (socket) => {
-  console.log(`🟢 มีหน้าจอ POS เชื่อมต่อเข้ามาแล้ว: ${socket.id}`);
+  console.log(`🟢 มีหน้าจอ POS เชื่อมต่อเข้ามาแล้ว: ${socket.id} (user_id=${socket.user?.id}, role=${socket.user?.role})`);
+  // ⭐️ SECURITY FIX (#5) — เอา log handshake.auth ออก (มี JWT อยู่ข้างใน)
 
-  socket.on('disconnect', () => {
-    console.log(`🔴 หน้าจอ POS ปิดการเชื่อมต่อ: ${socket.id}`);
+  // ⭐️ Task 1A — เข้าห้องส่วนตัวของ user ตัวเอง เพื่อให้ backend ยิง event เฉพาะคนได้ด้วย io.to(`user_${id}`)
+  if (socket.user?.id) socket.join(`user_${socket.user.id}`);
+
+  // ⭐️ Task 1A — audit log การเชื่อมต่อ socket
+  pool.query(
+    'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
+    ['SOCKET_CONNECTED', socket.user?.id || null, JSON.stringify({ socket_id: socket.id })]
+  ).catch(err => console.error('audit_logs SOCKET_CONNECTED ล้มเหลว:', err.message));
+
+  // ⭐️ Task 1A — ตัวอย่าง event ที่ต้องเช็ค role ก่อนตอบข้อมูล (เฉพาะ ADMIN)
+  socket.on('request_shift_report', () => {
+    if (socket.user?.role !== 'ADMIN') {
+      socket.emit('error', 'Unauthorized');
+      return;
+    }
+    socket.emit('shift_report_ack', { message: 'ok' });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`🔴 หน้าจอ POS ปิดการเชื่อมต่อ: ${socket.id} - reason: ${reason}`);
+    console.log(`[DEBUG SOCKET] Disconnect details - socket.id=${socket.id}, user_id=${socket.user?.id}, reason=${reason}`);
+    pool.query(
+      'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
+      ['SOCKET_DISCONNECTED', socket.user?.id || null, JSON.stringify({ socket_id: socket.id, reason })]
+    ).catch(err => console.error('audit_logs SOCKET_DISCONNECTED ล้มเหลว:', err.message));
   });
 });
 
 // Swagger Document Endpoint
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
-
 // =========================================
 // 3. CATEGORIES (ระบบหมวดหมู่สินค้า)
 // =========================================
 
-/**
- * @swagger
- * /api/categories:
- *   get:
- *     summary: ดึงหมวดหมู่ทั้งหมด
- *     tags: [Categories]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
 app.get('/api/categories', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM categories');
@@ -203,26 +618,7 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/categories:
- *   post:
- *     summary: เพิ่มหมวดหมู่ใหม่
- *     tags: [Categories]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *     responses:
- *       201:
- *         description: เพิ่มสำเร็จ
- */
-app.post('/api/categories', async (req, res) => {
+app.post('/api/categories', requireRole('ADMIN'), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "กรุณาระบุชื่อหมวดหมู่" });
 
@@ -234,23 +630,7 @@ app.post('/api/categories', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/categories/{id}:
- *   delete:
- *     summary: ลบหมวดหมู่
- *     tags: [Categories]
- *     parameters:
- *       - in: path
- *         name: id
- *         schema:
- *           type: integer
- *         required: true
- *     responses:
- *       200:
- *         description: ลบสำเร็จ
- */
-app.delete('/api/categories/:id', async (req, res) => {
+app.delete('/api/categories/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
     res.json({ message: "ลบหมวดหมู่สำเร็จ" });
@@ -263,35 +643,39 @@ app.delete('/api/categories/:id', async (req, res) => {
 // 4. PRODUCTS & INVENTORY (ระบบสินค้าและคลัง)
 // =========================================
 
-/**
- * @swagger
- * /api/products:
- *   get:
- *     summary: ดึงข้อมูลสินค้าทั้งหมด (รองรับการค้นหาและฟิลเตอร์หมวดหมู่)
- *     tags: [Products]
- *     parameters:
- *       - in: query
- *         name: search
- *         schema:
- *           type: string
- *         description: ค้นหาจากชื่อหรือบาร์โค้ด
- *       - in: query
- *         name: category_id
- *         schema:
- *           type: integer
- *         description: ฟิลเตอร์ตาม ID หมวดหมู่
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
+// ⭐️ Sprint 2 — Expiry Discount: Helper function to calculate product expiry status
+function getProductExpiry(product) {
+  if (!product.expiry_date) return { status: 'no_expiry' };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
+  const expiry = new Date(product.expiry_date);
+  expiry.setHours(0, 0, 0, 0);
+
+  const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+  if (daysLeft < 0) return { status: 'expired', daysLeft };
+  if (daysLeft === 0) return { status: 'expires_today', daysLeft: 0 };
+  if (daysLeft === 1) return { status: 'near_expiry', daysLeft: 1, applyDiscount: true };
+  return { status: 'ok', daysLeft };
+}
+
 app.get('/api/products', async (req, res) => {
   try {
     const { search, category_id } = req.query;
+    // ⭐️ Sprint 2 — B8: Use Bangkok timezone for expiry checks
     let query = `
-      SELECT p.*, c.name as category_name 
-      FROM products p 
-      LEFT JOIN categories c ON p.category_id = c.id 
-      WHERE 1=1
+      SELECT p.*, c.name as category_name,
+             CASE
+               WHEN p.expiry_date IS NULL THEN 'no_expiry'
+               WHEN DATE(p.expiry_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00')) THEN 'expired'
+               WHEN DATE(p.expiry_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00')) THEN 'expires_today'
+               WHEN DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00'))) = 1 THEN 'near_expiry'
+               ELSE 'ok'
+             END as expiry_status
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.is_active = 1
     `;
     const params = [];
 
@@ -304,51 +688,39 @@ app.get('/api/products', async (req, res) => {
       params.push(category_id);
     }
 
+    query += ` ORDER BY p.name`;
+
     const [rows] = await pool.query(query, params);
-    res.json(rows);
+
+    // ⭐️ Enrich with expiry and discount info
+    const enrichedProducts = rows.map(p => {
+      const expiry = getProductExpiry(p);
+      const discount = expiry.applyDiscount ? Math.round(p.price * p.discount_percent / 100) : 0;
+      return {
+        ...p,
+        days_left: expiry.daysLeft,
+        discount_amount: discount,
+        price_after_discount: p.price - discount
+      };
+    });
+
+    res.json(enrichedProducts);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/products:
- *   post:
- *     summary: เพิ่มสินค้าใหม่
- *     tags: [Products]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - price
- *             properties:
- *               barcode:
- *                 type: string
- *               name:
- *                 type: string
- *               category_id:
- *                 type: integer
- *               price:
- *                 type: number
- *               stock:
- *                 type: integer
- *               image_url:
- *                 type: string
- *     responses:
- *       201:
- *         description: เพิ่มสำเร็จ
- */
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator), async (req, res) => {
   const { barcode, name, category_id, price, stock = 0, image_url, vendor_id, gp_rate } = req.body;
   try {
     const [result] = await pool.query(
       'INSERT INTO products (barcode, name, category_id, price, stock, image_url, vendor_id, gp_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [barcode || null, name, category_id || null, price, stock, image_url || null, vendor_id || null, gp_rate || 0]
+    );
+    // ⭐️ Task 5 — audit log
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['CREATE_PRODUCT', req.user.id, 'PRODUCT', result.insertId, JSON.stringify({ name, price })]
     );
     res.status(201).json({ id: result.insertId, message: "เพิ่มสินค้าสำเร็จ" });
   } catch (error) {
@@ -359,69 +731,34 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/products/{id}:
- *   put:
- *     summary: แก้ไขรายละเอียดสินค้า
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               barcode:
- *                 type: string
- *               name:
- *                 type: string
- *               category_id:
- *                 type: integer
- *               price:
- *                 type: number
- *               image_url:
- *                 type: string
- *     responses:
- *       200:
- *         description: อัปเดตสำเร็จ
- */
 app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
-  const { barcode, name, category_id, price, image_url, vendor_id, gp_rate } = req.body;
+  const { barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent } = req.body;
   try {
+    // ⭐️ Sprint 2: Validate expiry_date if provided
+    if (expiry_date && new Date(expiry_date) < new Date()) {
+      return res.status(400).json({ error: 'วันหมดอายุไม่สามารถเป็นวันที่ผ่านมาแล้ว' });
+    }
+
+    // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log
+    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent FROM products WHERE id = ?', [req.params.id]);
+
     await pool.query(
-      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, image_url=?, vendor_id=?, gp_rate=? WHERE id=?',
-      [barcode || null, name, category_id || null, price, image_url || null, vendor_id || null, gp_rate || null, req.params.id]
+      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=? WHERE id=?',
+      [barcode || null, name, category_id || null, price, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, req.params.id]
     );
+
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['UPDATE_PRODUCT', req.user.id, 'PRODUCT', req.params.id, JSON.stringify({ old: oldRows[0] || null, new: { barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent } })]
+    );
+
     res.json({ message: "อัปเดตข้อมูลสินค้าสำเร็จ" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/products/{id}:
- *   delete:
- *     summary: ลบสินค้า
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: ลบสำเร็จ
- */
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     await pool.query('DELETE FROM products WHERE id=?', [req.params.id]);
     res.json({ message: "ลบสินค้าสำเร็จ" });
@@ -433,14 +770,7 @@ app.delete('/api/products/:id', async (req, res) => {
 // =========================================
 // 1. AUTH & USERS (ระบบเข้าสู่ระบบและพนักงาน)
 // =========================================
-/**
- * @swagger
- * /api/auth/login:
- * post:
- * summary: ล็อกอินเข้าสู่ระบบ (รหัสนักศึกษา / เลขบัตรประชาชน)
- * tags: [Auth]
- */
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body; // หน้าเว็บส่งช่อง username มา เราจะเอาไปเทียบกับ student_id
   try {
     const [users] = await pool.query('SELECT * FROM users WHERE student_id = ? AND is_active = TRUE', [username]);
@@ -450,27 +780,62 @@ app.post('/api/auth/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง" });
 
-    // สร้าง Token
-    const token = jwt.sign(
-      { id: user.id, role: user.role, full_name: user.full_name },
-      JWT_SECRET,
-      { expiresIn: '12h' }
-    );
+    // ⭐️ Sprint 2 — B5: Issue both access token (15m) and refresh token (7d)
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
 
-    res.json({ message: "ล็อกอินสำเร็จ", token, user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role } });
+    res.json({
+      message: "ล็อกอินสำเร็จ",
+      accessToken,
+      refreshToken,
+      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role },
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/users/search:
- * get:
- * summary: ค้นหาผู้ใช้งานด้วยเบอร์โทรศัพท์ หรือ รหัสนักศึกษา (สำหรับแคชเชียร์)
- * tags: [Users]
- */
-app.get('/api/users/search', async (req, res) => {
+// ⭐️ Sprint 2 — B5: Token Refresh Endpoint
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.body.refreshToken;
+    
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'ไม่พบ refresh token' });
+    }
+    
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) {
+      return res.status(401).json({ error: 'Refresh token ไม่ถูกต้องหรือหมดอายุ' });
+    }
+    
+    // Fetch user to get fresh data
+    const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    if (users.length === 0) {
+      return res.status(401).json({ error: 'ไม่พบผู้ใช้งาน' });
+    }
+    
+    // Issue new access token
+    const accessToken = generateAccessToken(users[0]);
+    
+    res.json({ accessToken });
+  } catch (err) {
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// ⭐️ Sprint 2 — B5: Token Logout Endpoint
+app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
+  try {
+    // Token is invalidated by removing it from frontend storage
+    // No server-side token blacklist implemented yet (optional enhancement)
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/search', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { q } = req.query;
   if (!q) return res.status(400).json({ error: "กรุณาระบุคำค้นหา" });
 
@@ -488,15 +853,46 @@ app.get('/api/users/search', async (req, res) => {
   }
 });
 
+// ⭐️ Sprint 0 — A2: เดิม PreOrder.tsx ใช้ /api/users/search (staff-only) มายืนยันเบอร์โทรตัวเอง
+// ก่อนสั่งจอง ทำให้ MEMBER โดน 403 ทุกครั้ง — endpoint นี้เปิดให้ทุก role ที่ login แล้วเรียกได้
+// (ไม่จำกัดแค่ MEMBER เพราะ CASHIER/ADMIN ก็อาจสั่งจองแทนตัวเองได้เหมือนกัน) แต่คืนข้อมูลน้อยกว่า
+// /users/search มาก: ไม่มีเบอร์โทร ไม่มีแต้มสะสม มีแค่ matched (boolean) + ชื่อ (สำหรับ confirm
+// ก่อนสั่งจอง) กันไม่ให้กลายเป็นช่องทาง enumerate เบอร์โทร→แต้ม/ข้อมูลส่วนตัวคนอื่นเหมือน endpoint เดิม
+app.post('/api/users/verify-phone', async (req, res) => {
+  const { phone_number } = req.body;
+  if (!phone_number) return res.status(400).json({ error: 'กรุณาระบุเบอร์โทรศัพท์' });
 
-/**
- * @swagger
- * /api/users/register:
- * post:
- * summary: สมัครสมาชิกลูกค้าใหม่หน้าเคาน์เตอร์
- * tags: [Users]
- */
-app.post('/api/users/register', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT full_name FROM users WHERE phone_number = ?',
+      [phone_number]
+    );
+    res.json({ matched: rows.length > 0, member_name: rows[0]?.full_name || null });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🐛 FIX (MEMBER login bug, follow-up) — PreOrder.tsx (MEMBER-facing page, /pre-order) was calling
+// GET /api/users/search?q=<own student_id> just to read its own points balance. That endpoint is
+// correctly CASHIER/ADMIN-only (it does arbitrary cross-user lookup by phone/student_id — opening
+// it to MEMBER would let any member read any other member's phone number + points). So every
+// PreOrder mount 403'd, spamming the log. Real fix: a self-only endpoint, scoped to req.user.id,
+// safe for any authenticated role since it can only ever return the caller's own data.
+app.get('/api/users/me', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, student_id, full_name, phone_number, points, role FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "ไม่พบข้อมูลผู้ใช้" });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users/register', validateRequest(userRegisterValidator), async (req, res) => {
   const { student_id, full_name, phone_number } = req.body;
   if (!student_id || !full_name || !phone_number) {
     return res.status(400).json({ error: "กรุณากรอกข้อมูลให้ครบถ้วน" });
@@ -525,16 +921,145 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/profile:
- * put:
- * summary: อัปเดตข้อมูลโปรไฟล์ (เปลี่ยนเบอร์โทร, ชื่อ หรือ รหัสผ่าน)
- * tags: [Users]
- */
+// =========================================
+// ⭐️ Task 13 — PASSWORD RESET
+// ระบบนี้ไม่มีคอลัมน์ email บน users (identity คือ student_id, ไม่มีระบบส่งอีเมล/SMS จริง) —
+// สเปกเดิมอิง email; ปรับให้ยืนยันตัวตนด้วย student_id + phone_number แทน (สองอย่างที่มีอยู่แล้วในระบบ)
+// TODO: ต่อระบบส่ง SMS/LINE Notify จริงตอน deploy — ตอนนี้ log token ไว้ที่ server console แทน "ส่งอีเมล"
+// =========================================
+
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
+  const { student_id, phone_number } = req.body;
+  if (!student_id || !phone_number) {
+    return res.status(400).json({ error: "กรุณาระบุรหัสนักศึกษาและเบอร์โทรศัพท์" });
+  }
+
+  try {
+    const [users] = await pool.query('SELECT id FROM users WHERE student_id = ? AND phone_number = ? AND is_active = TRUE', [student_id, phone_number]);
+
+    // ⭐️ ไม่ยืนยัน/ปฏิเสธว่ามีบัญชีนี้จริงไหม (กัน enumeration) — ตอบข้อความเดียวกันเสมอ
+    if (users.length === 0) {
+      return res.json({ message: "ถ้าข้อมูลถูกต้อง ระบบจะสร้างลิงก์รีเซ็ตรหัสผ่านให้ (ติดต่อเจ้าหน้าที่หากไม่ได้รับ)" });
+    }
+
+    const userId = users[0].id;
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 ชั่วโมง
+
+    // ล้าง token เก่าของ user คนนี้ทิ้งก่อน (ให้ใช้ได้แค่ token ล่าสุด)
+    await pool.query('DELETE FROM password_resets WHERE user_id = ?', [userId]);
+    await pool.query(
+      'INSERT INTO password_resets (user_id, reset_token, expires_at) VALUES (?, ?, ?)',
+      [userId, resetToken, expiresAt]
+    );
+
+    // ⭐️ SECURITY FIX (#5) — เลิก log token ลง console (แอดมินดู/ส่งลิงก์ผ่านแท็บ "รีเซ็ตรหัสผ่าน" ใน Settings แทน)
+    console.log(`🔑 [password reset] สร้างคำขอให้ student_id=${student_id} แล้ว (หมดอายุ ${expiresAt.toISOString()})`);
+
+    res.json({ message: "ถ้าข้อมูลถูกต้อง ระบบจะสร้างลิงก์รีเซ็ตรหัสผ่านให้ (ติดต่อเจ้าหน้าที่หากไม่ได้รับ)" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/auth/reset-token/:token', async (req, res) => {
+  try {
+    const [tokens] = await pool.query(
+      'SELECT 1 FROM password_resets WHERE reset_token = ? AND expires_at > NOW() AND used_at IS NULL',
+      [req.params.token]
+    );
+    res.json(tokens.length > 0 ? { valid: true } : { valid: false, reason: 'expired or already used' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { reset_token, new_password } = req.body;
+
+  if (!reset_token) return res.status(400).json({ error: "ไม่พบ token" });
+
+  // ⭐️ Sprint 2 — C4: Validate new password strength
+  const passwordCheck = validatePasswordStrength(new_password);
+  if (!passwordCheck.valid) {
+    return res.status(400).json({
+      error: 'Password does not meet strength requirements',
+      requirements: passwordCheck.errors
+    });
+  }
+
+  try {
+    const [tokens] = await pool.query(
+      'SELECT user_id FROM password_resets WHERE reset_token = ? AND expires_at > NOW() AND used_at IS NULL',
+      [reset_token]
+    );
+    if (tokens.length === 0) return res.status(400).json({ error: "Token ไม่ถูกต้องหรือหมดอายุแล้ว" });
+
+    const userId = tokens[0].user_id;
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+
+    // Update both password and password_hash columns for compatibility
+    await pool.query('UPDATE users SET password = ?, password_hash = ? WHERE id = ?', [hashedPassword, hashedPassword, userId]);
+    // ⭐️ token ใช้ครั้งเดียว — mark used_at กันเอาไปใช้ซ้ำ
+    await pool.query('UPDATE password_resets SET used_at = NOW() WHERE reset_token = ?', [reset_token]);
+
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['PASSWORD_RESET', userId, 'USER', userId, JSON.stringify({ via: 'reset_token' })]
+    );
+
+    res.json({ message: "ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ⭐️ FIX — คิวคำขอรีเซ็ตรหัสผ่านให้ ADMIN ดูและส่งลิงก์ให้นักเรียนเอง (แทนการต่อ SMS/อีเมลจริงซึ่งมีค่าใช้จ่าย)
+// ADMIN เห็น token ได้เพราะเป็นคนกลางที่ต้องคัดลอกลิงก์ไปส่งให้นักเรียนเอง (ผ่าน LINE/บอกปากเปล่า)
+app.get('/api/admin/password-resets', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT pr.id, pr.user_id, pr.reset_token, pr.created_at, pr.expires_at,
+              u.student_id, u.full_name, u.phone_number
+       FROM password_resets pr
+       JOIN users u ON u.id = pr.user_id
+       WHERE pr.used_at IS NULL AND pr.expires_at > NOW()
+       ORDER BY pr.created_at DESC`
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/password-resets/:id', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [existing] = await pool.query('SELECT user_id FROM password_resets WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: "ไม่พบคำขอนี้ (อาจถูกใช้งานหรือลบไปแล้ว)" });
+
+    await pool.query('DELETE FROM password_resets WHERE id = ?', [req.params.id]);
+
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['REJECT_PASSWORD_RESET', req.user.id, 'USER', existing[0].user_id, JSON.stringify({ password_reset_id: req.params.id })]
+    );
+
+    res.json({ message: "ปฏิเสธคำขอรีเซ็ตรหัสผ่านแล้ว ลิงก์นี้ใช้งานไม่ได้อีกต่อไป" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.put('/api/users/:id/profile', async (req, res) => {
   const userId = req.params.id;
-  const { full_name, phone_number, new_password } = req.body;
+  // ⭐️ SECURITY FIX (#4) — เดิม endpoint นี้เปลี่ยนรหัสผ่านได้โดยไม่ต้องกรอกรหัสเดิม (ถ้า token ค้าง = โดนยึดบัญชี)
+  //   ตัด new_password ออก บังคับให้เปลี่ยนรหัสผ่านทางเดียวคือ PUT /api/users/:id/change-password ที่ยืนยันรหัสเดิม
+  const { full_name, phone_number } = req.body;
+
+  // ⭐️ Task 1 audit — เดิมไม่มีการเช็ค ownership: user คนไหนก็แก้โปรไฟล์ id อื่นได้แค่เปลี่ยน :id ใน URL
+  if (req.user.role !== 'ADMIN' && String(req.user.id) !== String(userId)) {
+    return res.status(403).json({ error: "แก้ไขได้เฉพาะโปรไฟล์ของตัวเองเท่านั้น" });
+  }
 
   try {
     const conn = await pool.getConnection();
@@ -549,16 +1074,9 @@ app.put('/api/users/:id/profile', async (req, res) => {
       phoneChanged = current.length > 0 && current[0].phone_number !== phone_number;
     }
 
-    // 2. ถ้ามีการส่งรหัสผ่านใหม่มา ให้เข้ารหัสด้วย
+    // ⭐️ SECURITY FIX (#4) — อัปเดตแค่ชื่อ + เบอร์ ไม่แตะรหัสผ่านที่นี่แล้ว
     let query = 'UPDATE users SET full_name = COALESCE(?, full_name), phone_number = COALESCE(?, phone_number)';
     let params = [full_name, phone_number];
-
-    if (new_password) {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(new_password, salt);
-      query += ', password = ?';
-      params.push(hashedPassword);
-    }
 
     query += ' WHERE id = ?';
     params.push(userId);
@@ -581,17 +1099,7 @@ app.put('/api/users/:id/profile', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users:
- * get:
- *    summary: ดึงรายชื่อผู้ใช้งานทั้งหมด (พนักงาน + นักศึกษา)
- *    tags: [Users]
- * responses:
- *    200:
- *        description: สำเร็จ
- */
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
   try {
     // ⭐️ ทริค: ใช้ AS username เพื่อหลอกหน้าเว็บ React ให้ยังใช้งานได้โดยไม่ต้องไปแก้โค้ดฝั่งหน้าเว็บอีกรอบ
     const [rows] = await pool.query('SELECT id, student_id AS username, full_name, role, is_active FROM users');
@@ -601,47 +1109,44 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users:
- *   post:
- *     summary: เพิ่มพนักงานใหม่ (เข้ารหัสผ่านด้วย bcrypt)
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - username
- *               - password
- *               - full_name
- *             properties:
- *               username:
- *                 type: string
- *               password:
- *                 type: string
- *               full_name:
- *                 type: string
- *               role:
- *                 type: string
- *                 enum: [ADMIN, CASHIER]
- *     responses:
- *       201:
- *         description: สร้างสำเร็จ
- */
-app.post('/api/users', async (req, res) => {
+app.get('/api/staff-list', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, full_name, role FROM users WHERE role IN ('CASHIER', 'ADMIN') AND is_active = TRUE ORDER BY full_name`
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
   const { username, password, full_name, role = 'CASHIER' } = req.body;
   try {
+    // ⭐️ Sprint 2 — C4: Validate password strength
+    const passwordCheck = validatePasswordStrength(password);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({
+        error: 'Password does not meet strength requirements',
+        requirements: passwordCheck.errors
+      });
+    }
+
     // เข้ารหัสผ่านก่อนบันทึกลงฐานข้อมูล
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const [result] = await pool.query(
-      'INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)',
-      [username, hashedPassword, full_name, role]
+      'INSERT INTO users (username, password, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?)',
+      [username, hashedPassword, hashedPassword, full_name, role]
     );
+
+    // Audit log
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['CREATE_USER', req.user.id, 'USER', result.insertId, JSON.stringify({ username, full_name, role })]
+    );
+
     res.status(201).json({ id: result.insertId, message: "สร้างพนักงานสำเร็จ" });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "ชื่อผู้ใช้งานนี้มีในระบบแล้ว" });
@@ -649,37 +1154,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}:
- *   put:
- *     summary: แก้ไขข้อมูลพนักงาน (เฉพาะชื่อและบทบาท)
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               full_name:
- *                 type: string
- *               role:
- *                 type: string
- *                 enum: [ADMIN, CASHIER]
- *               is_active:
- *                 type: boolean
- *     responses:
- *       200:
- *         description: อัปเดตสำเร็จ
- */
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
   const { full_name, role, is_active } = req.body;
   try {
     await pool.query(
@@ -692,16 +1167,67 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/update-role:
- * put:
- * summary: อัปเดต Role ของนักศึกษาให้เป็นพนักงาน (CASHIER/ADMIN)
- * tags: [Users]
- */
-app.put('/api/users/update-role', async (req, res) => {
+app.put('/api/users/:id/change-password', async (req, res) => {
+  const { id } = req.params;
+  const { current_password, new_password, confirm_password } = req.body;
+  const user_id = req.user?.id;
+
+  try {
+    // Verify ownership (user can only change their own password)
+    if (!user_id || parseInt(id) !== user_id) {
+      return res.status(403).json({ error: 'Cannot change other user passwords' });
+    }
+
+    // Get user
+    const [users] = await pool.query('SELECT password, password_hash FROM users WHERE id = ?', [id]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password (support both 'password' and 'password_hash' columns for compatibility)
+    const userPassword = users[0].password_hash || users[0].password;
+    const currentMatch = await bcrypt.compare(current_password, userPassword);
+    if (!currentMatch) {
+      return res.status(401).json({ error: 'Current password incorrect' });
+    }
+
+    // Validate new password strength
+    const passwordCheck = validatePasswordStrength(new_password);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({
+        error: 'New password does not meet strength requirements',
+        requirements: passwordCheck.errors
+      });
+    }
+
+    // Confirm passwords match
+    if (new_password !== confirm_password) {
+      return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    // Hash and update
+    const newHash = await bcrypt.hash(new_password, 10);
+    // Update both password and password_hash columns for compatibility
+    await pool.query('UPDATE users SET password = ?, password_hash = ? WHERE id = ?', [newHash, newHash, id]);
+
+    // Audit log
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['PASSWORD_CHANGED', user_id, 'USER', id, JSON.stringify({ via: 'change_password_modal' })]
+    );
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/update-role', requireRole('ADMIN'), async (req, res) => {
   const { student_id, role } = req.body;
   try {
+    // ⭐️ Task 5 — เก็บ role เดิมไว้เทียบใน audit log
+    const [oldRows] = await pool.query('SELECT id, role FROM users WHERE student_id = ?', [student_id]);
+
     const [result] = await pool.query(
       'UPDATE users SET role = ? WHERE student_id = ?',
       [role, student_id]
@@ -711,31 +1237,20 @@ app.put('/api/users/update-role', async (req, res) => {
       return res.status(404).json({ error: "ไม่พบรหัสนักศึกษานี้ในระบบ" });
     }
 
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['ROLE_CHANGE', req.user.id, 'USER', oldRows[0]?.id || null, JSON.stringify({ student_id, old_role: oldRows[0]?.role || null, new_role: role })]
+    );
+
     res.json({ message: `อัปเดตสิทธิ์ ${student_id} เป็น ${role} สำเร็จ` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}:
- *   delete:
- *     summary: ปิดการใช้งานพนักงาน (Soft Delete)
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: ปิดการใช้งานสำเร็จ
- */
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
   try {
-    // เราจะไม่ใช้ DELETE FROM users จริงๆ เพราะจะทำให้บิลเก่าพัง 
+    // เราจะไม่ใช้ DELETE FROM users จริงๆ เพราะจะทำให้บิลเก่าพัง
     // แต่เราจะใช้วิธีปิดสถานะ (Soft Delete) แทน
     await pool.query('UPDATE users SET is_active = FALSE WHERE id = ?', [req.params.id]);
     res.json({ message: "ระงับการใช้งานพนักงานสำเร็จ" });
@@ -744,13 +1259,6 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/sync-csv:
- *   post:
- *     summary: ซิงค์รายชื่อผู้ใช้จาก CSV — ใครไม่มีในไฟล์จะถูกระงับการใช้งาน (soft delete, ไม่ลบจริงกันบิลเก่าพัง)
- *     tags: [Users]
- */
 app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
   // ⭐️ DEBUG: ดูว่า server ใหม่รับ request จริงไหม และ body มีอะไร
   console.log('[sync-csv] body keys:', Object.keys(req.body));
@@ -828,31 +1336,7 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
 // =========================================
 // 2. SHIFT MANAGEMENT (ระบบจัดการกะการขาย)
 // =========================================
-/**
- * @swagger
- * /api/shifts/open:
- *   post:
- *     summary: เปิดกะ (บันทึกยอดเงินทอนตั้งต้นในลิ้นชัก)
- *     tags: [Shifts]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - cashier_id
- *               - opening_cash
- *             properties:
- *               cashier_id:
- *                 type: integer
- *               opening_cash:
- *                 type: number
- *     responses:
- *       201:
- *         description: เปิดกะสำเร็จ
- */
-app.post('/api/shifts/open', async (req, res) => {
+app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id, opening_cash, cash_breakdown, open_photo } = req.body;
   if (!cashier_id || opening_cash === undefined) {
     return res.status(400).json({ error: "กรุณาระบุรหัสแคชเชียร์และเงินตั้งต้น" });
@@ -860,36 +1344,40 @@ app.post('/api/shifts/open', async (req, res) => {
   if (!open_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนเปิดกะ" });
 
   try {
-    // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
+    // ⭐️ Sprint 2 — B8: Check no open shift for this cashier today (Bangkok timezone)
+    const today = getTodayBangkok();
+    const todayStr = dateToString(today);
+
     const [existing] = await pool.query(
-      "SELECT id FROM shifts WHERE cashier_id = ? AND status = 'OPEN'",
-      [cashier_id]
+      "SELECT id FROM shifts WHERE cashier_id = ? AND DATE(CONVERT_TZ(opened_at, '+00:00', '+07:00')) = ? AND status = 'OPEN'",
+      [cashier_id, todayStr]
     );
 
     if (existing.length > 0) {
-      return res.status(400).json({ error: "แคชเชียร์คนนี้มีกะที่เปิดอยู่แล้ว ต้องปิดกะเดิมก่อน" });
+      return res.status(400).json({ error: "แคชเชียร์คนนี้มีกะที่เปิดอยู่แล้วในวันนี้ (เวลาประเทศไทย) ต้องปิดกะเดิมก่อน" });
     }
 
+    // ⭐️ Sprint 2 — B6: Store idempotency_key
+    const idempotencyKey = req.headers['idempotency-key'];
     const [result] = await pool.query(
-      'INSERT INTO shifts (cashier_id, opening_cash, opening_cash_breakdown, open_photo) VALUES (?, ?, ?, ?)',
-      [cashier_id, opening_cash, cash_breakdown ? JSON.stringify(cash_breakdown) : null, open_photo]
+      'INSERT INTO shifts (cashier_id, opening_cash, opening_cash_breakdown, open_photo, idempotency_key, opened_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [cashier_id, opening_cash, cash_breakdown ? JSON.stringify(cash_breakdown) : null, open_photo, idempotencyKey || null]
     );
-    res.status(201).json({ shift_id: result.insertId, message: "เปิดกะการขายสำเร็จ" });
+    res.status(201).json({ shift_id: result.insertId, message: "เปิดกะการขายสำเร็จ", opened_at: formatBangkokTime(new Date()) });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/shifts/last-closed:
- *   get:
- *     summary: ดึงยอดเงินสดปิดกะล่าสุดของแคชเชียร์คนนี้ (สำหรับ pre-fill เงินทอนตั้งต้นกะใหม่)
- *     tags: [Shifts]
- */
-app.get('/api/shifts/last-closed', async (req, res) => {
+// ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย และไม่เช็ค ownership — ใครก็ตามที่ login แล้ว
+// (รวม MEMBER) ใส่ cashier_id คนอื่นมาดูยอดเงินสดปิดกะของ cashier คนนั้นได้ ล็อกเป็น CASHIER/ADMIN
+// เท่านั้น และ CASHIER ดูได้แค่ของตัวเอง (ADMIN ดูของใครก็ได้ เผื่อใช้ตรวจสอบ)
+app.get('/api/shifts/last-closed', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id } = req.query;
   if (!cashier_id) return res.status(400).json({ error: "กรุณาระบุ cashier_id" });
+  if (req.user.role !== 'ADMIN' && Number(cashier_id) !== req.user.id) {
+    return res.status(403).json({ error: "ดูได้เฉพาะยอดปิดกะของตัวเองเท่านั้น" });
+  }
   try {
     const [rows] = await pool.query(
       "SELECT actual_cash, closing_cash_breakdown FROM shifts WHERE cashier_id = ? AND status = 'CLOSED' ORDER BY closed_at DESC LIMIT 1",
@@ -901,24 +1389,13 @@ app.get('/api/shifts/last-closed', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/shifts/current:
- *   get:
- *     summary: ดูข้อมูลกะที่กำลังเปิดอยู่ (ค้นหาตาม cashier_id)
- *     tags: [Shifts]
- *     parameters:
- *       - in: query
- *         name: cashier_id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/shifts/current', async (req, res) => {
+// ⭐️ Sprint 1 — C1 audit finding: เหตุผลเดียวกับ /api/shifts/last-closed ด้านบน (`SELECT *` ด้วย —
+// เผยข้อมูลกะที่กำลังเปิดของ cashier คนอื่นทั้งแถว ถ้าไม่ล็อก)
+app.get('/api/shifts/current', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id } = req.query;
+  if (req.user.role !== 'ADMIN' && Number(cashier_id) !== req.user.id) {
+    return res.status(403).json({ error: "ดูได้เฉพาะกะของตัวเองเท่านั้น" });
+  }
   try {
     // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
     const [rows] = await pool.query(
@@ -932,39 +1409,13 @@ app.get('/api/shifts/current', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-/**
- * @swagger
- * /api/shifts/close:
- *   post:
- *     summary: ปิดกะ (ระบบจะคำนวณเงินสดที่ควรมีให้อัตโนมัติและหาเงินขาด/เกิน)
- *     tags: [Shifts]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - cashier_id
- *               - actual_cash
- *             properties:
- *               cashier_id:
- *                 type: integer
- *               actual_cash:
- *                 type: number
- *                 description: ยอดเงินสดที่พนักงานนับได้จริงในลิ้นชัก
- *               note:
- *                 type: string
- *     responses:
- *       200:
- *         description: ปิดกะสำเร็จ
- */
-app.post('/api/shifts/close', async (req, res) => {
-  const { cashier_id, actual_cash, note, cash_breakdown, close_photo } = req.body;
+app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(shiftCloseValidator), async (req, res) => {
+  // ⭐️ Sprint 2 — D1: Dual-Control Shift Close: Cashier initiates close request (status → PENDING_CLOSE)
+  // Manager must approve via PUT /api/shifts/:id/approve before shift is fully closed
+  const { cashier_id, actual_cash, note, cash_breakdown, close_photo, discrepancy_category } = req.body;
   if (!close_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนปิดกะ" });
 
   try {
-    // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
     const [shifts] = await pool.query(
       "SELECT id, opening_cash, opened_at FROM shifts WHERE cashier_id = ? AND status = 'OPEN'",
       [cashier_id]
@@ -976,7 +1427,7 @@ app.post('/api/shifts/close', async (req, res) => {
 
     const currentShift = shifts[0];
 
-    // ⭐️ สรุปยอดขายทุกช่องทางในกะนี้ (ไม่ใช่แค่เงินสด) — นับเฉพาะบิลที่ COMPLETED
+    // สรุปยอดขายทุกช่องทางในกะนี้ (ไม่ใช่แค่เงินสด) — นับเฉพาะบิลที่ COMPLETED
     const [sales] = await pool.query(
       `SELECT
          COUNT(*) as bill_count,
@@ -991,36 +1442,58 @@ app.post('/api/shifts/close', async (req, res) => {
 
     const s = sales[0];
     const totalCashSales = Number(s.cash_sales);
-    const expected_cash = Number(currentShift.opening_cash) + totalCashSales; // เงินในลิ้นชัก = เงินทอนตั้งต้น + ยอดเงินสดเท่านั้น
-    const difference = Number(actual_cash) - expected_cash;
+    // B3 — เทียบ/คำนวณส่วนต่างเงินสดในหน่วยสตางค์ กันพลาดตรง threshold ±20/±100 บาท จาก float drift
+    const expectedCashSatang = toSatang(currentShift.opening_cash) + toSatang(totalCashSales);
+    const expected_cash = fromSatang(expectedCashSatang);
+    const difference = fromSatang(toSatang(actual_cash) - expectedCashSatang);
 
-    // ⭐️ tolerance ส่วนต่างเงินสด ±20 บาทถือว่าปกติ เกินกว่านี้บังคับกรอก note อธิบาย
+    // tolerance ส่วนต่างเงินสด ±20 บาทถือว่าปกติ เกินกว่านี้บังคับกรอก note อธิบาย
     const CASH_DIFF_TOLERANCE = 20;
     if (Math.abs(difference) > CASH_DIFF_TOLERANCE && !(note && note.trim())) {
       return res.status(400).json({ error: `ส่วนต่างเงินสด ${difference > 0 ? 'เกิน' : 'ขาด'} ฿${Math.abs(difference).toFixed(2)} เกินเกณฑ์ปกติ (±${CASH_DIFF_TOLERANCE}) กรุณาระบุหมายเหตุอธิบายก่อนปิดกะ` });
     }
 
+    // ⭐️ Sprint 2 — D1: ALL closes now go to PENDING_CLOSE (dual-control workflow)
+    // Manager must verify and approve via PUT /api/shifts/:id/approve
+    const idempotencyKey = req.headers['idempotency-key'];
     await pool.query(
-      `UPDATE shifts 
-       SET expected_cash = ?, actual_cash = ?, difference = ?, status = 'CLOSED', closed_at = CURRENT_TIMESTAMP, note = ?, closing_cash_breakdown = ?, close_photo = ?
+      `UPDATE shifts
+       SET expected_cash = ?, actual_cash = ?, difference = ?, status = 'PENDING_CLOSE',
+           discrepancy_amount = ?, discrepancy_flag = 0, note = ?, discrepancy_category = ?,
+           closing_cash_breakdown = ?, close_photo = ?, idempotency_key = ?
        WHERE id = ?`,
-      [expected_cash, actual_cash, difference, note || null, cash_breakdown ? JSON.stringify(cash_breakdown) : null, close_photo, currentShift.id]
+      [expected_cash, actual_cash, difference, Math.abs(difference), note || null, discrepancy_category || null,
+       cash_breakdown ? JSON.stringify(cash_breakdown) : null, close_photo, idempotencyKey || null, currentShift.id]
+    );
+
+    // Emit Socket.io event to notify managers
+    req.io.emit('shift_pending_close', {
+      shift_id: currentShift.id,
+      cashier_id,
+      timestamp: new Date(),
+      message: `แคชเชียร์ ${cashier_id} ขอปิดกะ (รอการอนุมัติ)`,
+      variance: Math.abs(difference)
+    });
+
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['CLOSE_SHIFT_PENDING_CLOSE', req.user.id, 'SHIFT', currentShift.id, JSON.stringify({ discrepancy: difference, expected_cash, actual_cash, variance: Math.abs(difference) })]
     );
 
     res.json({
-      message: "ปิดกะสำเร็จ",
+      message: "ส่งคำขอปิดกะแล้ว รอการอนุมัติจากผู้จัดการ",
+      shift_id: currentShift.id,
+      status: 'PENDING_CLOSE',
+      variance: Math.abs(difference),
       summary: {
         opening_cash: Number(currentShift.opening_cash),
         opened_at: currentShift.opened_at,
         bill_count: Number(s.bill_count),
         total_sales: Number(s.total_sales),
         cash_sales: totalCashSales,
-        qr_sales: Number(s.qr_sales),
-        other_sales: Number(s.other_sales),
         expected_cash: expected_cash,
         actual_cash: Number(actual_cash),
-        difference: difference,
-        note: note
+        difference: difference
       }
     });
 
@@ -1029,17 +1502,165 @@ app.post('/api/shifts/close', async (req, res) => {
   }
 });
 
+app.put('/api/shifts/:id/approve', requireRole('ADMIN'), async (req, res) => {
+  const { approval_notes, password } = req.body;
+  const shiftId = req.params.id;
+  const approverId = req.user.id;
+
+  if (!approval_notes || !approval_notes.trim()) {
+    return res.status(400).json({ error: "กรุณาระบุหมายเหตุการอนุมัติ" });
+  }
+  if (!password) {
+    return res.status(400).json({ error: "กรุณาระบุรหัสผ่านสำหรับยืนยันตัวตน" });
+  }
+
+  try {
+    // Verify password of approver
+    const [users] = await pool.query("SELECT password FROM users WHERE id = ?", [approverId]);
+    if (users.length === 0) {
+      return res.status(401).json({ error: "ไม่พบผู้ใช้นี้" });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, users[0].password);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: "รหัสผ่านไม่ถูกต้อง" });
+    }
+
+    // Verify shift exists and is PENDING_CLOSE
+    const [shifts] = await pool.query(
+      "SELECT id, cashier_id, status FROM shifts WHERE id = ?",
+      [shiftId]
+    );
+    if (shifts.length === 0) {
+      return res.status(404).json({ error: "ไม่พบกะนี้" });
+    }
+
+    const shift = shifts[0];
+    if (shift.status !== 'PENDING_CLOSE') {
+      return res.status(400).json({ error: `กะนี้ไม่ได้อยู่ในสถานะรออนุมัติ (ปัจจุบัน: ${shift.status})` });
+    }
+
+    // Approve close: PENDING_CLOSE → CLOSED
+    await pool.query(
+      `UPDATE shifts
+       SET status = 'CLOSED', closed_at = CURRENT_TIMESTAMP,
+           approved_by = ?, approval_notes = ?, approved_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [approverId, approval_notes, shiftId]
+    );
+
+    // Audit log
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['APPROVE_SHIFT_CLOSE', approverId, 'SHIFT', shiftId, JSON.stringify({ approval_notes })]
+    );
+
+    // Notify cashier
+    req.io.to(`user_${shift.cashier_id}`).emit('shift_approved', {
+      shift_id: shiftId,
+      status: 'CLOSED',
+      message: "คำขอปิดกะของคุณได้รับการอนุมัติแล้ว",
+      approved_at: new Date()
+    });
+
+    res.json({
+      message: "อนุมัติปิดกะสำเร็จ",
+      shift_id: shiftId,
+      status: 'CLOSED',
+      approved_at: formatBangkokTime(new Date())
+    });
+  } catch (error) {
+    console.error("Error approving shift:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/shifts/:id/reject', requireRole('ADMIN'), async (req, res) => {
+  const { reason } = req.body;
+  const shiftId = req.params.id;
+  const rejectorId = req.user.id;
+
+  if (!reason || !reason.trim()) {
+    return res.status(400).json({ error: "กรุณาระบุเหตุผลในการปฏิเสธ" });
+  }
+
+  try {
+    // Verify shift exists and is PENDING_CLOSE
+    const [shifts] = await pool.query(
+      "SELECT id, cashier_id, status FROM shifts WHERE id = ?",
+      [shiftId]
+    );
+    if (shifts.length === 0) {
+      return res.status(404).json({ error: "ไม่พบกะนี้" });
+    }
+
+    const shift = shifts[0];
+    if (shift.status !== 'PENDING_CLOSE') {
+      return res.status(400).json({ error: `กะนี้ไม่ได้อยู่ในสถานะรออนุมัติ (ปัจจุบัน: ${shift.status})` });
+    }
+
+    // Reject close: PENDING_CLOSE → OPEN (reopen for cashier correction)
+    // Clear close-related data
+    await pool.query(
+      `UPDATE shifts
+       SET status = 'OPEN', actual_cash = NULL, difference = NULL,
+           close_photo = NULL, closing_cash_breakdown = NULL,
+           approval_notes = ?, discrepancy_category = NULL
+       WHERE id = ?`,
+      [reason, shiftId]
+    );
+
+    // Audit log
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['REJECT_SHIFT_CLOSE', rejectorId, 'SHIFT', shiftId, JSON.stringify({ reason })]
+    );
+
+    // Notify cashier
+    req.io.to(`user_${shift.cashier_id}`).emit('shift_rejected', {
+      shift_id: shiftId,
+      status: 'OPEN',
+      reason,
+      message: `คำขอปิดกะของคุณถูกปฏิเสธ: ${reason}`,
+      rejected_at: new Date()
+    });
+
+    res.json({
+      message: "ปฏิเสธการปิดกะเรียบร้อย กะถูกเปิดใหม่สำหรับแคชเชียร์ดำเนินการอีกครั้ง",
+      shift_id: shiftId,
+      status: 'OPEN',
+      reason
+    });
+  } catch (error) {
+    console.error("Error rejecting shift:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/shifts/pending', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        sh.id, sh.cashier_id, u.full_name as cashier_name,
+        sh.opening_cash, sh.expected_cash, sh.actual_cash,
+        sh.difference, sh.discrepancy_amount as variance,
+        sh.opened_at, sh.note, sh.close_photo, sh.discrepancy_category
+      FROM shifts sh
+      JOIN users u ON sh.cashier_id = u.id
+      WHERE sh.status = 'PENDING_CLOSE'
+      ORDER BY sh.opened_at ASC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching pending shifts:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // =========================================
 // 2.1 SCHEDULES / ATTENDANCE (หมวด 7 — ตารางเวลา + เช็คมาสาย)
 // =========================================
 
-/**
- * @swagger
- * /api/schedules:
- *   post:
- *     summary: ตั้งตารางเวลาทำงานล่วงหน้าให้พนักงาน (upsert ต่อ cashier_id + work_date)
- *     tags: [Schedules]
- */
 app.post('/api/schedules', requireRole('ADMIN'), async (req, res) => {
   const { cashier_id, work_date, expected_start, expected_end } = req.body;
   if (!cashier_id || !work_date || !expected_start || !expected_end) {
@@ -1062,13 +1683,16 @@ app.post('/api/schedules', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/schedules:
- *   get:
- *     summary: ดูตารางเวลาของพนักงาน (กรองด้วย cashier_id และ/หรือ date ได้)
- *     tags: [Schedules]
- */
+app.delete('/api/schedules/:id', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [result] = await pool.query('DELETE FROM schedules WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบตารางเวลานี้' });
+    res.json({ message: 'ลบตารางเวลาสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   try {
     const { cashier_id, date } = req.query;
@@ -1084,26 +1708,21 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/attendance/check-in:
- *   post:
- *     summary: ลงชื่อเข้างาน (ปัจจุบันใช้กับ ADMIN เท่านั้น — CASHIER ใช้ระบบเปิดกะแทน)
- *     tags: [Attendance]
- */
-/**
- * @swagger
- * /api/attendance/upload-photo:
- *   post:
- *     summary: อัปโหลดรูปถ่ายยืนยันสถานที่ตอนเข้า/ออกงาน
- *     tags: [Attendance]
- */
-app.post('/api/attendance/upload-photo', upload.single('photo'), (req, res) => {
+app.post('/api/attendance/upload-photo', shiftPhotoUpload.single('photo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
-  res.json({ photo_url: `/uploads/${req.file.filename}` });
+  // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
+  const photoType = req.query.type || 'clock-out';
+  const bangkokDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const year = bangkokDate.getFullYear();
+  const month = String(bangkokDate.getMonth() + 1).padStart(2, '0');
+  const day = String(bangkokDate.getDate()).padStart(2, '0');
+  const photoPath = `/uploads/shift-photos/${photoType}/${year}-${month}-${day}/${req.file.filename}`;
+  res.json({ photo_url: photoPath });
 });
 
-app.post('/api/attendance/check-in', requireRole('ADMIN'), async (req, res) => {
+// ⭐️ Sprint 0 — A3: เดิม requireRole('ADMIN') เท่านั้น ทั้งที่ query ข้างในใช้ req.user.id (self-scoped)
+// และ Shift.tsx (clock-in flow) เรียกใช้จากทั้ง CASHIER และ ADMIN — ทำให้ CASHIER check-in ไม่ได้เลย
+app.post('/api/attendance/check-in', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   const { check_in_photo } = req.body;
   if (!check_in_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อเข้างาน" });
   try {
@@ -1124,14 +1743,8 @@ app.post('/api/attendance/check-in', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/attendance/check-out:
- *   put:
- *     summary: ลงชื่อออกงาน
- *     tags: [Attendance]
- */
-app.put('/api/attendance/check-out', requireRole('ADMIN'), async (req, res) => {
+// ⭐️ Sprint 0 — A3: เหตุผลเดียวกับ check-in ด้านบน
+app.put('/api/attendance/check-out', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   const { check_out_photo } = req.body;
   if (!check_out_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อออกงาน" });
   try {
@@ -1153,13 +1766,6 @@ app.put('/api/attendance/check-out', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/attendance/today:
- *   get:
- *     summary: เช็คว่าวันนี้ลงชื่อเข้างานหรือยัง (ใช้ตอนล็อกอิน ADMIN)
- *     tags: [Attendance]
- */
 app.get('/api/attendance/today', async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -1176,13 +1782,6 @@ app.get('/api/attendance/today', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/attendance:
- *   get:
- *     summary: ดูประวัติ attendance ทั้งหมด (ADMIN-only) กรองด้วย user_id/month ได้ — ใช้แก้ไขกรณีลืมออกงาน
- *     tags: [Attendance]
- */
 app.get('/api/attendance', requireRole('ADMIN'), async (req, res) => {
   try {
     const { user_id, month } = req.query;
@@ -1217,13 +1816,6 @@ app.get('/api/attendance', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/attendance/{id}:
- *   put:
- *     summary: ADMIN แก้ไข check_in/check_out ย้อนหลัง (กรณีลืม/ผิดพลาด) พร้อมบันทึก note
- *     tags: [Attendance]
- */
 app.put('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
   const { check_in, check_out, note, source } = req.body;
   try {
@@ -1260,13 +1852,6 @@ app.delete('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/attendance/auto-checkout-stale:
- *   post:
- *     summary: ตัดออกงาน/ปิดกะอัตโนมัติทุกคนที่ลืมออกข้ามวัน (ระบบมี cron รันเที่ยงคืนให้อยู่แล้ว endpoint นี้ไว้สั่งด้วยมือกรณีต้องการรันทันที)
- *     tags: [Attendance]
- */
 // ⭐️ ตรรกะตัดออกงาน/ปิดกะอัตโนมัติ (แยกเป็นฟังก์ชันเพื่อให้ทั้ง endpoint และ cron เรียกใช้ร่วมกันได้)
 async function runAutoCheckoutStale(io) {
   // ⭐️ attendance ที่ค้าง (ADMIN ลืมลงชื่อออกงานข้ามวัน)
@@ -1311,13 +1896,6 @@ app.post('/api/attendance/auto-checkout-stale', requireRole('ADMIN'), async (req
   }
 });
 
-/**
- * @swagger
- * /api/holidays:
- *   post:
- *     summary: ตั้งวันหยุดพิเศษ (วันในนี้จะไม่ถูกนับว่ามาสาย/ขาดงาน)
- *     tags: [Holidays]
- */
 app.post('/api/holidays', requireRole('ADMIN'), async (req, res) => {
   const { holiday_date, note } = req.body;
   if (!holiday_date) return res.status(400).json({ error: "กรุณาระบุวันที่" });
@@ -1330,13 +1908,6 @@ app.post('/api/holidays', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/holidays:
- *   get:
- *     summary: ดูรายการวันหยุดพิเศษทั้งหมด
- *     tags: [Holidays]
- */
 app.get('/api/holidays', async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT id, DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date, note FROM holidays ORDER BY holiday_date DESC");
@@ -1346,13 +1917,6 @@ app.get('/api/holidays', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/attendance:
- *   get:
- *     summary: เทียบเวลาเข้างานจริงกับตารางเวลา (CASHIER เทียบ shifts.opened_at, ADMIN เทียบ attendance.check_in) ข้ามวันหยุด กรองตามเดือนได้ (?month=YYYY-MM)
- *     tags: [Reports]
- */
 app.get('/api/reports/attendance', requireRole('ADMIN'), async (req, res) => {
   try {
     const { month } = req.query; // 'YYYY-MM'
@@ -1385,13 +1949,6 @@ app.get('/api/reports/attendance', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/orders/{id}/assign:
- *   post:
- *     summary: พนักงานรับงาน order (first-come-first-served) — ล็อคสิทธิ์เฉพาะคนนั้นจนปิดบิล
- *     tags: [Orders]
- */
 app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
@@ -1425,53 +1982,18 @@ app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => 
     const [orders] = await pool.query('SELECT user_id FROM orders WHERE id = ? AND status = ?', [req.params.id, 'SLIP_REJECTED']);
     if (orders.length === 0) return res.status(404).json({ error: "ไม่พบออเดอร์หรือสถานะไม่ถูกต้อง" });
     if (orders[0].user_id !== req.user.id) return res.status(403).json({ error: "ไม่มีสิทธิ์แก้ไขออเดอร์นี้" });
-    await pool.query("UPDATE orders SET slip_image = ?, status = 'PENDING_VERIFY', reject_reason = NULL WHERE id = ?", [slip_image, req.params.id]);
+    // ⭐️ Task 4 — reset สถานะตรวจสลิปกลับเป็น PENDING ตอนลูกค้าส่งสลิปใหม่
+    await pool.query("UPDATE orders SET slip_image = ?, slip_file_path = ?, slip_verification_status = 'PENDING', status = 'PENDING_VERIFY', reject_reason = NULL WHERE id = ?", [slip_image, slip_image, req.params.id]);
     req.io.emit('new_order_received', { message: `ลูกค้าส่งสลิปใหม่ ออเดอร์ #${req.params.id}`, order_id: req.params.id });
     req.io.emit('order_status_changed', { order_id: req.params.id, status: 'PENDING_VERIFY' });
+    req.io.emit('payment_slip_received', { order_id: req.params.id, message: `ออเดอร์ #${req.params.id} ส่งสลิปใหม่ รอตรวจสอบ` });
     res.json({ message: "ส่งสลิปใหม่สำเร็จ รอพนักงานตรวจสอบ" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/sales/checkout:
- *   post:
- *     summary: ชำระเงินและสร้างใบเสร็จ (Checkout)
- *     tags: [Sales]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - cashier_id
- *               - payment_method
- *               - amount_received
- *               - items
- *             properties:
- *               cashier_id:
- *                 type: integer
- *               payment_method:
- *                 type: string
- *               amount_received:
- *                 type: number
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     product_id:
- *                       type: integer
- *                     quantity:
- *                       type: integer
- *     responses:
- *       200:
- *         description: ทำรายการสำเร็จ
- */
-app.post('/api/sales/checkout', async (req, res) => {
+app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter, validateRequest(checkoutValidator), async (req, res) => {
   // ⭐️ เพิ่มการรับค่า member_id, promotion_id, redeem_points เข้ามาด้วย
   const { cashier_id, member_id, promotion_id, redeem_points, payment_method, amount_received, items } = req.body;
   if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าสินค้าว่างเปล่า" });
@@ -1480,22 +2002,61 @@ app.post('/api/sales/checkout', async (req, res) => {
 
   try {
     await conn.beginTransaction();
-    let totalAmount = 0;
+    // ⭐️ Sprint 1 — B3: totalAmount สะสมในหน่วยสตางค์ (integer) แทน float บาท กัน drift สะสมข้ามหลาย
+    // รายการในตะกร้า (เดิม: product.price * item.quantity เป็น float คูณ+บวกสะสมทีละรายการ)
+    let totalAmountSatang = 0;
     const processedItems = [];
+    const stockIssues = []; // ⭐️ Sprint 2 — B7: Collect stock validation errors
 
-    // 1. เช็คราคาสินค้าและสต๊อก
+    // 1. เช็คราคาสินค้าและสต๊อก + ⭐️ Sprint 2: เช็ค expiry status
     for (let item of items) {
-      const [productRows] = await conn.query('SELECT price, stock FROM products WHERE id = ?', [item.product_id]);
+      const [productRows] = await conn.query('SELECT id, name, price, stock, expiry_date, discount_percent FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
       if (productRows.length === 0) throw new Error(`ไม่พบสินค้า ID: ${item.product_id}`);
 
       const product = productRows[0];
-      if (product.stock < item.quantity) throw new Error(`สต๊อกไม่เพียงพอสำหรับสินค้า ID: ${item.product_id}`);
+      // ⭐️ Sprint 2 — B7: Collect insufficient stock issues instead of throwing
+      if (product.stock < item.quantity) {
+        stockIssues.push({
+          product_id: item.product_id,
+          product_name: product.name,
+          requested: item.quantity,
+          available: product.stock
+        });
+        continue; // Skip this item but continue checking others
+      }
 
-      const subtotal = product.price * item.quantity;
-      totalAmount += subtotal;
+      // ⭐️ Sprint 2: Check for expired products — block sale if expired
+      const expiryStatus = getProductExpiry(product);
+      if (expiryStatus.status === 'expired') {
+        throw new Error(`ไม่สามารถขายสินค้าที่หมดอายุแล้ว: ${product.name}`);
+      }
 
-      processedItems.push({ product_id: item.product_id, quantity: item.quantity, unit_price: product.price, subtotal: subtotal, stock_before: product.stock });
+      let itemPrice = product.price;
+      // ⭐️ Sprint 2: Auto-apply 40% discount if near_expiry
+      if (expiryStatus.status === 'near_expiry') {
+        const discountAmount = Math.round(itemPrice * product.discount_percent / 100);
+        itemPrice -= discountAmount;
+        console.log(`[CHECKOUT] Auto ${product.discount_percent}% discount applied to ${product.name}`);
+      }
+
+      const subtotalSatang = toSatang(itemPrice) * item.quantity;
+      const subtotal = fromSatang(subtotalSatang);
+      totalAmountSatang += subtotalSatang;
+
+      processedItems.push({ product_id: item.product_id, quantity: item.quantity, unit_price: itemPrice, subtotal: subtotal, stock_before: product.stock });
     }
+
+    // ⭐️ Sprint 2 — B7: If any stock issues, return 400 with details
+    if (stockIssues.length > 0) {
+      await conn.rollback();
+      conn.release();
+      return res.status(400).json({
+        error: "สต๊อกไม่เพียงพอสำหรับบางรายการ",
+        issues: stockIssues
+      });
+    }
+
+    let totalAmount = fromSatang(totalAmountSatang);
 
     // ⭐️ 1.5 คำนวณส่วนลดจากโปรโมชั่นใหม่ฝั่ง Backend เอง (ห้ามเชื่อ discount ที่ client ส่งมา)
     let discountAmount = 0;
@@ -1511,7 +2072,9 @@ app.post('/api/sales/checkout', async (req, res) => {
       discountAmount = await calculatePromotionDiscount(conn.query.bind(conn), promo, totalAmount, items);
       appliedPromo = promo;
     }
-    let netTotal = totalAmount - discountAmount;
+    // ⭐️ B3 — ลบส่วนลดในหน่วยสตางค์เช่นกัน
+    let netTotalSatang = totalAmountSatang - toSatang(discountAmount);
+    let netTotal = fromSatang(netTotalSatang);
 
     // ⭐️ 1.6 แลกแต้มเป็นส่วนลด (1 แต้ม = ฿1) — คำนวณ/ตรวจสอบใหม่ฝั่ง backend ทั้งหมด ห้ามเชื่อ client
     let pointsRedeemed = 0;
@@ -1523,32 +2086,54 @@ app.post('/api/sales/checkout', async (req, res) => {
 
       pointsRedeemed = Math.min(Number(redeem_points), availablePoints, Math.floor(netTotal));
       if (pointsRedeemed < 0) pointsRedeemed = 0;
-      pointsDiscount = pointsRedeemed; // อัตรา 1 แต้ม = ฿1
-      netTotal -= pointsDiscount;
+      pointsDiscount = pointsRedeemed; // อัตรา 1 แต้ม = ฿1 (จำนวนเต็มอยู่แล้ว ไม่มีเศษสตางค์)
+      netTotalSatang -= toSatang(pointsDiscount);
+      netTotal = fromSatang(netTotalSatang);
     }
 
-    // 2. ตรวจสอบเงินทอน (เทียบกับยอดสุทธิหลังหักส่วนลด+แต้ม)
-    if (amount_received < netTotal) throw new Error("รับเงินลูกค้ามาไม่พอ!");
-    const changeAmount = amount_received - netTotal;
+    // 2. ตรวจสอบเงินทอน (เทียบกับยอดสุทธิหลังหักส่วนลด+แต้ม) — ⭐️ B3: เทียบ/คำนวณในหน่วยสตางค์
+    const amountReceivedSatang = toSatang(amount_received);
+    if (amountReceivedSatang < netTotalSatang) throw new Error("รับเงินลูกค้ามาไม่พอ!");
+    const changeAmount = fromSatang(amountReceivedSatang - netTotalSatang);
 
     // ⭐️ หากะที่เปิดอยู่ของแคชเชียร์คนนี้ ผูกเข้าบิล (แม่นกว่าเทียบช่วงเวลา ถ้าเปิดกะซ้อนเวลากันหลายคน)
     const [openShiftRows] = await conn.query(`SELECT id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1`, [cashier_id]);
     const shiftId = openShiftRows[0]?.id || null;
 
     // 3. สร้างหัวบิลใบเสร็จ (ผูก member_id, promotion_id, discount_amount, points_redeemed, shift_id ลงไป)
+    // ⭐️ Sprint 2 — B6: Store idempotency_key for offline handling
+    const idempotencyKey = req.headers['idempotency-key'];
     const [saleResult] = await conn.query(
-      'INSERT INTO sales (cashier_id, member_id, promotion_id, total_amount, discount_amount, points_redeemed, points_discount, payment_method, amount_received, change_amount, shift_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [cashier_id, member_id || null, promotion_id || null, netTotal, discountAmount, pointsRedeemed, pointsDiscount, payment_method, amount_received, changeAmount, shiftId]
+      'INSERT INTO sales (cashier_id, member_id, promotion_id, total_amount, discount_amount, points_redeemed, points_discount, payment_method, amount_received, change_amount, shift_id, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [cashier_id, member_id || null, promotion_id || null, netTotal, discountAmount, pointsRedeemed, pointsDiscount, payment_method, amount_received, changeAmount, shiftId, idempotencyKey || null]
     );
     const saleId = saleResult.insertId;
 
     // 4. บันทึกรายละเอียดสินค้าและตัดสต๊อก
     const lowStockMsgs = [];
+    const raceConditionItems = []; // ⭐️ Sprint 2 — B7: Collect race condition errors
     for (let item of processedItems) {
       await conn.query('INSERT INTO sale_items (sale_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)', [saleId, item.product_id, item.quantity, item.unit_price, item.subtotal]);
-      await conn.query('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.product_id]);
+
+      // ⭐️ Sprint 2 — B7: Check affectedRows to detect race condition
+      const [updateResult] = await conn.query('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?', [item.quantity, item.product_id, item.quantity]);
+      if (updateResult.affectedRows === 0) {
+        // Stock was modified by another transaction (race condition)
+        raceConditionItems.push(item.product_id);
+      }
+
       const msg = await notifyIfLowStock(conn, req.io, item.product_id, item.stock_before, item.stock_before - item.quantity);
       if (msg) lowStockMsgs.push(msg);
+    }
+
+    // ⭐️ Sprint 2 — B7: If any race condition detected, return 409
+    if (raceConditionItems.length > 0) {
+      await conn.rollback();
+      conn.release();
+      return res.status(409).json({
+        error: "สต๊อกถูกแก้ไขโดยระบบอื่นพร้อมกัน กรุณาลองใหม่",
+        conflicted_products: raceConditionItems
+      });
     }
 
     // ⭐️ 5. หักแต้มที่แลกใช้ไป + คำนวณแต้มสะสมใหม่ (ทุก 20 บาท = 1 แต้ม, คิดจากยอดสุทธิหลังหักทุกส่วนลด)
@@ -1570,6 +2155,12 @@ app.post('/api/sales/checkout', async (req, res) => {
         await conn.query('INSERT INTO promotion_usages (promotion_id, member_id) VALUES (?, ?)', [appliedPromo.id, member_id]);
       }
     }
+
+    // ⭐️ Task 5 — audit log (ในทรานแซกชันเดียวกับบิล กันเคส commit สำเร็จแต่ log หาย)
+    await conn.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['CHECKOUT', req.user.id, 'SALE', saleId, JSON.stringify({ amount: netTotal, items: processedItems.length, payment_method })]
+    );
 
     await conn.commit();
     req.io.emit('stock_updated', { message: 'มีการตัดสต๊อกสินค้า ให้โหลดข้อมูลใหม่' });
@@ -1603,17 +2194,7 @@ app.post('/api/sales/checkout', async (req, res) => {
 // 5.1 SALES HISTORY, HOLD & VOID (ประวัติ, พักบิล และ ยกเลิกบิล)
 // =========================================
 
-/**
- * @swagger
- * /api/sales/history:
- *   get:
- *     summary: ดึงประวัติการขาย (เลือกช่วงเวลาได้)
- *     tags: [Sales]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/sales/history', async (req, res) => {
+app.get('/api/sales/history', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
@@ -1651,23 +2232,7 @@ app.get('/api/sales/history', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/sales/history/{id}:
- *   get:
- *     summary: ดูรายละเอียดสินค้าภายในบิล
- *     tags: [Sales]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/sales/history/:id', async (req, res) => {
+app.get('/api/sales/history/:id', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     const { source } = req.query; // 'PREORDER' = ดูจาก order_items, อื่นๆ = sale_items (บิลหน้าร้าน)
     let rows;
@@ -1692,27 +2257,8 @@ app.get('/api/sales/history/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/sales/{id}/void:
- *   post:
- *     summary: ยกเลิกบิล (Void) คืนสต๊อกและแต้ม (เฉพาะ ADMIN)
- *     tags: [Sales]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: ยกเลิกสำเร็จ
- */
-app.post('/api/sales/:id/void', async (req, res) => {
+app.post('/api/sales/:id/void', requireRole('ADMIN'), async (req, res) => {
   const saleId = req.params.id;
-  const { user_role } = req.body;
-
-  if (user_role !== 'ADMIN') return res.status(403).json({ error: "เฉพาะ ADMIN เท่านั้น" });
 
   const conn = await pool.getConnection();
   try {
@@ -1728,6 +2274,12 @@ app.post('/api/sales/:id/void', async (req, res) => {
 
     // ⭐️ เปลี่ยนสถานะบิลเป็น VOIDED
     await conn.query('UPDATE sales SET status = "VOIDED" WHERE id = ?', [saleId]);
+
+    // ⭐️ บันทึก audit log: ใครสั่ง void บิลไหน มูลค่าเท่าไร (ใช้ req.user.id/role จาก JWT เท่านั้น ห้ามเชื่อ body)
+    await conn.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['VOID_SALE', req.user.id, 'sale', saleId, JSON.stringify({ role: req.user.role, total_amount: sale.total_amount, member_id: sale.member_id })]
+    );
 
     // คืนสต๊อก
     const [items] = await conn.query('SELECT product_id, quantity FROM sale_items WHERE sale_id = ?', [saleId]);
@@ -1758,40 +2310,7 @@ app.post('/api/sales/:id/void', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/sales/hold:
- *   post:
- *     summary: บันทึกตะกร้าสินค้าไว้ชั่วคราว (พักบิล) - ยังไม่ตัดสต๊อก
- *     tags: [Sales]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - cashier_id
- *               - items
- *             properties:
- *               cashier_id:
- *                 type: integer
- *               member_id:
- *                 type: string
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     product_id:
- *                       type: integer
- *                     quantity:
- *                       type: integer
- *     responses:
- *       201:
- *         description: พักบิลสำเร็จ
- */
-app.post('/api/sales/hold', async (req, res) => {
+app.post('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id, member_id, items } = req.body;
 
   if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าว่างเปล่า" });
@@ -1839,17 +2358,7 @@ app.post('/api/sales/hold', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/sales/hold:
- *   get:
- *     summary: ดึงรายการบิลที่ถูกพักไว้ทั้งหมด
- *     tags: [Sales]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/sales/hold', async (req, res) => {
+app.get('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM sales WHERE status = "HOLD"');
     res.json(rows);
@@ -1858,23 +2367,7 @@ app.get('/api/sales/hold', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/sales/hold/{id}:
- *   delete:
- *     summary: ลบบิลที่พักไว้ (ลูกค้ายกเลิกไม่เอาแล้ว)
- *     tags: [Sales]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: ลบสำเร็จ
- */
-app.delete('/api/sales/hold/:id', async (req, res) => {
+app.delete('/api/sales/hold/:id', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const saleId = req.params.id;
   const conn = await pool.getConnection();
   try {
@@ -1895,167 +2388,13 @@ app.delete('/api/sales/hold/:id', async (req, res) => {
 // =========================================
 // 6. MEMBERS (ระบบสมาชิกสหกรณ์)
 // =========================================
+// ⭐️ HOTFIX: GET/POST /api/members และ /api/members/:id/points ถูกลบออก —
+// อ้างอิงตาราง `members` ที่ไม่มีอยู่จริง (single-identity design: สมาชิกคือ users role=MEMBER, ดู db.js)
+// ทำให้ทุก call ไปที่ 4 endpoint นี้ crash ด้วย ER_NO_SUCH_TABLE เสมอ
+// ระบบสมาชิกตัวจริงอยู่ที่ /api/users/search, /api/users/register, /api/users/:id/profile
+// เหลือไว้เฉพาะ /api/members/import เพราะ insert เข้า users ถูกต้องอยู่แล้ว (ดูโค้ดด้านล่าง)
 
-/**
- * @swagger
- * /api/members:
- *   get:
- *     summary: ค้นหาสมาชิก (รองรับการค้นหาด้วย student_id หรือชื่อ)
- *     tags: [Members]
- *     parameters:
- *       - in: query
- *         name: search
- *         schema:
- *           type: string
- *         description: รหัสนักศึกษา หรือ ชื่อ-นามสกุล
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/members', async (req, res) => {
-  try {
-    const { search } = req.query;
-    let query = 'SELECT * FROM members';
-    let params = [];
-
-    if (search) {
-      query += ' WHERE student_id LIKE ? OR full_name LIKE ?';
-      params.push(`%${search}%`, `%${search}%`);
-    }
-
-    const [rows] = await pool.query(query, params);
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * @swagger
- * /api/members:
- *   post:
- *     summary: สมัครสมาชิกใหม่
- *     tags: [Members]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - student_id
- *               - full_name
- *             properties:
- *               student_id:
- *                 type: string
- *               full_name:
- *                 type: string
- *     responses:
- *       201:
- *         description: สมัครสมาชิกสำเร็จ
- */
-app.post('/api/members', async (req, res) => {
-  const { student_id, full_name } = req.body;
-  if (!student_id || !full_name) {
-    return res.status(400).json({ error: "กรุณาระบุรหัสนักศึกษาและชื่อ-นามสกุล" });
-  }
-
-  try {
-    await pool.query(
-      'INSERT INTO members (student_id, full_name, points) VALUES (?, ?, 0)',
-      [student_id, full_name]
-    );
-    res.status(201).json({ message: "สมัครสมาชิกสำเร็จ", student_id, full_name, points: 0 });
-  } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: "รหัสนักศึกษานี้เป็นสมาชิกอยู่แล้ว" });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * @swagger
- * /api/members/{id}/points:
- *   get:
- *     summary: เช็คแต้มสะสมของสมาชิก
- *     tags: [Members]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: รหัสนักศึกษา (student_id)
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/members/:id/points', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT student_id, full_name, points FROM members WHERE student_id = ?', [req.params.id]);
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "ไม่พบข้อมูลสมาชิก" });
-    }
-    res.json(rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * @swagger
- * /api/members/{id}/points:
- *   patch:
- *     summary: เพิ่ม/ลด แต้มสะสมแมนนวล (เช่น แลกของรางวัล)
- *     tags: [Members]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: รหัสนักศึกษา
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - points_to_add
- *             properties:
- *               points_to_add:
- *                 type: integer
- *                 description: ใส่ค่าบวกเพื่อเพิ่มแต้ม ใส่ค่าลบเพื่อตัดแต้ม
- *     responses:
- *       200:
- *         description: อัปเดตสำเร็จ
- */
-app.patch('/api/members/:id/points', async (req, res) => {
-  const { points_to_add } = req.body;
-  if (points_to_add === undefined) {
-    return res.status(400).json({ error: "กรุณาระบุจำนวนแต้มที่ต้องการอัปเดต" });
-  }
-
-  try {
-    // ใช้ตัวแปรเพื่อป้องกันแต้มติดลบ
-    const [result] = await pool.query(
-      'UPDATE members SET points = GREATEST(0, points + ?) WHERE student_id = ?',
-      [points_to_add, req.params.id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "ไม่พบข้อมูลสมาชิก" });
-    }
-
-    res.json({ message: "อัปเดตแต้มสะสมสำเร็จ" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/members/import', upload.single('file'), async (req, res) => {
+app.post('/api/members/import', requireRole('ADMIN'), csvUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "กรุณาเลือกไฟล์ CSV" });
 
   const results = [];
@@ -2090,17 +2429,7 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
 // 7. REPORTS & DASHBOARD (ระบบรายงานสรุป)
 // =========================================
 
-/**
- * @swagger
- * /api/reports/dashboard:
- *   get:
- *     summary: สรุปยอดขายรวมประจำวัน (Today's Dashboard)
- *     tags: [Reports]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/reports/dashboard', async (req, res) => {
+app.get('/api/reports/dashboard', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     // ⭐️ รวมยอดขายหน้าร้าน (sales) กับบิลจากการจองที่ลูกค้ามารับแล้ว (orders สถานะ COMPLETED)
     // นับ orders เข้าวันที่ "มารับจริง" (completed_at) ไม่ใช่วันที่จอง (created_at)
@@ -2141,17 +2470,7 @@ app.get('/api/reports/dashboard', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/top-selling:
- *   get:
- *     summary: จัดอันดับสินค้าขายดี (Top 10)
- *     tags: [Reports]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/reports/top-selling', async (req, res) => {
+app.get('/api/reports/top-selling', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     // ⭐️ รวมรายการจาก sale_items (ขายหน้าร้าน) กับ order_items (บิลจองที่ COMPLETED แล้ว)
     const [rows] = await pool.query(`
@@ -2179,21 +2498,24 @@ app.get('/api/reports/top-selling', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-/**
- * @swagger
- * /api/reports/vendor-sales:
- *   get:
- *     summary: สรุปยอดขายสินค้าฝากขายแยกตามนักศึกษา (สำหรับจ่ายเงินรอบเดือน)
- *     tags: [Reports]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
+// 🐛 FIX (round 2) — แก้รอบแรกเปิดแค่ requireRole('ADMIN','MEMBER') โดยลืมไปว่า CASHIER/ADMIN ก็เห็น
+// ลิงก์ "ยอดฝากขายของฉัน" ได้เหมือนกันตอนสลับเป็นโหมด "ซื้อของ/จองสินค้า" (sessionMode='shop' ใน
+// Layout.tsx ทำให้ isStaff เป็น false แล้วโชว์ /my-sales ให้ CASHIER/ADMIN ด้วย) เจอจาก log จริง:
+// role=CASHIER โดน 403 — วิธีแก้ที่ถูกคือเลิก enumerate role เป็นรายตัว เพราะ route นี้ self-scoped
+// อยู่แล้ว (ownership check ด้านล่าง) ต้องแค่ authenticateToken (มี global อยู่แล้ว) ก็พอ ไม่ต้องมี
+// requireRole เลย — ใครก็ตามที่ login แล้วดูได้เฉพาะของตัวเอง ยกเว้น ADMIN ที่ดูของใครก็ได้
 app.get('/api/reports/vendor-sales', async (req, res) => {
   try {
     // ⭐️ ถ้ามี ?vendor_id= ส่งมา ให้กรองเฉพาะของเจ้าของคนนั้น (ใช้กับหน้า "ยอดฝากขายของฉัน")
-    // ไม่ส่งมา = ดึงสรุปทุกคน (ใช้กับ ADMIN)
+    // ไม่ส่งมา = ดึงสรุปทุกคน (ใช้กับ ADMIN เท่านั้น)
     const { vendor_id } = req.query;
+
+    if (req.user.role !== 'ADMIN') {
+      if (!vendor_id || Number(vendor_id) !== req.user.id) {
+        return res.status(403).json({ error: "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น" });
+      }
+    }
+
     let query = `
       SELECT 
         u.id as vendor_id,
@@ -2223,20 +2545,16 @@ app.get('/api/reports/vendor-sales', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/vendor-sales/detail:
- *   get:
- *     summary: รายละเอียดสินค้าฝากขายรายชิ้นของ vendor คนหนึ่ง (สำหรับหน้า "ยอดฝากขายของฉัน")
- *     tags: [Reports]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
+// 🐛 FIX (round 2) — เหตุผลเดียวกับ /api/reports/vendor-sales ด้านบน: เลิก enumerate role, ใช้
+// ownership check แทน (ใครก็ดูของตัวเองได้ ยกเว้น ADMIN ดูของใครก็ได้)
 app.get('/api/reports/vendor-sales/detail', async (req, res) => {
   try {
     const { vendor_id } = req.query;
     if (!vendor_id) return res.status(400).json({ error: 'ต้องระบุ vendor_id' });
+
+    if (req.user.role !== 'ADMIN' && Number(vendor_id) !== req.user.id) {
+      return res.status(403).json({ error: "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น" });
+    }
 
     const [rows] = await pool.query(`
       SELECT 
@@ -2264,15 +2582,6 @@ app.get('/api/reports/vendor-sales/detail', async (req, res) => {
 // REPORTS เพิ่มเติม (หมวด 5 — Dashboard ADMIN) — ทุก endpoint requireRole('ADMIN')
 // =========================================
 
-/**
- * @swagger
- * /api/reports/void-summary:
- *   get:
- *     summary: สรุปยอด/จำนวนบิลที่ถูกยกเลิก (VOID) วันนี้
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/void-summary', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -2286,15 +2595,6 @@ app.get('/api/reports/void-summary', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/shift-anomalies:
- *   get:
- *     summary: กะที่ปิดแล้วมีส่วนต่างเงินสดผิดปกติวันนี้ (|difference| เกิน tolerance)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/shift-anomalies', requireRole('ADMIN'), async (req, res) => {
   try {
     // tolerance ±20 บาท ถือว่าปกติ เกินกว่านี้ = ผิดปกติ
@@ -2311,15 +2611,6 @@ app.get('/api/reports/shift-anomalies', requireRole('ADMIN'), async (req, res) =
   }
 });
 
-/**
- * @swagger
- * /api/reports/sales-comparison:
- *   get:
- *     summary: เปรียบเทียบยอดขายวันนี้ vs เมื่อวาน vs สัปดาห์ก่อน (%)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/sales-comparison', requireRole('ADMIN'), async (req, res) => {
   try {
     // ยอดต่อวัน = sales (created_at) + orders COMPLETED (completed_at)
@@ -2350,15 +2641,6 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN'), async (req, res) 
   }
 });
 
-/**
- * @swagger
- * /api/reports/hourly-sales:
- *   get:
- *     summary: ยอดขายรายชั่วโมงของวันนี้ (จาก sales.created_at)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/hourly-sales', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -2378,15 +2660,6 @@ app.get('/api/reports/hourly-sales', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/sales-by-cashier:
- *   get:
- *     summary: สรุปยอดขาย/จำนวนบิลต่อพนักงานต่อกะ (วันนี้)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/sales-by-cashier', requireRole('ADMIN'), async (req, res) => {
   try {
     // ⭐️ หมวด 6: JOIN sales.shift_id = shifts.id แม่นกว่าเทียบช่วงเวลา (รองรับเปิดกะซ้อนเวลากันหลายคน)
@@ -2409,15 +2682,6 @@ app.get('/api/reports/sales-by-cashier', requireRole('ADMIN'), async (req, res) 
   }
 });
 
-/**
- * @swagger
- * /api/reports/open-shifts:
- *   get:
- *     summary: กะที่ยังเปิดค้างอยู่ (status=OPEN)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/open-shifts', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -2433,15 +2697,22 @@ app.get('/api/reports/open-shifts', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/pending-orders:
- *   get:
- *     summary: Pre-order ที่ยังค้างดำเนินการ (ยังไม่ COMPLETED/CANCELLED)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
+app.get('/api/shifts/pending-approval', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT sh.id, sh.cashier_id, u.full_name as cashier_name, sh.opening_cash, sh.expected_cash,
+             sh.actual_cash, sh.difference, sh.discrepancy_amount, sh.opened_at, sh.closed_at, sh.note
+      FROM shifts sh
+      JOIN users u ON sh.cashier_id = u.id
+      WHERE sh.status = 'PENDING_APPROVAL'
+      ORDER BY sh.opened_at ASC
+    `);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/reports/pending-orders', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -2456,15 +2727,6 @@ app.get('/api/reports/pending-orders', requireRole('ADMIN'), async (req, res) =>
   }
 });
 
-/**
- * @swagger
- * /api/reports/sales-channel:
- *   get:
- *     summary: สัดส่วนยอดขายวันนี้ แยกหน้าร้าน (sales) vs Pre-order (orders)
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/sales-channel', requireRole('ADMIN'), async (req, res) => {
   try {
     const [walkin] = await pool.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE status='COMPLETED' AND DATE(created_at)=CURDATE()`);
@@ -2475,15 +2737,6 @@ app.get('/api/reports/sales-channel', requireRole('ADMIN'), async (req, res) => 
   }
 });
 
-/**
- * @swagger
- * /api/reports/gross-profit:
- *   get:
- *     summary: กำไรขั้นต้นวันนี้ (price - cost ต่อชิ้น) พร้อมหัก GP สินค้าฝากขาย
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/gross-profit', requireRole('ADMIN'), async (req, res) => {
   try {
     // กำไรขั้นต้น = subtotal - (cost * qty) - GP ที่ต้องคืน vendor (เฉพาะสินค้าฝากขาย)
@@ -2507,15 +2760,6 @@ app.get('/api/reports/gross-profit', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/dead-stock:
- *   get:
- *     summary: สินค้าขายไม่ออก (ไม่มียอดขายใน 30 วันล่าสุด) แต่ยังมีสต๊อก
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/dead-stock', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -2537,15 +2781,6 @@ app.get('/api/reports/dead-stock', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/reports/vendor-summary:
- *   get:
- *     summary: สรุปยอดขายสินค้าฝากขายรวมทุก vendor (สำหรับ ADMIN) หัก GP แล้ว
- *     tags: [Reports]
- *     responses:
- *       200: { description: สำเร็จ }
- */
 app.get('/api/reports/vendor-summary', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -2570,19 +2805,170 @@ app.get('/api/reports/vendor-summary', requireRole('ADMIN'), async (req, res) =>
 });
 
 // =========================================
+// ⭐️ SUMMARY / PAYROLL (หน้า "สรุปข้อมูล" — ADMIN เท่านั้น)
+// =========================================
+
+app.get('/api/reports/payroll', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+    // พนักงานทั้งหมด (CASHIER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
+    const [staff] = await pool.query(
+      `SELECT id, full_name, role, hourly_rate FROM users WHERE role IN ('CASHIER','ADMIN') AND is_active = TRUE ORDER BY full_name`
+    );
+
+    // ชั่วโมงทำงาน: CASHIER นับจาก shifts ที่ปิดสมบูรณ์แล้ว (status='CLOSED'), ADMIN นับจาก attendance
+    const [shiftMinutes] = await pool.query(
+      `SELECT cashier_id as user_id, SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
+       FROM shifts
+       WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND DATE_FORMAT(opened_at, '%Y-%m') = ?
+       GROUP BY cashier_id`,
+      [month]
+    );
+    const [attendanceMinutes] = await pool.query(
+      `SELECT user_id, SUM(TIMESTAMPDIFF(MINUTE, check_in, check_out)) as total_minutes
+       FROM attendance
+       WHERE check_out IS NOT NULL AND DATE_FORMAT(check_in, '%Y-%m') = ?
+       GROUP BY user_id`,
+      [month]
+    );
+
+    // มาสาย: ใช้ตรรกะเดียวกับ /api/reports/attendance (เทียบ schedules.expected_start กับเวลาจริง) ยกเว้นวันหยุด
+    const [lateRows] = await pool.query(
+      `SELECT user_id, work_date, actual_time,
+         CASE WHEN actual_time IS NULL THEN NULL
+              ELSE TIMESTAMPDIFF(MINUTE, CONCAT(work_date, ' ', expected_start), actual_time)
+         END as late_minutes
+       FROM (
+         SELECT s.cashier_id as user_id, s.work_date, s.expected_start, sh.opened_at as actual_time
+         FROM schedules s
+         JOIN users u ON s.cashier_id = u.id AND u.role = 'CASHIER'
+         LEFT JOIN shifts sh ON sh.cashier_id = s.cashier_id AND DATE(sh.opened_at) = s.work_date
+         UNION ALL
+         SELECT s.cashier_id as user_id, s.work_date, s.expected_start, att.check_in as actual_time
+         FROM schedules s
+         JOIN users u ON s.cashier_id = u.id AND u.role = 'ADMIN'
+         LEFT JOIN attendance att ON att.user_id = s.cashier_id AND DATE(att.check_in) = s.work_date
+       ) combined
+       WHERE work_date NOT IN (SELECT holiday_date FROM holidays)
+         AND DATE_FORMAT(work_date, '%Y-%m') = ?`,
+      [month]
+    );
+
+    const minutesByUser = {};
+    for (const r of shiftMinutes) minutesByUser[r.user_id] = (minutesByUser[r.user_id] || 0) + Number(r.total_minutes || 0);
+    for (const r of attendanceMinutes) minutesByUser[r.user_id] = (minutesByUser[r.user_id] || 0) + Number(r.total_minutes || 0);
+
+    const lateMinutesByUser = {};
+    for (const r of lateRows) {
+      if (r.late_minutes && r.late_minutes > 0) {
+        lateMinutesByUser[r.user_id] = (lateMinutesByUser[r.user_id] || 0) + r.late_minutes;
+      }
+    }
+
+    const result = staff.map(u => {
+      const totalMinutes = minutesByUser[u.id] || 0;
+      const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+      const lateMinutes = lateMinutesByUser[u.id] || 0;
+      const lateHours = Math.round((lateMinutes / 60) * 100) / 100;
+      const hourlyRate = Number(u.hourly_rate) || 0;
+      const calculatedPay = Math.round(totalHours * hourlyRate * 100) / 100;
+      return {
+        user_id: u.id,
+        full_name: u.full_name,
+        role: u.role,
+        hourly_rate: hourlyRate,
+        total_hours: totalHours,
+        late_minutes: lateMinutes,
+        late_hours: lateHours,
+        calculated_pay: calculatedPay,
+      };
+    });
+
+    res.json({ month, staff: result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => {
+  const { id } = req.params;
+  const { hourly_rate } = req.body;
+  const rate = Number(hourly_rate);
+  if (hourly_rate === undefined || hourly_rate === null || !Number.isFinite(rate) || rate < 0) {
+    return res.status(400).json({ error: 'กรุณาระบุอัตราค่าจ้างต่อชั่วโมงที่ถูกต้อง (ตัวเลข ≥ 0)' });
+  }
+  try {
+    const [result] = await pool.query('UPDATE users SET hourly_rate = ? WHERE id = ? AND role IN (\'CASHIER\',\'ADMIN\')', [rate, id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบพนักงานนี้' });
+    res.json({ message: 'อัปเดตอัตราค่าจ้างสำเร็จ', hourly_rate: rate });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/reports/monthly-overview', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+
+    // ยอดขายรวมเดือนนี้ (sales หน้าร้าน + orders จองที่มารับแล้ว)
+    const [salesRows] = await pool.query(
+      `SELECT COALESCE(SUM(cnt), 0) as total_bills, COALESCE(SUM(total), 0) as total_sales
+       FROM (
+         SELECT COUNT(id) as cnt, SUM(total_amount) as total
+         FROM sales WHERE status = 'COMPLETED' AND DATE_FORMAT(created_at, '%Y-%m') = ?
+         UNION ALL
+         SELECT COUNT(id), SUM(total_amount)
+         FROM orders WHERE status = 'COMPLETED' AND DATE_FORMAT(completed_at, '%Y-%m') = ?
+       ) combined`,
+      [month, month]
+    );
+
+    // สมาชิก: รวมทั้งหมด + สมัครใหม่เดือนนี้
+    const [memberRows] = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM users WHERE role = 'MEMBER') as total_members,
+         (SELECT COUNT(*) FROM users WHERE role = 'MEMBER' AND DATE_FORMAT(created_at, '%Y-%m') = ?) as new_members`,
+      [month]
+    );
+
+    // สต๊อกใกล้หมด (ข้อมูลปัจจุบัน ไม่ผูกกับเดือนที่เลือก)
+    const [lowStockRows] = await pool.query(
+      `SELECT COUNT(*) as count FROM products WHERE is_active = TRUE AND stock <= 5`
+    );
+
+    // ออเดอร์จองที่ยังค้างอยู่ (ข้อมูลปัจจุบัน)
+    const [pendingOrderRows] = await pool.query(
+      `SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('COMPLETED', 'CANCELLED')`
+    );
+
+    // บิลยกเลิกเดือนนี้
+    const [voidRows] = await pool.query(
+      `SELECT COUNT(*) as void_count, COALESCE(SUM(total_amount), 0) as void_amount
+       FROM sales WHERE status = 'VOIDED' AND DATE_FORMAT(created_at, '%Y-%m') = ?`,
+      [month]
+    );
+
+    res.json({
+      month,
+      total_bills: Number(salesRows[0].total_bills),
+      total_sales: Number(salesRows[0].total_sales),
+      total_members: Number(memberRows[0].total_members),
+      new_members: Number(memberRows[0].new_members),
+      low_stock_count: Number(lowStockRows[0].count),
+      pending_orders_count: Number(pendingOrderRows[0].count),
+      void_count: Number(voidRows[0].void_count),
+      void_amount: Number(voidRows[0].void_amount),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =========================================
 // 10. SETTINGS (ตั้งค่าร้านค้า)
 // =========================================
 
-/**
- * @swagger
- * /api/settings/store:
- *   get:
- *     summary: ดึงข้อมูลร้าน (ชื่อร้าน, ที่อยู่, เลขผู้เสียภาษี)
- *     tags: [Settings]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
 app.get('/api/settings/store', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM settings WHERE id = 1');
@@ -2592,32 +2978,7 @@ app.get('/api/settings/store', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/settings/store:
- *   put:
- *     summary: อัปเดตข้อมูลร้านค้า
- *     tags: [Settings]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               store_name:
- *                 type: string
- *               tax_id:
- *                 type: string
- *               address:
- *                 type: string
- *               receipt_footer:
- *                 type: string
- *     responses:
- *       200:
- *         description: อัปเดตสำเร็จ
- */
-app.put('/api/settings/store', async (req, res) => {
+app.put('/api/settings/store', requireRole('ADMIN'), async (req, res) => {
   const { store_name, tax_id, address, receipt_footer } = req.body;
   try {
     await pool.query(
@@ -2630,16 +2991,6 @@ app.put('/api/settings/store', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/settings/receipt:
- *   get:
- *     summary: ดึงข้อความท้ายใบเสร็จ
- *     tags: [Settings]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
 app.get('/api/settings/receipt', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT receipt_footer FROM settings WHERE id = 1');
@@ -2653,41 +3004,7 @@ app.get('/api/settings/receipt', async (req, res) => {
 // 4.1 INVENTORY (ส่วนเสริมของระบบสินค้า)
 // =========================================
 
-/**
- * @swagger
- * /api/products/{id}/stock:
- *   patch:
- *     summary: ปรับสต๊อกแมนนวล (+ เติมของ, - ตัดของเสีย)
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - adjustment
- *               - type
- *             properties:
- *               adjustment:
- *                 type: integer
- *                 description: จำนวนที่ปรับ (บวกหรือลบ)
- *               type:
- *                 type: string
- *                 enum: [RESTOCK, DAMAGE, LOSS]
- *               note:
- *                 type: string
- *     responses:
- *       200:
- *         description: ปรับสต๊อกสำเร็จ
- */
-app.patch('/api/products/:id/stock', async (req, res) => {
+app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { adjustment, type, note } = req.body;
   if (adjustment === undefined || !type) {
     return res.status(400).json({ error: "ข้อมูลไม่ครบ (ต้องมี adjustment และ type)" });
@@ -2711,17 +3028,9 @@ app.patch('/api/products/:id/stock', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/inventory/low-stock:
- *   get:
- *     summary: ดึงรายการสินค้าที่สต๊อกเหลือน้อย (<= 10 ชิ้น)
- *     tags: [Products]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/inventory/low-stock', async (req, res) => {
+// ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — เผยระดับสต๊อกภายใน (สินค้าใกล้หมด) ให้ MEMBER
+// เห็นได้ด้วย ทั้งที่เป็นข้อมูลปฏิบัติการภายในร้าน (ใช้เติมสต๊อก) ไม่ใช่ข้อมูลสำหรับลูกค้า
+app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     // ดึงสินค้าที่เหลือน้อยกว่าหรือเท่ากับ 10 ชิ้น
     const [rows] = await pool.query('SELECT id, barcode, name, stock FROM products WHERE stock <= 10 AND is_active = TRUE ORDER BY stock ASC');
@@ -2735,16 +3044,6 @@ app.get('/api/inventory/low-stock', async (req, res) => {
 // 8. PROMOTIONS (ระบบโปรโมชั่นและส่วนลด)
 // =========================================
 
-/**
- * @swagger
- * /api/promotions:
- *   get:
- *     summary: ดึงรายการโปรโมชั่นที่กำลังใช้งานอยู่
- *     tags: [Promotions]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
 app.get('/api/promotions', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM promotions WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURDATE())');
@@ -2754,37 +3053,7 @@ app.get('/api/promotions', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/promotions:
- *   post:
- *     summary: สร้างโปรโมชั่นใหม่
- *     tags: [Promotions]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               discount_type:
- *                 type: string
- *                 enum: [PERCENT, FIXED, BOGO]
- *               discount_value:
- *                 type: number
- *               start_date:
- *                 type: string
- *                 format: date
- *               end_date:
- *                 type: string
- *                 format: date
- *     responses:
- *       201:
- *         description: สร้างสำเร็จ
- */
-app.post('/api/promotions', async (req, res) => {
+app.post('/api/promotions', requireRole('ADMIN'), async (req, res) => {
   const {
     name, discount_type, discount_value, start_date, end_date,
     buy_product_id, buy_qty, free_product_id, free_qty,
@@ -2812,31 +3081,10 @@ app.post('/api/promotions', async (req, res) => {
 });
 
 
-/**
- * @swagger
- * /api/promotions/verify:
- *   post:
- *     summary: ตรวจสอบและคำนวณส่วนลดของตะกร้าสินค้า
- *     tags: [Promotions]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - promotion_id
- *               - grand_total
- *             properties:
- *               promotion_id:
- *                 type: integer
- *               grand_total:
- *                 type: number
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.post('/api/promotions/verify', async (req, res) => {
+// ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — endpoint นี้มีแค่ POS.tsx (staff-only page) เรียกใช้
+// ล็อกให้ตรงกับผู้ใช้จริงเพื่อความสม่ำเสมอ (severity ต่ำ เพราะ response แค่ preview ไม่ใช่ยอดที่เชื่อถือได้
+// จริง — /api/sales/checkout คำนวณส่วนลดใหม่เองเสมอ ไม่เชื่อค่าจาก client)
+app.post('/api/promotions/verify', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { promotion_id, grand_total, items, member_id } = req.body;
   try {
     const [promos] = await pool.query('SELECT * FROM promotions WHERE id = ? AND is_active = TRUE', [promotion_id]);
@@ -2863,17 +3111,9 @@ app.post('/api/promotions/verify', async (req, res) => {
 // 9. SUPPLIERS & PURCHASES (รับของเข้า)
 // =========================================
 
-/**
- * @swagger
- * /api/suppliers:
- *   get:
- *     summary: ดึงรายชื่อซัพพลายเออร์ทั้งหมด
- *     tags: [Purchases]
- *     responses:
- *       200:
- *         description: สำเร็จ
- */
-app.get('/api/suppliers', async (req, res) => {
+// ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — `SELECT *` เผยชื่อ+ข้อมูลติดต่อซัพพลายเออร์
+// (ข้อมูลธุรกิจภายใน) ให้ MEMBER เห็นได้ด้วย ไม่ใช่ข้อมูลสำหรับลูกค้า
+app.get('/api/suppliers', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM suppliers');
     res.json(rows);
@@ -2882,28 +3122,7 @@ app.get('/api/suppliers', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/suppliers:
- *   post:
- *     summary: เพิ่มซัพพลายเออร์
- *     tags: [Purchases]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               contact_info:
- *                 type: string
- *     responses:
- *       201:
- *         description: สร้างสำเร็จ
- */
-app.post('/api/suppliers', async (req, res) => {
+app.post('/api/suppliers', requireRole('ADMIN'), async (req, res) => {
   const { name, contact_info } = req.body;
   try {
     const [result] = await pool.query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact_info]);
@@ -2913,23 +3132,7 @@ app.post('/api/suppliers', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/suppliers/{id}:
- *   delete:
- *     summary: ลบซัพพลายเออร์
- *     tags: [Purchases]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: ลบสำเร็จ
- */
-app.delete('/api/suppliers/:id', async (req, res) => {
+app.delete('/api/suppliers/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     // ลบข้อมูลซัพพลายเออร์ตาม ID
     await pool.query('DELETE FROM suppliers WHERE id = ?', [req.params.id]);
@@ -2943,43 +3146,7 @@ app.delete('/api/suppliers/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/purchases:
- *   post:
- *     summary: สร้างใบรับสินค้าเข้าคลัง (เพิ่มสต๊อกและอัปเดตต้นทุนอัตโนมัติ)
- *     tags: [Purchases]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - user_id
- *               - items
- *             properties:
- *               supplier_id:
- *                 type: integer
- *               user_id:
- *                 type: integer
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     product_id:
- *                       type: integer
- *                     quantity:
- *                       type: integer
- *                     unit_cost:
- *                       type: number
- *     responses:
- *       201:
- *         description: รับของเข้าสำเร็จ
- */
-
-app.post('/api/purchases', async (req, res) => {
+app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { supplier_id, user_id, items } = req.body;
   if (!items || items.length === 0) return res.status(400).json({ error: "ไม่มีรายการสินค้า" });
 
@@ -3003,9 +3170,11 @@ app.post('/api/purchases', async (req, res) => {
     }
 
     // 1. สร้างบิลรับของเข้า
+    // ⭐️ Sprint 2 — B6: Store idempotency_key
+    const idempotencyKey = req.headers['idempotency-key'];
     const [purchaseResult] = await conn.query(
-      'INSERT INTO purchases (supplier_id, user_id, total_cost) VALUES (?, ?, ?)',
-      [supplier_id || null, user_id, totalCost]
+      'INSERT INTO purchases (supplier_id, user_id, total_cost, idempotency_key) VALUES (?, ?, ?, ?)',
+      [supplier_id || null, user_id, totalCost, idempotencyKey || null]
     );
     const purchaseId = purchaseResult.insertId;
 
@@ -3043,14 +3212,12 @@ app.post('/api/purchases', async (req, res) => {
 // 11. PRE-ORDER & NOTIFICATIONS (ระบบสั่งจองและแจ้งเตือน)
 // =========================================
 
-// 1. API สำหรับอัปโหลดสลิป
-app.post('/api/orders/upload-slip', upload.single('slip'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
-  res.json({ slip_url: `/uploads/${req.file.filename}` });
-});
+// ⭐️ Refactor — ลบ endpoint เก่า POST /api/orders/upload-slip (ไม่มี :id) ทิ้ง: ไม่มี frontend
+// เรียกใช้แล้ว (PreOrder.tsx เปลี่ยนไปใช้ POST /api/orders/:id/upload-slip ทั้งหมดแล้ว) และของเก่า
+// เก็บไฟล์ลง uploads/ ตรงๆ ไม่ได้จัดโฟลเดอร์ตามวันที่แบบระบบใหม่ (slipUpload ใน multer-config.js)
 
 // 2. API สร้างออเดอร์ใหม่
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateRequest(orderValidator), async (req, res) => {
   // รับข้อมูลจากหน้าเว็บ (⭐️ เพิ่ม redeem_points สำหรับแลกแต้มเป็นส่วนลด)
   const { items, payment_method, slip_image, use_phone_for_points, redeem_points } = req.body;
   const user_id = req.user.id; // ดึงจากคนที่ล็อกอินอยู่
@@ -3061,7 +3228,8 @@ app.post('/api/orders', async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    let totalAmount = 0;
+    // ⭐️ Sprint 1 — B3: สะสมยอดในหน่วยสตางค์ (integer) กัน float drift ข้ามหลายรายการ — pattern เดียวกับ /sales/checkout
+    let totalAmountSatang = 0;
     const processedItems = [];
 
     // คำนวณราคา + เช็คสต๊อกพอจริง (ล็อกแถวสินค้ากันขายเกินตอนมีหลายคนจองพร้อมกัน)
@@ -3071,10 +3239,12 @@ app.post('/api/orders', async (req, res) => {
       if (rows[0].stock < item.quantity) {
         throw new Error(`สต๊อกไม่พอสำหรับ "${rows[0].name}" (เหลือ ${rows[0].stock}, ต้องการ ${item.quantity})`);
       }
-      const subtotal = Number(rows[0].price) * item.quantity;
-      totalAmount += subtotal;
+      const subtotalSatang = toSatang(rows[0].price) * item.quantity;
+      const subtotal = fromSatang(subtotalSatang);
+      totalAmountSatang += subtotalSatang;
       processedItems.push({ product_id: item.product_id, quantity: item.quantity, price: rows[0].price, subtotal, stock_before: rows[0].stock });
     }
+    const totalAmount = fromSatang(totalAmountSatang);
 
     // ⭐️ แลกแต้มเป็นส่วนลด (1 แต้ม = ฿1) — คำนวณ/ตรวจสอบใหม่ฝั่ง backend ทั้งหมด ห้ามเชื่อ client
     // (pattern เดียวกับ POST /sales/checkout: ล็อกแถว users FOR UPDATE กันแลกแต้มซ้ำ/เกินยอดจริง)
@@ -3089,7 +3259,7 @@ app.post('/api/orders', async (req, res) => {
       if (pointsRedeemed < 0) pointsRedeemed = 0;
       pointsDiscount = pointsRedeemed; // อัตรา 1 แต้ม = ฿1
     }
-    const netTotal = totalAmount - pointsDiscount;
+    const netTotal = fromSatang(totalAmountSatang - toSatang(pointsDiscount));
 
     // คำนวณแต้มสะสมใหม่ที่จะได้รับ ถ้าลูกค้ากรอกเบอร์มา หรือติ๊กว่าจะสะสมแต้ม
     // (ทุก 20 บาท = 1 แต้ม, คิดจากยอดสุทธิ "หลังหักแต้มที่แลกไปแล้ว" เหมือน pattern ใน /sales/checkout)
@@ -3099,9 +3269,12 @@ app.post('/api/orders', async (req, res) => {
     const status = payment_method === 'QR' ? 'PENDING_VERIFY' : 'WAITING_CASH';
 
     // บันทึกหัวบิลออเดอร์ (⭐️ total_amount = ยอดสุทธิหลังหักแต้มแล้ว, เก็บ points_redeemed/points_discount ไว้ด้วย)
+    // ⭐️ Task 4 — slip_verification_status='PENDING' ตั้งแต่สร้าง ถ้าจ่ายแบบ QR (มีสลิปมาตั้งแต่ต้น)
+    // ⭐️ Sprint 2 — B6: Store idempotency_key
+    const idempotencyKey = req.headers['idempotency-key'];
     const [orderResult] = await conn.query(
-      'INSERT INTO orders (user_id, total_amount, payment_method, slip_image, earn_points, points_redeemed, points_discount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [user_id, netTotal, payment_method, slip_image || null, earnPoints, pointsRedeemed, pointsDiscount, status]
+      'INSERT INTO orders (user_id, total_amount, payment_method, slip_image, slip_file_path, slip_verification_status, earn_points, points_redeemed, points_discount, status, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [user_id, netTotal, payment_method, slip_image || null, slip_image || null, payment_method === 'QR' ? 'PENDING' : null, earnPoints, pointsRedeemed, pointsDiscount, status, idempotencyKey || null]
     );
     const orderId = orderResult.insertId;
 
@@ -3124,7 +3297,8 @@ app.post('/api/orders', async (req, res) => {
     }
 
     // ⭐️ บันทึกแจ้งเตือนระบบ: มีออเดอร์จองใหม่เข้ามา (ให้พนักงานเห็นในหน้าแจ้งเตือนด้วย ไม่ใช่แค่ badge)
-    const newOrderMsg = `มีคำสั่งซื้อจองใหม่ #${orderId} เข้ามา`;
+    // ⭐️ FIX: ข้อความแจ้งเตือนเดิมใช้คำซ้อน "คำสั่งซื้อจอง" ฟังดูเป็นทางการเกินไป ปรับให้เข้าใจง่ายขึ้น
+    const newOrderMsg = `มีออเดอร์จองใหม่ #${orderId} เข้ามา`;
     await conn.query('INSERT INTO notifications (user_id, message) VALUES (NULL, ?)', [newOrderMsg]);
 
     await conn.commit();
@@ -3134,6 +3308,10 @@ app.post('/api/orders', async (req, res) => {
     req.io.emit('notifications_updated', { message: newOrderMsg });
     req.io.emit('stock_updated', { message: `ออเดอร์จอง #${orderId} ตัดสต๊อกแล้ว` });
     lowStockMsgs.forEach(msg => req.io.emit('notifications_updated', { message: msg }));
+    // ⭐️ Task 4 — แจ้ง ADMIN/CASHIER ว่ามีสลิปรอตรวจ (เฉพาะจ่ายแบบ QR ที่มีสลิปแนบมาตั้งแต่ต้น)
+    if (payment_method === 'QR' && slip_image) {
+      req.io.emit('payment_slip_received', { order_id: orderId, message: `ออเดอร์ #${orderId} มีสลิปรอตรวจสอบ` });
+    }
 
     res.status(201).json({
       message: "สั่งจองสินค้าสำเร็จ",
@@ -3155,27 +3333,27 @@ app.get('/api/orders', async (req, res) => {
   try {
     let query = `
       SELECT o.*, u.full_name as customer_name, u.phone_number,
-             a.full_name as assigned_name
-      FROM orders o 
+             DATE_FORMAT(CONVERT_TZ(o.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as created_at_bkk
+      FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
-      LEFT JOIN users a ON o.assigned_to = a.id
       ORDER BY o.created_at DESC
     `;
-    
+    const params = [];
+
     // ถ้าเป็นแค่ MEMBER ให้ดูได้แค่ออเดอร์ของตัวเอง
     if (req.user.role === 'MEMBER') {
       query = `
         SELECT o.*, u.full_name as customer_name, u.phone_number,
-               a.full_name as assigned_name
-        FROM orders o 
+               DATE_FORMAT(CONVERT_TZ(o.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as created_at_bkk
+        FROM orders o
         LEFT JOIN users u ON o.user_id = u.id
-        LEFT JOIN users a ON o.assigned_to = a.id
-        WHERE o.user_id = ${req.user.id} 
+        WHERE o.user_id = ?
         ORDER BY o.created_at DESC
       `;
+      params.push(req.user.id);
     }
 
-    const [orders] = await pool.query(query);
+    const [orders] = await pool.query(query, params);
 
     // ดึงรายการสินค้าข้างในออเดอร์มาให้ด้วยเลย
     for (let order of orders) {
@@ -3197,7 +3375,9 @@ app.get('/api/orders', async (req, res) => {
 // 4. API จัดการสถานะออเดอร์ (พนักงานกดยืนยัน / ยกเลิก)
 app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   const orderId = req.params.id;
-  const { status, reject_reason } = req.body;
+  // ⭐️ F3 (frontend) — รับ notes เป็น alias ของ reject_reason ด้วย เผื่อ frontend ส่งชื่อ field ต่างกันตามบริบท (ตรวจสลิป vs ยกเลิก)
+  const { status, reject_reason: rawRejectReason, notes } = req.body;
+  const reject_reason = rawRejectReason || notes || null;
   // status: PENDING_VERIFY → PREPARING → READY → COMPLETED
   //         PENDING_VERIFY → SLIP_REJECTED (สลิปผิด, ขอส่งใหม่)
   //         PENDING_VERIFY → REFUND_REQUESTED (โอนแล้วแต่ไม่เอาแล้ว)
@@ -3242,7 +3422,8 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
     // ถ้ายกเลิกออเดอร์ (เช่น สลิปมั่ว) — คืนสต๊อกกลับ เพราะตัดไปแล้วตั้งแต่ตอนลูกค้าจอง
     let cancelMsg = null;
     if (status === 'CANCELLED') {
-      cancelMsg = `ออเดอร์ #${orderId} ถูกยกเลิก เนื่องจาก: ${reject_reason || 'สลิปไม่ถูกต้อง'}`;
+      // ⭐️ FIX: ข้อความแจ้งเตือนปรับให้อ่านเข้าใจง่ายขึ้น ไม่ใช้ศัพท์ทางการ/รูปแบบ log ระบบ
+      cancelMsg = `ออเดอร์ #${orderId} ถูกยกเลิกแล้ว สาเหตุ: ${reject_reason || 'สลิปไม่ถูกต้อง'}`;
       await conn.query('INSERT INTO notifications (user_id, message) VALUES (?, ?)', [order.user_id, cancelMsg]);
 
       const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
@@ -3264,6 +3445,16 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
         await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
       }
       stockChanged = true;
+
+      // ⭐️ Task 4 — บันทึกผลตรวจสลิป (reject) ลง orders โดยตรง แทนการสร้าง endpoint แยกที่จะตัดสต๊อกซ้ำ
+      await conn.query(
+        `UPDATE orders SET slip_verification_status = 'REJECTED' WHERE id = ?`,
+        [orderId]
+      );
+      await conn.query(
+        'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+        ['REJECT_SLIP', req.user.id, 'ORDER', orderId, JSON.stringify({ reason: reject_reason || null })]
+      );
     }
 
     // ⭐️ ขอคืนเงิน (โอนมาแล้วแต่ไม่เอาแล้ว) — แจ้งลูกค้าให้นำสลิปมาที่ร้าน + คืนแต้ม
@@ -3281,13 +3472,28 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
       }
     }
 
+    // ⭐️ F3 — จุดที่ "ตรวจสลิปผ่าน" จริงๆ คือ PENDING_VERIFY → PREPARING (ไม่ใช่ตอน COMPLETED ซึ่งคือลูกค้ามารับของ
+    // แก้จาก Task 4 เดิมที่ผูก slip_verification_status='VERIFIED' ไว้ผิดจุดที่ COMPLETED)
+    if (order.status === 'PENDING_VERIFY' && status === 'PREPARING') {
+      await conn.query(
+        `UPDATE orders SET slip_verification_status = 'VERIFIED', slip_verified_by = ?, slip_verified_at = NOW() WHERE id = ?`,
+        [req.user.id, orderId]
+      );
+      await conn.query(
+        'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+        ['VERIFY_SLIP', req.user.id, 'ORDER', orderId, JSON.stringify({ notes: reject_reason || null })]
+      );
+    }
+
     // ⭐️ แจ้งเตือนลูกค้าแบบมีข้อความจริง บันทึกลง notifications ด้วย (ไม่ใช่แค่ socket เฉยๆ กันพลาดถ้าลูกค้าไม่ได้เปิดแอปอยู่ตอนนั้น)
+    // ⭐️ FIX: ข้อความแจ้งเตือนลูกค้าเดิมใช้คำทางการ/ระบบเกินไป (เช่น "พนักงานรับเรื่องแล้ว", "เนื่องจาก:")
+    // ปรับเป็นภาษาพูดธรรมดาที่คนทั่วไปอ่านแล้วเข้าใจทันที ความหมาย/ตัวแปรเหมือนเดิมทุกจุด
     const statusMessages = {
-      PREPARING: `ออเดอร์ #${orderId} พนักงานรับเรื่องแล้ว กำลังเตรียมสินค้า ${order.payment_method === 'CASH' ? 'เตรียมเงินไว้ได้เลยครับ' : ''}`,
-      READY: `ออเดอร์ #${orderId} เตรียมสินค้าเสร็จแล้ว พร้อมให้มารับได้เลยครับ`,
-      COMPLETED: `ออเดอร์ #${orderId} รับสินค้าเรียบร้อยแล้ว ขอบคุณที่ใช้บริการครับ`,
-      SLIP_REJECTED: `ออเดอร์ #${orderId} สลิปไม่ถูกต้อง: ${reject_reason || 'กรุณาตรวจสอบสลิปอีกครั้ง'} — ถ้าโอนมาแล้วจริงให้แนบสลิปใหม่ที่ถูกต้อง ถ้าต้องการยกเลิกแจ้งพนักงานได้เลย`,
-      REFUND_REQUESTED: `ออเดอร์ #${orderId} อยู่ระหว่างรอคืนเงิน — กรุณานำหลักฐานการโอนมาที่ร้านเพื่อรับเงินคืนเป็นเงินสด`,
+      PREPARING: `ร้านได้รับออเดอร์ #${orderId} แล้ว กำลังจัดเตรียมสินค้าให้คุณ${order.payment_method === 'CASH' ? ' เตรียมเงินสดไว้ได้เลยนะครับ' : ''}`,
+      READY: `สินค้าออเดอร์ #${orderId} เตรียมเสร็จแล้ว มารับได้เลยครับ`,
+      COMPLETED: `รับสินค้าออเดอร์ #${orderId} เรียบร้อยแล้ว ขอบคุณที่ใช้บริการครับ`,
+      SLIP_REJECTED: `สลิปโอนเงินของออเดอร์ #${orderId} ไม่ถูกต้อง: ${reject_reason || 'กรุณาตรวจสอบอีกครั้ง'} — กรุณาแนบสลิปใหม่ หรือแจ้งพนักงานถ้าต้องการยกเลิกออเดอร์`,
+      REFUND_REQUESTED: `ออเดอร์ #${orderId} กำลังดำเนินการคืนเงิน กรุณานำหลักฐานการโอนมาที่ร้านเพื่อรับเงินคืนเป็นเงินสด`,
     };
     const statusMsg = statusMessages[status] || cancelMsg;
     if (statusMessages[status]) {
@@ -3299,8 +3505,8 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
     // ⭐️ ย้ายมาหลัง commit เสมอ กัน client รีเฟรชแล้วเจอข้อมูลเก่า (transaction ยังไม่ commit ตอนยิง event)
     if (stockChanged) req.io.emit('stock_updated', { message: `ออเดอร์ #${orderId} อัปเดตสต๊อกแล้ว` });
     lowStockMsgs.forEach(msg => req.io.emit('notifications_updated', { message: msg }));
-    if (statusMsg) req.io.emit(`notification_user_${order.user_id}`, { message: statusMsg });
-    req.io.emit(`order_update_user_${order.user_id}`, { order_id: orderId, status: status });
+    if (statusMsg) req.io.to(`user_${order.user_id}`).emit(`notification_user_${order.user_id}`, { message: statusMsg });
+    req.io.to(`user_${order.user_id}`).emit(`order_update_user_${order.user_id}`, { order_id: orderId, status: status });
     req.io.emit('order_status_changed', { order_id: orderId, status: status });
 
     res.json({ message: "อัปเดตสถานะออเดอร์สำเร็จ" });
@@ -3390,7 +3596,7 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
     req.io.emit('new_order_received', { message: `❌ ลูกค้ายกเลิกออเดอร์ #${orderId}`, order_id: orderId });
     req.io.emit('order_status_changed', { order_id: orderId, status: 'CANCELLED' });
     req.io.emit('stock_updated', { message: `ออเดอร์ #${orderId} ยกเลิก คืนสต๊อกแล้ว` });
-    req.io.emit(`order_update_user_${order.user_id}`, { order_id: orderId, status: 'CANCELLED' });
+    req.io.to(`user_${order.user_id}`).emit(`order_update_user_${order.user_id}`, { order_id: orderId, status: 'CANCELLED' });
 
     res.json({ message: "ยกเลิกออเดอร์สำเร็จ" });
   } catch (error) {
@@ -3401,15 +3607,225 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
   }
 });
 
+// ⭐️ Sprint 2 — B9: File Upload Validation Endpoints
+
+/**
+ * POST /api/orders/:id/upload-slip — Upload payment slip for an order
+ * Only MEMBER can upload
+ * Validates: MIME type (jpeg, png, gif, webp), size (5MB max), dimensions (400×300 to 4000×3000)
+ * Returns: { success, filename, path, dimensions }
+ */
+app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'), slipUpload.single('slip'), async (req, res) => {
+  const { id } = req.params;
+  console.log(`[DEBUG] /orders/:id/upload-slip - orderId=${id}, user_id=${req.user?.id}, file=${req.file ? 'YES' : 'NO'}`);
+  if (req.file) {
+    console.log(`[DEBUG] File details - fieldname=${req.file.fieldname}, mimetype=${req.file.mimetype}, size=${req.file.size}, path=${req.file.path}`);
+  }
+
+  try {
+    if (!req.file) {
+      console.log(`[DEBUG] ERROR: No file uploaded in request`);
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // ⭐️ Bug Fix 1 — Validate order exists and belongs to user before processing file
+    const [orders] = await pool.query(
+      'SELECT id, status FROM orders WHERE id = ? AND user_id = ?',
+      [id, req.user.id]
+    );
+    if (orders.length === 0) {
+      console.log(`[DEBUG] ERROR: Order not found - id=${id}, user_id=${req.user.id}`);
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Order not found or does not belong to you' });
+    }
+
+    const order = orders[0];
+    console.log(`[DEBUG] Order found - id=${order.id}, status=${order.status}`);
+    // ⭐️ Allow upload for PENDING_VERIFY (new slip) OR SLIP_REJECTED (resubmit after rejection)
+    if (!['PENDING_VERIFY', 'SLIP_REJECTED'].includes(order.status)) {
+      console.log(`[DEBUG] ERROR: Order not in PENDING_VERIFY/SLIP_REJECTED status - current status=${order.status}`);
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: `Order must be in PENDING_VERIFY or SLIP_REJECTED status to upload slip. Current status: ${order.status}` });
+    }
+
+    // ⭐️ Sprint 2 — B9: Validate MIME type for payment slip (jpeg, png, gif, webp)
+    const allowedPaymentSlipMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedPaymentSlipMimes.includes(req.file.mimetype)) {
+      console.log(`[DEBUG] ERROR: Invalid MIME type - ${req.file.mimetype}`);
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: `Invalid file type: ${req.file.mimetype}. Only JPEG, PNG, GIF, WebP allowed.` });
+    }
+
+    // Validate file size (5 MB max for payment slip)
+    if (req.file.size > 5 * 1024 * 1024) {
+      console.log(`[DEBUG] ERROR: File too large - ${req.file.size} bytes`);
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File too large (max 5 MB for payment slip)' });
+    }
+
+    // Validate dimensions (payment slip min 400×300, max 4000×3000)
+    console.log(`[DEBUG] Validating dimensions for file: ${req.file.path}`);
+    const dimensions = await validateImageDimensions(
+      req.file.path,
+      400, 300,
+      4000, 3000
+    );
+    console.log(`[DEBUG] Dimensions validated - ${dimensions.width}×${dimensions.height}`);
+
+    // Update order with slip path + reset status to PENDING_VERIFY if was SLIP_REJECTED
+    const statusUpdate = order.status === 'SLIP_REJECTED' ? ', status = \'PENDING_VERIFY\'' : '';
+    const [result] = await pool.query(
+      `UPDATE orders SET slip_image = ?${statusUpdate} WHERE id = ? AND user_id = ?`,
+      [req.file.filename, id, req.user.id]
+    );
+    console.log(`[DEBUG] Database update - affectedRows=${result.affectedRows}, status=${order.status === 'SLIP_REJECTED' ? 'PENDING_VERIFY' : order.status}`);
+
+    // Verify update was successful
+    if (result.affectedRows === 0) {
+      console.log(`[DEBUG] ERROR: Failed to save payment slip to order`);
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Failed to save payment slip to order' });
+    }
+
+    console.log(`[DEBUG] SUCCESS: Slip uploaded - filename=${req.file.filename}`);
+
+    // ⭐️ Notify ADMIN/CASHIER that slip was resubmitted
+    req.io.emit('payment_slip_received', {
+      order_id: id,
+      message: `ออเดอร์ #${id} ส่งสลิปใหม่ (resubmit)`
+    });
+    req.io.emit('notifications_updated', {
+      message: `ลูกค้าส่งสลิปใหม่สำหรับออเดอร์ #${id}`
+    });
+
+    // ⭐️ Construct path: /uploads/slips/YYYY-MM-DD/filename
+    const bangkokDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    const year = bangkokDate.getFullYear();
+    const month = String(bangkokDate.getMonth() + 1).padStart(2, '0');
+    const day = String(bangkokDate.getDate()).padStart(2, '0');
+    const slipPath = `/uploads/slips/${year}-${month}-${day}/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      path: slipPath,
+      dimensions
+    });
+  } catch (err) {
+    console.log(`[DEBUG] ERROR: Caught exception - ${err.message}`);
+    console.error(`[ERROR STACK] ${err.stack}`);
+    // Delete file if validation failed
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/shifts/:id/upload-photo — Upload close photo for a shift
+ * Only CASHIER/ADMIN can upload
+ * Validates: MIME type (jpeg, png only), size (10MB max), dimensions (min 800×600)
+ * Returns: { success, filename, path, dimensions }
+ */
+app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), shiftPhotoUpload.single('photo'), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // ⭐️ Sprint 2 — B9: Validate MIME type for shift photo (jpeg, png only)
+    const allowedPhotoMimes = ['image/jpeg', 'image/png'];
+    if (!allowedPhotoMimes.includes(req.file.mimetype)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: `Invalid file type: ${req.file.mimetype}. Only JPEG and PNG allowed for shift photos.` });
+    }
+
+    // Validate file size (10 MB max)
+    if (req.file.size > 10 * 1024 * 1024) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File too large (max 10 MB)' });
+    }
+
+    // Validate dimensions (close photo min 800×600)
+    const dimensions = await validateImageDimensions(
+      req.file.path,
+      800, 600,
+      10000, 10000 // max 10000×10000
+    );
+
+    // Update shift with photo path
+    await pool.query(
+      'UPDATE shifts SET close_photo = ? WHERE id = ? AND user_id = ?',
+      [req.file.filename, id, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      path: `/api/uploads/${req.file.filename}`,
+      dimensions
+    });
+  } catch (err) {
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/uploads/:filename — Serve uploaded file
+ * Security: validates filename (no directory traversal)
+ * Returns: file with proper Content-Type headers
+ */
+// ⭐️ SECURITY FIX (วิกฤต #1) — เสิร์ฟไฟล์อัปโหลด (สลิป/รูปเข้างาน/รูปสินค้า) แบบมี JWT คุม
+// รับ path เต็มที่เก็บใน DB เช่น ?path=/uploads/slips/2026-07-18/xxx.jpg (มี subfolder ได้)
+// endpoint นี้ไม่อยู่ใน PUBLIC_PATHS จึงผ่าน authenticateToken อัตโนมัติ = ต้อง login ก่อนถึงเปิดดูได้
+// (ของเดิม /api/uploads/:filename ชี้ผิดไดเรกทอรี '../uploads' + ไม่รองรับ subfolder — เลิกใช้)
+const UPLOADS_ROOT = path.join(__dirname, 'uploads');
+app.get('/api/media', async (req, res) => {
+  try {
+    let rel = String(req.query.path || '');
+    if (!rel) return res.status(400).json({ error: 'ต้องระบุ path' });
+
+    // ตัด prefix '/uploads' ออก (path ใน DB ขึ้นต้นด้วย /uploads/...)
+    rel = rel.replace(/^\/+/, '');            // ตัด / นำหน้า
+    if (rel.startsWith('uploads/')) rel = rel.slice('uploads/'.length);
+
+    // ป้องกัน directory traversal — resolve แล้วต้องยังอยู่ใต้ UPLOADS_ROOT เท่านั้น
+    const abs = path.normalize(path.join(UPLOADS_ROOT, rel));
+    if (!abs.startsWith(UPLOADS_ROOT + path.sep)) {
+      return res.status(400).json({ error: 'path ไม่ถูกต้อง' });
+    }
+    if (!fs.existsSync(abs)) {
+      return res.status(404).json({ error: 'ไม่พบไฟล์' });
+    }
+
+    // กันไม่ให้ browser/proxy แคชสลิปไว้แชร์ต่อ (เป็นข้อมูลส่วนตัว)
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(abs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // =========================================
 // API สำหรับล้างข้อมูล (เตรียมอัปเกรดระบบ)
 // =========================================
-app.get('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
+// ⭐️ Fix 1 — เดิมเป็น GET (ลบข้อมูลจริงแค่เปิดลิงก์/prefetch ก็โดน) เปลี่ยนเป็น DELETE + ยังคง requireRole('ADMIN')
+app.delete('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
   try {
     // ปิดการเช็ค Foreign Key ชั่วคราว เพื่อให้ลบข้อมูลที่ผูกกันอยู่ได้
     await pool.query('SET FOREIGN_KEY_CHECKS = 0');
 
     // รายชื่อตารางที่ต้องการล้างข้อมูลทิ้ง (ไม่รวม users และ settings)
+    // ⭐️ เอา 'members' ออก — ตารางนี้ไม่มีอยู่จริงในสคีมา (ดูจุดที่ลบ /api/members/* ใน HOTFIX 3)
+    // ทิ้งไว้จะทำให้ทุกครั้งที่เรียก endpoint นี้ crash ด้วย ER_NO_SUCH_TABLE
     const tablesToClear = [
       'purchase_items',
       'purchases',
@@ -3418,8 +3834,7 @@ app.get('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
       'shifts',
       'products',
       'promotions',
-      'suppliers',
-      'members'
+      'suppliers'
     ];
 
     // วนลูปใช้คำสั่ง TRUNCATE ล้างข้อมูลและรีเซ็ต AUTO_INCREMENT เป็น 1
@@ -3616,64 +4031,352 @@ app.get('/api/init-db', requireSetupKey, async (req, res) => {
 // =========================================
 // BACKUP & SCHEDULED JOBS (หมวด 13 + auto-checkout)
 // =========================================
-// ⭐️ Backup ผ่าน mysqldump ใน container docker (ตาม docker-compose.yml เดิม: container=pos_mysql, db=pos_coop)
-// เก็บไฟล์ .sql ไว้ในโฟลเดอร์ backups/ (ควร sync ออกนอกเครื่องอีกทีตอน deploy จริง)
-const BACKUP_DIR = path.join(__dirname, 'backups');
-const DB_CONTAINER = process.env.DB_CONTAINER || 'pos_mysql';
-const DB_NAME = process.env.DB_NAME || 'pos_coop';
-const DB_ROOT_PW = process.env.DB_ROOT_PASSWORD || 'rootpassword';
-const BACKUP_KEEP_DAYS = 7; // เก็บ backup ย้อนหลังกี่วัน
+// ⭐️ Refactor — เดิมมี backup 2 ระบบซ้อนกัน: runBackup() (docker exec mysqldump, ใช้ไม่ได้นอก
+// docker/ไม่มี DB_ROOT_PASSWORD ก็พัง) กับ createBackup() จาก backup.js (query ตรงผ่าน pool, มี
+// DB tracking table, ใช้งานได้จริงบนเครื่อง dev นี้). ลบระบบแรกทิ้ง เหลือระบบเดียวคือ createBackup()
+// (ดู POST /api/admin/backups/create และ cron ด้านล่าง)
 
-function runBackup() {
-  if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const outFile = path.join(BACKUP_DIR, `backup_${stamp}.sql`);
-
-  // docker exec pos_mysql mysqldump -u root -p<pw> pos_coop > backups/backup_xxx.sql
-  const cmd = `docker exec ${DB_CONTAINER} mysqldump -u root -p${DB_ROOT_PW} --default-character-set=utf8mb4 ${DB_NAME}`;
-  exec(cmd, { maxBuffer: 1024 * 1024 * 200 }, (err, stdout, stderr) => {
-    if (err) {
-      console.error('❌ Backup ล้มเหลว:', stderr || err.message);
-      return;
-    }
-    fs.writeFileSync(outFile, stdout);
-    console.log(`💾 Backup สำเร็จ: ${outFile}`);
-
-    // ลบไฟล์ backup เก่าเกิน BACKUP_KEEP_DAYS วัน
-    try {
-      const cutoff = Date.now() - BACKUP_KEEP_DAYS * 86400000;
-      for (const f of fs.readdirSync(BACKUP_DIR)) {
-        if (!f.startsWith('backup_')) continue;
-        const fp = path.join(BACKUP_DIR, f);
-        if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp);
-      }
-    } catch (cleanErr) { console.error('⚠️ ลบ backup เก่าไม่สำเร็จ:', cleanErr.message); }
-  });
-}
-
-/**
- * @swagger
- * /api/backup/run:
- *   post:
- *     summary: สั่ง backup ฐานข้อมูลทันที (ADMIN) — สร้างไฟล์ .sql ในโฟลเดอร์ backups/
- *     tags: [Backup]
- */
-app.post('/api/backup/run', requireRole('ADMIN'), (req, res) => {
-  runBackup();
-  res.json({ message: "เริ่ม backup ฐานข้อมูลแล้ว (ตรวจไฟล์ในโฟลเดอร์ backups/)" });
+// ⭐️ Sprint 1 — D4: manual trigger เอาไว้เทสต์โดยไม่ต้องรอ cron 06:00 น. — คืนข้อมูลรายงานกลับมาด้วย
+// เผื่อ ADMIN_EMAIL ยังไม่ตั้งค่า (sent: false) จะได้ยังเห็นตัวเลขได้
+app.post('/api/reports/daily/send', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const result = await sendDailyReport(req.query.date);
+    res.json({
+      message: result.sent ? "ส่งรายงานสรุปยอดประจำวันสำเร็จ" : "สร้างรายงานสำเร็จ แต่ไม่ได้ส่งอีเมล (ตรวจ ADMIN_EMAIL / SMTP ใน .env)",
+      sent: result.sent,
+      report: result.data,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-const PORT = 3000;
+// =========================================
+// BACKUP & RESTORE (Sprint 2 — C3)
+// =========================================
+
+app.get('/api/admin/backups', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [backups] = await pool.query(`
+      SELECT id, filename, backup_date, file_size_mb, status, created_at, restored_at
+      FROM backups
+      ORDER BY backup_date DESC
+      LIMIT 50
+    `);
+
+    res.json(backups);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/backups/create', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const result = await createBackup(pool);
+
+    if (!result) {
+      return res.status(400).json({ error: 'Backup already exists for today' });
+    }
+
+    res.json({ success: true, backup: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res) => {
+  const { id } = req.params;
+  const { confirm } = req.body;
+
+  if (!confirm) {
+    return res.status(400).json({ error: 'Restore requires explicit confirmation' });
+  }
+
+  try {
+    const [backups] = await pool.query(
+      'SELECT * FROM backups WHERE id = ? AND status = ?',
+      [id, 'SUCCESS']
+    );
+
+    if (backups.length === 0) {
+      return res.status(404).json({ error: 'Backup not found or not successful' });
+    }
+
+    const backup = backups[0];
+
+    // Perform restore
+    await restoreBackup(pool, backup.backup_path);
+
+    // Log restore
+    await pool.query(
+      'UPDATE backups SET restored_at = NOW(), restored_by = ? WHERE id = ?',
+      [req.user.id, id]
+    );
+
+    res.json({ success: true, message: `Restored from ${backup.filename}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ⭐️ Sprint 2 — C2: Audit Log Viewer — GET /api/audit-logs
+app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
+  const { page = 1, limit = 50, action, user_id, start_date, end_date, search } = req.query;
+  const currentUser = req.user;
+
+  try {
+    let query = `
+      SELECT
+        al.id, al.user_id, u.full_name,
+        al.action, al.resource_type, al.resource_id,
+        al.description, al.amount_cents, al.status,
+        DATE_FORMAT(CONVERT_TZ(al.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as timestamp_bkk
+      FROM audit_logs al
+      JOIN users u ON al.user_id = u.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+
+    // Access control: non-admins only see own logs
+    if (currentUser.role !== 'ADMIN') {
+      query += ' AND al.user_id = ?';
+      params.push(currentUser.id);
+    }
+
+    // Filters
+    if (action) {
+      query += ' AND al.action = ?';
+      params.push(action);
+    }
+
+    if (user_id && currentUser.role === 'ADMIN') {
+      query += ' AND al.user_id = ?';
+      params.push(user_id);
+    }
+
+    if (start_date && end_date) {
+      query += ' AND DATE(al.created_at) BETWEEN ? AND ?';
+      params.push(start_date, end_date);
+    }
+
+    if (search) {
+      query += ' AND (al.description LIKE ? OR al.resource_id = ?)';
+      params.push(`%${search}%`, parseInt(search) || 0);
+    }
+
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) as total FROM audit_logs al WHERE 1=1';
+    const countParams = [];
+
+    if (currentUser.role !== 'ADMIN') {
+      countQuery += ' AND al.user_id = ?';
+      countParams.push(currentUser.id);
+    }
+
+    if (action) {
+      countQuery += ' AND al.action = ?';
+      countParams.push(action);
+    }
+
+    if (user_id && currentUser.role === 'ADMIN') {
+      countQuery += ' AND al.user_id = ?';
+      countParams.push(user_id);
+    }
+
+    if (start_date && end_date) {
+      countQuery += ' AND DATE(al.created_at) BETWEEN ? AND ?';
+      countParams.push(start_date, end_date);
+    }
+
+    if (search) {
+      countQuery += ' AND (al.description LIKE ? OR al.resource_id = ?)';
+      countParams.push(`%${search}%`, parseInt(search) || 0);
+    }
+
+    const [countResult] = await pool.query(countQuery, countParams);
+    const total = countResult[0].total;
+
+    // Pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), offset);
+
+    const [logs] = await pool.query(query, params);
+
+    res.json({
+      logs,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: getErrorMessage(err) });
+  }
+});
+
+// ⭐️ Sprint 2 — C2: Audit Log Viewer — GET /api/audit-logs/:id
+app.get('/api/audit-logs/:id', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
+  const { id } = req.params;
+  const currentUser = req.user;
+
+  try {
+    const [logs] = await pool.query(
+      `SELECT * FROM audit_logs WHERE id = ? ${currentUser.role !== 'ADMIN' ? 'AND user_id = ?' : ''}`,
+      currentUser.role !== 'ADMIN' ? [id, currentUser.id] : [id]
+    );
+
+    if (logs.length === 0) {
+      return res.status(404).json({ error: 'Audit log not found' });
+    }
+
+    res.json(logs[0]);
+  } catch (err) {
+    res.status(500).json({ error: getErrorMessage(err) });
+  }
+});
+
+// ⭐️ Sprint 2 — C2: Audit Log Viewer — GET /api/audit-logs/export/csv (ADMIN only)
+app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => {
+  const { start_date, end_date } = req.query;
+
+  try {
+    let query = `
+      SELECT
+        al.id, u.full_name as user_name,
+        al.action, al.resource_type, al.description,
+        al.amount_cents, al.status,
+        DATE_FORMAT(CONVERT_TZ(al.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as timestamp_bkk
+      FROM audit_logs al
+      JOIN users u ON al.user_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (start_date && end_date) {
+      query += ' AND DATE(al.created_at) BETWEEN ? AND ?';
+      params.push(start_date, end_date);
+    }
+
+    query += ' ORDER BY al.created_at DESC';
+
+    const [logs] = await pool.query(query, params);
+
+    // Convert to CSV
+    const headers = ['ID', 'User', 'Action', 'Resource Type', 'Description', 'Amount', 'Status', 'Timestamp'];
+    const rows = logs.map((log) => [
+      log.id,
+      log.user_name,
+      log.action,
+      log.resource_type || '',
+      log.description || '',
+      log.amount_cents ? (log.amount_cents / 100).toFixed(2) : '0.00',
+      log.status || 'SUCCESS',
+      log.timestamp_bkk
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8-sig');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
+    res.send('﻿' + csv); // BOM for Excel UTF-8
+  } catch (err) {
+    res.status(500).json({ error: getErrorMessage(err) });
+  }
+});
+
+// ⭐️ Task 12A — centralized error handler (must be the LAST app.use()).
+// Express 5 auto-forwards rejected promises from async route handlers here, and multer
+// upload errors (bad mimetype / oversized file) also land here via next(err).
+// NOTE: most existing routes already catch their own errors locally and respond with
+// { error: error.message } directly — this handler does NOT retrofit all ~60 of them
+// (out of scope for this pass), it's the safety net for anything that slips past those
+// local catches (unhandled throws, multer errors, jwt errors bubbling from middleware).
+app.use((err, req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const requestId = Math.random().toString(36).substr(2, 9);
+
+  console.error(`[${timestamp}] ERROR ${requestId}: ${err.message}`);
+  console.error(err.stack);
+
+  if (req.user?.id && (req.path.includes('/sales') || req.path.includes('/orders'))) {
+    pool.query(
+      'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
+      ['ERROR', req.user.id, JSON.stringify({ error: err.message, path: req.path, method: req.method, requestId })]
+    ).catch(logErr => console.error('audit_logs ERROR insert ล้มเหลว:', logErr.message));
+  }
+
+  let statusCode = 500;
+  let userMessage = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+
+  if (err.statusCode) {
+    statusCode = err.statusCode;
+    userMessage = err.message;
+  } else if (err.name === 'ValidationError') {
+    statusCode = 400;
+    userMessage = err.message;
+  } else if (err.name === 'JsonWebTokenError') {
+    statusCode = 403;
+    userMessage = 'Token ไม่ถูกต้อง';
+  } else if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    userMessage = 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่';
+  } else if (err.code === 'LIMIT_FILE_SIZE') {
+    statusCode = 400;
+    userMessage = 'ไฟล์มีขนาดใหญ่เกินไป (จำกัด 5MB)';
+  } else if (err.message?.includes('อนุญาตเฉพาะไฟล์รูปภาพ')) {
+    statusCode = 400;
+    userMessage = err.message;
+  }
+
+  res.status(statusCode).json({ error: userMessage, requestId });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+const PORT = process.env.PORT || 3000; // ⭐️ DEPLOY — อ่านจาก .env ได้ (default 3000)
 // เปลี่ยนจาก app.listen เป็น server.listen
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📚 Swagger Docs: http://localhost:${PORT}/api/docs`);
   console.log(`⚡ WebSocket Server is ready!`);
 
-  // ⭐️ Cron: backup ทุกวันตี 2 (เวลาไทย ถ้าตั้ง TZ=Asia/Bangkok ตอนรัน)
-  cron.schedule('0 2 * * *', () => {
-    console.log('⏰ เริ่ม backup ตามตารางเวลา (ตี 2)...');
-    runBackup();
+  // ⭐️ Sprint 2 — C3: Cron backup ทุกวัน 19:00 UTC (ตี 2 เวลาไทย วันถัดไป)
+  cron.schedule('0 19 * * *', async () => {
+    try {
+      console.log('[CRON] Starting daily backup...');
+      const result = await createBackup(pool);
+
+      if (result) {
+        console.log(`[CRON] ✅ Backup successful: ${result.filename}`);
+
+        // Send email notification if enabled
+        if (process.env.ENABLE_BACKUP_EMAIL === 'true') {
+          // TODO: implement email sending if needed
+          console.log(`[CRON] Email would be sent to ${process.env.ADMIN_EMAIL}`);
+        }
+      } else {
+        console.log('[CRON] ⏭️  Backup skipped (already exists today)');
+      }
+    } catch (err) {
+      console.error('[CRON] ❌ Backup failed:', err.message);
+
+      // Send error email if enabled
+      if (process.env.ENABLE_BACKUP_EMAIL === 'true') {
+        // TODO: implement email error notification if needed
+        console.log(`[CRON] Error email would be sent to ${process.env.ADMIN_EMAIL}`);
+      }
+    }
   });
 
   // ⭐️ Cron: ตัดออกงาน/ปิดกะอัตโนมัติทุกเที่ยงคืน (ข้อ 12 — ลืมออกงาน/ลืมปิดกะข้ามวัน)
@@ -3684,5 +4387,34 @@ server.listen(PORT, () => {
     } catch (e) { console.error('❌ auto-checkout cron ล้มเหลว:', e.message); }
   });
 
-  console.log('🕐 ตั้ง cron: backup (ตี 2), auto-checkout (เที่ยงคืน) เรียบร้อย');
+  // ⭐️ Sprint 1 — D4: รายงานสรุปยอดประจำวันทุกวันตี 6 (ก่อนร้านเปิด) — ส่งอีเมลถึง ADMIN_EMAIL
+  cron.schedule('0 6 * * *', async () => {
+    console.log('⏰ เริ่มสร้าง/ส่งรายงานสรุปยอดประจำวัน (ตี 6)...');
+    try {
+      const result = await sendDailyReport();
+      console.log(`📧 รายงานประจำวัน ${result.data.date}: ${result.sent ? 'ส่งอีเมลสำเร็จ' : 'สร้างรายงานแล้วแต่ไม่ได้ส่ง (เช็ค ADMIN_EMAIL/SMTP)'}`);
+    } catch (e) { console.error('❌ daily report cron ล้มเหลว:', e.message); }
+  });
+
+  // ⭐️ Sprint 2 — Expiry Discount: Check for expired products hourly and notify cashiers
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const [expiredToday] = await pool.query(`
+        SELECT id, name FROM products
+        WHERE expiry_date = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        AND is_active = 1
+      `);
+
+      if (expiredToday.length > 0) {
+        console.log(`⏰ พบสินค้าหมดอายุ ${expiredToday.length} รายการ`);
+        io.emit('products_expired', {
+          count: expiredToday.length,
+          products: expiredToday.map(p => p.name),
+          timestamp: new Date()
+        });
+      }
+    } catch (e) { console.error('❌ expired products cron ล้มเหลว:', e.message); }
+  });
+
+  console.log('🕐 ตั้ง cron: backup (ตี 2), auto-checkout (เที่ยงคืน), รายงานประจำวัน (ตี 6), ตรวจสินค้าหมดอายุ (ทุกชั่วโมง) เรียบร้อย');
 });

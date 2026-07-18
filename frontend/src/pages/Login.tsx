@@ -1,8 +1,8 @@
 // ✅ CHANGED: Layout, colors, typography → DMTC Mart theme
 // 🔒 UNCHANGED: handleLogin, handleChooseWork, handleChooseShop, API call, localStorage, modal state
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, Briefcase, Eye, EyeOff } from 'lucide-react';
 import api from '../api';
 
@@ -17,19 +17,58 @@ export default function Login() {
   const [showChoiceModal, setShowChoiceModal] = useState(false);
   const [loggedInRole, setLoggedInRole] = useState<string | null>(null);
 
+  // ⭐️ F4 — countdown ตอนโดน rate limit (429)
+  const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
+  const countdownIntervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleRateLimited = (e: Event) => {
+      const { retryAfter } = (e as CustomEvent<{ retryAfter: number }>).detail;
+      setRateLimitCountdown(retryAfter);
+    };
+    window.addEventListener('rate-limited', handleRateLimited);
+    return () => window.removeEventListener('rate-limited', handleRateLimited);
+  }, []);
+
+  useEffect(() => {
+    if (rateLimitCountdown <= 0) {
+      if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null; }
+      return;
+    }
+    countdownIntervalRef.current = window.setInterval(() => {
+      setRateLimitCountdown(prev => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => { if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current); };
+  }, [rateLimitCountdown > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isRateLimited = rateLimitCountdown > 0;
+
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(''); setLoading(true);
+    e.preventDefault();
+    if (isRateLimited) return;
+    setError(''); setLoading(true);
     try {
       const response = await api.post('/auth/login', { username, password });
-      localStorage.setItem('token', response.data.token);
+      // ⭐️ Sprint 2 — B5: Store both access and refresh tokens
+      localStorage.setItem('accessToken', response.data.accessToken);
+      localStorage.setItem('refreshToken', response.data.refreshToken);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+
+      // ⭐️ F4 — Notify Socket context that token has changed (for same-tab reconnection)
+      window.dispatchEvent(new Event('tokenChanged'));
+
       const role = response.data.user.role;
       if (role === 'ADMIN' || role === 'CASHIER') {
         setLoggedInRole(role); setShowChoiceModal(true); setLoading(false); return;
       }
       localStorage.removeItem('session_mode');
       navigate('/pre-order');
-    } catch (err: any) { setError(err.response?.data?.error || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง'); setLoading(false); }
+    } catch (err: any) {
+      if (err.response?.status !== 429) {
+        setError(err.response?.data?.error || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
+      }
+      setLoading(false);
+    }
   };
 
   const handleChooseWork = () => { localStorage.setItem('session_mode', 'work'); navigate('/shift'); };
@@ -39,11 +78,9 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-[#FFF5F7] via-white to-[#FFF5F7] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
 
-        {/* Brand */}
+        {/* Brand — ⭐️ FIX: ใช้โลโก้จริงของร้านแทนกล่องไอคอน ShoppingBag เดิม */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#F12B6B] rounded-2xl shadow-lg mb-4">
-            <ShoppingBag size={28} className="text-white" />
-          </div>
+          <img src="/logo-192.png" alt="DMTC Mart" className="inline-flex w-16 h-16 rounded-2xl shadow-lg mb-4 object-contain" />
           <h1 className="text-2xl font-bold text-gray-900">DMTC Mart</h1>
           <p className="mt-1 text-sm text-gray-500">ระบบ POS สหกรณ์โรงเรียน</p>
         </div>
@@ -56,13 +93,20 @@ export default function Login() {
             </div>
           )}
 
+          {/* ⭐️ F4 — แจ้งเตือน rate limit + countdown */}
+          {isRateLimited && (
+            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl text-center">
+              พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารออีก <span className="font-bold">{rateLimitCountdown}</span> วินาที
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1">
               <label className="block text-sm font-medium text-gray-500">ชื่อผู้ใช้งาน</label>
               <input
                 type="text" required value={username} onChange={e => setUsername(e.target.value)}
-                placeholder="Username / รหัสนักศึกษา"
-                className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:border-[#F12B6B] transition-colors duration-150"
+                placeholder="Username / รหัสนักศึกษา" disabled={isRateLimited}
+                className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:border-[#F12B6B] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -71,22 +115,29 @@ export default function Login() {
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2.5 pr-10 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:border-[#F12B6B] transition-colors duration-150"
+                  placeholder="••••••••" disabled={isRateLimited}
+                  className="w-full px-3 py-2.5 pr-10 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:border-[#F12B6B] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setShowPw(!showPw)} disabled={isRateLimited} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50">
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
             <button
-              type="submit" disabled={loading}
+              type="submit" disabled={loading || isRateLimited}
               className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:ring-offset-2"
             >
-              {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+              {isRateLimited ? `กรุณารอ ${rateLimitCountdown} วินาที` : loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </button>
           </form>
+
+          {/* ⭐️ F1 — ลืมรหัสผ่าน */}
+          <div className="mt-4 text-center">
+            <Link to="/forgot-password" className="text-sm text-[#F12B6B] hover:underline">
+              ลืมรหัสผ่าน?
+            </Link>
+          </div>
         </div>
 
         <p className="mt-4 text-center text-xs text-gray-400">DMTC Mart © 2026</p>

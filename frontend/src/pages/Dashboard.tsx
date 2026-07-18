@@ -7,8 +7,23 @@ import { LayoutDashboard, TrendingUp, Receipt, Banknote, CreditCard, LogOut, Pac
 import api from '../api';
 import Swal from '../swal';
 import { useSocket } from '../SocketContext';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
+import PendingShiftClosesWidget from '../components/PendingShiftClosesWidget'; // ⭐️ Sprint 2 — D1
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
+
+// ⭐️ FIX: แปลงรหัสสถานะ pre-order (PENDING_VERIFY ฯลฯ) เป็นคำไทยที่พนักงานเข้าใจง่าย
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING_VERIFY: 'รอตรวจสลิป',
+  WAITING_CASH: 'รอรับเงินสด',
+  SLIP_REJECTED: 'สลิปไม่ผ่าน รอส่งใหม่',
+  PREPARING: 'กำลังเตรียมของ',
+  READY: 'พร้อมให้มารับ',
+  REFUND_REQUESTED: 'รอคืนเงิน',
+};
+const orderStatusLabel = (status: string) => ORDER_STATUS_LABELS[status] || status;
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<any>(null);
@@ -17,6 +32,7 @@ export default function Dashboard() {
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [voidSummary, setVoidSummary] = useState<any>(null);
   const [shiftAnomalies, setShiftAnomalies] = useState<any[]>([]);
+  const [pendingApprovalShifts, setPendingApprovalShifts] = useState<any[]>([]); // ⭐️ F2
   const [comparison, setComparison] = useState<any>(null);
   const [hourly, setHourly] = useState<any[]>([]);
   const [byCashier, setByCashier] = useState<any[]>([]);
@@ -33,19 +49,36 @@ export default function Dashboard() {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [denomCounts, setDenomCounts] = useState<Record<number, number | ''>>({});
   const [closeNote, setCloseNote] = useState('');
+  const [discrepancyCategory, setDiscrepancyCategory] = useState(''); // ⭐️ Sprint 1 — D3
   const [closeLoading, setCloseLoading] = useState(false);
   const [closePhoto, setClosePhoto] = useState<File | null>(null);
   const [closePhotoPreview, setClosePhotoPreview] = useState<string | null>(null);
   const [shiftSummary, setShiftSummary] = useState<any>(null);
   const [checkOutLoading, setCheckOutLoading] = useState(false);
+  const [healthOk, setHealthOk] = useState<boolean | null>(null); // ⭐️ F10 — null = ยังไม่เช็ค, true = ok, false = degraded/เช็คไม่ได้
   const actualCash = DENOMINATIONS.reduce((sum, d) => sum + d * (Number(denomCounts[d]) || 0), 0);
   const socket = useSocket();
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  // ⭐️ F10 — เช็ค GET /api/health ทุก 30 วิ (public route ไม่ต้องมี token)
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await api.get('/health');
+        setHealthOk(res.data?.status === 'ok');
+      } catch {
+        setHealthOk(false); // network error, timeout, หรือ 503 ก็ถือว่า degraded
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const isAdmin = user.role === 'ADMIN';
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     if (!token) { navigate('/login'); return; }
     if (localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
     fetchDashboardData();
@@ -63,6 +96,7 @@ export default function Dashboard() {
       await Promise.all([
         get('/inventory/low-stock', setLowStock), get('/reports/void-summary', setVoidSummary),
         get('/reports/shift-anomalies', setShiftAnomalies), get('/reports/sales-comparison', setComparison),
+        get('/shifts/pending-approval', setPendingApprovalShifts), // ⭐️ F2
         get('/reports/hourly-sales', setHourly), get('/reports/sales-by-cashier', setByCashier),
         get('/reports/open-shifts', setOpenShifts), get('/reports/pending-orders', setPendingOrders),
         get('/reports/sales-channel', setChannel), get('/reports/gross-profit', setGrossProfit),
@@ -74,6 +108,33 @@ export default function Dashboard() {
 
   const handleLogout = () => { localStorage.clear(); navigate('/login'); };
 
+  // ⭐️ F2 — ADMIN อนุมัติปิดกะที่รออนุมัติ (ส่วนต่างเกิน 100 บาท)
+  const handleApproveShift = async (shiftId: number) => {
+    const { value: notes } = await Swal.fire({
+      title: 'อนุมัติปิดกะ',
+      input: 'textarea',
+      inputLabel: 'หมายเหตุการอนุมัติ (จำเป็น อย่างน้อย 5 ตัวอักษร)',
+      inputPlaceholder: 'เช่น ตรวจสอบแล้ว เงินขาดเพราะ...',
+      showCancelButton: true,
+      confirmButtonText: 'อนุมัติ',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#F12B6B',
+      inputValidator: (value) => {
+        if (!value || value.trim().length < 5) return 'กรุณากรอกหมายเหตุอย่างน้อย 5 ตัวอักษร';
+        return undefined;
+      },
+    });
+    if (!notes) return;
+    try {
+      await api.post(`/shifts/${shiftId}/approve-close`, { admin_approval_notes: notes });
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'อนุมัติปิดกะสำเร็จ', showConfirmButton: false, timer: 2500 });
+      setDetailModal(null);
+      fetchDashboardData();
+    } catch (error: any) {
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) });
+    }
+  };
+
   const handleCloseShift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (actualCash <= 0) return Swal.fire({ icon: 'warning', title: 'กรุณานับเงินสดในลิ้นชักก่อน' });
@@ -81,10 +142,25 @@ export default function Dashboard() {
     setCloseLoading(true);
     try {
       const fd = new FormData(); fd.append('photo', closePhoto);
-      const uploadRes = await api.post('/attendance/upload-photo', fd);
-      const response = await api.post('/shifts/close', { cashier_id: user.id, actual_cash: actualCash, note: closeNote || undefined, cash_breakdown: denomCounts, close_photo: uploadRes.data.photo_url });
+      const uploadRes = await api.post('/attendance/upload-photo?type=clock-out', fd);
+      console.log('[DEBUG] Photo upload response:', uploadRes.data); // ⭐️ Debug
+      const response = await api.post('/shifts/close', { cashier_id: user.id, actual_cash: actualCash, note: closeNote || undefined, discrepancy_category: discrepancyCategory || undefined, cash_breakdown: denomCounts, close_photo: uploadRes.data.photo_url }); // ⭐️ D3
+      // ⭐️ F2 — status 202 = ส่วนต่างเกิน 100 บาท กะยังไม่ปิดจริง ต้องรอ ADMIN คนอื่นอนุมัติก่อน
+      if (response.status === 202) {
+        setShowCloseModal(false);
+        await Swal.fire({
+          icon: 'warning',
+          title: 'ส่วนต่างเงินสดเกิน 100 บาท',
+          text: `${response.data.message || 'กะนี้ต้องรอ ADMIN อนุมัติก่อนถึงจะปิดกะสำเร็จ'} กรุณาออกจากระบบ`,
+          confirmButtonColor: '#F12B6B',
+          confirmButtonText: 'ออกจากระบบ',
+          allowOutsideClick: false,
+        });
+        handleLogout();
+        return;
+      }
       setShiftSummary(response.data.summary);
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: error.response?.data?.error }); }
+    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
     finally { setCloseLoading(false); }
   };
 
@@ -101,7 +177,7 @@ export default function Dashboard() {
       await api.put('/attendance/check-out', { check_out_photo: uploadRes.data.photo_url });
       Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
       setTimeout(() => { localStorage.clear(); navigate('/login'); }, 1500);
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: error.response?.data?.error }); }
+    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
     finally { setCheckOutLoading(false); }
   };
 
@@ -128,6 +204,13 @@ export default function Dashboard() {
             <LayoutDashboard size={16} className="text-[#F12B6B]" />
           </div>
           <h1 className="text-lg font-bold text-gray-900">สรุปยอดขายประจำวัน</h1>
+          {/* ⭐️ F10 — Health check status dot: เขียว=ปกติ, แดง=เซิร์ฟเวอร์/DB มีปัญหา, เทา=ยังไม่เช็ค */}
+          <span
+            title={healthOk === null ? 'กำลังตรวจสอบสถานะระบบ...' : healthOk ? 'ระบบทำงานปกติ' : 'เซิร์ฟเวอร์/ฐานข้อมูลมีปัญหา'}
+            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+              healthOk === null ? 'bg-gray-300' : healthOk ? 'bg-green-500' : 'bg-red-500 animate-pulse'
+            }`}
+          />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-gray-500 hover:text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150">
@@ -148,6 +231,13 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* ⭐️ Sprint 2 — D1: Pending Shift Closes Widget (for ADMIN) */}
+      {isAdmin && (
+        <div className="max-w-7xl mx-auto mb-5">
+          <PendingShiftClosesWidget />
+        </div>
+      )}
 
       {/* ── Stat cards + Top products ─────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
@@ -228,6 +318,7 @@ export default function Dashboard() {
               { type: 'void', title: 'บิลยกเลิกวันนี้', value: `${voidSummary?.void_count || 0} บิล`, sub: `฿${Number(voidSummary?.void_amount || 0).toLocaleString()}`, border: 'border-red-200 hover:border-red-400', icon: <XCircle size={16} />, color: 'text-red-500' },
               { type: 'anomalies', title: 'กะเงินสดผิดปกติ', value: `${shiftAnomalies.length} กะ`, sub: 'แตะเพื่อดูรายละเอียด', border: 'border-purple-200 hover:border-purple-400', icon: <AlertTriangle size={16} />, color: 'text-purple-500' },
               { type: 'openshifts', title: 'กะเปิดค้างอยู่', value: `${openShifts.length} กะ`, sub: 'แตะเพื่อดูรายละเอียด', border: 'border-blue-200 hover:border-blue-400', icon: <Clock size={16} />, color: 'text-blue-500' },
+              { type: 'pending_approval', title: 'รออนุมัติปิดกะ', value: `${pendingApprovalShifts.length} กะ`, sub: pendingApprovalShifts.length > 0 ? 'ส่วนต่างเกิน ฿100' : 'ไม่มีกะรออนุมัติ', border: 'border-amber-300 hover:border-amber-500', icon: <AlertTriangle size={16} />, color: 'text-amber-600' }, // ⭐️ F2
             ].map(a => (
               <div key={a.type} onClick={() => setDetailModal({ type: a.type, title: a.title })} className={`bg-white border ${a.border} rounded-2xl p-3 cursor-pointer hover:shadow-md transition-all duration-150 active:scale-95`}>
                 <div className={`flex items-center gap-1.5 ${a.color} mb-2`}>{a.icon}<span className="text-xs font-semibold">{a.title}</span></div>
@@ -297,7 +388,7 @@ export default function Dashboard() {
                       <div key={c.shift_id} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl transition-colors duration-150">
                         <div>
                           <p className="text-xs font-semibold text-gray-900">{c.cashier_name}</p>
-                          <p className="text-[10px] text-gray-400">{c.bill_count} บิล • {new Date(c.opened_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}{c.shift_status === 'OPEN' ? ' (ยังไม่ปิดกะ)' : ''}</p>
+                          <p className="text-[10px] text-gray-400">{c.bill_count} บิล • {formatBangkokTime(c.opened_at).slice(-5)}{c.shift_status === 'OPEN' ? ' (ยังไม่ปิดกะ)' : ''}</p>
                         </div>
                         <span className="text-xs font-bold text-[#F12B6B]">฿{Number(c.total_sales).toLocaleString()}</span>
                       </div>
@@ -329,7 +420,7 @@ export default function Dashboard() {
                   {pendingOrders.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ไม่มีออเดอร์ค้าง</p> :
                     pendingOrders.map(o => (
                       <div key={o.status} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl text-xs transition-colors duration-150">
-                        <span className="font-medium text-gray-700">{o.status}</span>
+                        <span className="font-medium text-gray-700">{orderStatusLabel(o.status)}</span>
                         <span className="text-gray-500">{o.count} บิล • ฿{Number(o.total).toLocaleString()}</span>
                       </div>
                     ))}
@@ -391,7 +482,7 @@ export default function Dashboard() {
                   <h3 className="text-sm font-semibold text-gray-900">ปิดกะการขาย</h3>
                   <button onClick={() => setShowCloseModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
                 </div>
-                <div className="p-5 max-h-[75vh] overflow-y-auto">
+                <div className="p-5 max-h-[75dvh] overflow-y-auto">
                   <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-xs text-blue-700">
                     <p className="font-semibold mb-1">📋 วิธีนับเงินปิดกะ</p>
                     <p>• เงินสด: นับแบงก์/เหรียญในลิ้นชักแล้วใส่ด้านล่าง</p>
@@ -411,8 +502,20 @@ export default function Dashboard() {
                       <p className="text-[10px] text-gray-400 mb-1">เงินสดที่นับได้จริง</p>
                       <p className="text-2xl font-bold text-[#F12B6B]">฿{actualCash.toLocaleString()}</p>
                     </div>
+                    {/* ⭐️ Sprint 1 — D3: หมวดหมู่สาเหตุส่วนต่าง (optional, คู่กับ note freeform ด้านล่าง ไม่แทนที่กัน) */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">หมายเหตุ (ถ้าส่วนต่างเกิน ±20 บาท ระบบบังคับให้กรอก)</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">สาเหตุส่วนต่าง (ถ้ามี)</label>
+                      <select value={discrepancyCategory} onChange={e => setDiscrepancyCategory(e.target.value)} className={inputCls}>
+                        <option value="">— ไม่ระบุ —</option>
+                        <option value="SHORT_CHANGE">ทอนผิด</option>
+                        <option value="FAKE_BILL">รับเงินปลอม</option>
+                        <option value="FORGOT_RECEIPT">ลืมบันทึก</option>
+                        <option value="CUSTOMER_RETURN">คืนสินค้า</option>
+                        <option value="OTHER">อื่นๆ</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">หมายเหตุเพิ่มเติม (ถ้าส่วนต่างเกิน ±20 บาท ระบบบังคับให้กรอก)</label>
                       <input type="text" value={closeNote} onChange={e => setCloseNote(e.target.value)} placeholder="เช่น ทอนผิดตอนเช้า" className={inputCls} />
                     </div>
                     {/* Photo */}
@@ -460,12 +563,12 @@ export default function Dashboard() {
       {/* ── Detail Modal ──────────────────────────────────────────────────── */}
       {detailModal && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDetailModal(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center px-4 py-3 border-b border-[#F6C7C7]">
               <h3 className="text-sm font-semibold text-gray-900">{detailModal.title}</h3>
               <button onClick={() => setDetailModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-[#FFF5F7] transition-colors duration-150"><X size={16} /></button>
             </div>
-            <div className="overflow-y-auto max-h-[60vh] p-4 space-y-2">
+            <div className="overflow-y-auto max-h-[60dvh] p-4 space-y-2">
               {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีสินค้าสต๊อกใกล้หมด</p> :
                 lowStock.map((p: any) => (
                   <div key={p.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-100 rounded-xl">
@@ -483,15 +586,37 @@ export default function Dashboard() {
               {detailModal.type === 'anomalies' && (shiftAnomalies.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะที่ผิดปกติ</p> :
                 shiftAnomalies.map((s: any) => (
                   <div key={s.id} className="flex justify-between items-center p-3 bg-purple-50 border border-purple-100 rounded-xl">
-                    <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">{new Date(s.closed_at).toLocaleString('th-TH')}</p></div>
+                    <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">{formatBangkokTime(s.closed_at)}</p></div>
                     <span className={`font-bold text-lg ${Number(s.difference) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{Number(s.difference) > 0 ? '+' : ''}{Number(s.difference).toFixed(2)}</span>
                   </div>
                 )))}
               {detailModal.type === 'openshifts' && (openShifts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะที่ค้างอยู่</p> :
                 openShifts.map((s: any) => (
                   <div key={s.id} className="flex justify-between items-center p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                    <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">เปิดกะ {new Date(s.opened_at).toLocaleString('th-TH')}</p></div>
+                    <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">เปิดกะ {formatBangkokTime(s.opened_at)}</p></div>
                     <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">เปิดอยู่</span>
+                  </div>
+                )))}
+              {/* ⭐️ F2 — กะรออนุมัติปิด (ส่วนต่างเกิน 100 บาท) */}
+              {detailModal.type === 'pending_approval' && (pendingApprovalShifts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะรออนุมัติ</p> :
+                pendingApprovalShifts.map((s: any) => (
+                  <div key={s.id} className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p>
+                        <p className="text-xs text-gray-400">เปิดกะ {new Date(s.opened_at).toLocaleString('th-TH')}</p>
+                        {s.note && <p className="text-xs text-gray-500 mt-1">หมายเหตุแคชเชียร์: {s.note}</p>}
+                      </div>
+                      <span className="font-bold text-lg text-amber-600 shrink-0">
+                        {Number(s.difference) > 0 ? '+' : ''}{Number(s.difference).toFixed(2)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleApproveShift(s.id)}
+                      className="w-full py-2 bg-[#F12B6B] hover:bg-[#FF467E] text-white text-sm font-semibold rounded-lg transition-all duration-150 active:scale-95"
+                    >
+                      อนุมัติปิดกะ
+                    </button>
                   </div>
                 )))}
             </div>

@@ -1,14 +1,42 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Minus, CheckCircle, PackagePlus, Upload, X, Image as ImageIcon, Search } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, Plus, Minus, CheckCircle, PackagePlus, Upload, X, Image as ImageIcon, Search } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 import { useSocket } from '../SocketContext';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { toSatang, fromSatang, lineTotalSatang } from '../utils/money'; // ⭐️ Sprint 1 — B3
+import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
+import { validatePaymentSlip } from '../utils/fileValidator'; // ⭐️ Sprint 2 — B9
+import AuthImage from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 
 interface Category { id: number; name: string; }
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
 interface CartItem extends Product { quantity: number; }
+
+// ⭐️ ข้อความแจ้งเตือนฝั่งลูกค้าให้เป็นกันเอง แทนการโชว์รหัสสถานะดิบ (PREPARING ฯลฯ)
+const CUSTOMER_STATUS_MESSAGE: Record<string, { icon: 'info' | 'success' | 'warning'; text: string }> = {
+  PENDING_VERIFY:   { icon: 'info',    text: 'ได้รับออเดอร์แล้ว กำลังตรวจสอบสลิปให้นะ 🧾' },
+  WAITING_CASH:     { icon: 'info',    text: 'ยืนยันออเดอร์แล้ว รอชำระเงินสดที่ร้านได้เลย' },
+  PREPARING:        { icon: 'info',    text: 'ร้านกำลังจัดเตรียมสินค้าให้คุณอยู่ 🛍️' },
+  READY:            { icon: 'success', text: 'สินค้าพร้อมแล้ว มารับที่ร้านได้เลย 🎉' },
+  COMPLETED:        { icon: 'success', text: 'รับสินค้าเรียบร้อย ขอบคุณที่ใช้บริการนะ 😊' },
+  SLIP_REJECTED:    { icon: 'warning', text: 'สลิปยังไม่ผ่าน รบกวนส่งใหม่อีกครั้งนะ' },
+  REFUND_REQUESTED: { icon: 'info',    text: 'กำลังดำเนินการคืนเงินให้คุณอยู่' },
+  CANCELLED:        { icon: 'warning', text: 'ออเดอร์นี้ถูกยกเลิกแล้ว' },
+};
+
+// ⭐️ Construct slip image path from created_at date + filename
+function getSlipImagePath(createdAt: string, filename: string): string {
+  if (!filename) return '';
+  const date = new Date(createdAt);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `/uploads/slips/${year}-${month}-${day}/${filename}`;
+}
 
 export default function PreOrder() {
   const socket = useSocket();
@@ -24,6 +52,8 @@ export default function PreOrder() {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('QR');
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  const [slipUploadProgress, setSlipUploadProgress] = useState(0); // ⭐️ Sprint 2 — B9
+  const [slipDimensions, setSlipDimensions] = useState<{ width: number; height: number } | null>(null); // ⭐️ Sprint 2 — B9
 
   // State สำหรับสะสมแต้ม
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -35,10 +65,12 @@ export default function PreOrder() {
   const [verifying, setVerifying] = useState(false);
 
   const PROMPTPAY_ID = "0803610120"; // 👈 เบอร์พร้อมเพย์ร้าน
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null); // ✅ CHANGED: modal order detail
+  const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
 
   useEffect(() => {
     fetchProducts();
@@ -57,10 +89,13 @@ export default function PreOrder() {
 
     // ⭐️ WebSocket ฟังเสียงสวรรค์ (เวลามีอัปเดตสถานะจากพนักงาน)
     socket.on(`order_update_user_${user.id}`, (data) => {
+      // ⭐️ แปลงรหัสสถานะเป็นข้อความเป็นกันเอง แทนโชว์ PREPARING/READY ดิบๆ
+      const msg = CUSTOMER_STATUS_MESSAGE[data.status] || { icon: 'info' as const, text: 'ออเดอร์ของคุณมีการอัปเดต' };
       Swal.fire({
-        toast: true, position: 'top-end', icon: 'info',
-        title: `ออเดอร์ #${data.order_id} อัปเดตสถานะเป็น: ${data.status}`,
-        showConfirmButton: false, timer: 3000
+        toast: true, position: 'top-end', icon: msg.icon,
+        title: msg.text,
+        text: `ออเดอร์ #${data.order_id}`,
+        showConfirmButton: false, timer: 3500
       });
     });
     socket.on(`notification_user_${user.id}`, (data) => {
@@ -107,25 +142,32 @@ export default function PreOrder() {
     } catch (e) { console.error(e); }
   };
 
-  // ⭐️ ดึงแต้มสะสมปัจจุบันของตัวเอง (ใช้ endpoint เดิม /users/search ที่มีอยู่แล้ว ค้นด้วย student_id ของตัวเอง)
-  // ⭐️ ตรวจเบอร์โทร (ค้นหาสมาชิกด้วยเบอร์ เหมือน POS) เพื่อยืนยันชื่อ+แต้มก่อนสั่งจอง
+  // 🐛 FIX (Sprint 0 — A2) — เดิมใช้ /api/users/search (staff-only, ค้นข้ามคนได้ + คืนแต้ม/เบอร์โทร
+  // เต็มๆ) มายืนยันเบอร์โทรก่อนสั่งจอง ทำให้ MEMBER โดน 403 ทุกครั้งที่กด "ยืนยันเบอร์" — เปลี่ยนไปใช้
+  // POST /api/users/verify-phone ที่เปิดให้ทุก role เรียกได้ และคืนข้อมูลน้อยกว่ามาก (แค่ matched +
+  // ชื่อ ไม่มีแต้ม ไม่มีเบอร์คนอื่น) กันไม่ให้เป็นช่องทาง enumerate ข้อมูลสมาชิกคนอื่นเหมือน endpoint เดิม
   const handleVerifyPhone = async () => {
     if (!phoneNumber.trim()) return Swal.fire({ icon: 'warning', title: 'กรุณากรอกเบอร์โทรก่อน' });
     setVerifying(true);
     try {
-      const res = await api.get(`/users/search?q=${phoneNumber.trim()}`);
-      setPhoneVerified(res.data);
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบสมาชิก: ${res.data.full_name} (มี ${res.data.points || 0} แต้ม)`, showConfirmButton: false, timer: 2500 });
+      const res = await api.post('/users/verify-phone', { phone_number: phoneNumber.trim() });
+      if (res.data.matched) {
+        setPhoneVerified(res.data);
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบสมาชิก: ${res.data.member_name}`, showConfirmButton: false, timer: 2500 });
+      } else {
+        setPhoneVerified(null);
+        Swal.fire({ icon: 'error', title: 'ไม่พบสมาชิก', text: 'ไม่พบเบอร์นี้ในระบบ (แต้มจะสะสมให้เมื่อเบอร์ตรงกับบัญชีสมาชิก)' });
+      }
     } catch (e: any) {
       setPhoneVerified(null);
-      Swal.fire({ icon: 'error', title: 'ไม่พบสมาชิก', text: 'ไม่พบเบอร์นี้ในระบบ (แต้มจะสะสมให้เมื่อเบอร์ตรงกับบัญชีสมาชิก)' });
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(e) });
     } finally { setVerifying(false); }
   };
 
   const fetchMyPoints = async () => {
-    if (!user.student_id) return;
+    if (!user.id) return;
     try {
-      const res = await api.get(`/users/search?q=${user.student_id}`);
+      const res = await api.get('/users/me');
       setMyPoints(res.data.points || 0);
     } catch (e) {
       setMyPoints(0);
@@ -162,11 +204,50 @@ export default function PreOrder() {
     }).filter(item => item.quantity > 0));
   };
 
-  const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSlipFile(file);
-      setSlipPreview(URL.createObjectURL(file));
+  // ⭐️ Sprint 2 — B9: Validate payment slip before upload
+  const handleSlipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate
+    const validation = await validatePaymentSlip(file);
+    if (!validation.valid) {
+      Swal.fire('Invalid File', validation.error, 'warning');
+      e.target.value = ''; // Reset input
+      return;
+    }
+
+    setSlipFile(file);
+    setSlipDimensions(validation.dimensions || null);
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setSlipPreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ⭐️ Sprint 2 — B9: Upload payment slip to specific order
+  const handleUploadSlip = async (orderId: number) => {
+    if (!slipFile) return;
+
+    const formData = new FormData();
+    formData.append('slip', slipFile);
+
+    try {
+      await api.post(`/orders/${orderId}/upload-slip`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded / progressEvent.total!) * 100);
+          setSlipUploadProgress(percent);
+        }
+      });
+
+      Swal.fire('Success', `Payment slip uploaded (${slipDimensions?.width}×${slipDimensions?.height})`, 'success');
+    } catch (err: any) {
+      Swal.fire('Upload Failed', err.response?.data?.error || 'Unknown error', 'error');
+      throw err; // Re-throw to handle in handleCheckout
     }
   };
 
@@ -176,35 +257,31 @@ export default function PreOrder() {
 
     setLoading(true);
     try {
-      let slip_url = null;
-
-      // 1. ถ้าสแกนจ่าย ต้องอัปโหลดรูปก่อน
-      if (paymentMethod === 'QR' && slipFile) {
-        const formData = new FormData();
-        formData.append('slip', slipFile);
-        const uploadRes = await api.post('/orders/upload-slip', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        slip_url = uploadRes.data.slip_url;
-      }
-
-      // 2. สั่งสร้างออเดอร์
+      // 1. สั่งสร้างออเดอร์
       const payload = {
         items: cart.map(item => ({ product_id: item.id, quantity: item.quantity })),
         payment_method: paymentMethod,
-        slip_image: slip_url,
+        slip_image: null, // ⭐️ Sprint 2 — B9: Upload slip separately after order creation
         use_phone_for_points: phoneNumber.trim().length >= 9, // ถ้ากรอกเบอร์มา ถือว่าสะสมแต้ม
         redeem_points: pointsDiscount > 0 ? pointsDiscount : 0 // 👈 แต้มที่จะแลกเป็นส่วนลด
       };
 
-      await api.post('/orders', payload);
+      const orderRes = await api.post('/orders', payload);
+      const orderId = orderRes.data.id || orderRes.data.order_id;
+
+      // 2. ⭐️ Sprint 2 — B9: Upload payment slip to the created order (if QR payment)
+      if (paymentMethod === 'QR' && slipFile) {
+        await handleUploadSlip(orderId);
+      }
 
       Swal.fire({
         icon: 'success', title: 'ส่งออเดอร์สำเร็จ! 🎉',
-        text: (paymentMethod === 'QR' ? 'กรุณารอพนักงานตรวจสอบสลิปสักครู่นะครับ' : 'กรุณานำเงินสดมาชำระที่หน้าร้านได้เลยครับ')
+        text: (paymentMethod === 'QR' ? 'สลิปอัปโหลดสำเร็จ กรุณารอพนักงานตรวจสอบสักครู่นะครับ' : 'กรุณานำเงินสดมาชำระที่หน้าร้านได้เลยครับ')
           + (pointsDiscount > 0 ? ` (ใช้แต้มลดไปแล้ว ${pointsDiscount} บาท)` : '')
       });
 
       // รีเซ็ตค่าทั้งหมด
-      setCart([]); setSlipFile(null); setSlipPreview(null); setPhoneNumber(''); setRedeemPoints(''); setIsCartOpen(false);
+      setCart([]); setSlipFile(null); setSlipPreview(null); setSlipUploadProgress(0); setSlipDimensions(null); setPhoneNumber(''); setRedeemPoints(''); setIsCartOpen(false);
       fetchProducts(); // ดึงสต๊อกใหม่
       fetchMyPoints(); // ⭐️ แต้มถูกหักไปแล้วถ้ามีการแลก ต้องดึงยอดคงเหลือใหม่
     } catch (error: any) {
@@ -221,54 +298,48 @@ export default function PreOrder() {
     } catch (err) { console.error(err); }
   };
 
-  const handleCancelMyOrder = async (order: any) => {
-    let refundInfo = '';
-    // ถ้าจ่ายผ่าน QR (หรือสถานะกำลังรอตรวจสลิป) — แจ้งว่าต้องนำสลิปมาที่ร้านเพื่อรับเงินคืนเป็นเงินสด
-    if (order.payment_method === 'QR') {
-      const res = await Swal.fire({
-        title: 'ยกเลิกออเดอร์ที่ชำระผ่าน QR',
-        html: `<p class="text-sm text-gray-600">ถ้าท่านโอนเงินมาแล้ว กรุณานำ <strong>หลักฐานการโอน (สลิป)</strong> มาที่ร้านสหกรณ์<br>เพื่อรับเงินคืนเป็น <strong>เงินสด</strong> ครับ</p>`,
-        icon: 'info',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444',
-        confirmButtonText: 'รับทราบ ยืนยันยกเลิก',
-        cancelButtonText: 'ไม่ยกเลิก'
-      });
-      if (!res.isConfirmed) return;
-      refundInfo = 'นำสลิปมารับเงินสดที่ร้าน';
-    } else {
-      const res = await Swal.fire({ title: 'ต้องการยกเลิกออเดอร์นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'ใช่, ยกเลิกเลย' });
-      if (!res.isConfirmed) return;
+  // ✅ CHANGED: accept refund reason from modal input
+  const handleCancelMyOrder = async (order: any, reason: string) => {
+    if (!reason.trim()) {
+      Swal.fire({ icon: 'warning', title: 'ต้องระบุเหตุผล', text: 'กรุณาใส่เหตุผลการยกเลิกออเดอร์' });
+      return;
     }
 
     try {
-      await api.put(`/orders/${order.id}/cancel-by-user`, { refund_info: refundInfo });
+      await api.put(`/orders/${order.id}/cancel-by-user`, { refund_info: reason });
       Swal.fire({ icon: 'success', title: 'ยกเลิกออเดอร์สำเร็จ', showConfirmButton: false, timer: 1500 });
+      setSelectedOrder(null); // ✅ CHANGED: close modal
+      setRefundReason(''); // ✅ CHANGED: reset input
       fetchMyOrders();
       fetchProducts();
     } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error });
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
     }
   };
 
-  const grandTotal = cart.reduce((total, item) => total + (Number(item.price) * item.quantity), 0);
+  // ⭐️ Sprint 1 — B3: บวกยอดตะกร้าในหน่วยสตางค์ (integer) กัน float drift สะสมข้ามหลายรายการ
+  const grandTotalSatang = cart.reduce((total, item) => total + lineTotalSatang(item.price, item.quantity), 0);
+  const grandTotal = fromSatang(grandTotalSatang);
 
   // ⭐️ ส่วนลดจากแต้ม (1 แต้ม = ฿1) ห้ามเกินแต้มที่มี และห้ามเกินยอดที่ต้องจ่าย (cap เหมือนฝั่ง backend)
   const maxRedeemable = Math.min(myPoints, Math.floor(grandTotal));
   const pointsDiscount = redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
-  const finalTotal = Math.max(0, grandTotal - pointsDiscount);
+  const finalTotal = fromSatang(Math.max(0, grandTotalSatang - toSatang(pointsDiscount)));
 
   return (
-    <div className="flex h-screen bg-pink-50 font-sans relative">
+    <div className="flex h-screen bg-[#FFF5F7] font-sans relative">
       {/* ================= ฝั่งซ้าย: เลือกสินค้า ================= */}
       <div className="w-full md:w-2/3 flex flex-col h-full">
-        <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0 border-b border-pink-100">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-pink-600">สั่งจองสินค้า (Pre-order)</h1>
-            <p className="text-xs md:text-sm text-gray-500">เลือกสินค้าลงตะกร้า แล้วรอรับที่สหกรณ์ได้เลย</p>
+        {/* ⭐️ FIX: ปรับ header ให้เหมือนหน้า POS — แถวเดียว icon box + title ซ้าย ปุ่มขวา ไม่ค่อยสตัดเป็น 2 บรรทัด */}
+        <div className="bg-white border-b border-[#F6C7C7] px-4 py-3 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 bg-[#F12B6B] rounded-lg flex items-center justify-center shrink-0">
+              <ShoppingBag size={15} className="text-white" />
+            </div>
+            <h1 className="text-base font-bold text-gray-900 truncate">สั่งจองสินค้า (Pre-order)</h1>
           </div>
           {/* ⭐️ ปุ่มกดดูประวัติของตัวเอง */}
-          <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="bg-pink-100 text-pink-700 px-4 py-2 rounded-xl font-bold hover:bg-pink-200 transition text-sm flex items-center gap-2">
+          <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] hover:bg-[#F6C7C7] px-3 py-1.5 rounded-full transition-colors duration-150">
             ประวัติของฉัน
           </button>
         </div>
@@ -277,16 +348,21 @@ export default function PreOrder() {
           {/* ⭐️ ค้นหา */}
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            {/* ⭐️ FIX: เดิม border-none กลืนกับพื้นหลัง เพิ่มกรอบให้เหมือนช่องค้นหาหน้า POS */}
             <input type="text" placeholder="ค้นหาสินค้า..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-pink-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-pink-500 focus:bg-white transition border-none" />
+              className="w-full pl-9 pr-4 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#F12B6B] focus:bg-white transition-colors duration-150" />
           </div>
 
-          {/* ⭐️ หมวดหมู่ */}
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-            <button onClick={() => setSelectedCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === 'ALL' ? 'bg-pink-600 text-white' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'}`}>ทั้งหมด</button>
-            {categories.map(c => (
-              <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === c.id ? 'bg-pink-600 text-white' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'}`}>{c.name}</button>
-            ))}
+          {/* ⭐️ FIX: หมวดหมู่ — ใส่กรอบขาวรอบแท็บให้ดูเป็นกล่องแยกชัดเจน (เหมือนหน้า POS) เดิมลอยอยู่บนพื้น
+              ชมพูเฉยๆ กลืนกับพื้นหลัง มองไม่ออกว่าเป็นส่วนควบคุมแยก + ยังคง fade gradient บอกว่าเลื่อนได้ */}
+          <div className="relative bg-white border border-[#F6C7C7] rounded-xl p-2.5 mb-4 shadow-sm">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+              <button onClick={() => setSelectedCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === 'ALL' ? 'bg-[#F12B6B] text-white' : 'bg-[#FFF5F7] text-[#F12B6B] hover:bg-[#F6C7C7]'}`}>ทั้งหมด</button>
+              {categories.map(c => (
+                <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === c.id ? 'bg-[#F12B6B] text-white' : 'bg-[#FFF5F7] text-[#F12B6B] hover:bg-[#F6C7C7]'}`}>{c.name}</button>
+              ))}
+            </div>
+            <div className="pointer-events-none absolute right-2.5 top-2.5 bottom-2.5 w-8 bg-gradient-to-l from-white to-transparent rounded-r-xl" />
           </div>
 
           {(() => {
@@ -296,15 +372,25 @@ export default function PreOrder() {
             return (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {filtered.map((product) => (
-              <div key={product.id} onClick={() => addToCart(product)} className="bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-pink-100 cursor-pointer hover:shadow-md transition active:scale-95 flex flex-col items-center relative overflow-hidden group">
-                <div className="w-full aspect-square bg-pink-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
-                  {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition duration-300" /> : <PackagePlus size={32} className="text-gray-300" />}
+              // ⭐️ FIX: เปลี่ยนการ์ดให้เหมือนหน้า POS ทั้งหมด — ขนาด/ระยะห่างเท่ากัน + มีปุ่ม "เพิ่มลงตะกร้า"
+              // ชัดเจนแทนการต้องแตะทั้งการ์ด (ปุ่มมี stopPropagation กัน addToCart ยิงซ้อน 2 ครั้งตอนกดปุ่ม)
+              <div key={product.id} onClick={() => addToCart(product)} className="bg-white border border-[#F6C7C7] rounded-xl p-3 transition-all duration-150 flex flex-col items-center cursor-pointer hover:border-[#FD94B4] hover:shadow-sm active:scale-95 h-full">
+                <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                  {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-[#FD94B4] opacity-50" />}
                 </div>
-                <h3 className="font-semibold text-center text-gray-700 line-clamp-2 text-sm">{product.name}</h3>
-                <div className="w-full flex justify-between items-end mt-2">
-                  <p className="text-pink-600 font-bold text-lg">฿{Number(product.price).toFixed(2)}</p>
-                  <p className="text-xs bg-pink-100 text-pink-600 px-2 py-1 rounded-md font-bold">เหลือ {product.stock}</p>
+                <p className="text-xs font-medium text-gray-800 text-center line-clamp-2 mb-1">{product.name}</p>
+
+                <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
+                  <p className="text-sm font-bold text-[#F12B6B]">฿{Number(product.price).toFixed(2)}</p>
+                  <p className="shrink-0 text-[10px] bg-[#FFF5F7] text-[#F12B6B] px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>
                 </div>
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); addToCart(product); }}
+                  className="w-full py-1 rounded text-xs font-medium bg-[#F12B6B] text-white hover:bg-[#FF467E] active:scale-95 transition-colors duration-150"
+                >
+                  เพิ่มลงตะกร้า
+                </button>
               </div>
             ))}
           </div>
@@ -313,33 +399,38 @@ export default function PreOrder() {
         </div>
       </div>
 
-      {/* ⭐️ ปุ่มตะกร้าลอย (มือถือ) */}
-      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-6 right-4 bg-pink-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 hover:bg-pink-700 active:scale-90 transition">
+      {/* ⭐️ FIX: เดิม bottom-6 ทับ bottom nav bar (h-14 + z-50) เพราะปุ่มนี้ z-40 ต่ำกว่า — เปลี่ยนเป็น
+          bottom-20 ให้ตรงกับปุ่มลอยหน้าอื่น (POS.tsx, Inventory.tsx) ที่แก้ถูกไว้แล้ว */}
+      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-20 right-4 bg-[#F12B6B] text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 hover:bg-[#FF467E] active:scale-90 transition">
         <ShoppingCart size={24} />
         {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
       </button>
 
       {/* ================= ฝั่งขวา: ตะกร้าและชำระเงิน ================= */}
-      <div className={`${isCartOpen ? 'fixed inset-0 z-50 flex animate-fade-in' : 'hidden'} md:flex md:relative md:w-1/3 flex-col bg-white border-l border-pink-100 shadow-xl`}>
-        <div className="p-4 bg-pink-600 text-white flex justify-between items-center">
+      {/* ⭐️ FIX: z-50 เดิมชนกับ bottom nav (z-50) เหมือน modal รายละเอียดออเดอร์ — ยกเป็น z-[60] ให้เหนือ nav
+          แน่นอน (ตรงกับ z-[60] ที่ตะกร้าหน้า POS ใช้อยู่แล้ว) */}
+      <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex animate-fade-in' : 'hidden'} md:flex md:relative md:w-1/3 flex-col bg-white border-l border-[#F6C7C7] shadow-xl`}>
+        <div className="p-4 bg-[#F12B6B] text-white flex justify-between items-center">
           <h2 className="text-lg font-bold flex items-center gap-2"><ShoppingCart size={20} /> ตะกร้าของฉัน</h2>
-          <button onClick={() => setIsCartOpen(false)} className="md:hidden p-1 bg-pink-700 rounded-lg hover:bg-pink-800"><X size={20} /></button>
+          <button onClick={() => setIsCartOpen(false)} className="md:hidden p-1 bg-[#FF467E] rounded-lg hover:bg-[#FF467E]"><X size={20} /></button>
         </div>
 
         {/* รายการในตะกร้า */}
-        <div className="flex-1 overflow-y-auto p-4 bg-pink-50 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 bg-[#FFF5F7] space-y-3">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50"><ShoppingCart size={48} className="mb-2" /> <p>ยังไม่มีสินค้า</p></div>
+            // ⭐️ FIX: เดิม h-full ยืดเต็มพื้นที่ scroll ทำให้กล่องว่างดูสูงเกินไป เปลี่ยนเป็น min-h คงที่แทน
+            // ⭐️ FIX: ลดต่ออีก 220px ยังดูสูงเกินไปเมื่อเทียบกับแผงชำระเงินด้านล่างที่กระชับแล้ว ย่อเหลือ 100px + ไอคอนเล็กลง
+            <div className="min-h-[100px] flex flex-col items-center justify-center text-gray-400 opacity-50"><ShoppingCart size={32} className="mb-1.5" /> <p className="text-xs">ยังไม่มีสินค้า</p></div>
           ) : (
             cart.map((item) => (
-              <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-pink-100 flex flex-col gap-2">
+              <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-[#F6C7C7] flex flex-col gap-2">
                 <div className="flex justify-between">
                   <p className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</p>
-                  <p className="font-bold text-pink-600">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
+                  <p className="font-bold text-[#F12B6B]">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-gray-500">฿{Number(item.price).toFixed(2)} / ชิ้น</p>
-                  <div className="flex items-center gap-2 bg-pink-50 rounded-lg p-1">
+                  <div className="flex items-center gap-2 bg-[#FFF5F7] rounded-lg p-1">
                     <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white rounded text-gray-600"><Minus size={14} /></button>
                     <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
                     <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white rounded text-gray-600"><Plus size={14} /></button>
@@ -351,7 +442,7 @@ export default function PreOrder() {
         </div>
 
         {/* ส่วนการชำระเงิน */}
-        <div className="p-5 bg-white border-t border-pink-100 shrink-0">
+        <div className="p-5 bg-white border-t border-[#F6C7C7] shrink-0">
           <div className="mb-4 space-y-1">
             <div className="flex justify-between text-sm text-gray-500">
               <span>ยอดรวมสินค้า:</span> <span>฿{grandTotal.toFixed(2)}</span>
@@ -361,8 +452,8 @@ export default function PreOrder() {
                 <span>แลกแต้ม ({pointsDiscount} 🌟):</span> <span>-฿{pointsDiscount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between text-xl font-bold text-gray-800 pt-1 border-t border-pink-100">
-              <span>ยอดสุทธิ:</span> <span className="text-pink-600">฿{finalTotal.toFixed(2)}</span>
+            <div className="flex justify-between text-xl font-bold text-gray-800 pt-1 border-t border-[#F6C7C7]">
+              <span>ยอดสุทธิ:</span> <span className="text-[#F12B6B]">฿{finalTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -371,13 +462,14 @@ export default function PreOrder() {
             <div>
               <label className="block text-xs font-bold text-gray-600 mb-1">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</label>
               <div className="flex gap-2">
-                <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => { setPhoneNumber(e.target.value); setPhoneVerified(null); }} className="flex-1 p-2.5 border border-pink-200 rounded-lg text-sm outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500" />
-                <button type="button" onClick={handleVerifyPhone} disabled={verifying} className="shrink-0 bg-pink-100 text-pink-700 px-3 py-2 rounded-lg text-sm font-bold hover:bg-pink-200 transition disabled:opacity-50">
+                <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => { setPhoneNumber(e.target.value); setPhoneVerified(null); }} className="flex-1 p-2.5 border border-[#F6C7C7] rounded-lg text-sm outline-none focus:border-[#F12B6B] focus:ring-1 focus:ring-[#F12B6B]" />
+                <button type="button" onClick={handleVerifyPhone} disabled={verifying} className="shrink-0 bg-[#FFF5F7] text-[#FF467E] px-3 py-2 rounded-lg text-sm font-bold hover:bg-[#F6C7C7] transition disabled:opacity-50">
                   {verifying ? '...' : 'ตรวจสอบ'}
                 </button>
               </div>
+              {/* 🐛 FIX (Sprint 0 — A2): /users/verify-phone ไม่คืนแต้มแล้ว (กันข้อมูลรั่ว) แสดงแค่ชื่อยืนยัน */}
               {phoneVerified && (
-                <p className="text-xs text-green-600 font-bold mt-1">✓ {phoneVerified.full_name} • มี {phoneVerified.points || 0} แต้ม</p>
+                <p className="text-xs text-green-600 font-bold mt-1">✓ ยืนยันตัวตน: {phoneVerified.member_name}</p>
               )}
             </div>
 
@@ -399,51 +491,79 @@ export default function PreOrder() {
               </div>
             )}
 
-            {/* เลือกวิธีจ่ายเงิน */}
+            {/* ⭐️ FIX: เลือกวิธีจ่ายเงิน — เดิม text-sm ยาวเกิน ตัวหนังสือชนกันในปุ่มแคบบนมือถือ ลดขนาด + leading-tight */}
             <div className="flex gap-2">
-              <button onClick={() => setPaymentMethod('CASH')} className={`flex-1 py-2 rounded-lg font-bold text-sm border-2 transition ${paymentMethod === 'CASH' ? 'border-pink-600 bg-pink-50 text-pink-700' : 'border-gray-200 text-gray-400'}`}>
+              <button onClick={() => setPaymentMethod('CASH')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'CASH' ? 'border-[#F12B6B] bg-[#FFF5F7] text-[#FF467E]' : 'border-gray-200 text-gray-400'}`}>
                 💵 จ่ายเงินสดหน้าร้าน
               </button>
-              <button onClick={() => setPaymentMethod('QR')} className={`flex-1 py-2 rounded-lg font-bold text-sm border-2 transition ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>
+              <button onClick={() => setPaymentMethod('QR')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>
                 📱 สแกนจ่าย
               </button>
             </div>
 
-            {/* โซนอัปโหลดสลิป (แสดงเฉพาะตอนสแกนจ่าย) */}
+            {/* โซนอัปโหลดสลิป (แสดงเฉพาะตอนสแกนจ่าย) — ⭐️ Sprint 2 — B9: Enhanced with validation */}
             {paymentMethod === 'QR' && (
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center animate-fade-in">
-                <div className="bg-white p-2 rounded-lg shadow-sm inline-block mb-2">
-                  <QRCode value={generatePayload(PROMPTPAY_ID, { amount: finalTotal })} size={120} />
+              // ⭐️ FIX: ขยาย QR ให้สแกนง่ายขึ้น (96→140) และลดขนาดช่องอัปโหลดสลิปลงอีก (ตัดคำอธิบายรอง,
+              // ไอคอน/padding เล็กลง, เหลือแค่ปุ่มเดียวไม่กินพื้นที่) ให้สมดุลกัน
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 text-center animate-fade-in">
+                <div className="bg-white p-2 rounded-lg shadow-sm inline-block mb-1.5">
+                  <QRCode value={generatePayload(PROMPTPAY_ID, { amount: finalTotal })} size={140} />
                 </div>
-                <p className="text-xs text-blue-800 font-bold mb-3">สแกนจ่าย {finalTotal.toFixed(2)} บาท</p>
+                <p className="text-xs text-blue-800 font-bold mb-2">สแกนจ่าย {finalTotal.toFixed(2)} บาท</p>
 
-                <label className="cursor-pointer bg-white border-2 border-dashed border-blue-300 rounded-lg p-3 flex flex-col items-center justify-center hover:bg-blue-100 transition">
-                  <input type="file" accept="image/*" className="hidden" onChange={handleSlipChange} />
-                  {slipPreview ? (
-                    <img src={slipPreview} alt="Slip" className="max-h-24 object-contain rounded" />
-                  ) : (
-                    <>
-                      <ImageIcon className="text-blue-400 mb-1" size={24} />
-                      <span className="text-xs font-bold text-blue-600">กดเพื่ออัปโหลดสลิปโอนเงิน</span>
-                    </>
-                  )}
-                </label>
+                {/* Upload zone */}
+                <div className="border-2 border-dashed border-blue-300 rounded-lg p-1.5">
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 hover:bg-blue-100 transition py-1">
+                    <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={handleSlipChange} />
+                    {slipPreview ? (
+                      <img src={slipPreview} alt="Slip" className="max-h-16 object-contain rounded" />
+                    ) : (
+                      <>
+                        <Upload className="text-blue-600" size={14} />
+                        <span className="text-xs font-bold text-blue-600">แตะเพื่ออัปโหลดสลิป</span>
+                      </>
+                    )}
+                  </label>
+                </div>
+
+                {/* File info and progress — ⭐️ Sprint 2 — B9 */}
+                {slipFile && (
+                  <div className="bg-white p-3 rounded-lg border border-blue-200 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-bold text-gray-700">{slipFile.name}</span>
+                      <button onClick={() => { setSlipFile(null); setSlipPreview(null); setSlipDimensions(null); }} className="text-red-500 hover:bg-red-50 p-1 rounded">
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {slipDimensions && (
+                      <p className="text-xs text-green-600 font-bold">✓ ขนาดรูปถูกต้อง: {slipDimensions.width}×{slipDimensions.height}</p>
+                    )}
+                    {slipUploadProgress > 0 && slipUploadProgress < 100 && (
+                      <div className="w-full bg-gray-200 rounded h-2">
+                        <div className="bg-blue-600 h-full rounded transition-all" style={{ width: `${slipUploadProgress}%` }} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          <button onClick={handleCheckout} disabled={cart.length === 0 || loading} className={`w-full py-4 rounded-xl text-lg font-bold text-white transition flex justify-center items-center gap-2 ${cart.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-700 active:scale-95 shadow-md'}`}>
-            {loading ? 'กำลังส่งข้อมูล...' : <><CheckCircle size={24} /> ยืนยันคำสั่งซื้อ</>}
+          {/* ⭐️ FIX: ปุ่มยืนยัน — ปรับให้ตรงกับปุ่ม "ชำระเงิน" หน้า POS: ขนาด/ฟอนต์เล็กลง (py-3.5, text-sm,
+              ไอคอน 18px), เปลี่ยนเป็นสีฟ้าตอนเลือกสแกนจ่าย (เหมือน POS ที่สลับสีตาม paymentMethod) */}
+          <button onClick={handleCheckout} disabled={cart.length === 0 || loading} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${cart.length === 0 ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#F12B6B] hover:bg-[#FF467E]'}`}>
+            {loading ? 'กำลังส่งข้อมูล...' : <><CheckCircle size={18} /> ยืนยันคำสั่งซื้อ</>}
           </button>
         </div>
       </div>
       {/* ⭐️ Modal ประวัติออเดอร์ของลูกค้า */}
       {showMyOrders && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
-            <div className="p-4 bg-pink-50 border-b border-pink-100 flex justify-between items-center shrink-0">
+          {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-[#FFF5F7] border-b border-[#F6C7C7] flex justify-between items-center shrink-0">
               <h2 className="font-bold text-lg text-gray-800">ประวัติการสั่งจองของฉัน</h2>
-              <button onClick={() => setShowMyOrders(false)} className="p-1 hover:bg-pink-200 text-gray-500 rounded-lg"><X size={20} /></button>
+              <button onClick={() => setShowMyOrders(false)} className="p-1 hover:bg-[#F6C7C7] text-gray-500 rounded-lg"><X size={20} /></button>
             </div>
             <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
               {myOrders.length === 0 ? (
@@ -471,70 +591,239 @@ export default function PreOrder() {
                     REFUND_REQUESTED: '💰 รอคืนเงิน',
                   };
                   return (
-                  <div key={order.id} className="bg-white p-4 rounded-xl border border-pink-100 shadow-sm">
+                  <div key={order.id} className="bg-white p-4 rounded-2xl border border-[#F6C7C7] shadow-md hover:shadow-lg hover:border-[#FD94B4] transition-all cursor-pointer"
+                    onClick={() => { setSelectedOrder(order); setRefundReason(''); setShowMyOrders(false); }}>
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className="font-bold text-gray-800">บิล #{order.id}</h3>
-                        <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString('th-TH')}</p>
+                        <h3 className="font-bold text-lg text-gray-800">ออเดอร์ #{order.id}</h3>
+                        <p className="text-xs text-gray-500 mt-1">{formatBangkokTime(order.created_at)}</p>
                       </div>
-                      <span className={`px-2 py-1 rounded-md text-[10px] md:text-xs font-bold ${statusBadge[order.status] || 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`px-3 py-1.5 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap ${statusBadge[order.status] || 'bg-gray-100 text-gray-600'}`}>
                         {statusLabel[order.status] || order.status}
                       </span>
                     </div>
 
-                    <div className="text-sm text-gray-600 mb-3 space-y-1">
+                    <div className="text-sm text-gray-600 mb-3 space-y-1.5 bg-gray-50 p-2.5 rounded-lg">
                       {order.items?.map((item: any) => (
-                        <div key={item.id} className="flex justify-between">
-                          <span>{item.quantity}x {item.product_name}</span>
-                          <span>฿{Number(item.subtotal).toFixed(2)}</span>
+                        <div key={item.id} className="flex justify-between text-xs md:text-sm">
+                          <span className="text-gray-700">{item.quantity}x {item.product_name}</span>
+                          <span className="font-semibold text-gray-800">฿{Number(item.subtotal).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
 
                     {Number(order.points_discount) > 0 && (
-                      <p className="text-xs text-yellow-600 font-bold mb-2">ใช้แต้มลด {order.points_redeemed} 🌟 (-฿{Number(order.points_discount).toFixed(2)})</p>
+                      <p className="text-xs text-yellow-600 font-bold mb-2 bg-yellow-50 p-2 rounded-lg">🌟 ใช้แต้มลด {order.points_redeemed} (-฿{Number(order.points_discount).toFixed(2)})</p>
                     )}
 
-                    {/* ⭐️ SLIP_REJECTED — ให้ลูกค้าส่งสลิปใหม่ */}
-                    {order.status === 'SLIP_REJECTED' && (
-                      <div className="mb-3 bg-red-50 border border-red-100 rounded-lg p-3">
-                        <p className="text-xs text-red-700 font-bold mb-2">⚠️ สลิปของท่านไม่ถูกต้อง กรุณาแนบสลิปใหม่ที่ถูกต้อง</p>
-                        {order.reject_reason && <p className="text-xs text-gray-500 mb-2">เหตุผล: {order.reject_reason}</p>}
-                        <label className="block cursor-pointer">
-                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                            const file = e.target.files?.[0]; if (!file) return;
-                            try {
-                              const fd = new FormData(); fd.append('slip', file);
-                              const upRes = await api.post('/orders/upload-slip', fd);
-                              await api.put(`/orders/${order.id}/resubmit-slip`, { slip_image: upRes.data.slip_url });
-                              Swal.fire({ icon: 'success', title: 'ส่งสลิปใหม่สำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
-                              fetchMyOrders();
-                            } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
-                          }} />
-                          <span className="block w-full text-center bg-red-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-red-700 transition cursor-pointer">📎 แนบสลิปใหม่</span>
-                        </label>
-                      </div>
-                    )}
-
-                    {order.status === 'REFUND_REQUESTED' && (
-                      <div className="mb-3 bg-purple-50 border border-purple-100 rounded-lg p-3 text-xs text-purple-700 font-bold">
-                        💰 กรุณานำหลักฐานการโอนเงินมาที่ร้านสหกรณ์เพื่อรับเงินสดคืน
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center border-t border-gray-100 pt-3">
-                      <span className="font-bold text-pink-600">ยอดรวม: ฿{Number(order.total_amount).toFixed(2)}</span>
-                      {/* ⭐️ ยกเลิกได้เฉพาะก่อนเริ่มเตรียมของ (ยังไม่ผ่าน PREPARING) */}
-                      {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(order.status) && (
-                        <button onClick={() => handleCancelMyOrder(order)} className="bg-red-50 text-red-500 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-100 transition">
-                          ขอยกเลิกออเดอร์
-                        </button>
-                      )}
+                    <div className="flex justify-between items-center border-t border-gray-200 pt-3">
+                      <span className="font-bold text-[#F12B6B] text-base">฿{Number(order.total_amount).toFixed(2)}</span>
+                      <span className="text-xs text-gray-500">แตะเพื่อดูละเอียด →</span>
                     </div>
                   </div>
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ CHANGED: new order detail modal - refactored UI */}
+      {/* ✅ CHANGED: Refactored modal JSX — typography, spacing, interactive states, animations */}
+      {selectedOrder && (
+        // ⭐️ FIX: z-50 เดิมเท่ากับ bottom nav (z-50 ใน Layout.tsx) — เพราะ nav อยู่หลัง <main> ใน DOM ทำให้
+        // แม้ backdrop คลุมเต็มจอ nav ก็ยังโผล่ทับด้านบนอยู่ (ตามภาพที่แจ้ง) ยกเป็น z-[80] ให้อยู่เหนือ nav แน่นอน
+        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+          {/* ⭐️ FIX: ปรับให้เหมือนสไตล์การ์ด/หัวข้อหน้า POS — แบนขึ้น ตัดไล่สีออก ใช้ theme token ตรงๆ
+              เดิม max-h-[90vh] บนมือถือจริง vh นับรวมแถบ URL bar ทำให้ modal โดนตัดปุ่มด้านล่าง เปลี่ยนเป็น dvh */}
+          {/* ⭐️ FIX: เดิมไม่มี overflow-hidden — header สีชมพูมุมตรง (ไม่ได้ใส่ rounded-t) เลยล้นทับมุมโค้ง
+              ของการ์ดแม่ (rounded-2xl) ทำให้ขอบบนดูเหลี่ยม ไม่มน ใส่ overflow-hidden ให้ครอบตัดตามการ์ดแม่ */}
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85dvh] flex flex-col overflow-hidden animate-fade-in">
+            {/* Header - Sticky */}
+            <div className="shrink-0 bg-[#F12B6B] px-4 py-3 flex justify-between items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-white font-bold text-base truncate">ออเดอร์ #{selectedOrder.id}</h2>
+                <p className="text-white/80 text-xs mt-0.5">{formatBangkokTime(selectedOrder.created_at)}</p>
+              </div>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="shrink-0 p-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors duration-150"
+                aria-label="ปิด"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {/* ⭐️ FIX: เอาคำว่า "สำเร็จแล้ว" ออก — ซ่อนป้ายสถานะทั้งอันตอน COMPLETED เพราะดูซ้ำซ้อน
+                  ในมุมมองประวัติออเดอร์ที่รู้อยู่แล้วว่าสำเร็จ (สถานะอื่นที่ยังต้องติดตามยังโชว์ตามปกติ) */}
+              {selectedOrder.status !== 'COMPLETED' && (
+              <div className="flex justify-center">
+                <span className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-sm transition-transform duration-150 ${
+                  selectedOrder.status === 'PENDING_VERIFY' ? 'bg-blue-100 text-blue-800' :
+                  selectedOrder.status === 'WAITING_CASH' ? 'bg-yellow-100 text-yellow-800' :
+                  selectedOrder.status === 'PREPARING' ? 'bg-orange-100 text-orange-800' :
+                  selectedOrder.status === 'READY' ? 'bg-green-100 text-green-800' :
+                  selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 text-gray-700' :
+                  selectedOrder.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
+                  selectedOrder.status === 'SLIP_REJECTED' ? 'bg-red-100 text-red-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}>
+                  {selectedOrder.status === 'PENDING_VERIFY' && '⏳ รอตรวจสลิป'}
+                  {selectedOrder.status === 'WAITING_CASH' && '💵 รอชำระเงิน'}
+                  {selectedOrder.status === 'PREPARING' && '📦 กำลังเตรียมของ'}
+                  {selectedOrder.status === 'READY' && '✅ พร้อมรับสินค้า'}
+                  {selectedOrder.status === 'CANCELLED' && '❌ ยกเลิกแล้ว'}
+                  {selectedOrder.status === 'SLIP_REJECTED' && '⚠️ สลิปผิด'}
+                </span>
+              </div>
+              )}
+
+              {/* Slip Image Section */}
+              {(selectedOrder.payment_method === 'QR' || selectedOrder.slip_image) && (
+                <div className="bg-[#FFF5F7] rounded-xl p-4 text-center border border-[#F6C7C7]">
+                  <p className="text-xs sm:text-sm text-gray-600 font-semibold mb-3 flex items-center justify-center gap-2">
+                    <span className="text-lg">🧾</span> หลักฐานการชำระเงิน
+                  </p>
+                  {selectedOrder.slip_image ? (
+                    // ⭐️ FIX: เดิมไม่มี max-height เลย ถ้าสลิปเป็นรูปแนวตั้ง/ความละเอียดสูงจะดันความสูงทั้ง
+                    // modal บวมจนต้องเลื่อนไกลกว่าจะเจอปุ่มด้านล่าง — จำกัดความสูงไว้ + object-contain
+                    // ⭐️ SECURITY FIX #1 — โหลดผ่าน AuthImage (แนบ JWT) แทน <img src> ตรงๆ
+                    <AuthImage
+                      path={getSlipImagePath(selectedOrder.created_at, selectedOrder.slip_image)}
+                      alt="slip"
+                      className="w-full max-h-64 sm:max-h-80 object-contain rounded-xl border border-[#F6C7C7] bg-white"
+                      fallback={<p className="text-gray-500 text-sm py-8">โหลดรูปสลิปไม่ได้</p>}
+                    />
+                  ) : (
+                    <p className="text-gray-500 text-sm py-8">ยังไม่ได้อัปโหลดสลิป</p>
+                  )}
+                </div>
+              )}
+
+              {/* Upload Slip Section */}
+              {selectedOrder.status === 'PENDING_VERIFY' && !selectedOrder.slip_image && (
+                <label className="block cursor-pointer group">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    try {
+                      const fd = new FormData(); fd.append('slip', file);
+                      await api.post(`/orders/${selectedOrder.id}/upload-slip`, fd);
+                      // ⭐️ Fetch updated orders BEFORE closing modal to avoid stale selectedOrder
+                      await fetchMyOrders();
+                      setSelectedOrder(null);
+                      Swal.fire({ icon: 'success', title: 'อัปโหลดสลิปสำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
+                    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+                  }} />
+                  <div className="border-2 border-dashed border-[#FD94B4] rounded-2xl p-6 sm:p-7 text-center bg-[#FFF5F7] group-hover:bg-[#F6C7C7] group-active:bg-[#F6C7C7] transition-colors duration-150">
+                    <p className="text-[#F12B6B] font-bold text-sm sm:text-base">📎 แตะเพื่ออัปโหลดสลิป</p>
+                    <p className="text-[#F12B6B] text-xs sm:text-sm mt-2">(รูปภาพขนาดไม่เกิน 5 MB)</p>
+                  </div>
+                </label>
+              )}
+
+              {/* Resubmit Slip */}
+              {selectedOrder.status === 'SLIP_REJECTED' && (
+                <label className="block cursor-pointer group">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    try {
+                      const fd = new FormData(); fd.append('slip', file);
+                      await api.post(`/orders/${selectedOrder.id}/upload-slip`, fd);
+                      // ⭐️ Fetch updated orders BEFORE closing modal to avoid stale selectedOrder
+                      await fetchMyOrders();
+                      setSelectedOrder(null);
+                      Swal.fire({ icon: 'success', title: 'ส่งสลิปใหม่สำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
+                    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+                  }} />
+                  <div className="border-2 border-dashed border-red-300 rounded-2xl p-6 sm:p-7 text-center bg-red-50 group-hover:bg-red-100 group-active:bg-red-75 transition-colors duration-150">
+                    <p className="text-red-600 font-bold text-sm sm:text-base">📎 แตะเพื่อส่งสลิปใหม่</p>
+                    <p className="text-red-500 text-xs sm:text-sm mt-2">สลิปของท่านไม่ถูกต้อง กรุณาส่งสลิปใหม่</p>
+                  </div>
+                </label>
+              )}
+
+              {/* Items Section */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <h3 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2">
+                  <span className="text-lg">📦</span> รายการสินค้า ({selectedOrder.items?.length})
+                </h3>
+                <div className="space-y-2">
+                  {selectedOrder.items?.map((item: any) => (
+                    <div key={item.id} className="flex justify-between items-center gap-3 py-2.5 px-3 bg-white rounded-lg border border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-800 font-medium text-sm truncate">{item.product_name}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">จำนวน: {item.quantity} ชิ้น</p>
+                      </div>
+                      <p className="font-bold text-[#F12B6B] text-sm whitespace-nowrap">฿{Number(item.subtotal).toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Points Discount */}
+              {Number(selectedOrder.points_discount) > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                  <p className="text-sm text-yellow-800 font-semibold flex items-center gap-2">
+                    <span className="text-lg">🌟</span> ใช้แต้มลด {selectedOrder.points_redeemed} แต้ม
+                  </p>
+                  <p className="text-base font-bold text-yellow-700 mt-2">ลด ฿{Number(selectedOrder.points_discount).toFixed(2)}</p>
+                </div>
+              )}
+
+              {/* Reject Reason */}
+              {selectedOrder.status === 'SLIP_REJECTED' && selectedOrder.reject_reason && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <p className="text-xs sm:text-sm text-red-700 font-bold">⚠️ เหตุผลที่ปฏิเสธ:</p>
+                  <p className="text-sm text-red-800 mt-2 leading-relaxed">{selectedOrder.reject_reason}</p>
+                </div>
+              )}
+
+              {/* Total Amount */}
+              <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-4">
+                <p className="text-gray-700 text-xs sm:text-sm font-medium mb-1">ยอดรวมทั้งสิ้น</p>
+                <p className="text-2xl sm:text-3xl font-bold text-[#F12B6B]">
+                  ฿{Number(selectedOrder.total_amount).toFixed(2)}
+                </p>
+              </div>
+
+              {/* Refund Reason Input */}
+              {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(selectedOrder.status) && (
+                <div className="space-y-2.5 pt-2">
+                  <label className="block text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                    🔍 เหตุผลในการยกเลิก
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <textarea
+                    placeholder="ระบุเหตุผลการยกเลิก เช่น เปลี่ยนใจ, ส่วนลดน้อยเกินไป, ฯลฯ"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-[#F12B6B] focus:ring-2 focus:ring-[#F6C7C7] transition-colors duration-150 resize-none h-24 bg-gray-50 placeholder:text-gray-400"
+                  />
+                  <p className="text-xs text-gray-500 text-right">{refundReason.length} / 200</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2.5 pt-2 pb-1">
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 active:scale-95 text-gray-800 font-bold rounded-xl transition-all duration-150 text-sm"
+                >
+                  ปิด
+                </button>
+                {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(selectedOrder.status) && (
+                  <button
+                    onClick={() => handleCancelMyOrder(selectedOrder, refundReason)}
+                    disabled={!refundReason.trim()}
+                    className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    ยกเลิกออเดอร์
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

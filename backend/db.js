@@ -1,12 +1,22 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config(); // ⭐️ 1. เพิ่มบรรทัดนี้ เพื่อให้ db.js อ่านไฟล์ .env ได้
 
+// ⭐️ Task 6 — เอา fallback รหัสผ่านฮาร์ดโค้ด ('rootpassword') ออก
+// เดิมถ้า DB_PASSWORD หายจาก .env ระบบจะบูทต่อแบบเงียบๆ ด้วยรหัสผ่านอ่อนแอ — อันตรายเวลา deploy จริง
+// ตอนนี้ต้องมี DB_HOST/DB_USER/DB_PASSWORD/DB_NAME ใน .env จริงเท่านั้น ไม่มี fallback ให้ค่าอ่อนแอ
+const REQUIRED_DB_ENV = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missingDbEnv = REQUIRED_DB_ENV.filter(key => !process.env[key]);
+if (missingDbEnv.length > 0) {
+  console.error(`❌ db.js: ไม่พบ environment variable ที่จำเป็น: ${missingDbEnv.join(', ')}`);
+  process.exit(1);
+}
+
 // ⭐️ 2. เปลี่ยนบล็อก const pool เดิม ให้เป็นแบบนี้
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'rootpassword', 
-  database: process.env.DB_NAME || 'pos_coop',
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
@@ -260,6 +270,21 @@ const initDB = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+    // ⭐️ Task 13 — ตาราง password reset tokens
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        reset_token VARCHAR(255) UNIQUE NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        INDEX idx_token (reset_token),
+        INDEX idx_expires (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
     // 16. ตารางแจ้งเตือน (Notifications)
     await connection.query(`
       CREATE TABLE IF NOT EXISTS notifications (
@@ -267,6 +292,20 @@ const initDB = async () => {
         user_id INT,
         message TEXT,
         is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // 16.1 ตารางบันทึกการตรวจสอบย้อนหลัง (Audit Logs) — บันทึกการกระทำสำคัญที่กระทบเงิน/สิทธิ์
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        action VARCHAR(100) NOT NULL,
+        user_id INT NULL,
+        resource_type VARCHAR(50) NULL,
+        resource_id INT NULL,
+        details TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -449,12 +488,172 @@ const initDB = async () => {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE shifts (close_photo) ล้มเหลว:", alterErr.message);
     }
 
+    // ⭐️ Task 3 — Shift discrepancy workflow: ส่วนต่างเงินสดเกินเกณฑ์ต้องรอ ADMIN อนุมัติก่อนปิดกะจริง
+    for (const [col, def] of [
+      ['discrepancy_amount', 'DECIMAL(10,2) NULL'],
+      ['discrepancy_flag', 'BOOLEAN DEFAULT 0'],
+      ['admin_approval_required', 'BOOLEAN DEFAULT 0'],
+      ['admin_approved_by', 'INT NULL'],
+      ['admin_approval_notes', 'TEXT NULL'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE shifts ADD COLUMN ${col} ${def}`);
+        console.log(`🔧 เพิ่มคอลัมน์ shifts.${col} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE shifts (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+    // ⭐️ Sprint 2 — D1: status ENUM ประกอบด้วย OPEN/PENDING_CLOSE/CLOSED/REJECTED
+    // OPEN → PENDING_CLOSE (cashier initiates close) → CLOSED (manager approves) or REJECTED → OPEN (manager rejects)
+    try {
+      await connection.query(`ALTER TABLE shifts MODIFY COLUMN status ENUM('OPEN','PENDING_CLOSE','CLOSED','REJECTED') DEFAULT 'OPEN'`);
+    } catch (alterErr) {
+      console.error("⚠️ ALTER TABLE shifts (status enum D1) ล้มเหลว:", alterErr.message);
+    }
+
+    // ⭐️ Sprint 1 — D3: หมวดหมู่สาเหตุส่วนต่างเงินสด (แยกจาก note ที่เป็น freeform text) — ใช้ track root
+    // cause สะสมได้ (เช่น "ทอนผิดบ่อยแค่ไหน" vs "รับเงินปลอมบ่อยแค่ไหน") ไม่ได้แทนที่ note เดิม ใช้คู่กัน
+    try {
+      await connection.query(
+        `ALTER TABLE shifts ADD COLUMN discrepancy_category ENUM(
+          'SHORT_CHANGE', 'FAKE_BILL', 'FORGOT_RECEIPT', 'CUSTOMER_RETURN', 'OTHER'
+        ) DEFAULT NULL`
+      );
+      console.log("🔧 เพิ่มคอลัมน์ shifts.discrepancy_category ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE shifts (discrepancy_category) ล้มเหลว:", alterErr.message);
+    }
+
+    // ⭐️ Sprint 2 — D1: Dual-Control Shift Close: approved_by, approval_notes, approved_at
+    for (const [col, def] of [
+      ['approved_by', 'INT NULL'],
+      ['approval_notes', 'TEXT NULL'],
+      ['approved_at', 'TIMESTAMP NULL'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE shifts ADD COLUMN ${col} ${def}`);
+        console.log(`🔧 เพิ่มคอลัมน์ shifts.${col} (D1) ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE shifts (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
+    // ⭐️ Task 4 — Pre-order slip verification audit trail (นอกเหนือจาก orders.status ที่ใช้อยู่แล้ว)
+    for (const [col, def] of [
+      ['slip_file_path', 'VARCHAR(255) NULL'],
+      ['slip_verified_by', 'INT NULL'],
+      ['slip_verified_at', 'DATETIME NULL'],
+      ['slip_verification_status', "ENUM('PENDING','VERIFIED','REJECTED') DEFAULT 'PENDING'"],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE orders ADD COLUMN ${col} ${def}`);
+        console.log(`🔧 เพิ่มคอลัมน์ orders.${col} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE orders (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
     // ⭐️ Defensive patch: assigned_to — พนักงานที่รับงาน order นี้ไปดูแล (lock สิทธิ์)
     try {
       await connection.query(`ALTER TABLE orders ADD COLUMN assigned_to INT NULL`);
       console.log("🔧 เพิ่มคอลัมน์ orders.assigned_to ที่ขาดไปให้แล้ว");
     } catch (alterErr) {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE orders (assigned_to) ล้มเหลว:", alterErr.message);
+    }
+
+    // ⭐️ Sprint 2 — Expiry Discount Feature: expiry_date, discount_percent, is_expired (generated)
+    try {
+      await connection.query(`ALTER TABLE products ADD COLUMN expiry_date DATE DEFAULT NULL`);
+      console.log("🔧 เพิ่มคอลัมน์ products.expiry_date ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE products (expiry_date) ล้มเหลว:", alterErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE products ADD COLUMN discount_percent INT DEFAULT 40`);
+      console.log("🔧 เพิ่มคอลัมน์ products.discount_percent ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE products (discount_percent) ล้มเหลว:", alterErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE products ADD COLUMN is_expired BOOLEAN GENERATED ALWAYS AS (expiry_date IS NOT NULL AND expiry_date < CURDATE()) STORED`);
+      console.log("🔧 เพิ่มคอลัมน์ products.is_expired (GENERATED) ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE products (is_expired) ล้มเหลว:", alterErr.message);
+    }
+
+    // ⭐️ Sprint 2 — B6: Idempotency — add idempotency_key columns to financial endpoints
+    for (const [table, columns] of [
+      ['sales', 'idempotency_key'],
+      ['orders', 'idempotency_key'],
+      ['shifts', 'idempotency_key'],
+      ['purchases', 'idempotency_key'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN ${columns} VARCHAR(255) UNIQUE NULL`);
+        console.log(`🔧 เพิ่มคอลัมน์ ${table}.${columns} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE ${table} (${columns}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
+    // ⭐️ Sprint 2 — C2: Audit Log Viewer — Add missing columns for audit_logs
+    for (const [col, def] of [
+      ['description', 'TEXT NULL'],
+      ['amount_cents', 'INT DEFAULT 0'],
+      ['status', "VARCHAR(50) DEFAULT 'SUCCESS'"],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE audit_logs ADD COLUMN ${col} ${def}`);
+        console.log(`🔧 เพิ่มคอลัมน์ audit_logs.${col} (C2) ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE audit_logs (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+    // ⭐️ Sprint 2 — C2: Add indexes to audit_logs for faster querying
+    try {
+      await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_created_at (created_at)`);
+      console.log("🔧 เพิ่ม index audit_logs.idx_created_at ที่ขาดไปให้แล้ว");
+    } catch (indexErr) {
+      if (indexErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_created_at) ล้มเหลว:", indexErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_action (action)`);
+      console.log("🔧 เพิ่ม index audit_logs.idx_action ที่ขาดไปให้แล้ว");
+    } catch (indexErr) {
+      if (indexErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_action) ล้มเหลว:", indexErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_user_id (user_id)`);
+      console.log("🔧 เพิ่ม index audit_logs.idx_user_id ที่ขาดไปให้แล้ว");
+    } catch (indexErr) {
+      if (indexErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_user_id) ล้มเหลว:", indexErr.message);
+    }
+
+    // ⭐️ Sprint 2 — C3: Backup & Restore
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS backups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL UNIQUE,
+        backup_date DATE NOT NULL,
+        file_size_mb DECIMAL(10,2),
+        status ENUM('SUCCESS', 'FAILED', 'PENDING') DEFAULT 'PENDING',
+        backup_path VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        restored_at TIMESTAMP NULL,
+        restored_by INT,
+        notes TEXT,
+        INDEX (backup_date),
+        INDEX (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // ⭐️ Summary/Payroll feature — hourly wage per staff member, editable by ADMIN in the new
+    // summary page. Defaults to 0 so nothing breaks for existing users until ADMIN sets a rate.
+    try {
+      await connection.query(`ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT 0`);
+      console.log("🔧 เพิ่มคอลัมน์ users.hourly_rate ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE users (hourly_rate) ล้มเหลว:", alterErr.message);
     }
 
     console.log("✅ Ultimate Master Database Schema is Ready!");

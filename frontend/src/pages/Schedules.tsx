@@ -2,14 +2,18 @@
 // 🔒 UNCHANGED: fetchAll, handleSave, handleAddHoliday, openPopover, popover logic, all state
 
 import { useState, useEffect, useRef } from 'react';
-import { CalendarClock, ChevronLeft, ChevronRight, CalendarOff, X } from 'lucide-react';
+import { CalendarClock, ChevronLeft, ChevronRight, CalendarOff, X, Trash2 } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 
 const WEEKDAYS = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 export default function Schedules() {
+  const user = getCurrentUserOrRedirect();
+  const isAdmin = user.role === 'ADMIN'; // ⭐️ CASHIER เห็นตารางกะได้ (ดูอย่างเดียว) มีแค่ ADMIN ที่แก้ไข/ลบได้
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [staff, setStaff] = useState<any[]>([]);
@@ -17,6 +21,8 @@ export default function Schedules() {
   const [holidays, setHolidays] = useState<any[]>([]);
   const [popover, setPopover] = useState<{ date: string; x: number; y: number } | null>(null);
   const [popForm, setPopForm] = useState({ cashier_id: '', expected_start: '09:00', expected_end: '17:00' });
+  // ⭐️ ถ้ากำลังแก้ตารางกะที่มีอยู่แล้ว (คลิกจาก badge) เก็บ id ไว้เพื่อรู้ว่าต้อง "แก้" ไม่ใช่ "เพิ่มใหม่"
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
   const [holidayForm, setHolidayForm] = useState({ holiday_date: '', note: '' });
@@ -32,8 +38,9 @@ export default function Schedules() {
 
   const fetchAll = async () => {
     try {
-      const [staffRes, schRes, holRes] = await Promise.all([api.get('/users'), api.get('/schedules'), api.get('/holidays')]);
-      setStaff(staffRes.data.filter((u: any) => ['CASHIER','ADMIN'].includes(u.role) && u.is_active));
+      // ⭐️ /api/staff-list (ไม่ใช่ /api/users) — CASHIER เรียกได้ด้วย ไม่มี student_id/เบอร์โทรติดมา
+      const [staffRes, schRes, holRes] = await Promise.all([api.get('/staff-list'), api.get('/schedules'), api.get('/holidays')]);
+      setStaff(staffRes.data);
       setSchedules(schRes.data); setHolidays(holRes.data);
     } catch (e) { console.error(e); }
   };
@@ -52,25 +59,49 @@ export default function Schedules() {
   const staffColor = (id: number) => COLORS[staff.findIndex(s => s.id === id) % COLORS.length] || COLORS[0];
 
   const openPopover = (day: number, e: React.MouseEvent) => {
+    if (!isAdmin) return; // ⭐️ CASHIER ดูปฏิทินได้อย่างเดียว แตะแล้วไม่เด้ง popover แก้ไข
     const dateStr = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setEditingScheduleId(null);
     setPopForm({ cashier_id: '', expected_start: '09:00', expected_end: '17:00' });
     setPopover({ date: dateStr, x: rect.left, y: rect.bottom + window.scrollY });
+  };
+
+  // ⭐️ คลิกที่ badge ของพนักงานคนใดคนหนึ่งในวันนั้น → เปิด popover พร้อม pre-fill เวลาเข้า-ออกงานจริงของคนนั้น
+  // เพื่อแก้ไขได้ตรงๆ (เดิมเปิดมาแล้ว reset เป็น 09:00–17:00 เสมอ ทำให้ดูเหมือนทุกคนต้องเข้า-ออกงานเวลาเดียวกัน)
+  const openEditSchedule = (s: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAdmin) return;
+    const rect = (e.currentTarget as HTMLElement).closest('[data-day-cell]')?.getBoundingClientRect()
+      || (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setEditingScheduleId(s.id);
+    setPopForm({ cashier_id: String(s.cashier_id), expected_start: s.expected_start?.slice(0,5) || '09:00', expected_end: s.expected_end?.slice(0,5) || '17:00' });
+    setPopover({ date: s.work_date, x: rect.left, y: rect.bottom + window.scrollY });
   };
 
   const handleSave = async () => {
     if (!popForm.cashier_id || !popover) return Swal.fire({ icon: 'warning', title: 'กรุณาเลือกพนักงาน' });
     setSaving(true);
-    try { await api.post('/schedules', { cashier_id: Number(popForm.cashier_id), work_date: popover.date, expected_start: popForm.expected_start, expected_end: popForm.expected_end }); setPopover(null); fetchAll(); }
-    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    try { await api.post('/schedules', { cashier_id: Number(popForm.cashier_id), work_date: popover.date, expected_start: popForm.expected_start, expected_end: popForm.expected_end }); setPopover(null); setEditingScheduleId(null); fetchAll(); }
+    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setSaving(false); }
+  };
+
+  const handleDeleteSchedule = async (scheduleId: number) => {
+    const confirm = await Swal.fire({ title: 'ลบตารางเวลานี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก' });
+    if (!confirm.isConfirmed) return;
+    try {
+      await api.delete(`/schedules/${scheduleId}`);
+      if (editingScheduleId === scheduleId) { setPopover(null); setEditingScheduleId(null); }
+      fetchAll();
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
   const handleAddHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!holidayForm.holiday_date) return Swal.fire({ icon: 'warning', title: 'กรุณาเลือกวันที่' });
     try { await api.post('/holidays', holidayForm); setHolidayForm({ holiday_date: '', note: '' }); fetchAll(); }
-    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.response?.data?.error }); }
+    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
   const inputCls = "px-3 py-2 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150";
@@ -87,16 +118,18 @@ export default function Schedules() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">ตารางเวลาทำงาน</h1>
-              <p className="text-xs text-gray-500">คลิกวันในปฏิทินเพื่อกำหนดกะ</p>
+              <p className="text-xs text-gray-500">{isAdmin ? 'คลิกวันในปฏิทินเพื่อกำหนดกะ หรือคลิกชื่อพนักงานเพื่อแก้ไข' : 'ดูตารางเวลาทำงานของทีม (ผู้จัดการเป็นคนกำหนด)'}</p>
             </div>
           </div>
-          <button onClick={() => setShowHolidayPanel(!showHolidayPanel)} className="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-orange-100 transition-colors duration-150">
-            <CalendarOff size={15} /> วันหยุดพิเศษ
-          </button>
+          {isAdmin && (
+            <button onClick={() => setShowHolidayPanel(!showHolidayPanel)} className="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-orange-100 transition-colors duration-150">
+              <CalendarOff size={15} /> วันหยุดพิเศษ
+            </button>
+          )}
         </div>
 
         {/* Holiday panel */}
-        {showHolidayPanel && (
+        {isAdmin && showHolidayPanel && (
           <div className="bg-white border border-orange-200 rounded-2xl shadow-sm p-4 mb-5">
             <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><CalendarOff size={15} className="text-orange-500" /> จัดการวันหยุดพิเศษ</h2>
             <form onSubmit={handleAddHoliday} className="flex flex-wrap gap-2 mb-4">
@@ -129,14 +162,16 @@ export default function Schedules() {
               const isHoliday = holidaySet.has(dateStr);
               const dayScheds = schedulesByDate[dateStr] || [];
               return (
-                <div key={`day-${i}`} onClick={e => !isHoliday && openPopover(day, e)}
-                  className={`min-h-[72px] p-1.5 flex flex-col transition-colors duration-150 ${isHoliday ? 'bg-orange-50 cursor-default' : 'bg-white hover:bg-[#FFF5F7] cursor-pointer'}`}>
+                <div key={`day-${i}`} data-day-cell onClick={e => !isHoliday && openPopover(day, e)}
+                  className={`min-h-[72px] p-1.5 flex flex-col transition-colors duration-150 ${isHoliday ? 'bg-orange-50 cursor-default' : isAdmin ? 'bg-white hover:bg-[#FFF5F7] cursor-pointer' : 'bg-white cursor-default'}`}>
                   <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-[#F12B6B] text-white' : isHoliday ? 'text-orange-500' : 'text-gray-700'}`}>{day}</span>
                   {isHoliday && <span className="text-[9px] text-orange-500 font-medium leading-tight">หยุด</span>}
                   <div className="space-y-0.5 overflow-hidden">
                     {dayScheds.slice(0, 3).map((s: any, idx: number) => (
-                      <span key={idx} className={`text-[9px] font-medium px-1 py-0.5 rounded block truncate ${staffColor(s.cashier_id)}`}>
-                        {staffName(s.cashier_id)} {s.expected_start?.slice(0,5)}
+                      <span key={idx} onClick={e => openEditSchedule(s, e)}
+                        className={`text-[9px] font-medium px-1 py-0.5 rounded block truncate ${staffColor(s.cashier_id)} ${isAdmin ? 'hover:ring-1 hover:ring-black/10 cursor-pointer' : ''}`}
+                        title={isAdmin ? 'คลิกเพื่อแก้ไขเวลาของคนนี้' : undefined}>
+                        {staffName(s.cashier_id)} {s.expected_start?.slice(0,5)}–{s.expected_end?.slice(0,5)}
                       </span>
                     ))}
                     {dayScheds.length > 3 && <span className="text-[9px] text-gray-400">+{dayScheds.length - 3}</span>}
@@ -160,25 +195,34 @@ export default function Schedules() {
         <div ref={popRef} className="fixed z-[100] bg-white border border-[#F6C7C7] rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-top-2 duration-150"
           style={{ left: Math.min(popover.x, window.innerWidth - 280), top: popover.y + 8 }}>
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm font-semibold text-gray-900">{new Date(popover.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</h3>
-            <button onClick={() => setPopover(null)} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-[#FFF5F7] rounded-lg transition-colors duration-150"><X size={14} /></button>
+            <h3 className="text-sm font-semibold text-gray-900">
+              {editingScheduleId ? 'แก้ไขกะ — ' : ''}
+              {new Date(popover.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </h3>
+            <button onClick={() => { setPopover(null); setEditingScheduleId(null); }} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-[#FFF5F7] rounded-lg transition-colors duration-150"><X size={14} /></button>
           </div>
           <select value={popForm.cashier_id} onChange={e => setPopForm({ ...popForm, cashier_id: e.target.value })} className={`${inputCls} w-full mb-2`}>
             <option value="">เลือกพนักงาน</option>
             {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>)}
           </select>
+          {/* ⭐️ ไม่ต้องเป็น 09:00–17:00 เหมือนกันทุกคน — ปรับเวลาเข้า/ออกงานของแต่ละคนแยกกันได้ตรงนี้ */}
           <div className="flex items-center gap-1.5 mb-3">
             <input type="time" value={popForm.expected_start} onChange={e => setPopForm({ ...popForm, expected_start: e.target.value })} className={`${inputCls} flex-1`} />
             <span className="text-gray-400 text-xs">–</span>
             <input type="time" value={popForm.expected_end} onChange={e => setPopForm({ ...popForm, expected_end: e.target.value })} className={`${inputCls} flex-1`} />
           </div>
           {(schedulesByDate[popover.date] || []).map((s: any) => (
-            <div key={s.id} className={`flex justify-between items-center px-2 py-1 rounded-lg mb-1 text-xs font-medium ${staffColor(s.cashier_id)}`}>
-              {staffName(s.cashier_id)} {s.expected_start?.slice(0,5)}–{s.expected_end?.slice(0,5)}
+            <div key={s.id} className={`flex justify-between items-center px-2 py-1 rounded-lg mb-1 text-xs font-medium ${staffColor(s.cashier_id)} ${editingScheduleId === s.id ? 'ring-2 ring-[#F12B6B]' : ''}`}>
+              <button type="button" onClick={(e) => openEditSchedule(s, e)} className="flex-1 text-left truncate">
+                {staffName(s.cashier_id)} {s.expected_start?.slice(0,5)}–{s.expected_end?.slice(0,5)}
+              </button>
+              <button type="button" onClick={() => handleDeleteSchedule(s.id)} className="p-1 ml-1 rounded-md text-current opacity-60 hover:opacity-100 hover:bg-black/10 transition" title="ลบ">
+                <Trash2 size={12} />
+              </button>
             </div>
           ))}
           <button onClick={handleSave} disabled={saving} className="w-full mt-1 py-2 bg-[#F12B6B] hover:bg-[#FF467E] text-white text-sm font-semibold rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
-            {saving ? 'กำลังบันทึก...' : '+ เพิ่มกะ'}
+            {saving ? 'กำลังบันทึก...' : editingScheduleId ? 'บันทึกการแก้ไข' : '+ เพิ่มกะ'}
           </button>
         </div>
       )}
