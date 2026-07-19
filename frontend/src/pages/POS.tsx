@@ -574,14 +574,14 @@ export default function POS() {
             <div>
               {/* ⭐️ FIX: เดิม readOnly + inputMode="none" บังคับใช้คีย์แพดในแอปเท่านั้น (กิน 4 แถวจอ ทำให้
                   รายการสินค้าด้านบนเหลือพื้นที่น้อยมาก) — เปลี่ยนเป็นพิมพ์ตรงด้วยคีย์บอร์ดตัวเลขของมือถือแทน
-                  ปุ่มลัด (20/50/100/500/1000/เต็ม) ยังเก็บไว้เหมือนเดิมสำหรับกดเร็ว */}
+                  ปุ่มลัด (10/20/50/100/500/พอดี) — "พอดี" = ใส่ยอดสุทธิเป๊ะ (จ่ายพอดี ไม่ปัดขึ้น) */}
               <input type="number" inputMode="decimal" value={amountReceived} onChange={e => setAmountReceived(e.target.value ? Number(e.target.value) : '')} placeholder="0.00"
                 className="w-full text-right text-xl font-bold px-4 py-3 bg-[#FFF5F7] border border-[#F6C7C7] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
               <div className="flex gap-1.5 mt-2 flex-wrap">
-                {[20, 50, 100, 500, 1000].map(v => (
+                {[10, 20, 50, 100, 500].map(v => (
                   <button key={v} onClick={() => setAmountReceived(v)} className="flex-1 min-w-[40px] py-1.5 bg-[#FFF5F7] border border-[#F6C7C7] text-[#F12B6B] font-semibold rounded-lg text-xs hover:bg-[#F12B6B] hover:text-white transition-all duration-150">฿{v}</button>
                 ))}
-                <button onClick={() => setAmountReceived(Math.ceil(finalTotal / 10) * 10)} className="flex-1 min-w-[40px] py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg text-xs hover:bg-emerald-500 hover:text-white transition-all duration-150">เต็ม</button>
+                <button onClick={() => setAmountReceived(finalTotal)} className="flex-1 min-w-[40px] py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg text-xs hover:bg-emerald-500 hover:text-white transition-all duration-150">พอดี</button>
               </div>
             </div>
           ) : (
