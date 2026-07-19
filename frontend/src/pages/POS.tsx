@@ -453,7 +453,7 @@ export default function POS() {
           ) : cart.map(item => {
             // ⭐️ Sprint 2 — B7: Get current product stock to show warnings
             const product = products.find(p => p.id === item.id);
-            const isStockExceeded = product && item.quantity > product.stock;
+            const isStockExceeded = product && item.quantity > (product.stock ?? 0);
             return (
             <div key={item.id} className={`flex justify-between items-center rounded-xl px-3 py-2 border transition-colors ${
               isStockExceeded

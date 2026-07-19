@@ -291,7 +291,7 @@ export default function PendingShiftClosesWidget() {
                     path={shift.close_photo}
                     alt="Close shift confirmation"
                     className="w-full max-w-xs rounded-lg border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
-                    onClick={() => openAuthImage(shift.close_photo)}
+                    onClick={() => shift.close_photo && openAuthImage(shift.close_photo)}
                     fallback={<p className="text-xs text-gray-400">โหลดรูปไม่ได้</p>}
                   />
                 </div>

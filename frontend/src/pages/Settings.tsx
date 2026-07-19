@@ -276,9 +276,9 @@ export default function Settings() {
       const toRemove = preview.data.to_deactivate || [];
 
       let html = '';
-      if (toCreate.length > 0) html += `<p class="font-bold text-green-700 mb-1">เพิ่มใหม่ ${toCreate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#f0fdf4;padding:8px;border-radius:8px;">${toCreate.map(u => `+ ${u.full_name} (${u.username})`).join('\n')}</pre>`;
-      if (toReactivate.length > 0) html += `<p class="font-bold text-blue-700 mt-2 mb-1">เปิดใช้งานคืน ${toReactivate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#eff6ff;padding:8px;border-radius:8px;">${toReactivate.map(u => `↺ ${u.student_id}`).join('\n')}</pre>`;
-      if (toRemove.length > 0) html += `<p class="font-bold text-red-700 mt-2 mb-1">ปิดการใช้งาน ${toRemove.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#fef2f2;padding:8px;border-radius:8px;">${toRemove.map(u => `- ${u.full_name} (${u.username})`).join('\n')}</pre>`;
+      if (toCreate.length > 0) html += `<p class="font-bold text-green-700 mb-1">เพิ่มใหม่ ${toCreate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#f0fdf4;padding:8px;border-radius:8px;">${toCreate.map((u: any) => `+ ${u.full_name} (${u.username})`).join('\n')}</pre>`;
+      if (toReactivate.length > 0) html += `<p class="font-bold text-blue-700 mt-2 mb-1">เปิดใช้งานคืน ${toReactivate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#eff6ff;padding:8px;border-radius:8px;">${toReactivate.map((u: any) => `↺ ${u.student_id}`).join('\n')}</pre>`;
+      if (toRemove.length > 0) html += `<p class="font-bold text-red-700 mt-2 mb-1">ปิดการใช้งาน ${toRemove.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#fef2f2;padding:8px;border-radius:8px;">${toRemove.map((u: any) => `- ${u.full_name} (${u.username})`).join('\n')}</pre>`;
       if (toCreate.length === 0 && toReactivate.length === 0 && toRemove.length === 0) return Swal.fire({ icon: 'success', title: 'ข้อมูลตรงกันหมดแล้ว', text: 'ไม่มีการเปลี่ยนแปลง' });
 
       const confirm = await Swal.fire({
