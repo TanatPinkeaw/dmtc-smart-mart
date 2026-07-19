@@ -11,6 +11,21 @@ if (missingDbEnv.length > 0) {
   process.exit(1);
 }
 
+// ⭐️ SSL สำหรับ MySQL บนคลาวด์ (เช่น Aiven) — เปิดเมื่อ DB_SSL=true
+// - ถ้ามี DB_SSL_CA (เนื้อ CA cert แบบ PEM หรือ base64) จะ verify แบบเต็ม ปลอดภัยสุด
+// - ถ้าไม่มี CA จะเข้ารหัสแต่ไม่ verify (พอสำหรับ demo) ; local dev ไม่ต้องตั้ง DB_SSL เลย
+let sslOption;
+if (process.env.DB_SSL === 'true') {
+  if (process.env.DB_SSL_CA) {
+    const ca = process.env.DB_SSL_CA.includes('BEGIN CERTIFICATE')
+      ? process.env.DB_SSL_CA
+      : Buffer.from(process.env.DB_SSL_CA, 'base64').toString('utf8');
+    sslOption = { ca, rejectUnauthorized: true };
+  } else {
+    sslOption = { rejectUnauthorized: false };
+  }
+}
+
 // ⭐️ 2. เปลี่ยนบล็อก const pool เดิม ให้เป็นแบบนี้
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -22,7 +37,8 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4',
-  timezone: '+07:00' // ⭐️ บังคับ timezone เป็นไทย (Bangkok) กัน NOW()/CURDATE() เพี้ยนเป็น UTC
+  timezone: '+07:00', // ⭐️ บังคับ timezone เป็นไทย (Bangkok) กัน NOW()/CURDATE() เพี้ยนเป็น UTC
+  ...(sslOption ? { ssl: sslOption } : {})
 });
 
 // ⭐️ ทุกครั้งที่ pool เปิด connection ใหม่ ตั้ง session time_zone เป็นไทย
