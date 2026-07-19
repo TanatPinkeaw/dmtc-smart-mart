@@ -226,7 +226,10 @@ function LayoutInner() {
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#F6C7C7] flex h-14 z-50 shadow-[0_-2px_8px_rgba(241,43,107,0.06)]">
         <MobNavItem to="/notifications" icon={<Bell size={20} />} label="แจ้งเตือน" badge={unreadCount} onClick={handleOpenNotifications} />
-        <MobNavItem to="/pre-order" icon={<ShoppingBag size={20} />} label="จอง" />
+
+        {/* ⭐️ FIX: "จอง" เป็นหน้าของสมาชิก/ลูกค้า — พนักงานตอนทำงานไม่ควรเห็น (ให้ตรงกับ sidebar เดสก์ท็อป)
+            staff ที่สลับเป็น shop mode (isStaff=false) ยังเห็นได้ เพราะซื้อของเองในฐานะลูกค้า */}
+        {!isStaff && <MobNavItem to="/pre-order" icon={<ShoppingBag size={20} />} label="จอง" />}
 
         {!isStaff && <MobNavItem to="/my-sales" icon={<PiggyBank size={20} />} label="ฝากขาย" />}
 
