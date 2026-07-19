@@ -44,7 +44,7 @@ export default function Settings() {
   const [newCategory, setNewCategory] = useState('');
   const [newSupplier, setNewSupplier] = useState({ name: '', contact_info: '' });
   
-  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', expiry_date: '', discount_percent: 40 });
+  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', expiry_date: '', discount_percent: 40 });
   const [editingProduct, setEditingProduct] = useState<any>(null);
 
   const [newPromotion, setNewPromotion] = useState({
@@ -217,8 +217,8 @@ export default function Settings() {
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40 });
-      setNewProduct({ barcode: '', name: '', category_id: '', price: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', expiry_date: '', discount_percent: 40 });
+      await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), cost: Number(newProduct.cost) || 0, stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40 });
+      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', expiry_date: '', discount_percent: 40 });
       fetchProducts(); setActiveModal(null); setVendorSearch('');
       Swal.fire({ icon: 'success', title: 'เพิ่มสินค้าสำเร็จ', showConfirmButton: false, timer: 1500 });
     }
@@ -228,7 +228,7 @@ export default function Settings() {
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40 });
+      await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), cost: Number(editingProduct.cost) || 0, vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40 });
       fetchProducts(); setActiveModal(null); setEditingProduct(null); setVendorSearch('');
       Swal.fire({ icon: 'success', title: 'แก้ไขสินค้าสำเร็จ!', showConfirmButton: false, timer: 1500 });
     } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
@@ -694,9 +694,10 @@ export default function Settings() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <Input label="ต้นทุน/ชิ้น (฿)" type="number" value={editingProduct.cost ?? ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, cost: v })} />
               <Input label="ราคาขาย (฿)" type="number" value={editingProduct.price} onChange={(v: any) => setEditingProduct({ ...editingProduct, price: v })} />
-              <Input label="สต๊อกปัจจุบัน" type="number" value={editingProduct.stock} disabled={true} required={false} onChange={() => { }} />
             </div>
+            <Input label="สต๊อกปัจจุบัน" type="number" value={editingProduct.stock} disabled={true} required={false} onChange={() => { }} />
 
             <Input label="URL รูปภาพ (ถ้ามี)" value={editingProduct.image_url || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, image_url: v })} />
 
@@ -756,7 +757,10 @@ export default function Settings() {
             </div>
             
             <div className="grid grid-cols-2 gap-3 mt-3">
+              <Input label="ต้นทุน/ชิ้น (฿)" type="number" value={newProduct.cost} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, cost: v })} />
               <Input label="ราคาขาย (฿)" type="number" value={newProduct.price} onChange={(v: any) => setNewProduct({ ...newProduct, price: v })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <Input label="สต๊อกตั้งต้น" type="number" value={newProduct.stock} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, stock: v })} />
             </div>
             <Input label="URL รูปภาพ (ถ้ามี)" value={newProduct.image_url} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, image_url: v })} />

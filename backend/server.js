@@ -721,11 +721,11 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator), async (req, res) => {
-  const { barcode, name, category_id, price, stock = 0, image_url, vendor_id, gp_rate } = req.body;
+  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate } = req.body;
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (barcode, name, category_id, price, stock, image_url, vendor_id, gp_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [barcode || null, name, category_id || null, price, stock, image_url || null, vendor_id || null, gp_rate || 0]
+      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0]
     );
     // ⭐️ Task 5 — audit log
     await pool.query(
@@ -742,19 +742,20 @@ app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator
 });
 
 app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
-  const { barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent } = req.body;
+  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent } = req.body;
   try {
     // ⭐️ Sprint 2: Validate expiry_date if provided
     if (expiry_date && new Date(expiry_date) < new Date()) {
       return res.status(400).json({ error: 'วันหมดอายุไม่สามารถเป็นวันที่ผ่านมาแล้ว' });
     }
 
-    // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log
-    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent FROM products WHERE id = ?', [req.params.id]);
+    // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log (รวม cost เผื่อ client ไม่ส่ง cost มา จะได้ไม่ทับเป็น 0)
+    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent FROM products WHERE id = ?', [req.params.id]);
+    const finalCost = (cost === undefined || cost === null || cost === '') ? (oldRows[0]?.cost ?? 0) : cost;
 
     await pool.query(
-      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=? WHERE id=?',
-      [barcode || null, name, category_id || null, price, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, req.params.id]
+      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=? WHERE id=?',
+      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, req.params.id]
     );
 
     await pool.query(

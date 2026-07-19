@@ -32,6 +32,7 @@ module.exports = {
     name: Joi.string().trim().min(1).max(200).required(),
     category_id: Joi.number().integer().positive().allow(null).optional(),
     price: Joi.number().precision(2).positive().required(),
+    cost: Joi.number().precision(2).min(0).allow(null).optional(),
     stock: Joi.number().integer().min(0).optional(),
     image_url: Joi.string().trim().max(500).allow(null, '').optional(),
     vendor_id: Joi.number().integer().positive().allow(null).optional(),
