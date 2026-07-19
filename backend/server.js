@@ -394,10 +394,17 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', // ⭐️ Task 13 — ยังไม่ login จึงยังไม่มี token
   '/api/auth/reset-password',
   '/api/auth/reset-token',
-  '/api/products',          // ⭐️ F4 — Public shopping endpoints (can browse without auth)
-  '/api/categories',        // ⭐️ F4 — Public shopping endpoints (can browse without auth)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
+];
+
+// ⭐️ BUGFIX — public เฉพาะ "GET" (browse ไม่ต้อง login) เท่านั้น
+// เดิม '/api/products' + '/api/categories' อยู่ใน PUBLIC_PATHS แล้วเช็คด้วย startsWith โดยไม่ดู method
+// ทำให้ POST/PUT/DELETE ก็ match public → ข้าม auth → req.user ว่าง → requireRole ตอบ 403 เสมอ
+// (admin เพิ่ม/แก้/ลบ สินค้า+หมวดหมู่ ไม่ได้เลย) แยกออกมาให้ public เฉพาะ GET
+const PUBLIC_GET_PREFIXES = [
+  '/api/products',
+  '/api/categories',
 ];
 
 // ป้องกัน endpoint bootstrap ทั้ง 3 ตัว ด้วย key ลับใน .env
@@ -415,6 +422,8 @@ function requireSetupKey(req, res, next) {
 
 function authenticateToken(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
+  // browse สินค้า/หมวดหมู่ = public เฉพาะ GET; POST/PUT/DELETE ต้องผ่าน auth + requireRole ตามปกติ
+  if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
 
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
