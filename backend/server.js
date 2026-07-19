@@ -2777,6 +2777,65 @@ app.get('/api/reports/gross-profit', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
+// ⭐️ สรุปรายได้/กำไร แยกกำไรจาก GP (สินค้าฝากขาย) ออกจากกำไรสินค้าสหกรณ์เอง
+// รวมทั้งขายหน้าร้าน (sales) + พรีออเดอร์ที่ COMPLETED (orders) — คืนทั้งรายเดือน + ภาพรวมทั้งหมด
+app.get('/api/reports/profit-summary', requireRole('ADMIN'), async (req, res) => {
+  try {
+    // นิยาม (ต่อรายการสินค้า):
+    //   รายได้ (revenue)      = subtotal ที่ขายได้
+    //   ต้นทุนสินค้าสหกรณ์     = cost*qty (เฉพาะสินค้าสหกรณ์เอง vendor_id IS NULL)
+    //   คืนผู้ฝากขาย          = subtotal - subtotal*gp% (เฉพาะสินค้าฝากขาย)
+    //   กำไรสินค้าสหกรณ์เอง    = subtotal - cost*qty (vendor_id IS NULL)
+    //   กำไรจาก GP ฝากขาย     = subtotal*gp% (vendor_id IS NOT NULL)
+    const lineExpr = `
+      it.subtotal AS revenue,
+      CASE WHEN p.vendor_id IS NULL THEN p.cost*it.quantity ELSE 0 END AS cogs_own,
+      CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal - it.subtotal*p.gp_rate/100 ELSE 0 END AS vendor_payout,
+      CASE WHEN p.vendor_id IS NULL THEN it.subtotal - p.cost*it.quantity ELSE 0 END AS profit_own,
+      CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal*p.gp_rate/100 ELSE 0 END AS profit_gp`;
+    const [rows] = await pool.query(`
+      SELECT period,
+             SUM(revenue) AS revenue,
+             SUM(cogs_own) AS cogs_own,
+             SUM(vendor_payout) AS vendor_payout,
+             SUM(profit_own) AS profit_own,
+             SUM(profit_gp) AS profit_gp,
+             SUM(profit_own + profit_gp) AS profit_total
+      FROM (
+        SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m') AS period, ${lineExpr}
+        FROM sale_items it JOIN sales s ON it.sale_id=s.id JOIN products p ON it.product_id=p.id
+        WHERE s.status='COMPLETED'
+        UNION ALL
+        SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m') AS period, ${lineExpr}
+        FROM order_items it JOIN orders o ON it.order_id=o.id JOIN products p ON it.product_id=p.id
+        WHERE o.status='COMPLETED'
+      ) t
+      GROUP BY period ORDER BY period DESC
+    `);
+    const num = (v) => Number(v || 0);
+    const monthly = rows.map(r => ({
+      period: r.period,
+      revenue: num(r.revenue),
+      cogs_own: num(r.cogs_own),
+      vendor_payout: num(r.vendor_payout),
+      profit_own: num(r.profit_own),
+      profit_gp: num(r.profit_gp),
+      profit_total: num(r.profit_total),
+    }));
+    const overall = monthly.reduce((a, m) => ({
+      revenue: a.revenue + m.revenue,
+      cogs_own: a.cogs_own + m.cogs_own,
+      vendor_payout: a.vendor_payout + m.vendor_payout,
+      profit_own: a.profit_own + m.profit_own,
+      profit_gp: a.profit_gp + m.profit_gp,
+      profit_total: a.profit_total + m.profit_total,
+    }), { revenue: 0, cogs_own: 0, vendor_payout: 0, profit_own: 0, profit_gp: 0, profit_total: 0 });
+    res.json({ overall, monthly });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/reports/dead-stock', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`

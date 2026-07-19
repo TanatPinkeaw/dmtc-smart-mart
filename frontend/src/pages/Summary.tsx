@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3, ArrowLeft, TrendingUp, Receipt, Users, UserPlus, PackageX,
   ClipboardList, XCircle, Clock, AlertTriangle, Pencil, Check, X as XIcon, Wallet,
+  Printer, Percent, Coins, PiggyBank,
 } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
@@ -36,6 +37,22 @@ interface PayrollRow {
   calculated_pay: number;
 }
 
+interface ProfitRow {
+  period: string;
+  revenue: number;
+  cogs_own: number;
+  vendor_payout: number;
+  profit_own: number;
+  profit_gp: number;
+  profit_total: number;
+}
+interface ProfitSummary {
+  overall: Omit<ProfitRow, 'period'>;
+  monthly: ProfitRow[];
+}
+
+const baht = (n: number) => '฿' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function getCurrentMonth(): string {
   const now = new Date();
   const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
@@ -51,6 +68,8 @@ export default function Summary() {
   const [month, setMonth] = useState(getCurrentMonth());
   const [overview, setOverview] = useState<Overview | null>(null);
   const [payroll, setPayroll] = useState<PayrollRow[]>([]);
+  const [profit, setProfit] = useState<ProfitSummary | null>(null);
+  const [profitView, setProfitView] = useState<'overall' | 'monthly'>('overall');
   const [loading, setLoading] = useState(true);
 
   // Inline edit state for hourly rate
@@ -67,12 +86,14 @@ export default function Summary() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ovRes, prRes] = await Promise.all([
+      const [ovRes, prRes, pfRes] = await Promise.all([
         api.get(`/reports/monthly-overview?month=${month}`),
         api.get(`/reports/payroll?month=${month}`),
+        api.get('/reports/profit-summary'),
       ]);
       setOverview(ovRes.data);
       setPayroll(prRes.data.staff || []);
+      setProfit(pfRes.data);
     } catch (err: any) {
       Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
@@ -138,12 +159,18 @@ export default function Summary() {
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">สรุปข้อมูล</h1>
           </div>
         </div>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="border border-[#F6C7C7] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#F12B6B]"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="border border-[#F6C7C7] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#F12B6B]"
+          />
+          {/* ⭐️ ปุ่มปรินต์/บันทึก PDF สำหรับนำไปเสนออาจารย์ */}
+          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 border border-[#F6C7C7] text-[#F12B6B] rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[#FFF5F7] active:scale-95 transition">
+            <Printer size={16} /> ปรินต์
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -163,6 +190,85 @@ export default function Summary() {
                 <p className="text-lg font-bold text-gray-800">{c.value}</p>
               </div>
             ))}
+          </div>
+
+          {/* ⭐️ สรุปรายได้ & กำไร (แยกกำไรจาก GP ฝากขาย ออกจากกำไรสินค้าสหกรณ์เอง) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-[#F6C7C7] overflow-hidden mb-8">
+            <div className="px-5 py-4 border-b border-[#F6C7C7] flex items-center justify-between flex-wrap gap-2">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                <Coins size={18} className="text-[#F12B6B]" /> สรุปรายได้ &amp; กำไร (แยกกำไรจาก GP)
+              </h2>
+              <div className="flex bg-[#FFF5F7] border border-[#F6C7C7] rounded-full p-0.5 print:hidden">
+                <button onClick={() => setProfitView('overall')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'overall' ? 'bg-[#F12B6B] text-white' : 'text-gray-500'}`}>ภาพรวมทั้งหมด</button>
+                <button onClick={() => setProfitView('monthly')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'monthly' ? 'bg-[#F12B6B] text-white' : 'text-gray-500'}`}>รายเดือน</button>
+              </div>
+            </div>
+
+            {!profit || profit.monthly.length === 0 ? (
+              <p className="p-6 text-center text-gray-400 text-sm">ยังไม่มีข้อมูลการขาย</p>
+            ) : profitView === 'overall' ? (
+              <div className="p-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                    <div className="flex items-center gap-1.5 text-emerald-600 mb-1"><TrendingUp size={16} /><span className="text-xs font-semibold">รายได้รวม (ยอดขาย)</span></div>
+                    <p className="text-lg font-bold text-gray-800">{baht(profit.overall.revenue)}</p>
+                  </div>
+                  <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-4">
+                    <div className="flex items-center gap-1.5 text-[#F12B6B] mb-1"><Wallet size={16} /><span className="text-xs font-semibold">กำไรรวมของสหกรณ์</span></div>
+                    <p className="text-xl font-bold text-[#F12B6B]">{baht(profit.overall.profit_total)}</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-center gap-1.5 text-blue-600 mb-1"><PiggyBank size={16} /><span className="text-xs font-semibold">กำไรสินค้าสหกรณ์เอง</span></div>
+                    <p className="text-lg font-bold text-gray-800">{baht(profit.overall.profit_own)}</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-center gap-1.5 text-amber-600 mb-1"><Percent size={16} /><span className="text-xs font-semibold">กำไรจาก GP (ฝากขาย)</span></div>
+                    <p className="text-lg font-bold text-gray-800">{baht(profit.overall.profit_gp)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 text-xs">
+                  <div className="flex justify-between bg-gray-50 rounded-lg px-3 py-2"><span className="text-gray-500">ต้นทุนสินค้าสหกรณ์เอง</span><span className="font-semibold text-gray-700">{baht(profit.overall.cogs_own)}</span></div>
+                  <div className="flex justify-between bg-gray-50 rounded-lg px-3 py-2"><span className="text-gray-500">ส่วนแบ่งคืนผู้ฝากขาย</span><span className="font-semibold text-gray-700">{baht(profit.overall.vendor_payout)}</span></div>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left whitespace-nowrap text-sm">
+                  <thead className="bg-gray-50 text-gray-600 text-xs">
+                    <tr>
+                      <th className="p-3 border-b">เดือน</th>
+                      <th className="p-3 border-b text-right">รายได้</th>
+                      <th className="p-3 border-b text-right">กำไรสหกรณ์เอง</th>
+                      <th className="p-3 border-b text-right">กำไรจาก GP</th>
+                      <th className="p-3 border-b text-right">กำไรรวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profit.monthly.map(m => (
+                      <tr key={m.period} className="border-b last:border-0 hover:bg-[#FFF5F7]">
+                        <td className="p-3 font-semibold text-gray-800">{m.period}</td>
+                        <td className="p-3 text-right">{baht(m.revenue)}</td>
+                        <td className="p-3 text-right text-blue-600">{baht(m.profit_own)}</td>
+                        <td className="p-3 text-right text-amber-600">{baht(m.profit_gp)}</td>
+                        <td className="p-3 text-right font-bold text-[#F12B6B]">{baht(m.profit_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 font-bold">
+                      <td className="p-3">รวมทั้งหมด</td>
+                      <td className="p-3 text-right">{baht(profit.overall.revenue)}</td>
+                      <td className="p-3 text-right text-blue-600">{baht(profit.overall.profit_own)}</td>
+                      <td className="p-3 text-right text-amber-600">{baht(profit.overall.profit_gp)}</td>
+                      <td className="p-3 text-right text-[#F12B6B]">{baht(profit.overall.profit_total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+            <p className="px-5 py-3 text-xs text-gray-400 border-t border-[#F6C7C7]">
+              * กำไรสินค้าสหกรณ์เอง = ราคาขาย − ต้นทุน | กำไรจาก GP = ยอดขายสินค้าฝากขาย × %GP (ส่วนที่เหลือคืนผู้ฝากขาย) | รวมทั้งขายหน้าร้าน + พรีออเดอร์ที่สำเร็จแล้ว
+            </p>
           </div>
 
           {/* Payroll table */}
