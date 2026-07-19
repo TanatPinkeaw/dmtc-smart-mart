@@ -2,7 +2,7 @@
 // 🔒 UNCHANGED: all handlers (handleCheckout, handleSearchMember, handleRegister, handleApplyPromo, handleCloseShift, finishAndLogout), socket listeners, all state, filteredProducts, price calculations
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, User, Plus, Minus, X, CheckCircle, PackagePlus, UserPlus, Printer, Gift, Search } from 'lucide-react';
+import { ShoppingCart, User, Plus, Minus, X, CheckCircle, PackagePlus, UserPlus, Printer, Gift, Search, ChevronUp, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import Swal from '../swal';
@@ -34,6 +34,7 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('CASH');
   const PROMPTPAY_ID = "0803610120";
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false); // ⭐️ มือถือ: ยุบ/ขยายแผงชำระเงิน (กันจอสั้นล้น)
   // ⭐️ FIX: ปุ่ม/โมดัลปิดกะเดิมอยู่ในนี้ด้วย ซ้ำกับ Dashboard.tsx ที่มีฟีเจอร์ปิดกะสมบูรณ์อยู่แล้ว
   // ตามคำขอผู้ใช้ — ย้ายให้เหลือจุดเดียวที่ Dashboard เท่านั้น (state/handler/modal ที่เกี่ยวข้องถูกลบออกทั้งหมด)
   const [searchMemberQuery, setSearchMemberQuery] = useState('');
@@ -284,7 +285,7 @@ export default function POS() {
       {/* ⭐️ Sprint 2 — B6: Offline Banner */}
       <OfflineBanner isOnline={isOnline} />
 
-      <div className="flex h-full bg-gray-50 relative">
+      <div className="flex h-full bg-[#FFF5F7] relative">
 
       {/* ── Left: Products ─────────────────────────────────────────────────── */}
       <div className="w-full md:w-3/5 flex flex-col h-full">
@@ -485,7 +486,15 @@ export default function POS() {
         {/* ⭐️ FIX: เดิม pb-20 กันชนกับ bottom nav แต่ตะกร้ามือถือเป็น fixed inset-0 z-[60] คลุมเต็มจอ
             ทับ nav (z-50) อยู่แล้ว 100% เลยไม่มี nav ให้ต้องกันเว้นระยะ — เหลือ pb-20 ไว้กลายเป็นช่องว่างเปล่าๆ
             ใต้ปุ่ม "ชำระเงิน" เอาออกให้เนื้อหาทั้งแผงขยับลงมาชิดขอบล่างจริง */}
-        <div className="border-t border-[#F6C7C7] p-3 space-y-3 bg-white shrink-0">
+        <div className="border-t border-[#F6C7C7] bg-white shrink-0">
+          {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
+          <div className="md:hidden flex items-center justify-between gap-2 px-3 py-2 border-b border-[#F6C7C7]">
+            <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-[#F12B6B]">฿{finalTotal.toFixed(2)}</span></div>
+            <button onClick={() => setPayOpen(v => !v)} className="flex items-center gap-1 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-full active:scale-95 transition-all duration-150">
+              {payOpen ? <><ChevronDown size={14} /> ย่อลง</> : <><ChevronUp size={14} /> ชำระเงิน</>}
+            </button>
+          </div>
+          <div className={`${payOpen ? 'block' : 'hidden'} md:block p-3 pt-2 md:pt-3 space-y-3 overflow-y-auto max-h-[72vh] md:max-h-none md:overflow-visible`}>
 
           {/* Member search — ⭐️ FIX: rounded-xl → rounded-lg ให้ตรงกับสไตล์หน้าจองทั้งแผง */}
           <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-lg p-3">
@@ -589,6 +598,7 @@ export default function POS() {
             className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${cart.length === 0 || !!checkoutValidationError || (paymentMethod === 'CASH' && (!amountReceived || Number(amountReceived) < finalTotal)) ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#F12B6B] hover:bg-[#FF467E]'}`}>
             {loading ? 'กำลังประมวลผล...' : <><CheckCircle size={18} /> {paymentMethod === 'QR' ? 'ยืนยันตรวจสอบสลิปแล้ว' : 'ชำระเงิน'}</>}
           </button>
+          </div>
         </div>
       </div>
 

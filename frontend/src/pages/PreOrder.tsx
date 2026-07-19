@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, ShoppingBag, Plus, Minus, CheckCircle, PackagePlus, Upload, X, Image as ImageIcon, Search } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, Plus, Minus, CheckCircle, PackagePlus, Upload, X, Image as ImageIcon, Search, ChevronUp, ChevronDown } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
 import generatePayload from 'promptpay-qr';
@@ -49,6 +49,7 @@ export default function PreOrder() {
   const [productSearch, setProductSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false); // ⭐️ มือถือ: ยุบ/ขยายแผงชำระเงิน (กันจอสั้นล้น)
   const [loading, setLoading] = useState(false);
 
   // State สำหรับการชำระเงิน
@@ -445,7 +446,15 @@ export default function PreOrder() {
         </div>
 
         {/* ส่วนการชำระเงิน */}
-        <div className="p-5 bg-white border-t border-[#F6C7C7] shrink-0">
+        <div className="bg-white border-t border-[#F6C7C7] shrink-0">
+          {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
+          <div className="md:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-[#F6C7C7]">
+            <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-[#F12B6B]">฿{finalTotal.toFixed(2)}</span></div>
+            <button onClick={() => setPayOpen(v => !v)} className="flex items-center gap-1 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-full active:scale-95 transition-all duration-150">
+              {payOpen ? <><ChevronDown size={14} /> ย่อลง</> : <><ChevronUp size={14} /> ชำระเงิน</>}
+            </button>
+          </div>
+          <div className={`${payOpen ? 'block' : 'hidden'} md:block p-5 pt-3 md:pt-5 overflow-y-auto max-h-[72vh] md:max-h-none md:overflow-visible`}>
           <div className="mb-4 space-y-1">
             <div className="flex justify-between text-sm text-gray-500">
               <span>ยอดรวมสินค้า:</span> <span>฿{grandTotal.toFixed(2)}</span>
@@ -557,6 +566,7 @@ export default function PreOrder() {
           <button onClick={handleCheckout} disabled={cart.length === 0 || loading} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${cart.length === 0 ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#F12B6B] hover:bg-[#FF467E]'}`}>
             {loading ? 'กำลังส่งข้อมูล...' : <><CheckCircle size={18} /> ยืนยันคำสั่งซื้อ</>}
           </button>
+          </div>
         </div>
       </div>
       {/* ⭐️ Modal ประวัติออเดอร์ของลูกค้า */}
