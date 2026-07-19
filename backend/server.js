@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');  // ← เพิ่มบรรทัดนี้
 const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
 const { slipUpload, shiftPhotoUpload } = require('./multer-config');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
+const { saveImage } = require('./cloudinary-config');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
 
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
 // รอบเดียวก็โดนล็อกยาว) NODE_ENV=production ยังคงเข้มเท่าเดิม, ค่าอื่นๆ (development/undefined) ผ่อนให้
@@ -1717,16 +1718,23 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
   }
 });
 
-app.post('/api/attendance/upload-photo', shiftPhotoUpload.single('photo'), (req, res) => {
+app.post('/api/attendance/upload-photo', shiftPhotoUpload.single('photo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
-  // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
-  const photoType = req.query.type || 'clock-out';
-  const bangkokDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-  const year = bangkokDate.getFullYear();
-  const month = String(bangkokDate.getMonth() + 1).padStart(2, '0');
-  const day = String(bangkokDate.getDate()).padStart(2, '0');
-  const photoPath = `/uploads/shift-photos/${photoType}/${year}-${month}-${day}/${req.file.filename}`;
-  res.json({ photo_url: photoPath });
+  try {
+    // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
+    const photoType = req.query.type || 'clock-out';
+    const bangkokDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    const year = bangkokDate.getFullYear();
+    const month = String(bangkokDate.getMonth() + 1).padStart(2, '0');
+    const day = String(bangkokDate.getDate()).padStart(2, '0');
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+    const base = `${year}-${month}-${day}_${Date.now()}_${req.user?.id || 'x'}`;
+    // ⭐️ อัปโหลดขึ้น Cloudinary (หรือดิสก์ถ้า dev) → คืน URL/พาธเต็ม
+    const photoUrl = await saveImage(req.file.buffer, `shift-photos/${photoType}/${year}-${month}-${day}`, base, ext);
+    res.json({ photo_url: photoUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ⭐️ Sprint 0 — A3: เดิม requireRole('ADMIN') เท่านั้น ทั้งที่ query ข้างในใช้ req.user.id (self-scoped)
@@ -3626,79 +3634,56 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
  */
 app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'), slipUpload.single('slip'), async (req, res) => {
   const { id } = req.params;
-  console.log(`[DEBUG] /orders/:id/upload-slip - orderId=${id}, user_id=${req.user?.id}, file=${req.file ? 'YES' : 'NO'}`);
-  if (req.file) {
-    console.log(`[DEBUG] File details - fieldname=${req.file.fieldname}, mimetype=${req.file.mimetype}, size=${req.file.size}, path=${req.file.path}`);
-  }
-
   try {
     if (!req.file) {
-      console.log(`[DEBUG] ERROR: No file uploaded in request`);
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // ⭐️ Bug Fix 1 — Validate order exists and belongs to user before processing file
+    // ⭐️ ตรวจว่า order มีจริงและเป็นของ user ก่อน
     const [orders] = await pool.query(
       'SELECT id, status FROM orders WHERE id = ? AND user_id = ?',
       [id, req.user.id]
     );
     if (orders.length === 0) {
-      console.log(`[DEBUG] ERROR: Order not found - id=${id}, user_id=${req.user.id}`);
-      fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Order not found or does not belong to you' });
     }
 
     const order = orders[0];
-    console.log(`[DEBUG] Order found - id=${order.id}, status=${order.status}`);
-    // ⭐️ Allow upload for PENDING_VERIFY (new slip) OR SLIP_REJECTED (resubmit after rejection)
+    // ⭐️ อนุญาตอัปสลิปเมื่อสถานะ PENDING_VERIFY (สลิปใหม่) หรือ SLIP_REJECTED (ส่งใหม่)
     if (!['PENDING_VERIFY', 'SLIP_REJECTED'].includes(order.status)) {
-      console.log(`[DEBUG] ERROR: Order not in PENDING_VERIFY/SLIP_REJECTED status - current status=${order.status}`);
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: `Order must be in PENDING_VERIFY or SLIP_REJECTED status to upload slip. Current status: ${order.status}` });
     }
 
-    // ⭐️ Sprint 2 — B9: Validate MIME type for payment slip (jpeg, png, gif, webp)
+    // ⭐️ ตรวจ MIME (jpeg, png, gif, webp)
     const allowedPaymentSlipMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedPaymentSlipMimes.includes(req.file.mimetype)) {
-      console.log(`[DEBUG] ERROR: Invalid MIME type - ${req.file.mimetype}`);
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: `Invalid file type: ${req.file.mimetype}. Only JPEG, PNG, GIF, WebP allowed.` });
     }
 
-    // Validate file size (5 MB max for payment slip)
+    // ตรวจขนาดไฟล์ (สลิป ≤ 5 MB)
     if (req.file.size > 5 * 1024 * 1024) {
-      console.log(`[DEBUG] ERROR: File too large - ${req.file.size} bytes`);
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: 'File too large (max 5 MB for payment slip)' });
     }
 
-    // Validate dimensions (payment slip min 400×300, max 4000×3000)
-    console.log(`[DEBUG] Validating dimensions for file: ${req.file.path}`);
-    const dimensions = await validateImageDimensions(
-      req.file.path,
-      400, 300,
-      4000, 3000
-    );
-    console.log(`[DEBUG] Dimensions validated - ${dimensions.width}×${dimensions.height}`);
+    // ตรวจ dimensions จาก buffer (สลิป min 400×300, max 4000×3000)
+    const dimensions = await validateImageDimensions(req.file.buffer, 400, 300, 4000, 3000);
 
-    // Update order with slip path + reset status to PENDING_VERIFY if was SLIP_REJECTED
+    // ⭐️ อัปโหลดขึ้น Cloudinary (หรือดิสก์ถ้า dev) → เก็บ URL/พาธเต็มลง slip_image
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
+    const base = `${Date.now()}_${req.user.id}`;
+    const slipUrl = await saveImage(req.file.buffer, 'slips', base, ext);
+
+    // อัปเดต slip + reset สถานะเป็น PENDING_VERIFY ถ้าเดิมเป็น SLIP_REJECTED
     const statusUpdate = order.status === 'SLIP_REJECTED' ? ', status = \'PENDING_VERIFY\'' : '';
     const [result] = await pool.query(
       `UPDATE orders SET slip_image = ?${statusUpdate} WHERE id = ? AND user_id = ?`,
-      [req.file.filename, id, req.user.id]
+      [slipUrl, id, req.user.id]
     );
-    console.log(`[DEBUG] Database update - affectedRows=${result.affectedRows}, status=${order.status === 'SLIP_REJECTED' ? 'PENDING_VERIFY' : order.status}`);
-
-    // Verify update was successful
     if (result.affectedRows === 0) {
-      console.log(`[DEBUG] ERROR: Failed to save payment slip to order`);
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: 'Failed to save payment slip to order' });
     }
 
-    console.log(`[DEBUG] SUCCESS: Slip uploaded - filename=${req.file.filename}`);
-
-    // ⭐️ Notify ADMIN/CASHIER that slip was resubmitted
+    // ⭐️ แจ้ง ADMIN/CASHIER ว่ามีสลิปเข้ามา
     req.io.emit('payment_slip_received', {
       order_id: id,
       message: `ออเดอร์ #${id} ส่งสลิปใหม่ (resubmit)`
@@ -3707,27 +3692,9 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'
       message: `ลูกค้าส่งสลิปใหม่สำหรับออเดอร์ #${id}`
     });
 
-    // ⭐️ Construct path: /uploads/slips/YYYY-MM-DD/filename
-    const bangkokDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-    const year = bangkokDate.getFullYear();
-    const month = String(bangkokDate.getMonth() + 1).padStart(2, '0');
-    const day = String(bangkokDate.getDate()).padStart(2, '0');
-    const slipPath = `/uploads/slips/${year}-${month}-${day}/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      filename: req.file.filename,
-      path: slipPath,
-      dimensions
-    });
+    res.json({ success: true, path: slipUrl, dimensions });
   } catch (err) {
-    console.log(`[DEBUG] ERROR: Caught exception - ${err.message}`);
-    console.error(`[ERROR STACK] ${err.stack}`);
-    // Delete file if validation failed
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
-    }
-
+    console.error(`[upload-slip] ${err.message}`);
     res.status(400).json({ error: err.message });
   }
 });
@@ -3746,43 +3713,32 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), shiftP
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // ⭐️ Sprint 2 — B9: Validate MIME type for shift photo (jpeg, png only)
+    // ⭐️ Sprint 2 — B9: ตรวจ MIME (jpeg, png เท่านั้น)
     const allowedPhotoMimes = ['image/jpeg', 'image/png'];
     if (!allowedPhotoMimes.includes(req.file.mimetype)) {
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: `Invalid file type: ${req.file.mimetype}. Only JPEG and PNG allowed for shift photos.` });
     }
 
-    // Validate file size (10 MB max)
+    // ตรวจขนาดไฟล์ (≤ 10 MB)
     if (req.file.size > 10 * 1024 * 1024) {
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: 'File too large (max 10 MB)' });
     }
 
-    // Validate dimensions (close photo min 800×600)
-    const dimensions = await validateImageDimensions(
-      req.file.path,
-      800, 600,
-      10000, 10000 // max 10000×10000
-    );
+    // ตรวจ dimensions จาก buffer (รูปปิดกะ min 800×600)
+    const dimensions = await validateImageDimensions(req.file.buffer, 800, 600, 10000, 10000);
 
-    // Update shift with photo path
+    // ⭐️ อัปโหลดขึ้น Cloudinary (หรือดิสก์ถ้า dev) → เก็บ URL/พาธเต็มลง close_photo
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+    const base = `${Date.now()}_${req.user.id}`;
+    const photoUrl = await saveImage(req.file.buffer, 'shift-photos/close', base, ext);
+
     await pool.query(
       'UPDATE shifts SET close_photo = ? WHERE id = ? AND user_id = ?',
-      [req.file.filename, id, req.user.id]
+      [photoUrl, id, req.user.id]
     );
 
-    res.json({
-      success: true,
-      filename: req.file.filename,
-      path: `/api/uploads/${req.file.filename}`,
-      dimensions
-    });
+    res.json({ success: true, path: photoUrl, dimensions });
   } catch (err) {
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
-    }
-
     res.status(400).json({ error: err.message });
   }
 });

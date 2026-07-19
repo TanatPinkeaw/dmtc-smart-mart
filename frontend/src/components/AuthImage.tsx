@@ -14,12 +14,19 @@ type Props = {
   fallback?: React.ReactNode; // แสดงตอนไม่มี path / โหลดพลาด
 };
 
+// ⭐️ Cloudinary — รูปใหม่เก็บเป็น URL เต็ม (https://...) เปิดสาธารณะได้ ไม่ต้องแนบ JWT
+//    ถ้า path เป็น http(s) โหลดตรงๆ; ถ้าเป็นพาธเดิม (/uploads/...) โหลดผ่าน /api/media (แนบ token)
+const isFullUrl = (p?: string | null) => !!p && /^https?:\/\//i.test(p);
+
 export default function AuthImage({ path, alt = '', className, onClick, fallback = null }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!path) { setUrl(null); return; }
+    // รูป Cloudinary (URL เต็ม) — ใช้ src ตรงๆ ไม่ต้อง fetch blob
+    if (isFullUrl(path)) { setUrl(path); setError(false); return; }
+
     let objectUrl: string | null = null;
     let cancelled = false;
     setError(false);
@@ -48,6 +55,8 @@ export default function AuthImage({ path, alt = '', className, onClick, fallback
 
 // ⭐️ helper — เปิดรูปในแท็บใหม่ (แทน window.open ตรงๆ ที่ browser จะ 401 เพราะไม่มี token)
 export async function openAuthImage(path: string) {
+  // รูป Cloudinary (URL เต็ม) — เปิดแท็บใหม่ตรงๆ
+  if (isFullUrl(path)) { window.open(path, '_blank'); return; }
   try {
     const res = await api.get('/media', { params: { path }, responseType: 'blob' });
     const objectUrl = URL.createObjectURL(res.data);

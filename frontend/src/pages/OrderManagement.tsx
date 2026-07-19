@@ -9,8 +9,11 @@ import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import AuthImage, { openAuthImage } from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 
 // ⭐️ Construct slip image path from created_at date + filename
+// รูปใหม่เก็บเป็น URL/พาธเต็ม (https://cloudinary... หรือ /uploads/...) → คืนตรงๆ
+// รูปเก่าเก็บเป็นชื่อไฟล์ล้วน → ประกอบพาธจากวันที่เหมือนเดิม
 function getSlipImagePath(createdAt: string, filename: string): string {
   if (!filename) return '';
+  if (/^https?:\/\//i.test(filename) || filename.startsWith('/')) return filename;
   const date = new Date(createdAt);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

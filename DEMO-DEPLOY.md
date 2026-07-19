@@ -53,6 +53,23 @@
 
 ---
 
+## ขั้น A.5 — Cloudinary (เก็บรูปสลิป/รูปเข้างานถาวร)
+
+Render free ลบไฟล์อัปโหลดทุกครั้งที่ redeploy → ต้องเก็บรูปที่ Cloudinary (ฟรี 25GB)
+
+1. เข้า https://cloudinary.com → **Sign up for free** (ล็อกอิน GitHub/Google ได้)
+2. เข้า **Dashboard** จะเห็น **Product Environment Credentials** จดค่า 3 ตัว:
+
+| ช่องที่ Cloudinary แสดง | เอาไปใส่เป็น env |
+|--------------------------|------------------|
+| Cloud Name | `CLOUDINARY_CLOUD_NAME` |
+| API Key | `CLOUDINARY_API_KEY` |
+| API Secret (กด reveal) | `CLOUDINARY_API_SECRET` |
+
+> ถ้าไม่ตั้ง 3 ค่านี้ ระบบยังรันได้แต่รูปจะเก็บลงดิสก์ (หายตอน redeploy) — สำหรับ demo บน Render **ต้องตั้ง**
+
+---
+
 ## ขั้น B — เอา Backend ขึ้น Render
 
 1. เข้า https://render.com → **Sign up** (ล็อกอินด้วย GitHub)
@@ -83,6 +100,9 @@ DB_USER       = avnadmin
 DB_PASSWORD   = <Password จาก Aiven>
 DB_NAME       = defaultdb
 DB_SSL        = true
+CLOUDINARY_CLOUD_NAME  = <จากขั้น A.5>
+CLOUDINARY_API_KEY     = <จากขั้น A.5>
+CLOUDINARY_API_SECRET  = <จากขั้น A.5>
 FRONTEND_URL  = https://localhost      (ค่าชั่วคราว เดี๋ยวแก้ในขั้น D)
 ```
 
@@ -177,6 +197,9 @@ DB_USER=avnadmin
 DB_PASSWORD=<Aiven password>
 DB_NAME=defaultdb
 DB_SSL=true
+CLOUDINARY_CLOUD_NAME=<Cloudinary>
+CLOUDINARY_API_KEY=<Cloudinary>
+CLOUDINARY_API_SECRET=<Cloudinary>
 FRONTEND_URL=https://dmtc-smart-mart.vercel.app
 ```
 
