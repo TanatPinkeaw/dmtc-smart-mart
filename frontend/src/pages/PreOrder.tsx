@@ -44,6 +44,7 @@ function getSlipImagePath(createdAt: string, filename: string): string {
 export default function PreOrder() {
   const socket = useSocket();
   const [products, setProducts] = useState<Product[]>([]);
+  const [highlights, setHighlights] = useState<{ popular: Product[]; promo: Product[] }>({ popular: [], promo: [] });
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | 'ALL'>('ALL');
   const [productSearch, setProductSearch] = useState('');
@@ -116,10 +117,14 @@ export default function PreOrder() {
 
   const fetchProducts = async () => {
     try {
-      const [prodRes, catRes] = await Promise.all([api.get('/products'), api.get('/categories')]);
+      const [prodRes, catRes, hlRes] = await Promise.all([api.get('/products'), api.get('/categories'), api.get('/products/highlights')]);
       const fresh: Product[] = prodRes.data;
       setProducts(fresh.filter((p) => p.stock > 0));
       setCategories(catRes.data);
+      setHighlights({
+        popular: (hlRes.data.popular || []).filter((p: Product) => p.stock > 0),
+        promo: (hlRes.data.promo || []).filter((p: Product) => p.stock > 0),
+      });
 
       // ⭐️ sync ตะกร้ากับสต๊อกล่าสุด กันข้อมูลเพี้ยน (สินค้าหมด/สต๊อกลดระหว่างที่ลูกค้ากำลังเลือกอยู่)
       setCart((prevCart) => {
@@ -356,6 +361,46 @@ export default function PreOrder() {
             <input type="text" placeholder="ค้นหาสินค้า..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#F12B6B] focus:bg-white transition-colors duration-150" />
           </div>
+
+          {/* ⭐️ ไฮไลต์: สินค้ามีโปร + ยอดนิยม (โชว์เฉพาะตอน browse ปกติ ไม่ค้นหา/ไม่กรองหมวด) */}
+          {selectedCategory === 'ALL' && !productSearch && (highlights.promo.length > 0 || highlights.popular.length > 0) && (
+            <div className="space-y-4 mb-4">
+              {highlights.promo.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-amber-600 mb-2 flex items-center gap-1.5">🏷️ สินค้ามีโปร <span className="text-[10px] font-normal text-gray-400">(ใกล้หมดอายุ ลดราคา)</span></h3>
+                  <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                    {highlights.promo.map(p => (
+                      <div key={`promo-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-amber-200 rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
+                        <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).discount_percent || 40}%</span>
+                        <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-1 flex items-center justify-center overflow-hidden">
+                          {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-[#FD94B4] opacity-50" />}
+                        </div>
+                        <p className="text-[11px] font-medium text-gray-800 line-clamp-1">{p.name}</p>
+                        <p className="text-xs font-bold text-[#F12B6B]">฿{Number(p.price).toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {highlights.popular.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">🔥 สินค้ายอดนิยม</h3>
+                  <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                    {highlights.popular.map((p, i) => (
+                      <div key={`pop-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-[#F6C7C7] rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
+                        <span className="absolute top-1 left-1 z-10 bg-[#F12B6B] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{i + 1}</span>
+                        <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-1 flex items-center justify-center overflow-hidden">
+                          {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-[#FD94B4] opacity-50" />}
+                        </div>
+                        <p className="text-[11px] font-medium text-gray-800 line-clamp-1">{p.name}</p>
+                        <p className="text-xs font-bold text-[#F12B6B]">฿{Number(p.price).toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ⭐️ FIX: หมวดหมู่ — ใส่กรอบขาวรอบแท็บให้ดูเป็นกล่องแยกชัดเจน (เหมือนหน้า POS) เดิมลอยอยู่บนพื้น
               ชมพูเฉยๆ กลืนกับพื้นหลัง มองไม่ออกว่าเป็นส่วนควบคุมแยก + ยังคง fade gradient บอกว่าเลื่อนได้ */}

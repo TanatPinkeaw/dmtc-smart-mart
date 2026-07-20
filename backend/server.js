@@ -720,6 +720,47 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
+// ⭐️ ไฮไลต์สินค้า: ยอดนิยม (ขายดี) + มีโปร (ใกล้หมดอายุ ลดราคาอยู่) — สำหรับหน้าจองสินค้า/สมาชิก
+// public GET (อยู่ใต้ prefix /api/products ที่เปิด browse ได้โดยไม่ต้อง login)
+app.get('/api/products/highlights', async (req, res) => {
+  try {
+    const expiryCase = `CASE
+      WHEN p.expiry_date IS NULL THEN 'no_expiry'
+      WHEN DATE(p.expiry_date) < DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) THEN 'expired'
+      WHEN DATE(p.expiry_date) = DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) THEN 'expires_today'
+      WHEN DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1 THEN 'near_expiry'
+      ELSE 'ok' END`;
+    // ยอดนิยม — ขายดีรวมทั้งหน้าร้าน (sale_items) + พรีออเดอร์ที่ COMPLETED (order_items)
+    const [popular] = await pool.query(`
+      SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status, ps.sold
+      FROM products p
+      LEFT JOIN categories c ON p.category_id=c.id
+      JOIN (
+        SELECT product_id, SUM(qty) AS sold FROM (
+          SELECT si.product_id, si.quantity AS qty FROM sale_items si JOIN sales s ON si.sale_id=s.id WHERE s.status='COMPLETED'
+          UNION ALL
+          SELECT oi.product_id, oi.quantity FROM order_items oi JOIN orders o ON oi.order_id=o.id WHERE o.status='COMPLETED'
+        ) t GROUP BY product_id
+      ) ps ON ps.product_id=p.id
+      WHERE p.is_active=1 AND p.stock>0
+      ORDER BY ps.sold DESC LIMIT 8
+    `);
+    // มีโปร — สินค้าใกล้หมดอายุ (เหลือ 1 วัน = near_expiry ที่ระบบลดราคาอัตโนมัติ) + ยังมีสต๊อก
+    const [promo] = await pool.query(`
+      SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status
+      FROM products p
+      LEFT JOIN categories c ON p.category_id=c.id
+      WHERE p.is_active=1 AND p.stock>0
+        AND DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+        AND COALESCE(p.discount_percent,0) > 0
+      ORDER BY p.expiry_date ASC LIMIT 8
+    `);
+    res.json({ popular, promo });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator), async (req, res) => {
   const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate } = req.body;
   try {
