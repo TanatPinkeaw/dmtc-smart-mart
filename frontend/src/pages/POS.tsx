@@ -44,6 +44,7 @@ export default function POS() {
   const [regForm, setRegForm] = useState({ student_id: '', full_name: '', phone_number: '' });
   const [regLoading, setRegLoading] = useState(false);
   const [promotions, setPromotions] = useState<any[]>([]);
+  const [storePromos, setStorePromos] = useState<any[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
   const [selectedPromoId, setSelectedPromoId] = useState<number | ''>('');
   const [appliedPromo, setAppliedPromo] = useState<{ id: number; name: string; discount_amount: number } | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
@@ -75,7 +76,10 @@ export default function POS() {
   }, [navigate]);
 
   const fetchStoreInfo = async () => { try { const res = await api.get('/settings/store'); setStoreInfo(res.data); } catch (e) {} };
-  const fetchPromotions = async () => { try { const res = await api.get('/promotions'); setPromotions(res.data); } catch (e) {} };
+  const fetchPromotions = async () => {
+    try { const res = await api.get('/promotions'); setPromotions(res.data); } catch (e) {}
+    try { const r = await api.get('/promotions/active'); setStorePromos(r.data || []); } catch (e) {}
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -319,6 +323,17 @@ export default function POS() {
 
           {/* Product grid */}
           <div className="flex-1 p-3 overflow-y-auto pb-28 md:pb-4">
+            {/* ⭐️ Phase 2 — แบนเนอร์โปรร้าน (ลดทั้งบิล/BOGO) เตือนแคชเชียร์ว่ามีโปรอะไรใช้ได้ */}
+            {storePromos.length > 0 && (
+              <div className="mb-3 bg-gradient-to-r from-[#F12B6B] to-[#FF467E] text-white rounded-xl p-2.5">
+                <p className="text-xs font-bold mb-1 flex items-center gap-1">🎉 โปรวันนี้</p>
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                  {storePromos.map(pr => (
+                    <span key={pr.id} className="shrink-0 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold">{pr.label}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="relative mb-3">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" placeholder="ค้นหาสินค้า / บาร์โค้ด..." value={productSearchQuery} onChange={e => setProductSearchQuery(e.target.value)}

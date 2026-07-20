@@ -3196,6 +3196,34 @@ app.get('/api/promotions', async (req, res) => {
   }
 });
 
+// ⭐️ Phase 2 — โปรโมชั่นที่กำลัง active พร้อมข้อความอ่านง่าย (รวมชื่อสินค้าสำหรับ BOGO) — ไว้โชว์แบนเนอร์
+app.get('/api/promotions/active', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT p.id, p.name, p.discount_type, p.discount_value, p.end_date, p.buy_qty, p.free_qty,
+             bp.name AS buy_product_name, fp.name AS free_product_name
+      FROM promotions p
+      LEFT JOIN products bp ON p.buy_product_id = bp.id
+      LEFT JOIN products fp ON p.free_product_id = fp.id
+      WHERE p.is_active = TRUE
+        AND (p.start_date IS NULL OR p.start_date <= CURDATE())
+        AND (p.end_date IS NULL OR p.end_date >= CURDATE())
+      ORDER BY p.end_date ASC
+    `);
+    const items = rows.map(r => {
+      let label;
+      if (r.discount_type === 'PERCENT') label = `ลด ${Number(r.discount_value)}% ทั้งบิล`;
+      else if (r.discount_type === 'FIXED') label = `ลด ฿${Number(r.discount_value)} ทั้งบิล`;
+      else if (r.discount_type === 'BOGO') label = `ซื้อ ${r.buy_product_name || 'สินค้า'} ${r.buy_qty || 1} แถม ${r.free_product_name || 'สินค้า'} ${r.free_qty || 1}`;
+      else label = r.name;
+      return { id: r.id, name: r.name, type: r.discount_type, label, end_date: r.end_date };
+    });
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/promotions', requireRole('ADMIN'), async (req, res) => {
   const {
     name, discount_type, discount_value, start_date, end_date,

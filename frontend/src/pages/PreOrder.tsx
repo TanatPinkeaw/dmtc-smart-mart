@@ -45,6 +45,7 @@ export default function PreOrder() {
   const socket = useSocket();
   const [products, setProducts] = useState<Product[]>([]);
   const [highlights, setHighlights] = useState<{ popular: Product[]; promo: Product[] }>({ popular: [], promo: [] });
+  const [storePromos, setStorePromos] = useState<any[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | 'ALL'>('ALL');
   const [productSearch, setProductSearch] = useState('');
@@ -141,6 +142,13 @@ export default function PreOrder() {
         });
       } catch {
         setHighlights({ popular: [], promo: [] });
+      }
+      // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) — non-critical เช่นกัน
+      try {
+        const prRes = await api.get('/promotions/active');
+        setStorePromos(prRes.data || []);
+      } catch {
+        setStorePromos([]);
       }
 
       // ⭐️ sync ตะกร้ากับสต๊อกล่าสุด กันข้อมูลเพี้ยน (สินค้าหมด/สต๊อกลดระหว่างที่ลูกค้ากำลังเลือกอยู่)
@@ -396,6 +404,18 @@ export default function PreOrder() {
             <input type="text" placeholder="ค้นหาสินค้า..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#F12B6B] focus:bg-white transition-colors duration-150" />
           </div>
+
+          {/* ⭐️ Phase 2 — แบนเนอร์โปรร้าน (ลดทั้งบิล/BOGO) — โชว์ตอน browse ปกติ */}
+          {selectedCategory === 'ALL' && !productSearch && storePromos.length > 0 && (
+            <div className="mb-4 bg-gradient-to-r from-[#F12B6B] to-[#FF467E] text-white rounded-xl p-3 shadow-sm">
+              <p className="text-xs font-bold mb-1.5 flex items-center gap-1">🎉 โปรโมชั่นร้านวันนี้ <span className="font-normal text-white/70">(รับสิทธิ์ที่เคาน์เตอร์)</span></p>
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                {storePromos.map(pr => (
+                  <span key={pr.id} className="shrink-0 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold">{pr.label}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ⭐️ ไฮไลต์: สินค้ามีโปร + ยอดนิยม (โชว์เฉพาะตอน browse ปกติ ไม่ค้นหา/ไม่กรองหมวด) */}
           {selectedCategory === 'ALL' && !productSearch && (highlights.promo.length > 0 || highlights.popular.length > 0) && (
