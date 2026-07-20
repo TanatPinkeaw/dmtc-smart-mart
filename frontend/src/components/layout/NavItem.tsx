@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
-const NAV_ACTIVE = 'bg-brand-bg text-brand border-l-4 border-brand';
-const NAV_DEFAULT = 'text-gray-400 hover:bg-brand-bg hover:text-brand border-l-4 border-transparent';
+const NAV_ACTIVE = 'bg-brand text-white shadow-sm';
+const NAV_DEFAULT = 'text-gray-500 hover:bg-brand-bg hover:text-brand';
 const MOB_ACTIVE = 'text-brand';
 const MOB_DEFAULT = 'text-gray-400 hover:text-brand';
 

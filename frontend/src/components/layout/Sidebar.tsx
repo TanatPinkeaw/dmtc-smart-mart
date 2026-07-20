@@ -20,7 +20,7 @@ export function Sidebar({
   initials, fullName, role, onOpenProfile, onLogoutClick,
 }: SidebarProps) {
   return (
-    <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border flex-col shrink-0 z-40">
+    <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border shadow-sm flex-col shrink-0 z-40">
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-brand-border">
         <img src="/logo-192.png" alt="DMTC Mart" className="w-9 h-9 rounded-xl shrink-0 object-contain" />
