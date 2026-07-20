@@ -1,6 +1,7 @@
 import { ShoppingCart, Plus, Minus, X, CheckCircle, UserPlus, Gift, ChevronUp, ChevronDown } from 'lucide-react';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
+import { EmptyState } from '../ui/EmptyState';
 
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
 interface CartItem extends Product { quantity: number; }
@@ -55,28 +56,27 @@ export function CartPanel({
   return (
     <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex' : 'hidden'} md:flex md:relative md:w-2/5 flex-col bg-white border-l border-brand-border`}>
       {/* Cart header */}
-      <div className="bg-brand px-4 py-3 flex items-center justify-between shrink-0">
+      <div className="bg-brand px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
         <div className="flex items-center gap-2">
           <ShoppingCart size={18} className="text-white" />
-          <h2 className="text-sm font-bold text-white">ตะกร้าสินค้า</h2>
+          <h2 className="text-base font-semibold text-white">ตะกร้าสินค้า</h2>
           {cart.length > 0 && <span className="bg-white text-brand text-xs font-bold px-1.5 py-0.5 rounded-full">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
         </div>
-        <button onClick={onCloseCart} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 transition-colors duration-150"><X size={18} /></button>
+        <button onClick={onCloseCart} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={18} /></button>
       </div>
 
       {/* Cart items */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {cart.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center py-12 text-center">
-            <ShoppingCart size={36} className="text-brand-mid mb-3" />
-            <p className="text-sm text-gray-400">ยังไม่มีสินค้าในตะกร้า</p>
+          <div className="h-full flex items-center justify-center">
+            <EmptyState icon={<ShoppingCart size={36} />} title="ยังไม่มีสินค้าในตะกร้า" />
           </div>
         ) : cart.map(item => {
           // ⭐️ Sprint 2 — B7: Get current product stock to show warnings
           const product = products.find(p => p.id === item.id);
           const isStockExceeded = product && item.quantity > (product.stock ?? 0);
           return (
-          <div key={item.id} className={`flex justify-between items-center rounded-xl px-3 py-2 border transition-colors ${
+          <div key={item.id} className={`flex justify-between items-center rounded-xl px-3 py-2 border transition-all duration-150 hover:shadow-sm ${
             isStockExceeded
               ? 'bg-yellow-50 border-yellow-300'
               : 'bg-brand-bg border-brand-border'
@@ -92,9 +92,9 @@ export function CartPanel({
               )}
             </div>
             <div className="flex items-center gap-1 bg-white border border-brand-border rounded-lg p-1 shrink-0">
-              <button onClick={() => onUpdateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center hover:bg-brand-bg rounded text-gray-600 hover:text-red-500 transition-colors duration-150"><Minus size={11} /></button>
+              <button onClick={() => onUpdateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center hover:bg-brand-bg rounded text-gray-600 hover:text-red-500 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"><Minus size={11} /></button>
               <span className="text-xs font-bold text-gray-900 w-5 text-center">{item.quantity}</span>
-              <button onClick={() => onUpdateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-brand-bg rounded text-gray-600 hover:text-emerald-500 transition-colors duration-150"><Plus size={11} /></button>
+              <button onClick={() => onUpdateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-brand-bg rounded text-gray-600 hover:text-emerald-500 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"><Plus size={11} /></button>
             </div>
             <p className="text-xs font-bold text-gray-900 w-14 text-right shrink-0">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
           </div>
@@ -124,11 +124,11 @@ export function CartPanel({
             <form onSubmit={onSearchMember} className="flex gap-2">
               <div className="relative flex-1 min-w-0">
                 <input type="text" placeholder="เบอร์โทร หรือ รหัสนักศึกษา..." value={searchMemberQuery} onChange={e => onSearchMemberQueryChange(e.target.value)} className="w-full pl-3 pr-9 py-2 bg-white border border-brand-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
-                <button type="button" onClick={onOpenRegisterModal} title="สมัครสมาชิกใหม่" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors duration-150">
+                <button type="button" onClick={onOpenRegisterModal} title="สมัครสมาชิกใหม่" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-emerald-500 hover:bg-emerald-50 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
                   <UserPlus size={15} />
                 </button>
               </div>
-              <button type="submit" disabled={memberLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-50">{memberLoading ? '...' : 'ค้นหา'}</button>
+              <button type="submit" disabled={memberLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">{memberLoading ? '...' : 'ค้นหา'}</button>
             </form>
           ) : (
             <div className="flex items-center justify-between">
@@ -153,7 +153,7 @@ export function CartPanel({
               <option value="">-- โปรโมชั่น (ถ้ามี) --</option>
               {promotions.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.discount_type === 'PERCENT' ? `ลด ${p.discount_value}%` : `ลด ฿${p.discount_value}`})</option>)}
             </select>
-            <button onClick={onApplyPromo} disabled={!selectedPromoId || promoLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-40">{promoLoading ? '...' : 'ใช้โค้ด'}</button>
+            <button onClick={onApplyPromo} disabled={!selectedPromoId || promoLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">{promoLoading ? '...' : 'ใช้โค้ด'}</button>
           </div>
         ) : (
           <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
@@ -185,8 +185,8 @@ export function CartPanel({
         {/* ⭐️ FIX: ปุ่มเลือกวิธีจ่ายเงิน — ปรับให้ตรงกับสไตล์หน้าจอง (rounded-lg แทน rounded-xl, สีตัวอักษร
             ตอนเลือกเงินสดเป็น #FF467E ให้เหมือนกันทั้ง 2 หน้า) */}
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => { onSetPaymentMethod('CASH'); onAmountReceivedChange(''); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 ${paymentMethod === 'CASH' ? 'border-brand bg-brand-bg text-brand-dark' : 'border-gray-200 text-gray-400'}`}>💵 เงินสด</button>
-          <button onClick={() => { onSetPaymentMethod('QR'); onAmountReceivedChange(finalTotal); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>📱 สแกนจ่าย</button>
+          <button onClick={() => { onSetPaymentMethod('CASH'); onAmountReceivedChange(''); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${paymentMethod === 'CASH' ? 'border-brand bg-brand-bg text-brand-dark' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>💵 เงินสด</button>
+          <button onClick={() => { onSetPaymentMethod('QR'); onAmountReceivedChange(finalTotal); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>📱 สแกนจ่าย</button>
         </div>
 
         {/* Cash input or QR */}
@@ -199,9 +199,9 @@ export function CartPanel({
               className="w-full text-right text-xl font-bold px-4 py-3 bg-brand-bg border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
             <div className="flex gap-1.5 mt-2 flex-wrap">
               {[10, 20, 50, 100, 500].map(v => (
-                <button key={v} onClick={() => onAmountReceivedChange(v)} className="flex-1 min-w-[40px] py-1.5 bg-brand-bg border border-brand-border text-brand font-semibold rounded-lg text-xs hover:bg-brand hover:text-white transition-all duration-150">฿{v}</button>
+                <button key={v} onClick={() => onAmountReceivedChange(v)} className="flex-1 min-w-[40px] py-1.5 bg-brand-bg border border-brand-border text-brand font-semibold rounded-lg text-xs hover:bg-brand hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">฿{v}</button>
               ))}
-              <button onClick={() => onAmountReceivedChange(finalTotal)} className="flex-1 min-w-[40px] py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg text-xs hover:bg-emerald-500 hover:text-white transition-all duration-150">พอดี</button>
+              <button onClick={() => onAmountReceivedChange(finalTotal)} className="flex-1 min-w-[40px] py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg text-xs hover:bg-emerald-500 hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1">พอดี</button>
             </div>
           </div>
         ) : (
@@ -215,7 +215,7 @@ export function CartPanel({
         {/* Checkout button */}
         {/* ⭐️ F5 — เพิ่ม !!checkoutValidationError เข้าเงื่อนไข disabled (เช่น payment_method ผิด/items ว่าง/quantity ผิดรูปแบบ) */}
         <button onClick={onCheckout} disabled={checkoutDisabled}
-          className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${checkoutDisabled ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-brand hover:bg-brand-dark'}`}>
+          className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${checkoutDisabled ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500' : 'bg-brand hover:bg-brand-dark focus-visible:ring-brand'}`}>
           {loading ? 'กำลังประมวลผล...' : <><CheckCircle size={18} /> {paymentMethod === 'QR' ? 'ยืนยันตรวจสอบสลิปแล้ว' : 'ชำระเงิน'}</>}
         </button>
         </div>

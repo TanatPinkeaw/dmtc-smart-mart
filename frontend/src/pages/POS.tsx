@@ -293,15 +293,15 @@ export default function POS() {
       {/* ── Left: Products ─────────────────────────────────────────────────── */}
       <div className="w-full md:w-3/5 flex flex-col h-full">
         {/* Header */}
-        <div className="bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center">
-              <ShoppingCart size={15} className="text-white" />
+        <div className="bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shrink-0 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-brand rounded-xl flex items-center justify-center shadow-sm">
+              <ShoppingCart size={16} className="text-white" />
             </div>
-            <h1 className="text-base font-bold text-gray-900">POS ขายสินค้า</h1>
+            <h1 className="text-lg font-semibold text-gray-900">POS ขายสินค้า</h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 bg-brand-bg border border-brand-border px-3 py-1.5 rounded-full">
+            <span className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-brand-bg border border-brand-border px-3 py-1.5 rounded-full">
               <User size={13} /> {user.full_name || 'CASHIER'}
             </span>
             {/* ⭐️ FIX: ปุ่มปิดกะเดิมอยู่ตรงนี้ด้วย — ตามคำขอผู้ใช้ ย้ายให้เหลือจุดเดียวที่หน้า Dashboard */}
