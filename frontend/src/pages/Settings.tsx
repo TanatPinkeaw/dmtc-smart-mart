@@ -301,11 +301,13 @@ export default function Settings() {
     <div className="min-h-screen bg-brand-bg font-sans p-4 md:p-6 relative pb-20 md:pb-6">
 
       {/* Header */}
-      <div className="max-w-7xl mx-auto flex items-center gap-3 text-brand mb-6 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-brand-border">
-        <SettingsIcon size={28} className="md:w-8 md:h-8 shrink-0" />
+      <div className="max-w-7xl mx-auto flex items-center gap-3 mb-6 bg-gradient-to-r from-brand to-brand-dark p-4 md:p-6 rounded-2xl shadow-md">
+        <div className="w-11 h-11 md:w-12 md:h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+          <SettingsIcon size={24} className="md:w-7 md:h-7 text-white" />
+        </div>
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800">แผงควบคุม (Admin)</h1>
-          <p className="text-gray-500 text-xs md:text-sm">จัดการข้อมูลหลักในระบบ</p>
+          <h1 className="text-xl md:text-2xl font-semibold text-white">แผงควบคุม (Admin)</h1>
+          <p className="text-white/80 text-xs md:text-sm">จัดการข้อมูลหลักในระบบ</p>
         </div>
       </div>
 
@@ -324,7 +326,7 @@ export default function Settings() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-brand-border p-4 md:p-8 min-h-[500px] relative overflow-hidden">
+        <div className="flex-1 bg-white rounded-2xl shadow-md border border-brand-border p-4 md:p-8 min-h-[500px] relative overflow-hidden">
 
           {/* TAB 1: ร้านค้า */}
           {activeTab === 'STORE' && (
@@ -948,7 +950,7 @@ export default function Settings() {
 }
 
 const TabButton = ({ icon, label, isActive, onClick, badge }: any) => (
-  <button onClick={onClick} className={`shrink-0 snap-start flex items-center gap-2 px-4 py-3 md:p-4 rounded-xl font-bold text-sm md:text-base transition ${isActive ? 'bg-brand text-white shadow-md' : 'bg-white text-gray-600 hover:bg-brand-border border border-brand-border'}`}>
+  <button onClick={onClick} className={`shrink-0 snap-start flex items-center gap-2 px-4 py-3 md:p-4 rounded-xl font-bold text-sm md:text-base transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${isActive ? 'bg-brand text-white shadow-md' : 'bg-white text-gray-600 hover:bg-brand-border border border-brand-border shadow-sm'}`}>
     {icon} <span className="whitespace-nowrap">{label}</span>
     {!!badge && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/25 text-white' : 'bg-brand-bg text-brand'}`}>{badge}</span>}
   </button>
@@ -964,9 +966,9 @@ const Input = ({ label, value, onChange, type = "text", required = true, disable
 const CustomModal = ({ title, onClose, children }: any) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-end md:items-center justify-center sm:p-4 animate-fade-in">
     <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-lg w-full max-w-md overflow-hidden flex flex-col transform transition-all">
-      <div className="px-5 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg rounded-t-2xl md:rounded-t-none">
-        <h2 className="text-base md:text-lg font-bold text-gray-800">{title}</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition"><X size={20} /></button>
+      <div className="px-5 py-4 flex justify-between items-center bg-gradient-to-r from-brand to-brand-dark rounded-t-2xl md:rounded-t-none shadow-sm">
+        <h2 className="text-base md:text-lg font-semibold text-white">{title}</h2>
+        <button onClick={onClose} className="text-white/90 hover:text-white hover:bg-white/20 active:scale-90 p-1.5 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={20} /></button>
       </div>
       <div className="p-5 pb-12 md:pb-5 overflow-y-auto max-h-[75dvh] md:max-h-[85dvh]">
         {children}
