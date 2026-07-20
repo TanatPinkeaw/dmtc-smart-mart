@@ -111,18 +111,18 @@ export default function Schedules() {
       <div className="max-w-5xl mx-auto">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center shrink-0">
-              <CalendarClock size={18} className="text-brand" />
+            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <CalendarClock size={18} className="text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">ตารางเวลาทำงาน</h1>
-              <p className="text-xs text-gray-500">{isAdmin ? 'คลิกวันในปฏิทินเพื่อกำหนดกะ หรือคลิกชื่อพนักงานเพื่อแก้ไข' : 'ดูตารางเวลาทำงานของทีม (ผู้จัดการเป็นคนกำหนด)'}</p>
+              <h1 className="text-xl font-semibold text-white">ตารางเวลาทำงาน</h1>
+              <p className="text-xs text-white/80">{isAdmin ? 'คลิกวันในปฏิทินเพื่อกำหนดกะ หรือคลิกชื่อพนักงานเพื่อแก้ไข' : 'ดูตารางเวลาทำงานของทีม (ผู้จัดการเป็นคนกำหนด)'}</p>
             </div>
           </div>
           {isAdmin && (
-            <button onClick={() => setShowHolidayPanel(!showHolidayPanel)} className="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-orange-100 transition-colors duration-150">
+            <button onClick={() => setShowHolidayPanel(!showHolidayPanel)} className="flex items-center gap-2 bg-white/15 border border-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <CalendarOff size={15} /> วันหยุดพิเศษ
             </button>
           )}
@@ -130,7 +130,7 @@ export default function Schedules() {
 
         {/* Holiday panel */}
         {isAdmin && showHolidayPanel && (
-          <div className="bg-white border border-orange-200 rounded-2xl shadow-sm p-4 mb-5">
+          <div className="bg-white border border-orange-200 rounded-2xl shadow-md p-4 mb-5">
             <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><CalendarOff size={15} className="text-orange-500" /> จัดการวันหยุดพิเศษ</h2>
             <form onSubmit={handleAddHoliday} className="flex flex-wrap gap-2 mb-4">
               <input type="date" required value={holidayForm.holiday_date} onChange={e => setHolidayForm({ ...holidayForm, holiday_date: e.target.value })} className="px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
@@ -145,7 +145,7 @@ export default function Schedules() {
         )}
 
         {/* Calendar */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border">
             <button onClick={prevMonth} className="p-2 hover:bg-brand-bg rounded-lg transition-colors duration-150 text-gray-500 hover:text-brand"><ChevronLeft size={18} /></button>
             <span className="text-sm font-bold text-gray-900">{MONTHS_TH[viewDate.getMonth()]} {viewDate.getFullYear() + 543}</span>
