@@ -19,9 +19,9 @@ export function AlertCardsGrid({ lowStock, voidSummary, shiftAnomalies, openShif
   ];
 
   return (
-    <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+    <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
       {cards.map(a => (
-        <div key={a.type} onClick={() => onOpenDetail(a.type, a.title)} className={`bg-white border ${a.border} rounded-2xl p-3 cursor-pointer hover:shadow-md transition-all duration-150 active:scale-95`}>
+        <div key={a.type} onClick={() => onOpenDetail(a.type, a.title)} className={`bg-white border ${a.border} rounded-2xl p-3 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 active:scale-95 focus-visible:ring-2 focus-visible:ring-brand`}>
           <div className={`flex items-center gap-1.5 ${a.color} mb-2`}>{a.icon}<span className="text-xs font-semibold">{a.title}</span></div>
           <p className="text-lg font-bold text-gray-900">{a.value}</p>
           <p className="text-[10px] text-gray-400 mt-0.5">{a.sub}</p>

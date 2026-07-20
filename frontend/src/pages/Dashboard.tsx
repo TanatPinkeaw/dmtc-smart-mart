@@ -203,34 +203,34 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-6 pb-24">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-brand-border rounded-2xl shadow-sm p-4 mb-5 gap-3">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4 mb-5 gap-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center">
-            <LayoutDashboard size={16} className="text-brand" />
+          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+            <LayoutDashboard size={16} className="text-white" />
           </div>
-          <h1 className="text-lg font-bold text-gray-900">สรุปยอดขายประจำวัน</h1>
+          <h1 className="text-lg font-semibold text-white">สรุปยอดขายประจำวัน</h1>
           {/* ⭐️ F10 — Health check status dot: เขียว=ปกติ, แดง=เซิร์ฟเวอร์/DB มีปัญหา, เทา=ยังไม่เช็ค */}
           <span
             title={healthOk === null ? 'กำลังตรวจสอบสถานะระบบ...' : healthOk ? 'ระบบทำงานปกติ' : 'เซิร์ฟเวอร์/ฐานข้อมูลมีปัญหา'}
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              healthOk === null ? 'bg-gray-300' : healthOk ? 'bg-green-500' : 'bg-red-500 animate-pulse'
+            className={`w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white/60 ${
+              healthOk === null ? 'bg-gray-300' : healthOk ? 'bg-green-400' : 'bg-red-400 animate-pulse'
             }`}
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-gray-500 hover:text-brand bg-brand-bg border border-brand-border px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150">
+          <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-white hover:bg-white/25 bg-white/15 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             <ArrowLeft size={14} /> กลับไปหน้า POS
           </button>
-          <span className="text-xs text-gray-500 font-medium hidden sm:block">{user.full_name}</span>
+          <span className="text-xs text-white/90 font-medium hidden sm:block">{user.full_name}</span>
           {isAdmin ? (
             <>
-              <button onClick={handleAdminCheckOut} disabled={checkOutLoading} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 active:scale-95 disabled:opacity-50">
+              <button onClick={handleAdminCheckOut} disabled={checkOutLoading} className="flex items-center gap-1.5 bg-white text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
                 <LogOut size={14} /> {checkOutLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อออกงาน'}
               </button>
               <input type="file" accept="image/*" capture="environment" ref={checkOutFileRef} onChange={handleCheckOutPhotoSelected} className="hidden" />
             </>
           ) : (
-            <button onClick={() => setShowCloseModal(true)} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 active:scale-95">
+            <button onClick={() => setShowCloseModal(true)} className="flex items-center gap-1.5 bg-white text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <LogOut size={14} /> ปิดกะการขาย
             </button>
           )}

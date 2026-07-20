@@ -1,6 +1,7 @@
 import { TrendingUp, Receipt, Banknote, CreditCard, Package } from 'lucide-react';
 
-const card = "bg-white border border-brand-border rounded-2xl shadow-sm";
+const card = "relative overflow-hidden bg-white border border-brand-border rounded-2xl shadow-md";
+const accentBar = <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />;
 
 interface StatCardsProps {
   summary: any;
@@ -23,6 +24,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
 
         {/* Bills */}
         <div className={`${card} p-5`}>
+          {accentBar}
           <div className="flex justify-between items-start mb-3">
             <p className="text-xs font-medium text-gray-500">จำนวนบิลทั้งหมด</p>
             <div className="bg-emerald-50 p-2 rounded-xl"><Receipt size={18} className="text-emerald-500" /></div>
@@ -32,6 +34,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
 
         {/* Cash */}
         <div className={`${card} p-5`}>
+          {accentBar}
           <div className="flex items-center gap-2 text-xs text-gray-500 mb-3"><Banknote size={16} className="text-emerald-500" /> ยอดรับเงินสด</div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-xl font-bold text-gray-900">฿{Number(summary?.cash_sales || 0).toLocaleString()}</p>
@@ -43,6 +46,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
 
         {/* QR */}
         <div className={`${card} p-5`}>
+          {accentBar}
           <div className="flex items-center gap-2 text-xs text-gray-500 mb-3"><CreditCard size={16} className="text-purple-500" /> ยอดรับโอน (QR)</div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-xl font-bold text-gray-900">฿{Number(summary?.qr_sales || 0).toLocaleString()}</p>
@@ -55,6 +59,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
 
       {/* Top products */}
       <div className={`${card} p-4 flex flex-col`}>
+        {accentBar}
         <div className="flex items-center gap-2 mb-4">
           <Package size={18} className="text-orange-400" />
           <h2 className="text-sm font-semibold text-gray-900">10 อันดับสินค้าขายดี</h2>
