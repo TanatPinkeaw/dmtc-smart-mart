@@ -44,7 +44,7 @@ export default function Settings() {
   const [newCategory, setNewCategory] = useState('');
   const [newSupplier, setNewSupplier] = useState({ name: '', contact_info: '' });
   
-  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', expiry_date: '', discount_percent: 40 });
+  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40 });
   const [editingProduct, setEditingProduct] = useState<any>(null);
 
   const [newPromotion, setNewPromotion] = useState({
@@ -217,8 +217,8 @@ export default function Settings() {
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), cost: Number(newProduct.cost) || 0, stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40 });
-      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', expiry_date: '', discount_percent: 40 });
+      await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), cost: Number(newProduct.cost) || 0, stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, promo_percent: Number(newProduct.promo_percent) || 0, promo_start: newProduct.promo_start || null, promo_end: newProduct.promo_end || null, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40 });
+      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40 });
       fetchProducts(); setActiveModal(null); setVendorSearch('');
       Swal.fire({ icon: 'success', title: 'เพิ่มสินค้าสำเร็จ', showConfirmButton: false, timer: 1500 });
     }
@@ -228,7 +228,7 @@ export default function Settings() {
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), cost: Number(editingProduct.cost) || 0, vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40 });
+      await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), cost: Number(editingProduct.cost) || 0, vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, promo_percent: Number(editingProduct.promo_percent) || 0, promo_start: editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : null, promo_end: editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : null, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40 });
       fetchProducts(); setActiveModal(null); setEditingProduct(null); setVendorSearch('');
       Swal.fire({ icon: 'success', title: 'แก้ไขสินค้าสำเร็จ!', showConfirmButton: false, timer: 1500 });
     } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
@@ -701,6 +701,17 @@ export default function Settings() {
 
             <Input label="URL รูปภาพ (ถ้ามี)" value={editingProduct.image_url || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, image_url: v })} />
 
+            {/* ⭐️ Phase 1 — โปรโมชั่นช่วงวันที่ (ลด % เฉพาะช่วง ใช้ทั้ง POS + จอง) */}
+            <div className="bg-brand-bg border border-brand-mid rounded-xl p-3 space-y-3">
+              <p className="text-xs font-bold text-brand">🏷️ โปรโมชั่นช่วงวันที่ (ลดเฉพาะช่วง)</p>
+              <Input label="ลดราคา % ช่วงโปร" type="number" min="0" max="100" value={editingProduct.promo_percent || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, promo_percent: v })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="เริ่มโปร" type="date" value={editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, promo_start: v })} />
+                <Input label="สิ้นสุดโปร" type="date" value={editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, promo_end: v })} />
+              </div>
+              {editingProduct.vendor_id && <p className="text-[11px] text-amber-600">⚠️ สินค้าฝากขาย — ควรคุยกับเจ้าของสินค้าก่อนตั้งโปร (ส่วนลดหักตามสัดส่วน เจ้าของได้น้อยลงด้วย)</p>}
+            </div>
+
             {/* ⭐️ Sprint 2 — Expiry Discount: expiry_date + discount_percent */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-3">
               <p className="text-xs font-bold text-yellow-800">วันหมดอายุและส่วนลด</p>
@@ -764,6 +775,17 @@ export default function Settings() {
               <Input label="สต๊อกตั้งต้น" type="number" value={newProduct.stock} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, stock: v })} />
             </div>
             <Input label="URL รูปภาพ (ถ้ามี)" value={newProduct.image_url} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, image_url: v })} />
+
+            {/* ⭐️ Phase 1 — โปรโมชั่นช่วงวันที่ */}
+            <div className="bg-brand-bg border border-brand-mid rounded-xl p-3 space-y-3">
+              <p className="text-xs font-bold text-brand">🏷️ โปรโมชั่นช่วงวันที่ (ลดเฉพาะช่วง)</p>
+              <Input label="ลดราคา % ช่วงโปร" type="number" min="0" max="100" value={newProduct.promo_percent} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, promo_percent: v })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="เริ่มโปร" type="date" value={newProduct.promo_start} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, promo_start: v })} />
+                <Input label="สิ้นสุดโปร" type="date" value={newProduct.promo_end} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, promo_end: v })} />
+              </div>
+              {newProduct.vendor_id && <p className="text-[11px] text-amber-600">⚠️ สินค้าฝากขาย — ควรคุยกับเจ้าของสินค้าก่อนตั้งโปร (ส่วนลดหักตามสัดส่วน เจ้าของได้น้อยลงด้วย)</p>}
+            </div>
 
             {/* ⭐️ Sprint 2 — Expiry Discount: expiry_date + discount_percent */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-3">

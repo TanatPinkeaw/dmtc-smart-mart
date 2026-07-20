@@ -597,6 +597,20 @@ const initDB = async () => {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE products (is_expired) ล้มเหลว:", alterErr.message);
     }
 
+    // ⭐️ Phase 1 — โปรโมชั่นระดับสินค้า มีช่วงวันที่ (promo_percent ลด % ระหว่าง promo_start..promo_end)
+    for (const [col, ddl] of [
+      ['promo_percent', 'ADD COLUMN promo_percent INT DEFAULT 0'],
+      ['promo_start', 'ADD COLUMN promo_start DATE DEFAULT NULL'],
+      ['promo_end', 'ADD COLUMN promo_end DATE DEFAULT NULL'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE products ${ddl}`);
+        console.log(`🔧 เพิ่มคอลัมน์ products.${col} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE products (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
     // ⭐️ Sprint 2 — B6: Idempotency — add idempotency_key columns to financial endpoints
     for (const [table, columns] of [
       ['sales', 'idempotency_key'],

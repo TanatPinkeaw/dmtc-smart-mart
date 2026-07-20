@@ -670,6 +670,25 @@ function getProductExpiry(product) {
   return { status: 'ok', daysLeft };
 }
 
+// ⭐️ Phase 1 — โปรระดับสินค้า (ช่วงวันที่): เช็คว่าโปรกำลัง active วันนี้ไหม
+function isProductPromoActive(product) {
+  const pct = Number(product.promo_percent) || 0;
+  if (pct <= 0 || !product.promo_start || !product.promo_end) return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const s = new Date(product.promo_start); s.setHours(0, 0, 0, 0);
+  const e = new Date(product.promo_end); e.setHours(0, 0, 0, 0);
+  return today >= s && today <= e;
+}
+
+// ⭐️ Phase 1 — คืน % ส่วนลด "ที่ดีที่สุดอันเดียว" ระหว่างโปรช่วงวันที่ กับ ลดใกล้หมดอายุ
+// ไม่ลดซ้อน (เอาอันมากกว่า) — ลูกค้าได้ดีลดีสุด, ป้องกันลดทับกันจนขาดทุน
+function getBestItemDiscountPercent(product) {
+  let pct = 0;
+  if (isProductPromoActive(product)) pct = Math.max(pct, Number(product.promo_percent) || 0);
+  if (getProductExpiry(product).status === 'near_expiry') pct = Math.max(pct, Number(product.discount_percent) || 0);
+  return pct;
+}
+
 app.get('/api/products', async (req, res) => {
   try {
     const { search, category_id } = req.query;
@@ -682,7 +701,9 @@ app.get('/api/products', async (req, res) => {
                WHEN DATE(p.expiry_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00')) THEN 'expires_today'
                WHEN DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00'))) = 1 THEN 'near_expiry'
                ELSE 'ok'
-             END as expiry_status
+             END as expiry_status,
+             (p.promo_percent > 0 AND p.promo_start IS NOT NULL AND p.promo_end IS NOT NULL
+               AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN p.promo_start AND p.promo_end) AS promo_active
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE p.is_active = 1
@@ -745,15 +766,19 @@ app.get('/api/products/highlights', async (req, res) => {
       WHERE p.is_active=1 AND p.stock>0
       ORDER BY ps.sold DESC LIMIT 8
     `);
-    // มีโปร — สินค้าใกล้หมดอายุ (เหลือ 1 วัน = near_expiry ที่ระบบลดราคาอัตโนมัติ) + ยังมีสต๊อก
+    // มีโปร — โปรระดับสินค้าช่วงวันที่ (promo_percent) ที่กำลัง active + สินค้าใกล้หมดอายุ (near_expiry) + มีสต๊อก
+    const promoActiveExpr = `(p.promo_percent > 0 AND p.promo_start IS NOT NULL AND p.promo_end IS NOT NULL
+      AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN p.promo_start AND p.promo_end)`;
     const [promo] = await pool.query(`
-      SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status
+      SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status, ${promoActiveExpr} AS promo_active
       FROM products p
       LEFT JOIN categories c ON p.category_id=c.id
       WHERE p.is_active=1 AND p.stock>0
-        AND DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
-        AND COALESCE(p.discount_percent,0) > 0
-      ORDER BY p.expiry_date ASC LIMIT 8
+        AND (
+          (DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1 AND COALESCE(p.discount_percent,0) > 0)
+          OR ${promoActiveExpr}
+        )
+      ORDER BY promo_active DESC, p.promo_end ASC, p.expiry_date ASC LIMIT 12
     `);
     res.json({ popular, promo });
   } catch (error) {
@@ -762,11 +787,11 @@ app.get('/api/products/highlights', async (req, res) => {
 });
 
 app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator), async (req, res) => {
-  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate } = req.body;
+  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end } = req.body;
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0]
+      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null]
     );
     // ⭐️ Task 5 — audit log
     await pool.query(
@@ -783,7 +808,7 @@ app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator
 });
 
 app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
-  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent } = req.body;
+  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, promo_percent, promo_start, promo_end } = req.body;
   try {
     // ⭐️ Sprint 2: Validate expiry_date if provided
     if (expiry_date && new Date(expiry_date) < new Date()) {
@@ -795,8 +820,8 @@ app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
     const finalCost = (cost === undefined || cost === null || cost === '') ? (oldRows[0]?.cost ?? 0) : cost;
 
     await pool.query(
-      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=? WHERE id=?',
-      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, req.params.id]
+      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=?, promo_percent=?, promo_start=?, promo_end=? WHERE id=?',
+      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, req.params.id]
     );
 
     await pool.query(
@@ -2069,7 +2094,17 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
 
     // 1. เช็คราคาสินค้าและสต๊อก + ⭐️ Sprint 2: เช็ค expiry status
     for (let item of items) {
-      const [productRows] = await conn.query('SELECT id, name, price, stock, expiry_date, discount_percent FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
+      const [productRows] = await conn.query(`
+        SELECT id, name, price, stock, expiry_date, discount_percent, promo_percent, promo_start, promo_end,
+               GREATEST(
+                 CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
+                        AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
+                      THEN promo_percent ELSE 0 END,
+                 CASE WHEN expiry_date IS NOT NULL
+                        AND DATEDIFF(DATE(expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+                      THEN COALESCE(discount_percent,0) ELSE 0 END
+               ) AS best_discount_percent
+        FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
       if (productRows.length === 0) throw new Error(`ไม่พบสินค้า ID: ${item.product_id}`);
 
       const product = productRows[0];
@@ -2090,12 +2125,12 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
         throw new Error(`ไม่สามารถขายสินค้าที่หมดอายุแล้ว: ${product.name}`);
       }
 
-      let itemPrice = product.price;
-      // ⭐️ Sprint 2: Auto-apply 40% discount if near_expiry
-      if (expiryStatus.status === 'near_expiry') {
-        const discountAmount = Math.round(itemPrice * product.discount_percent / 100);
-        itemPrice -= discountAmount;
-        console.log(`[CHECKOUT] Auto ${product.discount_percent}% discount applied to ${product.name}`);
+      let itemPrice = Number(product.price);
+      // ⭐️ Phase 1: ส่วนลดระดับสินค้า (โปรช่วงวันที่ / ใกล้หมดอายุ) — คำนวณใน SQL เวลาไทย ให้ตรงกับที่การ์ดโชว์
+      const bestDiscPct = Number(product.best_discount_percent) || 0;
+      if (bestDiscPct > 0) {
+        itemPrice -= Math.round(itemPrice * bestDiscPct / 100);
+        console.log(`[CHECKOUT] -${bestDiscPct}% applied to ${product.name}`);
       }
 
       const subtotalSatang = toSatang(itemPrice) * item.quantity;
@@ -3171,6 +3206,34 @@ app.get('/api/promotions', async (req, res) => {
   }
 });
 
+// ⭐️ Phase 2 — โปรโมชั่นที่กำลัง active พร้อมข้อความอ่านง่าย (รวมชื่อสินค้าสำหรับ BOGO) — ไว้โชว์แบนเนอร์
+app.get('/api/promotions/active', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT p.id, p.name, p.discount_type, p.discount_value, p.end_date, p.buy_qty, p.free_qty,
+             bp.name AS buy_product_name, fp.name AS free_product_name
+      FROM promotions p
+      LEFT JOIN products bp ON p.buy_product_id = bp.id
+      LEFT JOIN products fp ON p.free_product_id = fp.id
+      WHERE p.is_active = TRUE
+        AND (p.start_date IS NULL OR p.start_date <= CURDATE())
+        AND (p.end_date IS NULL OR p.end_date >= CURDATE())
+      ORDER BY p.end_date ASC
+    `);
+    const items = rows.map(r => {
+      let label;
+      if (r.discount_type === 'PERCENT') label = `ลด ${Number(r.discount_value)}% ทั้งบิล`;
+      else if (r.discount_type === 'FIXED') label = `ลด ฿${Number(r.discount_value)} ทั้งบิล`;
+      else if (r.discount_type === 'BOGO') label = `ซื้อ ${r.buy_product_name || 'สินค้า'} ${r.buy_qty || 1} แถม ${r.free_product_name || 'สินค้า'} ${r.free_qty || 1}`;
+      else label = r.name;
+      return { id: r.id, name: r.name, type: r.discount_type, label, end_date: r.end_date };
+    });
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/promotions', requireRole('ADMIN'), async (req, res) => {
   const {
     name, discount_type, discount_value, start_date, end_date,
@@ -3352,15 +3415,29 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
 
     // คำนวณราคา + เช็คสต๊อกพอจริง (ล็อกแถวสินค้ากันขายเกินตอนมีหลายคนจองพร้อมกัน)
     for (const item of items) {
-      const [rows] = await conn.query('SELECT price, stock, name FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
+      const [rows] = await conn.query(`
+        SELECT id, name, price, stock,
+               GREATEST(
+                 CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
+                        AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
+                      THEN promo_percent ELSE 0 END,
+                 CASE WHEN expiry_date IS NOT NULL
+                        AND DATEDIFF(DATE(expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+                      THEN COALESCE(discount_percent,0) ELSE 0 END
+               ) AS best_discount_percent
+        FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
       if (rows.length === 0) throw new Error(`ไม่พบสินค้า ID ${item.product_id}`);
       if (rows[0].stock < item.quantity) {
         throw new Error(`สต๊อกไม่พอสำหรับ "${rows[0].name}" (เหลือ ${rows[0].stock}, ต้องการ ${item.quantity})`);
       }
-      const subtotalSatang = toSatang(rows[0].price) * item.quantity;
+      // ⭐️ Phase 1: pre-order ได้ส่วนลดระดับสินค้าเหมือน POS (คำนวณใน SQL เวลาไทย ให้ตรงกับที่การ์ดโชว์)
+      let unitPrice = Number(rows[0].price);
+      const discPct = Number(rows[0].best_discount_percent) || 0;
+      if (discPct > 0) unitPrice -= Math.round(unitPrice * discPct / 100);
+      const subtotalSatang = toSatang(unitPrice) * item.quantity;
       const subtotal = fromSatang(subtotalSatang);
       totalAmountSatang += subtotalSatang;
-      processedItems.push({ product_id: item.product_id, quantity: item.quantity, price: rows[0].price, subtotal, stock_before: rows[0].stock });
+      processedItems.push({ product_id: item.product_id, quantity: item.quantity, price: unitPrice, subtotal, stock_before: rows[0].stock });
     }
     const totalAmount = fromSatang(totalAmountSatang);
 

@@ -45,6 +45,7 @@ export default function POS() {
   const [regForm, setRegForm] = useState({ student_id: '', full_name: '', phone_number: '' });
   const [regLoading, setRegLoading] = useState(false);
   const [promotions, setPromotions] = useState<any[]>([]);
+  const [storePromos, setStorePromos] = useState<any[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
   const [selectedPromoId, setSelectedPromoId] = useState<number | ''>('');
   const [appliedPromo, setAppliedPromo] = useState<{ id: number; name: string; discount_amount: number } | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
@@ -76,7 +77,10 @@ export default function POS() {
   }, [navigate]);
 
   const fetchStoreInfo = async () => { try { const res = await api.get('/settings/store'); setStoreInfo(res.data); } catch (e) {} };
-  const fetchPromotions = async () => { try { const res = await api.get('/promotions'); setPromotions(res.data); } catch (e) {} };
+  const fetchPromotions = async () => {
+    try { const res = await api.get('/promotions'); setPromotions(res.data); } catch (e) {}
+    try { const r = await api.get('/promotions/active'); setStorePromos(r.data || []); } catch (e) {}
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -320,6 +324,17 @@ export default function POS() {
 
           {/* Product grid */}
           <div className="flex-1 p-3 overflow-y-auto pb-28 md:pb-4">
+            {/* ⭐️ Phase 2 — แบนเนอร์โปรร้าน (ลดทั้งบิล/BOGO) เตือนแคชเชียร์ว่ามีโปรอะไรใช้ได้ */}
+            {storePromos.length > 0 && (
+              <div className="mb-3 bg-gradient-to-r from-brand to-brand-dark text-white rounded-xl p-2.5">
+                <p className="text-xs font-bold mb-1 flex items-center gap-1">🎉 โปรวันนี้</p>
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                  {storePromos.map(pr => (
+                    <span key={pr.id} className="shrink-0 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold">{pr.label}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="relative mb-3">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" placeholder="ค้นหาสินค้า / บาร์โค้ด..." value={productSearchQuery} onChange={e => setProductSearchQuery(e.target.value)}
@@ -337,7 +352,10 @@ export default function POS() {
                   const pWithExpiry = p as any;
                   const showDiscount = pWithExpiry.expiry_status === 'near_expiry';
                   const overridePrice = priceOverride[p.id];
-                  const finalPrice = overridePrice ?? (showDiscount ? pWithExpiry.price_after_discount : p.price);
+                  // ⭐️ Phase 1 — โปรช่วงวันที่ (ใช้เมื่อไม่มีลดใกล้หมดอายุ; ถ้ามีทั้งคู่ server จะเลือกอันดีสุดตอนคิดเงินเอง)
+                  const promoActive = !showDiscount && !!pWithExpiry.promo_active;
+                  const promoPct = Number(pWithExpiry.promo_percent) || 0;
+                  const finalPrice = overridePrice ?? (showDiscount ? pWithExpiry.price_after_discount : (promoActive ? Number(p.price) * (1 - promoPct / 100) : p.price));
                   const isExpired = pWithExpiry.expiry_status === 'expired';
 
                   return (
@@ -370,6 +388,11 @@ export default function POS() {
                           ⚠️ หมดอายุวันนี้
                         </div>
                       )}
+                      {promoActive && (
+                        <div className="bg-amber-200 text-amber-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
+                          🏷️ โปรลดราคา -{promoPct}%
+                        </div>
+                      )}
 
                       {/* ⭐️ FIX: ราคาอยู่มุมซ้ายล่าง จำนวนคงเหลืออยู่มุมขวาล่าง เหมือนการ์ดสินค้าหน้าจอง (Pre-order)
                           mt-auto ดันราคา+ปุ่มด้านล่างทั้งกลุ่มให้ชิดขอบล่างเสมอ แม้การ์ดถูก grid stretch สูงไม่เท่ากัน */}
@@ -379,6 +402,11 @@ export default function POS() {
                             <>
                               <s className="text-gray-400 text-xs block">฿{Number(p.price).toFixed(2)}</s>
                               <span className="text-red-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
+                            </>
+                          ) : promoActive ? (
+                            <>
+                              <s className="text-gray-400 text-xs block">฿{Number(p.price).toFixed(2)}</s>
+                              <span className="text-amber-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
                             </>
                           ) : (
                             <p className="text-sm font-bold text-brand">฿{Number(finalPrice).toFixed(2)}</p>

@@ -37,6 +37,9 @@ module.exports = {
     image_url: Joi.string().trim().max(500).allow(null, '').optional(),
     vendor_id: Joi.number().integer().positive().allow(null).optional(),
     gp_rate: Joi.number().min(0).max(100).allow(null).optional(),
+    promo_percent: Joi.number().integer().min(0).max(100).allow(null).optional(),
+    promo_start: Joi.string().allow(null, '').optional(),
+    promo_end: Joi.string().allow(null, '').optional(),
   }),
 
   // POST /api/orders (pre-order) — body: items[], payment_method, slip_image,

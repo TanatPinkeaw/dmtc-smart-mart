@@ -45,6 +45,7 @@ export default function PreOrder() {
   const socket = useSocket();
   const [products, setProducts] = useState<Product[]>([]);
   const [highlights, setHighlights] = useState<{ popular: Product[]; promo: Product[] }>({ popular: [], promo: [] });
+  const [storePromos, setStorePromos] = useState<any[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | 'ALL'>('ALL');
   const [productSearch, setProductSearch] = useState('');
@@ -141,6 +142,13 @@ export default function PreOrder() {
         });
       } catch {
         setHighlights({ popular: [], promo: [] });
+      }
+      // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) — non-critical เช่นกัน
+      try {
+        const prRes = await api.get('/promotions/active');
+        setStorePromos(prRes.data || []);
+      } catch {
+        setStorePromos([]);
       }
 
       // ⭐️ sync ตะกร้ากับสต๊อกล่าสุด กันข้อมูลเพี้ยน (สินค้าหมด/สต๊อกลดระหว่างที่ลูกค้ากำลังเลือกอยู่)
@@ -397,6 +405,18 @@ export default function PreOrder() {
               className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
           </div>
 
+          {/* ⭐️ Phase 2 — แบนเนอร์โปรร้าน (ลดทั้งบิล/BOGO) — โชว์ตอน browse ปกติ */}
+          {selectedCategory === 'ALL' && !productSearch && storePromos.length > 0 && (
+            <div className="mb-4 bg-gradient-to-r from-brand to-brand-dark text-white rounded-xl p-3 shadow-sm">
+              <p className="text-xs font-bold mb-1.5 flex items-center gap-1">🎉 โปรโมชั่นร้านวันนี้ <span className="font-normal text-white/70">(รับสิทธิ์ที่เคาน์เตอร์)</span></p>
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                {storePromos.map(pr => (
+                  <span key={pr.id} className="shrink-0 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold">{pr.label}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ⭐️ ไฮไลต์: สินค้ามีโปร + ยอดนิยม (โชว์เฉพาะตอน browse ปกติ ไม่ค้นหา/ไม่กรองหมวด) */}
           {selectedCategory === 'ALL' && !productSearch && (highlights.promo.length > 0 || highlights.popular.length > 0) && (
             <div className="space-y-4 mb-4">
@@ -406,7 +426,7 @@ export default function PreOrder() {
                   <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                     {highlights.promo.map(p => (
                       <div key={`promo-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-amber-200 rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
-                        <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).discount_percent || 40}%</span>
+                        <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).promo_active ? (p as any).promo_percent : ((p as any).discount_percent || 40)}%</span>
                         <div className="w-full aspect-square bg-brand-bg rounded-lg mb-1 flex items-center justify-center overflow-hidden">
                           {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-brand-mid opacity-50" />}
                         </div>
@@ -465,8 +485,17 @@ export default function PreOrder() {
                 <p className="text-xs font-medium text-gray-800 text-center line-clamp-2 mb-1">{product.name}</p>
 
                 <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
-                  <p className="text-sm font-bold text-brand">฿{Number(product.price).toFixed(2)}</p>
-                  <p className="shrink-0 text-[10px] bg-brand-bg text-brand px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>
+                  {(product as any).promo_active ? (
+                    <p className="text-sm font-bold text-brand flex items-baseline gap-1">
+                      ฿{(Number(product.price) * (1 - (Number((product as any).promo_percent) || 0) / 100)).toFixed(2)}
+                      <span className="text-[9px] text-gray-400 line-through font-normal">฿{Number(product.price).toFixed(2)}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-brand">฿{Number(product.price).toFixed(2)}</p>
+                  )}
+                  {(product as any).promo_active
+                    ? <span className="shrink-0 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-bold">-{(product as any).promo_percent}%</span>
+                    : <p className="shrink-0 text-[10px] bg-brand-bg text-brand px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>}
                 </div>
 
                 <button
