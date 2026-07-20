@@ -76,7 +76,7 @@ export default function Shift() {
   if (pageLoading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center space-y-3">
-        <div className="w-10 h-10 border-2 border-[#F12B6B] border-t-transparent rounded-full animate-spin mx-auto" />
+        <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-sm text-gray-400">กำลังตรวจสอบ...</p>
       </div>
     </div>
@@ -85,9 +85,9 @@ export default function Shift() {
   // ── Shared wrapper ────────────────────────────────────────────────────────────
   const Card = ({ children }: { children: React.ReactNode }) => (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white border border-[#F6C7C7] rounded-2xl shadow-sm overflow-hidden">
+      <div className="w-full max-w-sm bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
         {/* Brand strip */}
-        <div className="bg-[#F12B6B] px-5 py-4 flex items-center gap-3">
+        <div className="bg-brand px-5 py-4 flex items-center gap-3">
           <ShoppingBag size={22} className="text-white" />
           <div>
             <p className="text-white font-bold text-sm">DMTC Mart</p>
@@ -115,14 +115,14 @@ export default function Shift() {
           const f = e.target.files?.[0]; if (f) { setCheckInPhoto(f); setCheckInPhotoPreview(URL.createObjectURL(f)); }
         }} />
         {checkInPhotoPreview
-          ? <img src={checkInPhotoPreview} alt="preview" className="w-full h-44 object-cover rounded-xl border border-[#F6C7C7]" />
-          : <div className="w-full h-44 rounded-xl border-2 border-dashed border-[#F6C7C7] flex flex-col items-center justify-center gap-2 text-[#FD94B4] hover:bg-[#FFF5F7] transition-colors duration-150">
+          ? <img src={checkInPhotoPreview} alt="preview" className="w-full h-44 object-cover rounded-xl border border-brand-border" />
+          : <div className="w-full h-44 rounded-xl border-2 border-dashed border-brand-border flex flex-col items-center justify-center gap-2 text-brand-mid hover:bg-brand-bg transition-colors duration-150">
               <Camera size={28} /> <span className="text-sm font-medium">แตะเพื่อถ่ายรูป</span>
             </div>
         }
       </label>
 
-      <button onClick={handleAdminCheckIn} disabled={checkInLoading} className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
+      <button onClick={handleAdminCheckIn} disabled={checkInLoading} className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
       </button>
     </Card>
@@ -143,7 +143,7 @@ export default function Shift() {
         {/* Denomination grid */}
         <div className="grid grid-cols-2 gap-2">
           {DENOMINATIONS.map(d => (
-            <div key={d} className="flex items-center gap-2 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl px-3 py-2">
+            <div key={d} className="flex items-center gap-2 bg-brand-bg border border-brand-border rounded-xl px-3 py-2">
               <span className="text-xs font-semibold text-gray-600 w-10 shrink-0">฿{d}</span>
               <input type="number" min="0" value={denomCounts[d] ?? ''} placeholder="0"
                 onChange={e => setDenomCounts({ ...denomCounts, [d]: e.target.value === '' ? '' : Number(e.target.value) })}
@@ -153,9 +153,9 @@ export default function Shift() {
         </div>
 
         {/* Total */}
-        <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-3 text-center">
+        <div className="bg-brand-bg border border-brand-border rounded-xl p-3 text-center">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">ยอดรวมตั้งต้น</p>
-          <p className="text-2xl font-bold text-[#F12B6B]">฿{openingCash.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-brand">฿{openingCash.toLocaleString()}</p>
         </div>
 
         {/* Photo */}
@@ -166,15 +166,15 @@ export default function Shift() {
               const f = e.target.files?.[0]; if (f) { setCheckInPhoto(f); setCheckInPhotoPreview(URL.createObjectURL(f)); }
             }} />
             {checkInPhotoPreview
-              ? <img src={checkInPhotoPreview} alt="preview" className="w-full h-28 object-cover rounded-xl border border-[#F6C7C7]" />
-              : <div className="w-full h-28 rounded-xl border-2 border-dashed border-[#F6C7C7] flex flex-col items-center justify-center gap-1.5 text-[#FD94B4] hover:bg-[#FFF5F7] transition-colors duration-150">
+              ? <img src={checkInPhotoPreview} alt="preview" className="w-full h-28 object-cover rounded-xl border border-brand-border" />
+              : <div className="w-full h-28 rounded-xl border-2 border-dashed border-brand-border flex flex-col items-center justify-center gap-1.5 text-brand-mid hover:bg-brand-bg transition-colors duration-150">
                   <Camera size={22} /><span className="text-xs font-medium">แตะเพื่อถ่ายรูป</span>
                 </div>
             }
           </label>
         </div>
 
-        <button type="submit" disabled={loading} className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+        <button type="submit" disabled={loading} className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
           <Banknote size={16} /> {loading ? 'กำลังเปิดกะ...' : 'เริ่มขายสินค้า'}
         </button>
       </form>

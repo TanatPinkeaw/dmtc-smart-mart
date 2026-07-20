@@ -191,11 +191,11 @@ export default function OrderManagement() {
 
   return (
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title), ช่องค้นหาเป็น
-    // bg-[#FFF5F7] แบบเดียวกัน และแท็บเปลี่ยนจากขีดเส้นใต้เป็นแบบเม็ดยา (pill) ในกรอบขาวเหมือนแท็บหมวดหมู่
-    <div className="bg-[#FFF5F7] min-h-screen pb-24">
-      <div className="bg-white border-b border-[#F6C7C7] px-4 py-3 flex justify-between items-center shadow-sm">
+    // bg-brand-bg แบบเดียวกัน และแท็บเปลี่ยนจากขีดเส้นใต้เป็นแบบเม็ดยา (pill) ในกรอบขาวเหมือนแท็บหมวดหมู่
+    <div className="bg-brand-bg min-h-screen pb-24">
+      <div className="bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 bg-[#F12B6B] rounded-lg flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
             <PackageSearch size={15} className="text-white" />
           </div>
           <h1 className="text-base font-bold text-gray-900 truncate">จัดการออเดอร์สั่งจอง</h1>
@@ -210,13 +210,13 @@ export default function OrderManagement() {
             placeholder="ค้นหา เลขบิล, ชื่อ, เบอร์โทร..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-[#FFF5F7] rounded-lg border border-[#F6C7C7] outline-none focus:outline-none focus:ring-2 focus:ring-[#F12B6B] text-sm transition-colors duration-150"
+            className="w-full pl-10 pr-4 py-2.5 bg-brand-bg rounded-lg border border-brand-border outline-none focus:outline-none focus:ring-2 focus:ring-brand text-sm transition-colors duration-150"
           />
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
 
         {/* ⭐️ F3 — แท็บสลับมุมมอง (เม็ดยาในกรอบขาว + fade เลื่อน เหมือนแท็บหมวดหมู่หน้า POS/จอง) */}
-        <div className="relative bg-white border border-[#F6C7C7] rounded-xl p-2.5 mb-6 shadow-sm">
+        <div className="relative bg-white border border-brand-border rounded-xl p-2.5 mb-6 shadow-sm">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {[
               { key: 'pending' as const, label: 'รอดำเนินการ', count: activeOrders.length },
@@ -227,11 +227,11 @@ export default function OrderManagement() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${activeTab === tab.key ? 'bg-[#F12B6B] text-white' : 'bg-[#FFF5F7] text-[#F12B6B] hover:bg-[#F6C7C7]'}`}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${activeTab === tab.key ? 'bg-brand text-white' : 'bg-brand-bg text-brand hover:bg-brand-border'}`}
               >
                 {tab.label}
                 {tab.count > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.key ? 'bg-white/25 text-white' : 'bg-white text-[#FF467E]'}`}>{tab.count}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.key ? 'bg-white/25 text-white' : 'bg-white text-brand-dark'}`}>{tab.count}</span>
                 )}
               </button>
             ))}
@@ -246,7 +246,7 @@ export default function OrderManagement() {
         </h2>
 
         {activeOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-[#F6C7C7] text-center text-gray-400 mb-8 shadow-sm">
+          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
             <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
             <p>{searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ใหม่ในขณะนี้'}</p>
           </div>
@@ -255,7 +255,7 @@ export default function OrderManagement() {
             {activeOrders.map(order => (
               // ⭐️ FIX: ออกแบบการ์ดใหม่ให้อ่านง่ายขึ้น — แยกชื่อลูกค้าเป็นแถวมีไอคอน แทนบล็อกตัวหนา
               // ทับกันหมด, ดึงยอดรวมออกมาเป็นแถบไฮไลต์แยกให้เด่นสุดในสายตา (ไม่ใช่แค่บรรทัดสุดท้ายในกล่อง)
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-[#F6C7C7] hover:shadow-md transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-brand-border hover:shadow-md transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -266,7 +266,7 @@ export default function OrderManagement() {
 
                 <div className="space-y-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-[#FFF5F7] rounded-lg flex items-center justify-center shrink-0"><User size={14} className="text-[#F12B6B]" /></div>
+                    <div className="w-7 h-7 bg-brand-bg rounded-lg flex items-center justify-center shrink-0"><User size={14} className="text-brand" /></div>
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{order.customer_name}</p>
                       {order.assigned_name && <p className="text-[10px] text-blue-600 font-bold">👤 {order.assigned_name} รับงานนี้</p>}
@@ -282,13 +282,13 @@ export default function OrderManagement() {
 
                 {/* ⭐️ FIX: เดิมไม่มีเส้นขอบ พื้นชมพูอ่อนกลืนกับพื้นขาวของการ์ดจนดูไม่มีขอบเขต เพิ่ม
                     border ให้ทั้งกล่องยอดรวมและปุ่มดูรายละเอียดเห็นขอบชัดเจนขึ้น */}
-                <div className="flex justify-between items-center bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl px-3 py-2.5 mb-3">
+                <div className="flex justify-between items-center bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 mb-3">
                   <span className="text-xs text-gray-500 font-medium">ยอดรวม</span>
-                  <span className="text-lg font-bold text-[#F12B6B]">฿{Number(order.total_amount).toFixed(2)}</span>
+                  <span className="text-lg font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</span>
                 </div>
 
                 {/* ⭐️ ปุ่มกดที่จะเปลี่ยนคำพูดตามสถานะบิล */}
-                <button onClick={() => setSelectedOrder(order)} className="w-full bg-[#FFF5F7] border border-[#F6C7C7] text-[#FF467E] font-bold py-2.5 rounded-xl hover:bg-[#F6C7C7] transition-colors duration-150 flex items-center justify-center gap-2">
+                <button onClick={() => setSelectedOrder(order)} className="w-full bg-brand-bg border border-brand-border text-brand-dark font-bold py-2.5 rounded-xl hover:bg-brand-border transition-colors duration-150 flex items-center justify-center gap-2">
                   {getButtonActionText(order.status)}
                 </button>
               </div>
@@ -303,14 +303,14 @@ export default function OrderManagement() {
           <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span> ออเดอร์รอตรวจสลิป
         </h2>
         {pendingSlipOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-[#F6C7C7] text-center text-gray-400 mb-8 shadow-sm">
+          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
             <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
             <p>ไม่มีสลิปรอตรวจสอบในขณะนี้</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {pendingSlipOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-[#F6C7C7] hover:shadow-md transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-brand-border hover:shadow-md transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -320,13 +320,13 @@ export default function OrderManagement() {
                 </div>
 
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 bg-[#FFF5F7] rounded-lg flex items-center justify-center shrink-0"><User size={14} className="text-[#F12B6B]" /></div>
+                  <div className="w-7 h-7 bg-brand-bg rounded-lg flex items-center justify-center shrink-0"><User size={14} className="text-brand" /></div>
                   <p className="text-sm font-bold text-gray-800 truncate">{order.customer_name}</p>
                 </div>
 
-                <div className="flex justify-between items-center bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl px-3 py-2.5 mb-3">
+                <div className="flex justify-between items-center bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 mb-3">
                   <span className="text-xs text-gray-500 font-medium">ยอดรวม</span>
-                  <span className="text-lg font-bold text-[#F12B6B]">฿{Number(order.total_amount).toFixed(2)}</span>
+                  <span className="text-lg font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</span>
                 </div>
 
                 <button onClick={() => setSelectedOrder(order)} className="w-full bg-blue-50 border border-blue-200 text-blue-700 font-bold py-2.5 rounded-xl hover:bg-blue-100 transition-colors duration-150 flex items-center justify-center gap-2">
@@ -344,14 +344,14 @@ export default function OrderManagement() {
           <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span> ออเดอร์รอสลิปใหม่
         </h2>
         {rejectedSlipOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-[#F6C7C7] text-center text-gray-400 mb-8 shadow-sm">
+          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
             <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
             <p>ไม่มีสลิปที่ถูกปฏิเสธในขณะนี้</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {rejectedSlipOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-[#F6C7C7] hover:shadow-md transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-brand-border hover:shadow-md transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -361,13 +361,13 @@ export default function OrderManagement() {
                 </div>
 
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 bg-[#FFF5F7] rounded-lg flex items-center justify-center shrink-0"><User size={14} className="text-[#F12B6B]" /></div>
+                  <div className="w-7 h-7 bg-brand-bg rounded-lg flex items-center justify-center shrink-0"><User size={14} className="text-brand" /></div>
                   <p className="text-sm font-bold text-gray-800 truncate">{order.customer_name}</p>
                 </div>
 
-                <div className="flex justify-between items-center bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl px-3 py-2.5 mb-3">
+                <div className="flex justify-between items-center bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 mb-3">
                   <span className="text-xs text-gray-500 font-medium">ยอดรวม</span>
-                  <span className="text-lg font-bold text-[#F12B6B]">฿{Number(order.total_amount).toFixed(2)}</span>
+                  <span className="text-lg font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</span>
                 </div>
 
                 {order.reject_reason && (
@@ -393,12 +393,12 @@ export default function OrderManagement() {
             อ่านยาก เพิ่ม card list สำหรับ mobile (< sm) ตรงนี้ */}
         <div className="sm:hidden space-y-3 mb-8">
           {completedOrders.length === 0 ? (
-            <div className="bg-white p-8 rounded-2xl border border-[#F6C7C7] text-center text-gray-400 shadow-sm">
+            <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 shadow-sm">
               <CheckCircle size={40} className="mx-auto mb-3 opacity-30" />
               <p>{searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ที่เสร็จสมบูรณ์'}</p>
             </div>
           ) : completedOrders.map(order => (
-            <div key={`m-${order.id}`} className="bg-white border border-[#F6C7C7] rounded-xl p-4 shadow-sm">
+            <div key={`m-${order.id}`} className="bg-white border border-brand-border rounded-xl p-4 shadow-sm">
               <div className="flex justify-between items-start mb-2 gap-2">
                 <h3 className="font-bold text-gray-800">#{order.id}</h3>
                 {getStatusBadge(order.status)}
@@ -406,14 +406,14 @@ export default function OrderManagement() {
               <p className="text-sm text-gray-600 mb-1">{order.customer_name}</p>
               {order.slip_verification_status === 'VERIFIED' && <span className="text-[10px] font-bold text-green-600">✅ ตรวจสลิปแล้ว</span>}
               <div className="flex justify-between items-center mt-3">
-                <span className="font-bold text-[#F12B6B]">฿{Number(order.total_amount).toFixed(2)}</span>
-                <button onClick={() => setSelectedOrder(order)} className="text-[#F12B6B] hover:text-[#FF467E] font-bold text-sm bg-[#FFF5F7] px-3 py-1.5 rounded-lg">ดูบิล</button>
+                <span className="font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</span>
+                <button onClick={() => setSelectedOrder(order)} className="text-brand hover:text-brand-dark font-bold text-sm bg-brand-bg px-3 py-1.5 rounded-lg">ดูบิล</button>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="hidden sm:block bg-white rounded-2xl shadow-sm border border-[#F6C7C7] overflow-hidden">
+        <div className="hidden sm:block bg-white rounded-2xl shadow-sm border border-brand-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left whitespace-nowrap">
               <thead className="bg-gray-50 text-gray-600 text-sm">
@@ -427,16 +427,16 @@ export default function OrderManagement() {
               </thead>
               <tbody>
                 {completedOrders.map(order => (
-                  <tr key={order.id} className="border-b last:border-0 hover:bg-[#FFF5F7]">
+                  <tr key={order.id} className="border-b last:border-0 hover:bg-brand-bg">
                     <td className="p-4 font-bold">#{order.id}</td>
                     <td className="p-4 text-sm">{order.customer_name}</td>
-                    <td className="p-4 font-bold text-[#F12B6B]">฿{Number(order.total_amount).toFixed(2)}</td>
+                    <td className="p-4 font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</td>
                     <td className="p-4">
                       {getStatusBadge(order.status)}
                       {order.slip_verification_status === 'VERIFIED' && <span className="ml-1 text-[10px] font-bold text-green-600">✅ ตรวจสลิปแล้ว</span>}
                     </td>
                     <td className="p-4 text-center">
-                      <button onClick={() => setSelectedOrder(order)} className="text-[#F12B6B] hover:text-[#FF467E] font-bold text-sm bg-[#FFF5F7] px-3 py-1.5 rounded-lg">ดูบิล</button>
+                      <button onClick={() => setSelectedOrder(order)} className="text-brand hover:text-brand-dark font-bold text-sm bg-brand-bg px-3 py-1.5 rounded-lg">ดูบิล</button>
                     </td>
                   </tr>
                 ))}
@@ -453,9 +453,9 @@ export default function OrderManagement() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden">
             
-            <div className="p-4 border-b border-[#F6C7C7] flex justify-between items-center bg-[#FFF5F7] shrink-0">
+            <div className="p-4 border-b border-brand-border flex justify-between items-center bg-brand-bg shrink-0">
               <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2">รายละเอียดออเดอร์ #{selectedOrder.id}</h2>
-              <button onClick={() => {setSelectedOrder(null); setRejectReason(''); setVerifyNotes('');}} className="p-1 hover:bg-[#F6C7C7] text-gray-500 rounded-lg"><X size={20}/></button>
+              <button onClick={() => {setSelectedOrder(null); setRejectReason(''); setVerifyNotes('');}} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg"><X size={20}/></button>
             </div>
 
             <div className="p-4 md:p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-6">
@@ -469,7 +469,7 @@ export default function OrderManagement() {
                 <h3 className="font-bold text-gray-700 mb-3">รายการสินค้า</h3>
                 <div className="space-y-3 mb-4">
                   {selectedOrder.items.map((item: any) => (
-                    <div key={item.id} className="flex justify-between items-center border-b border-[#FFF5F7] pb-2">
+                    <div key={item.id} className="flex justify-between items-center border-b border-brand-bg pb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-10 h-10 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
                           {item.image_url ? <img src={item.image_url} className="w-full h-full object-cover"/> : <PackageSearch size={20} className="text-gray-400"/>}
@@ -479,14 +479,14 @@ export default function OrderManagement() {
                           <p className="text-xs text-gray-500">{item.quantity} x ฿{Number(item.price).toFixed(2)}</p>
                         </div>
                       </div>
-                      <p className="font-bold text-[#F12B6B] text-sm">฿{Number(item.subtotal).toFixed(2)}</p>
+                      <p className="font-bold text-brand text-sm">฿{Number(item.subtotal).toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
-                <div className="bg-[#FFF5F7] p-4 rounded-xl border border-[#F6C7C7]">
+                <div className="bg-brand-bg p-4 rounded-xl border border-brand-border">
                   <div className="flex justify-between font-bold text-lg">
                     <span>ยอดรวมทั้งสิ้น:</span>
-                    <span className="text-[#F12B6B]">฿{Number(selectedOrder.total_amount).toFixed(2)}</span>
+                    <span className="text-brand">฿{Number(selectedOrder.total_amount).toFixed(2)}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">วิธีชำระเงิน: {selectedOrder.payment_method === 'QR' ? 'โอนเงิน (แนบสลิป)' : 'เงินสดหน้าร้าน'}</p>
                 </div>
@@ -550,7 +550,7 @@ export default function OrderManagement() {
               const locked = selectedOrder.assigned_to && selectedOrder.assigned_to !== user.id && user.role !== 'ADMIN';
               if (locked) return <div className="p-4 border-t bg-red-50 text-red-600 text-sm text-center font-bold">🔒 ออเดอร์นี้อยู่ในการดูแลของ {selectedOrder.assigned_name}</div>;
               return (
-              <div className="p-4 border-t border-[#F6C7C7] bg-gray-50 shrink-0 space-y-2">
+              <div className="p-4 border-t border-brand-border bg-gray-50 shrink-0 space-y-2">
 
                 {/* QR: ตรวจสลิป */}
                 {selectedOrder.status === 'PENDING_VERIFY' && (
@@ -601,7 +601,7 @@ export default function OrderManagement() {
 
                 {/* ลูกค้ามารับ */}
                 {selectedOrder.status === 'READY' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'COMPLETED')} disabled={loading} className="w-full bg-[#F12B6B] text-white font-bold py-3 rounded-xl hover:bg-[#FF467E] flex items-center justify-center gap-2 transition">
+                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'COMPLETED')} disabled={loading} className="w-full bg-brand text-white font-bold py-3 rounded-xl hover:bg-brand-dark flex items-center justify-center gap-2 transition">
                     <CheckCircle size={20}/> {selectedOrder.payment_method === 'CASH' ? 'รับเงิน ทอนแล้ว → ปิดบิล' : 'ลูกค้ารับของแล้ว → ปิดบิล'}
                   </button>
                 )}

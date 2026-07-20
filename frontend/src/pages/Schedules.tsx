@@ -54,7 +54,7 @@ export default function Schedules() {
   schedules.forEach(s => { const d = s.work_date?.slice(0, 10); if (!schedulesByDate[d]) schedulesByDate[d] = []; schedulesByDate[d].push(s); });
   const cells = [...Array(firstDayOfWeek).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
   const todayStr = today.toISOString().slice(0, 10);
-  const COLORS = ['bg-[#FFF5F7] text-[#F12B6B]','bg-blue-100 text-blue-700','bg-emerald-100 text-emerald-700','bg-purple-100 text-purple-700','bg-orange-100 text-orange-700'];
+  const COLORS = ['bg-brand-bg text-brand','bg-blue-100 text-blue-700','bg-emerald-100 text-emerald-700','bg-purple-100 text-purple-700','bg-orange-100 text-orange-700'];
   const staffName = (id: number) => staff.find(s => s.id === id)?.full_name?.split(' ')[0] || `#${id}`;
   const staffColor = (id: number) => COLORS[staff.findIndex(s => s.id === id) % COLORS.length] || COLORS[0];
 
@@ -104,7 +104,7 @@ export default function Schedules() {
     catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
-  const inputCls = "px-3 py-2 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150";
+  const inputCls = "px-3 py-2 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150";
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
@@ -113,8 +113,8 @@ export default function Schedules() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl flex items-center justify-center shrink-0">
-              <CalendarClock size={18} className="text-[#F12B6B]" />
+            <div className="w-9 h-9 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center shrink-0">
+              <CalendarClock size={18} className="text-brand" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">ตารางเวลาทำงาน</h1>
@@ -145,16 +145,16 @@ export default function Schedules() {
         )}
 
         {/* Calendar */}
-        <div className="bg-white border border-[#F6C7C7] rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#F6C7C7]">
-            <button onClick={prevMonth} className="p-2 hover:bg-[#FFF5F7] rounded-lg transition-colors duration-150 text-gray-500 hover:text-[#F12B6B]"><ChevronLeft size={18} /></button>
+        <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border">
+            <button onClick={prevMonth} className="p-2 hover:bg-brand-bg rounded-lg transition-colors duration-150 text-gray-500 hover:text-brand"><ChevronLeft size={18} /></button>
             <span className="text-sm font-bold text-gray-900">{MONTHS_TH[viewDate.getMonth()]} {viewDate.getFullYear() + 543}</span>
-            <button onClick={nextMonth} className="p-2 hover:bg-[#FFF5F7] rounded-lg transition-colors duration-150 text-gray-500 hover:text-[#F12B6B]"><ChevronRight size={18} /></button>
+            <button onClick={nextMonth} className="p-2 hover:bg-brand-bg rounded-lg transition-colors duration-150 text-gray-500 hover:text-brand"><ChevronRight size={18} /></button>
           </div>
-          <div className="grid grid-cols-7 bg-[#FFF5F7]">
+          <div className="grid grid-cols-7 bg-brand-bg">
             {WEEKDAYS.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold text-gray-500">{d}</div>)}
           </div>
-          <div className="grid grid-cols-7 gap-px bg-[#F6C7C7]">
+          <div className="grid grid-cols-7 gap-px bg-brand-border">
             {cells.map((day, i) => {
               if (!day) return <div key={`empty-${i}`} className="bg-white min-h-[72px]" />;
               const dateStr = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -163,8 +163,8 @@ export default function Schedules() {
               const dayScheds = schedulesByDate[dateStr] || [];
               return (
                 <div key={`day-${i}`} data-day-cell onClick={e => !isHoliday && openPopover(day, e)}
-                  className={`min-h-[72px] p-1.5 flex flex-col transition-colors duration-150 ${isHoliday ? 'bg-orange-50 cursor-default' : isAdmin ? 'bg-white hover:bg-[#FFF5F7] cursor-pointer' : 'bg-white cursor-default'}`}>
-                  <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-[#F12B6B] text-white' : isHoliday ? 'text-orange-500' : 'text-gray-700'}`}>{day}</span>
+                  className={`min-h-[72px] p-1.5 flex flex-col transition-colors duration-150 ${isHoliday ? 'bg-orange-50 cursor-default' : isAdmin ? 'bg-white hover:bg-brand-bg cursor-pointer' : 'bg-white cursor-default'}`}>
+                  <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-brand text-white' : isHoliday ? 'text-orange-500' : 'text-gray-700'}`}>{day}</span>
                   {isHoliday && <span className="text-[9px] text-orange-500 font-medium leading-tight">หยุด</span>}
                   <div className="space-y-0.5 overflow-hidden">
                     {dayScheds.slice(0, 3).map((s: any, idx: number) => (
@@ -192,14 +192,14 @@ export default function Schedules() {
 
       {/* Popover */}
       {popover && (
-        <div ref={popRef} className="fixed z-[100] bg-white border border-[#F6C7C7] rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-top-2 duration-150"
+        <div ref={popRef} className="fixed z-[100] bg-white border border-brand-border rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-top-2 duration-150"
           style={{ left: Math.min(popover.x, window.innerWidth - 280), top: popover.y + 8 }}>
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-semibold text-gray-900">
               {editingScheduleId ? 'แก้ไขกะ — ' : ''}
               {new Date(popover.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}
             </h3>
-            <button onClick={() => { setPopover(null); setEditingScheduleId(null); }} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-[#FFF5F7] rounded-lg transition-colors duration-150"><X size={14} /></button>
+            <button onClick={() => { setPopover(null); setEditingScheduleId(null); }} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-brand-bg rounded-lg transition-colors duration-150"><X size={14} /></button>
           </div>
           <select value={popForm.cashier_id} onChange={e => setPopForm({ ...popForm, cashier_id: e.target.value })} className={`${inputCls} w-full mb-2`}>
             <option value="">เลือกพนักงาน</option>
@@ -212,7 +212,7 @@ export default function Schedules() {
             <input type="time" value={popForm.expected_end} onChange={e => setPopForm({ ...popForm, expected_end: e.target.value })} className={`${inputCls} flex-1`} />
           </div>
           {(schedulesByDate[popover.date] || []).map((s: any) => (
-            <div key={s.id} className={`flex justify-between items-center px-2 py-1 rounded-lg mb-1 text-xs font-medium ${staffColor(s.cashier_id)} ${editingScheduleId === s.id ? 'ring-2 ring-[#F12B6B]' : ''}`}>
+            <div key={s.id} className={`flex justify-between items-center px-2 py-1 rounded-lg mb-1 text-xs font-medium ${staffColor(s.cashier_id)} ${editingScheduleId === s.id ? 'ring-2 ring-brand' : ''}`}>
               <button type="button" onClick={(e) => openEditSchedule(s, e)} className="flex-1 text-left truncate">
                 {staffName(s.cashier_id)} {s.expected_start?.slice(0,5)}–{s.expected_end?.slice(0,5)}
               </button>
@@ -221,7 +221,7 @@ export default function Schedules() {
               </button>
             </div>
           ))}
-          <button onClick={handleSave} disabled={saving} className="w-full mt-1 py-2 bg-[#F12B6B] hover:bg-[#FF467E] text-white text-sm font-semibold rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
+          <button onClick={handleSave} disabled={saving} className="w-full mt-1 py-2 bg-brand hover:bg-brand-dark text-white text-sm font-semibold rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
             {saving ? 'กำลังบันทึก...' : editingScheduleId ? 'บันทึกการแก้ไข' : '+ เพิ่มกะ'}
           </button>
         </div>

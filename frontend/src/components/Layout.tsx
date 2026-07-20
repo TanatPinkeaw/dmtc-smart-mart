@@ -9,6 +9,7 @@ import {
   ClipboardCheck, CalendarDays, CalendarClock, Store, BarChart3, Menu
 } from 'lucide-react';
 import Swal from '../swal';
+import { BRAND } from '../theme';
 import api from '../api';
 import { SocketProvider, useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -16,10 +17,10 @@ import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { ChangePasswordModal } from './ChangePasswordModal';
 
 // ─── Token shortcuts ─────────────────────────────────────────────────────────
-const NAV_ACTIVE  = 'bg-[#FFF5F7] text-[#F12B6B] border-l-4 border-[#F12B6B]';
-const NAV_DEFAULT = 'text-gray-400 hover:bg-[#FFF5F7] hover:text-[#F12B6B] border-l-4 border-transparent';
-const MOB_ACTIVE  = 'text-[#F12B6B]';
-const MOB_DEFAULT = 'text-gray-400 hover:text-[#F12B6B]';
+const NAV_ACTIVE  = 'bg-brand-bg text-brand border-l-4 border-brand';
+const NAV_DEFAULT = 'text-gray-400 hover:bg-brand-bg hover:text-brand border-l-4 border-transparent';
+const MOB_ACTIVE  = 'text-brand';
+const MOB_DEFAULT = 'text-gray-400 hover:text-brand';
 
 const desktopLink = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 w-full ${isActive ? NAV_ACTIVE : NAV_DEFAULT}`;
@@ -126,7 +127,7 @@ function LayoutInner() {
   };
 
   const handleLogoutClick = () => {
-    Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: '#F12B6B', cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
+    Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
       .then(async (r) => {
         if (r.isConfirmed) {
           try {
@@ -159,10 +160,10 @@ function LayoutInner() {
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
 
       {/* ── Desktop Sidebar ─────────────────────────────────────────────────── */}
-      <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-[#F6C7C7] flex-col shrink-0 z-40">
+      <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border flex-col shrink-0 z-40">
 
         {/* Brand — ⭐️ FIX: ใช้โลโก้จริงของร้านแทนกล่องไอคอน ShoppingBag เดิม */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-[#F6C7C7]">
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-brand-border">
           <img src="/logo-192.png" alt="DMTC Mart" className="w-9 h-9 rounded-xl shrink-0 object-contain" />
           <div>
             <p className="text-sm font-bold text-gray-900">DMTC Mart</p>
@@ -202,9 +203,9 @@ function LayoutInner() {
         </nav>
 
         {/* User footer */}
-        <div className="border-t border-[#F6C7C7] p-3 space-y-1">
-          <button onClick={() => setShowProfileModal(true)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
-            <div className="w-7 h-7 bg-[#F12B6B] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">{initials}</div>
+        <div className="border-t border-brand-border p-3 space-y-1">
+          <button onClick={() => setShowProfileModal(true)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
+            <div className="w-7 h-7 bg-brand rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">{initials}</div>
             <div className="flex-1 text-left min-w-0">
               <p className="text-xs font-semibold text-gray-800 truncate">{user.full_name}</p>
               <p className="text-[10px] text-gray-400">{user.role}</p>
@@ -224,7 +225,7 @@ function LayoutInner() {
       </main>
 
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#F6C7C7] flex h-14 z-50 shadow-[0_-2px_8px_rgba(241,43,107,0.06)]">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-brand-border flex h-14 z-50 shadow-[0_-2px_8px_rgba(241,43,107,0.06)]">
         <MobNavItem to="/notifications" icon={<Bell size={20} />} label="แจ้งเตือน" badge={unreadCount} onClick={handleOpenNotifications} />
 
         {/* ⭐️ FIX: "จอง" เป็นหน้าของสมาชิก/ลูกค้า — พนักงานตอนทำงานไม่ควรเห็น (ให้ตรงกับ sidebar เดสก์ท็อป)
@@ -239,14 +240,14 @@ function LayoutInner() {
             <MobNavItem to="/orders" icon={<ClipboardList size={20} />} label="ออเดอร์" badge={pendingOrders} />
             {/* ⭐️ FIX: เดิมมีแค่ปุ่ม "ตั้งค่า" โผล่เฉพาะ ADMIN ส่วนหน้าอื่น (Dashboard, Schedules, Summary,
                 Inventory, AttendanceManagement) ไม่มีทางเข้าจากมือถือเลย — รวมเป็นปุ่ม "เมนู" เดียวแทน */}
-            <button onClick={() => setShowMobileMenu(true)} className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-gray-400 hover:text-[#F12B6B] transition-colors duration-150">
+            <button onClick={() => setShowMobileMenu(true)} className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-gray-400 hover:text-brand transition-colors duration-150">
               <Menu size={20} />
               <span className="text-[10px] font-medium">เมนู</span>
             </button>
           </>
         )}
 
-        <button onClick={() => setShowProfileModal(true)} className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors duration-150 text-gray-400 hover:text-[#F12B6B]`}>
+        <button onClick={() => setShowProfileModal(true)} className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors duration-150 text-gray-400 hover:text-brand`}>
           <User size={20} />
           <span className="text-[10px] font-medium">โปรไฟล์</span>
         </button>
@@ -264,29 +265,29 @@ function LayoutInner() {
         <div className="md:hidden fixed inset-0 z-[90] flex items-end justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)} />
           <div className="relative bg-white rounded-t-2xl shadow-xl w-full max-h-[75dvh] overflow-hidden flex flex-col animate-fade-in">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F6C7C7] bg-[#FFF5F7] shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg shrink-0">
               <h3 className="font-semibold text-gray-900">เมนูเพิ่มเติม</h3>
               <button onClick={() => setShowMobileMenu(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
             </div>
             <div className="p-3 space-y-1 overflow-y-auto">
-              <NavLink to="/dashboard" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+              <NavLink to="/dashboard" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
                 <LayoutDashboard size={18} /> สรุปยอดขาย
               </NavLink>
-              <NavLink to="/schedules" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+              <NavLink to="/schedules" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
                 <CalendarClock size={18} /> ตารางกะ
               </NavLink>
               {user.role === 'ADMIN' && (
                 <>
-                  <NavLink to="/summary" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                  <NavLink to="/summary" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
                     <BarChart3 size={18} /> สรุปข้อมูล
                   </NavLink>
-                  <NavLink to="/inventory" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                  <NavLink to="/inventory" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
                     <Boxes size={18} /> คลังสินค้า
                   </NavLink>
-                  <NavLink to="/attendance-management" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                  <NavLink to="/attendance-management" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
                     <ClipboardCheck size={18} /> เข้า-ออกงาน
                   </NavLink>
-                  <NavLink to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-[#FFF5F7] hover:text-[#F12B6B] transition-colors duration-150">
+                  <NavLink to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
                     <Settings size={18} /> ตั้งค่า
                   </NavLink>
                 </>
@@ -301,9 +302,9 @@ function LayoutInner() {
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowProfileModal(false)} />
           <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F6C7C7] bg-[#FFF5F7]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
               <div className="flex items-center gap-2">
-                <User size={18} className="text-[#F12B6B]" />
+                <User size={18} className="text-brand" />
                 <h3 className="font-semibold text-gray-900">บัญชีของฉัน</h3>
               </div>
               <button onClick={() => setShowProfileModal(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
@@ -312,25 +313,25 @@ function LayoutInner() {
             <form onSubmit={handleUpdateProfile} className="p-5 space-y-4 max-h-[80dvh] overflow-y-auto">
               {/* Avatar */}
               <div className="flex flex-col items-center pt-1 pb-3">
-                <div className="w-14 h-14 bg-[#F12B6B] rounded-full flex items-center justify-center text-white text-xl font-bold mb-2">{initials}</div>
+                <div className="w-14 h-14 bg-brand rounded-full flex items-center justify-center text-white text-xl font-bold mb-2">{initials}</div>
                 <p className="font-semibold text-gray-900 text-sm">{user.full_name}</p>
                 <p className="text-xs text-gray-400">{user.student_id || user.username}</p>
-                <span className="mt-1.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FFF5F7] text-[#F12B6B] border border-[#FD94B4]">{user.role}</span>
+                <span className="mt-1.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-bg text-brand border border-brand-mid">{user.role}</span>
               </div>
 
               {/* Phone */}
               <div className="space-y-1">
                 <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500"><Phone size={13} /> เบอร์โทรศัพท์</label>
-                <input type="tel" value={profileForm.phone_number} onChange={e => setProfileForm({ ...profileForm, phone_number: e.target.value })} placeholder="08X-XXX-XXXX" className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150" />
+                <input type="tel" value={profileForm.phone_number} onChange={e => setProfileForm({ ...profileForm, phone_number: e.target.value })} placeholder="08X-XXX-XXXX" className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
                 <p className="text-[11px] text-amber-600">⚠️ รหัสผ่านเริ่มต้นคือเบอร์โทรตอนสมัคร ถ้าเปลี่ยนเบอร์ควรเปลี่ยนรหัสผ่านด้วย</p>
               </div>
 
               {/* Change Password Button */}
-              <div className="pt-3 border-t border-[#F6C7C7]">
+              <div className="pt-3 border-t border-brand-border">
                 <button
                   type="button"
                   onClick={() => { setShowProfileModal(false); setShowChangePasswordModal(true); }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
                 >
                   <KeyRound size={16} /> เปลี่ยนรหัสผ่าน
                 </button>
@@ -339,7 +340,7 @@ function LayoutInner() {
               {/* ⭐️ SECURITY FIX (#4) — ลบช่องเปลี่ยนรหัสซ้ำที่ตั้งรหัสใหม่ได้โดยไม่ยืนยันรหัสเดิม
                   เหลือทางเดียวคือปุ่ม "เปลี่ยนรหัสผ่าน" ด้านบน (โมดัลที่บังคับกรอกรหัสเดิม) */}
 
-              <button type="submit" disabled={profileLoading} className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
+              <button type="submit" disabled={profileLoading} className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
                 {profileLoading ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
               </button>
             </form>

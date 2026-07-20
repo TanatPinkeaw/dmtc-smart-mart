@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, TrendingUp, Receipt, Banknote, CreditCard, LogOut, Package, ArrowLeft, AlertTriangle, XCircle, Users, Clock, PiggyBank, PackageX, Store, ShoppingBag, Camera, X, ChevronDown } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
+import { BRAND } from '../theme';
 import { useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
@@ -118,7 +119,7 @@ export default function Dashboard() {
       showCancelButton: true,
       confirmButtonText: 'อนุมัติ',
       cancelButtonText: 'ยกเลิก',
-      confirmButtonColor: '#F12B6B',
+      confirmButtonColor: BRAND,
       inputValidator: (value) => {
         if (!value || value.trim().length < 5) return 'กรุณากรอกหมายเหตุอย่างน้อย 5 ตัวอักษร';
         return undefined;
@@ -152,7 +153,7 @@ export default function Dashboard() {
           icon: 'warning',
           title: 'ส่วนต่างเงินสดเกิน 100 บาท',
           text: `${response.data.message || 'กะนี้ต้องรอ ADMIN อนุมัติก่อนถึงจะปิดกะสำเร็จ'} กรุณาออกจากระบบ`,
-          confirmButtonColor: '#F12B6B',
+          confirmButtonColor: BRAND,
           confirmButtonText: 'ออกจากระบบ',
           allowOutsideClick: false,
         });
@@ -168,7 +169,7 @@ export default function Dashboard() {
   const handleAdminCheckOut = () => { checkOutFileRef.current?.click(); };
   const handleCheckOutPhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
-    const confirm = await Swal.fire({ title: 'ลงชื่อออกงาน?', icon: 'question', showCancelButton: true, confirmButtonColor: '#F12B6B', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลงชื่อออกงาน', cancelButtonText: 'ยกเลิก' });
+    const confirm = await Swal.fire({ title: 'ลงชื่อออกงาน?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ลงชื่อออกงาน', cancelButtonText: 'ยกเลิก' });
     if (!confirm.isConfirmed) return;
     setCheckOutLoading(true);
     try {
@@ -184,24 +185,24 @@ export default function Dashboard() {
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center space-y-3">
-        <div className="w-10 h-10 border-2 border-[#F12B6B] border-t-transparent rounded-full animate-spin mx-auto" />
+        <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-sm text-gray-400">กำลังโหลดข้อมูล...</p>
       </div>
     </div>
   );
 
   // ── shared card class ────────────────────────────────────────────────────
-  const card = "bg-white border border-[#F6C7C7] rounded-2xl shadow-sm";
-  const inputCls = "w-full px-3 py-2 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150";
+  const card = "bg-white border border-brand-border rounded-2xl shadow-sm";
+  const inputCls = "w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150";
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6 pb-24">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-[#F6C7C7] rounded-2xl shadow-sm p-4 mb-5 gap-3">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-brand-border rounded-2xl shadow-sm p-4 mb-5 gap-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl flex items-center justify-center">
-            <LayoutDashboard size={16} className="text-[#F12B6B]" />
+          <div className="w-8 h-8 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center">
+            <LayoutDashboard size={16} className="text-brand" />
           </div>
           <h1 className="text-lg font-bold text-gray-900">สรุปยอดขายประจำวัน</h1>
           {/* ⭐️ F10 — Health check status dot: เขียว=ปกติ, แดง=เซิร์ฟเวอร์/DB มีปัญหา, เทา=ยังไม่เช็ค */}
@@ -213,7 +214,7 @@ export default function Dashboard() {
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-gray-500 hover:text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150">
+          <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-gray-500 hover:text-brand bg-brand-bg border border-brand-border px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150">
             <ArrowLeft size={14} /> กลับไปหน้า POS
           </button>
           <span className="text-xs text-gray-500 font-medium hidden sm:block">{user.full_name}</span>
@@ -243,7 +244,7 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
         <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Total sales */}
-          <div className="bg-[#F12B6B] rounded-2xl p-5 text-white shadow-sm">
+          <div className="bg-brand rounded-2xl p-5 text-white shadow-sm">
             <div className="flex justify-between items-start mb-3">
               <p className="text-pink-100 text-xs font-medium">ยอดขายรวมวันนี้</p>
               <div className="bg-white/20 p-2 rounded-xl"><TrendingUp size={18} className="text-white" /></div>
@@ -293,15 +294,15 @@ export default function Dashboard() {
           <div className="flex-1 overflow-y-auto space-y-2 min-h-[240px]">
             {topProducts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ยังไม่มีข้อมูลวันนี้</p> :
               topProducts.map((p, i) => (
-                <div key={p.product_id} className="flex items-center justify-between px-2 py-2 hover:bg-[#FFF5F7] rounded-xl transition-colors duration-150">
+                <div key={p.product_id} className="flex items-center justify-between px-2 py-2 hover:bg-brand-bg rounded-xl transition-colors duration-150">
                   <div className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-100 text-orange-600' : 'bg-[#FFF5F7] text-[#F12B6B]'}`}>{i + 1}</span>
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-100 text-orange-600' : 'bg-brand-bg text-brand'}`}>{i + 1}</span>
                     <div>
                       <p className="text-xs font-semibold text-gray-900 line-clamp-1">{p.name}</p>
                       <p className="text-[10px] text-gray-400">ขาย {p.total_quantity} ชิ้น</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-[#F12B6B] shrink-0">฿{Number(p.total_revenue).toLocaleString()}</span>
+                  <span className="text-xs font-bold text-brand shrink-0">฿{Number(p.total_revenue).toLocaleString()}</span>
                 </div>
               ))}
           </div>
@@ -339,7 +340,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className={`${card} p-4`}>
-                <div className="flex items-center gap-2 mb-3"><ShoppingBag size={16} className="text-[#F12B6B]" /><h3 className="text-xs font-semibold text-gray-700">ช่องทางขายวันนี้</h3></div>
+                <div className="flex items-center gap-2 mb-3"><ShoppingBag size={16} className="text-brand" /><h3 className="text-xs font-semibold text-gray-700">ช่องทางขายวันนี้</h3></div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm"><span className="text-gray-500 flex items-center gap-1"><Store size={12}/> หน้าร้าน</span><span className="font-bold text-gray-900">฿{Number(channel?.walkin_sales || 0).toLocaleString()}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-500 flex items-center gap-1"><Package size={12}/> Pre-order</span><span className="font-bold text-gray-900">฿{Number(channel?.preorder_sales || 0).toLocaleString()}</span></div>
@@ -363,8 +364,8 @@ export default function Dashboard() {
                     <div className="flex items-end gap-1 h-32">
                       {hourly.map(h => (
                         <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group">
-                          <div className="w-full bg-[#FD94B4] hover:bg-[#F12B6B] rounded-t transition-all duration-150 relative" style={{ height: `${(Number(h.total) / max) * 100}%` }}>
-                            <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] text-gray-500 opacity-0 group-hover:opacity-100 whitespace-nowrap bg-white border border-[#F6C7C7] px-1 rounded">฿{Number(h.total).toLocaleString()}</span>
+                          <div className="w-full bg-brand-mid hover:bg-brand rounded-t transition-all duration-150 relative" style={{ height: `${(Number(h.total) / max) * 100}%` }}>
+                            <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] text-gray-500 opacity-0 group-hover:opacity-100 whitespace-nowrap bg-white border border-brand-border px-1 rounded">฿{Number(h.total).toLocaleString()}</span>
                           </div>
                           <span className="text-[8px] text-gray-400 mt-1">{h.hour}</span>
                         </div>
@@ -377,20 +378,20 @@ export default function Dashboard() {
           </Section>
 
           {/* Details section */}
-          <Section title="รายละเอียดพนักงาน สินค้า และบุคคล" icon={<Users size={16} className="text-[#F12B6B]" />} open={openDetails} onToggle={() => setOpenDetails(!openDetails)}>
+          <Section title="รายละเอียดพนักงาน สินค้า และบุคคล" icon={<Users size={16} className="text-brand" />} open={openDetails} onToggle={() => setOpenDetails(!openDetails)}>
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Cashier */}
               <div className={`${card} p-4`}>
-                <div className="flex items-center gap-2 mb-3"><Users size={16} className="text-[#F12B6B]" /><h3 className="text-xs font-semibold text-gray-700">ยอดขายต่อพนักงานต่อกะ (วันนี้)</h3></div>
+                <div className="flex items-center gap-2 mb-3"><Users size={16} className="text-brand" /><h3 className="text-xs font-semibold text-gray-700">ยอดขายต่อพนักงานต่อกะ (วันนี้)</h3></div>
                 <div className="space-y-2">
                   {byCashier.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ยังไม่มีข้อมูล</p> :
                     byCashier.map(c => (
-                      <div key={c.shift_id} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl transition-colors duration-150">
+                      <div key={c.shift_id} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl transition-colors duration-150">
                         <div>
                           <p className="text-xs font-semibold text-gray-900">{c.cashier_name}</p>
                           <p className="text-[10px] text-gray-400">{c.bill_count} บิล • {formatBangkokTime(c.opened_at).slice(-5)}{c.shift_status === 'OPEN' ? ' (ยังไม่ปิดกะ)' : ''}</p>
                         </div>
-                        <span className="text-xs font-bold text-[#F12B6B]">฿{Number(c.total_sales).toLocaleString()}</span>
+                        <span className="text-xs font-bold text-brand">฿{Number(c.total_sales).toLocaleString()}</span>
                       </div>
                     ))}
                 </div>
@@ -402,12 +403,12 @@ export default function Dashboard() {
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {vendorSummary.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ยังไม่มีข้อมูล</p> :
                     vendorSummary.map(v => (
-                      <div key={v.vendor_id} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl transition-colors duration-150">
+                      <div key={v.vendor_id} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl transition-colors duration-150">
                         <div>
                           <p className="text-xs font-semibold text-gray-900">{v.vendor_name}</p>
                           <p className="text-[10px] text-gray-400">ขาย {v.total_items_sold} ชิ้น • GP ฿{Number(v.coop_gp_earnings).toLocaleString()}</p>
                         </div>
-                        <span className="text-xs font-bold text-[#F12B6B]">฿{Number(v.vendor_earnings).toLocaleString()}</span>
+                        <span className="text-xs font-bold text-brand">฿{Number(v.vendor_earnings).toLocaleString()}</span>
                       </div>
                     ))}
                 </div>
@@ -419,7 +420,7 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   {pendingOrders.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ไม่มีออเดอร์ค้าง</p> :
                     pendingOrders.map(o => (
-                      <div key={o.status} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl text-xs transition-colors duration-150">
+                      <div key={o.status} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl text-xs transition-colors duration-150">
                         <span className="font-medium text-gray-700">{orderStatusLabel(o.status)}</span>
                         <span className="text-gray-500">{o.count} บิล • ฿{Number(o.total).toLocaleString()}</span>
                       </div>
@@ -433,7 +434,7 @@ export default function Dashboard() {
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {deadStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ไม่มีสินค้าค้างสต๊อก</p> :
                     deadStock.map(p => (
-                      <div key={p.id} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl text-xs transition-colors duration-150">
+                      <div key={p.id} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl text-xs transition-colors duration-150">
                         <span className="font-medium text-gray-700 truncate">{p.name}</span>
                         <span className="text-gray-400 shrink-0 ml-2">เหลือ {p.stock}</span>
                       </div>
@@ -458,7 +459,7 @@ export default function Dashboard() {
                   return (
                     <div className="space-y-2">
                       {list.map(s => (
-                        <div key={s.name} className="flex justify-between items-center px-2 py-2 hover:bg-[#FFF5F7] rounded-xl text-xs transition-colors duration-150">
+                        <div key={s.name} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl text-xs transition-colors duration-150">
                           <span className="font-semibold text-gray-800">{s.name}</span>
                           <span className={`font-medium ${s.lateCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>มาสาย {s.lateCount}/{s.totalDays} วัน {s.lateMinutes > 0 && `(รวม ${s.lateMinutes} น.)`}</span>
                         </div>
@@ -478,7 +479,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-xl w-full md:max-w-md overflow-hidden">
             {!shiftSummary ? (
               <>
-                <div className="flex items-center justify-between px-5 py-4 border-b border-[#F6C7C7] bg-[#FFF5F7]">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
                   <h3 className="text-sm font-semibold text-gray-900">ปิดกะการขาย</h3>
                   <button onClick={() => setShowCloseModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
                 </div>
@@ -492,15 +493,15 @@ export default function Dashboard() {
                     {/* Denom grid */}
                     <div className="grid grid-cols-2 gap-2">
                       {DENOMINATIONS.map(d => (
-                        <div key={d} className="flex items-center gap-2 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl px-3 py-2">
+                        <div key={d} className="flex items-center gap-2 bg-brand-bg border border-brand-border rounded-xl px-3 py-2">
                           <span className="text-xs font-semibold text-gray-600 w-10 shrink-0">฿{d}</span>
                           <input type="number" min="0" value={denomCounts[d] ?? ''} onChange={e => setDenomCounts({ ...denomCounts, [d]: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="0" className="w-full text-center bg-transparent text-sm outline-none" />
                         </div>
                       ))}
                     </div>
-                    <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-3 text-center">
+                    <div className="bg-brand-bg border border-brand-border rounded-xl p-3 text-center">
                       <p className="text-[10px] text-gray-400 mb-1">เงินสดที่นับได้จริง</p>
-                      <p className="text-2xl font-bold text-[#F12B6B]">฿{actualCash.toLocaleString()}</p>
+                      <p className="text-2xl font-bold text-brand">฿{actualCash.toLocaleString()}</p>
                     </div>
                     {/* ⭐️ Sprint 1 — D3: หมวดหมู่สาเหตุส่วนต่าง (optional, คู่กับ note freeform ด้านล่าง ไม่แทนที่กัน) */}
                     <div>
@@ -524,8 +525,8 @@ export default function Dashboard() {
                       <label className="block cursor-pointer">
                         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setClosePhoto(f); setClosePhotoPreview(URL.createObjectURL(f)); } }} />
                         {closePhotoPreview
-                          ? <img src={closePhotoPreview} alt="preview" className="w-full h-28 object-cover rounded-xl border border-[#F6C7C7]" />
-                          : <div className="w-full h-28 rounded-xl border-2 border-dashed border-[#F6C7C7] flex flex-col items-center justify-center gap-2 text-[#FD94B4] hover:bg-[#FFF5F7] transition-colors duration-150"><Camera size={24} /><span className="text-xs font-medium">แตะเพื่อถ่ายรูป</span></div>
+                          ? <img src={closePhotoPreview} alt="preview" className="w-full h-28 object-cover rounded-xl border border-brand-border" />
+                          : <div className="w-full h-28 rounded-xl border-2 border-dashed border-brand-border flex flex-col items-center justify-center gap-2 text-brand-mid hover:bg-brand-bg transition-colors duration-150"><Camera size={24} /><span className="text-xs font-medium">แตะเพื่อถ่ายรูป</span></div>
                         }
                       </label>
                     </div>
@@ -539,21 +540,21 @@ export default function Dashboard() {
               <div className="p-6 text-center">
                 <h3 className="text-lg font-bold text-gray-900 mb-1">สรุปยอดการขาย</h3>
                 <p className="text-xs text-gray-400 mb-4">ปิดกะสำเร็จ บันทึกเรียบร้อยแล้ว</p>
-                <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-4 text-left space-y-2 mb-5 text-sm">
+                <div className="bg-brand-bg border border-brand-border rounded-xl p-4 text-left space-y-2 mb-5 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">จำนวนบิล</span><span className="font-semibold">{Number(shiftSummary.bill_count || 0)} บิล</span></div>
-                  <div className="flex justify-between font-bold border-t border-[#F6C7C7] pt-2"><span className="text-gray-800">ยอดรวมทั้งหมด</span><span className="text-[#F12B6B]">฿{Number(shiftSummary.total_sales || 0).toFixed(2)}</span></div>
+                  <div className="flex justify-between font-bold border-t border-brand-border pt-2"><span className="text-gray-800">ยอดรวมทั้งหมด</span><span className="text-brand">฿{Number(shiftSummary.total_sales || 0).toFixed(2)}</span></div>
                   <div className="flex justify-between text-xs pl-2"><span className="text-gray-400">• เงินสด</span><span>฿{Number(shiftSummary.cash_sales || 0).toFixed(2)}</span></div>
                   <div className="flex justify-between text-xs pl-2"><span className="text-gray-400">• โอน/QR</span><span>฿{Number(shiftSummary.qr_sales || 0).toFixed(2)}</span></div>
-                  <div className="flex justify-between border-t border-[#F6C7C7] pt-2"><span className="font-bold text-gray-800">เงินสดที่ควรมี</span><span className="font-bold text-[#F12B6B]">฿{Number(shiftSummary.expected_cash).toFixed(2)}</span></div>
+                  <div className="flex justify-between border-t border-brand-border pt-2"><span className="font-bold text-gray-800">เงินสดที่ควรมี</span><span className="font-bold text-brand">฿{Number(shiftSummary.expected_cash).toFixed(2)}</span></div>
                   <div className="flex justify-between"><span className="font-bold text-gray-800">นับได้จริง</span><span className="font-bold">฿{Number(shiftSummary.actual_cash).toFixed(2)}</span></div>
-                  <div className="flex justify-between border-t border-[#F6C7C7] pt-2">
+                  <div className="flex justify-between border-t border-brand-border pt-2">
                     <span className="font-bold text-gray-800">ส่วนต่าง</span>
                     <span className={`font-bold ${Number(shiftSummary.difference) < 0 ? 'text-red-500' : Number(shiftSummary.difference) > 0 ? 'text-emerald-500' : 'text-gray-500'}`}>
                       {Number(shiftSummary.difference) > 0 ? '+' : ''}{Number(shiftSummary.difference).toFixed(2)} {Number(shiftSummary.difference) === 0 && '✅'}
                     </span>
                   </div>
                 </div>
-                <button onClick={handleLogout} className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold rounded-xl transition-all duration-150 active:scale-95">ออกจากระบบ</button>
+                <button onClick={handleLogout} className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold rounded-xl transition-all duration-150 active:scale-95">ออกจากระบบ</button>
               </div>
             )}
           </div>
@@ -564,9 +565,9 @@ export default function Dashboard() {
       {detailModal && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDetailModal(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-4 py-3 border-b border-[#F6C7C7]">
+            <div className="flex justify-between items-center px-4 py-3 border-b border-brand-border">
               <h3 className="text-sm font-semibold text-gray-900">{detailModal.title}</h3>
-              <button onClick={() => setDetailModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-[#FFF5F7] transition-colors duration-150"><X size={16} /></button>
+              <button onClick={() => setDetailModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-brand-bg transition-colors duration-150"><X size={16} /></button>
             </div>
             <div className="overflow-y-auto max-h-[60dvh] p-4 space-y-2">
               {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีสินค้าสต๊อกใกล้หมด</p> :
@@ -613,7 +614,7 @@ export default function Dashboard() {
                     </div>
                     <button
                       onClick={() => handleApproveShift(s.id)}
-                      className="w-full py-2 bg-[#F12B6B] hover:bg-[#FF467E] text-white text-sm font-semibold rounded-lg transition-all duration-150 active:scale-95"
+                      className="w-full py-2 bg-brand hover:bg-brand-dark text-white text-sm font-semibold rounded-lg transition-all duration-150 active:scale-95"
                     >
                       อนุมัติปิดกะ
                     </button>
@@ -630,7 +631,7 @@ export default function Dashboard() {
 function Section({ title, icon, open, onToggle, children }: { title: string; icon: React.ReactNode; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
     <div className="max-w-7xl mx-auto mt-4">
-      <button onClick={onToggle} className="w-full flex items-center justify-between bg-white border border-[#F6C7C7] rounded-2xl shadow-sm p-3.5 mb-3 hover:bg-[#FFF5F7] transition-colors duration-150">
+      <button onClick={onToggle} className="w-full flex items-center justify-between bg-white border border-brand-border rounded-2xl shadow-sm p-3.5 mb-3 hover:bg-brand-bg transition-colors duration-150">
         <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">{icon} {title}</span>
         <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>

@@ -156,7 +156,7 @@ export default function PendingShiftClosesWidget() {
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <div className="flex items-center justify-center h-32">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#F12B6B]"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
             <p className="text-gray-600 mt-2">กำลังโหลด...</p>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function PendingShiftClosesWidget() {
 
   return (
     <div className="bg-white rounded-lg shadow mb-6">
-      <div className="bg-gradient-to-r from-[#F12B6B] to-[#E91E5F] px-6 py-4 rounded-t-lg">
+      <div className="bg-gradient-to-r from-brand to-[#E91E5F] px-6 py-4 rounded-t-lg">
         <div className="flex items-center gap-2">
           <Clock className="w-6 h-6 text-white" />
           <h2 className="text-xl font-bold text-white">

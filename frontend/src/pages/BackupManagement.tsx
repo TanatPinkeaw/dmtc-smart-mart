@@ -112,8 +112,8 @@ export default function BackupManagement() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl flex items-center justify-center shrink-0">
-              <Database size={18} className="text-[#F12B6B]" />
+            <div className="w-9 h-9 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center shrink-0">
+              <Database size={18} className="text-brand" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">สำรอง & กู้คืนข้อมูล</h1>
@@ -123,7 +123,7 @@ export default function BackupManagement() {
           <button
             onClick={handleCreateBackup}
             disabled={loading || isLoadingBackups}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#F12B6B] hover:bg-[#FF467E] active:scale-95 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-brand hover:bg-brand-dark active:scale-95 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             {loading ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูลตอนนี้'}
@@ -133,11 +133,11 @@ export default function BackupManagement() {
         {isLoadingBackups ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-20 bg-white border border-[#F6C7C7] rounded-2xl animate-pulse" />
+              <div key={i} className="h-20 bg-white border border-brand-border rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : backups.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-[#F6C7C7] text-center text-gray-400 shadow-sm">
+          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 shadow-sm">
             <Database size={40} className="mx-auto mb-3 opacity-30" />
             <p>ยังไม่มีไฟล์สำรองข้อมูล</p>
           </div>
@@ -146,7 +146,7 @@ export default function BackupManagement() {
             {/* Mobile cards */}
             <div className="sm:hidden space-y-3">
               {backups.map(backup => (
-                <div key={backup.id} className="bg-white border border-[#F6C7C7] rounded-xl p-4 shadow-sm">
+                <div key={backup.id} className="bg-white border border-brand-border rounded-xl p-4 shadow-sm">
                   <div className="flex justify-between items-start mb-2 gap-2">
                     <p className="font-mono text-xs text-gray-700 break-all">{backup.filename}</p>
                     <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusColor(backup.status)}`}>
@@ -169,10 +169,10 @@ export default function BackupManagement() {
             </div>
 
             {/* Desktop table */}
-            <div className="hidden sm:block bg-white rounded-2xl border border-[#F6C7C7] shadow-sm overflow-hidden">
+            <div className="hidden sm:block bg-white rounded-2xl border border-brand-border shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-[#FFF5F7] text-gray-600 text-sm">
+                  <thead className="bg-brand-bg text-gray-600 text-sm">
                     <tr>
                       <th className="p-3 border-b">ไฟล์</th>
                       <th className="p-3 border-b">วันที่</th>
@@ -184,7 +184,7 @@ export default function BackupManagement() {
                   </thead>
                   <tbody>
                     {backups.map(backup => (
-                      <tr key={backup.id} className="border-b last:border-0 hover:bg-[#FFF5F7] transition-colors">
+                      <tr key={backup.id} className="border-b last:border-0 hover:bg-brand-bg transition-colors">
                         <td className="p-3 font-mono text-xs text-gray-700">{backup.filename}</td>
                         <td className="p-3 text-sm text-gray-600">{backup.backup_date}</td>
                         <td className="p-3 text-sm text-gray-600">{backup.file_size_mb ? `${backup.file_size_mb} MB` : '-'}</td>
