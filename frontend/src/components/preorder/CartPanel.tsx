@@ -51,9 +51,9 @@ export function CartPanel({
 
   return (
     <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex animate-fade-in' : 'hidden'} md:flex md:relative md:w-1/3 flex-col bg-white border-l border-brand-border shadow-xl`}>
-      <div className="p-4 bg-brand text-white flex justify-between items-center">
-        <h2 className="text-lg font-bold flex items-center gap-2"><ShoppingCart size={20} /> ตะกร้าของฉัน</h2>
-        <button onClick={onCloseCart} className="md:hidden p-1 bg-brand-dark rounded-lg hover:bg-brand-dark"><X size={20} /></button>
+      <div className="p-4 bg-gradient-to-r from-brand to-brand-dark text-white flex justify-between items-center shadow-sm">
+        <h2 className="text-lg font-semibold flex items-center gap-2"><ShoppingCart size={20} /> ตะกร้าของฉัน</h2>
+        <button onClick={onCloseCart} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={20} /></button>
       </div>
 
       {/* รายการในตะกร้า */}
@@ -62,7 +62,7 @@ export function CartPanel({
           <div className="min-h-[100px] flex flex-col items-center justify-center text-gray-400 opacity-50"><ShoppingCart size={32} className="mb-1.5" /> <p className="text-xs">ยังไม่มีสินค้า</p></div>
         ) : (
           cart.map((item) => (
-            <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-brand-border flex flex-col gap-2">
+            <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-l-4 border-brand-border border-l-brand flex flex-col gap-2">
               <div className="flex justify-between">
                 <p className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</p>
                 <p className="font-bold text-brand">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
@@ -81,7 +81,7 @@ export function CartPanel({
       </div>
 
       {/* ส่วนการชำระเงิน */}
-      <div className="bg-white border-t border-brand-border shrink-0">
+      <div className="bg-brand-bg border-t border-brand-border rounded-t-2xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
         {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
         <div className="md:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-brand-border">
           <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-brand">฿{finalTotal.toFixed(2)}</span></div>
@@ -90,7 +90,7 @@ export function CartPanel({
           </button>
         </div>
         <div className={`${payOpen ? 'block' : 'hidden'} md:block p-5 pt-3 md:pt-5 overflow-y-auto max-h-[72vh] md:max-h-none md:overflow-visible`}>
-        <div className="mb-4 space-y-1">
+        <div className="mb-4 bg-white border border-brand-border rounded-lg shadow-sm p-3 space-y-1">
           <div className="flex justify-between text-sm text-gray-500">
             <span>ยอดรวมสินค้า:</span> <span>฿{grandTotal.toFixed(2)}</span>
           </div>
@@ -109,8 +109,8 @@ export function CartPanel({
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</label>
             <div className="flex gap-2">
-              <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} className="flex-1 p-2.5 border border-brand-border rounded-lg text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
-              <button type="button" onClick={onVerifyPhone} disabled={verifying} className="shrink-0 bg-brand-bg text-brand-dark px-3 py-2 rounded-lg text-sm font-bold hover:bg-brand-border transition disabled:opacity-50">
+              <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} className="flex-1 p-2.5 bg-white border border-brand-border rounded-lg text-sm shadow-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
+              <button type="button" onClick={onVerifyPhone} disabled={verifying} className="shrink-0 bg-white text-brand-dark border border-brand-border px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-95 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
                 {verifying ? '...' : 'ตรวจสอบ'}
               </button>
             </div>
@@ -140,10 +140,10 @@ export function CartPanel({
 
           {/* ⭐️ FIX: เลือกวิธีจ่ายเงิน — เดิม text-sm ยาวเกิน ตัวหนังสือชนกันในปุ่มแคบบนมือถือ ลดขนาด + leading-tight */}
           <div className="flex gap-2">
-            <button onClick={() => onSetPaymentMethod('CASH')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'CASH' ? 'border-brand bg-brand-bg text-brand-dark' : 'border-gray-200 text-gray-400'}`}>
+            <button onClick={() => onSetPaymentMethod('CASH')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${paymentMethod === 'CASH' ? 'border-brand bg-white text-brand-dark shadow-sm' : 'border-gray-200 text-gray-400 bg-white/50'}`}>
               💵 จ่ายเงินสดหน้าร้าน
             </button>
-            <button onClick={() => onSetPaymentMethod('QR')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>
+            <button onClick={() => onSetPaymentMethod('QR')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 bg-white/50'}`}>
               📱 สแกนจ่าย
             </button>
           </div>
@@ -199,7 +199,7 @@ export function CartPanel({
         {/* ⭐️ FIX: ปุ่มยืนยัน — ปรับให้ตรงกับปุ่ม "ชำระเงิน" หน้า POS: ขนาด/ฟอนต์เล็กลง (py-3.5, text-sm,
             ไอคอน 18px), เปลี่ยนเป็นสีฟ้าตอนเลือกสแกนจ่าย (เหมือน POS ที่สลับสีตาม paymentMethod) */}
         {/* ⭐️ QR: ล็อกปุ่มจนกว่าสลิปจะแนบ+ตรวจเสร็จ กันกดยืนยันก่อนสลิปพร้อม (รูปสลิปจะไม่ขึ้น) */}
-        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-brand hover:bg-brand-dark'}`}>
+        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500' : 'bg-brand hover:bg-brand-dark focus-visible:ring-brand'}`}>
           {loading ? 'กำลังส่งข้อมูล...'
             : slipProcessing ? 'กำลังเตรียมสลิป...'
             : (paymentMethod === 'QR' && !slipFile) ? <><Upload size={18} /> แนบสลิปก่อนยืนยัน</>

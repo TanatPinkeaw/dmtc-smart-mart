@@ -38,7 +38,7 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
           ของการ์ดแม่ (rounded-2xl) ทำให้ขอบบนดูเหลี่ยม ไม่มน ใส่ overflow-hidden ให้ครอบตัดตามการ์ดแม่ */}
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85dvh] flex flex-col overflow-hidden animate-fade-in">
         {/* Header - Sticky */}
-        <div className="shrink-0 bg-brand px-4 py-3 flex justify-between items-center gap-3">
+        <div className="shrink-0 bg-gradient-to-r from-brand to-brand-dark px-4 py-3 flex justify-between items-center gap-3 shadow-sm">
           <div className="flex-1 min-w-0">
             <h2 className="text-white font-bold text-base truncate">ออเดอร์ #{selectedOrder.id}</h2>
             <p className="text-white/80 text-xs mt-0.5">{formatBangkokTime(selectedOrder.created_at)}</p>
