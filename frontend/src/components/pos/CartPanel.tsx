@@ -76,10 +76,10 @@ export function CartPanel({
           const product = products.find(p => p.id === item.id);
           const isStockExceeded = product && item.quantity > (product.stock ?? 0);
           return (
-          <div key={item.id} className={`flex justify-between items-center rounded-xl px-3 py-2 border transition-all duration-150 hover:shadow-sm ${
+          <div key={item.id} className={`flex justify-between items-center rounded-xl px-3 py-2 border border-l-4 shadow-sm transition-all duration-150 hover:shadow-md ${
             isStockExceeded
-              ? 'bg-yellow-50 border-yellow-300'
-              : 'bg-brand-bg border-brand-border'
+              ? 'bg-yellow-50 border-yellow-300 border-l-yellow-400'
+              : 'bg-brand-bg border-brand-border border-l-brand'
           }`}>
             <div className="flex-1 min-w-0 pr-2">
               <p className="text-xs font-semibold text-gray-900 truncate">{item.name}</p>
@@ -106,7 +106,7 @@ export function CartPanel({
       {/* ⭐️ FIX: เดิม pb-20 กันชนกับ bottom nav แต่ตะกร้ามือถือเป็น fixed inset-0 z-[60] คลุมเต็มจอ
           ทับ nav (z-50) อยู่แล้ว 100% เลยไม่มี nav ให้ต้องกันเว้นระยะ — เหลือ pb-20 ไว้กลายเป็นช่องว่างเปล่าๆ
           ใต้ปุ่ม "ชำระเงิน" เอาออกให้เนื้อหาทั้งแผงขยับลงมาชิดขอบล่างจริง */}
-      <div className="border-t border-brand-border bg-white shrink-0">
+      <div className="border-t border-brand-border bg-brand-bg rounded-t-2xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
         {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
         <div className="md:hidden flex items-center justify-between gap-2 px-3 py-2 border-b border-brand-border">
           <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-brand">฿{finalTotal.toFixed(2)}</span></div>
@@ -117,7 +117,7 @@ export function CartPanel({
         <div className={`${payOpen ? 'block' : 'hidden'} md:block p-3 pt-2 md:pt-3 space-y-3 overflow-y-auto max-h-[72vh] md:max-h-none md:overflow-visible`}>
 
         {/* Member search — ⭐️ FIX: rounded-xl → rounded-lg ให้ตรงกับสไตล์หน้าจองทั้งแผง */}
-        <div className="bg-brand-bg border border-brand-border rounded-lg p-3">
+        <div className="bg-white border border-brand-border rounded-lg p-3 shadow-sm">
           {!currentMember ? (
             // ⭐️ FIX: ย้ายปุ่ม "สมัครสมาชิกใหม่" จากปุ่มเขียวแยกด้านนอก ไปเป็นไอคอนเล็กฝังในช่องค้นหาแทน
             // ลดความรก ยังกดสมัครสมาชิกได้เหมือนเดิม (ระบบมีจุดสมัครจุดเดียว ไม่ได้ตัดฟีเจอร์)
@@ -149,7 +149,7 @@ export function CartPanel({
           <div className="flex gap-2">
             {/* ⭐️ FIX: ไม่ใช้ inputCls ตรงๆ เพราะมี rounded-xl ฝังอยู่ ต่อ class ซ้อนแบบเดิมไม่การันตี override
                 (ลำดับ class ใน CSS ไม่ตรงกับลำดับใน className) เขียน class ใหม่ทั้งชุดแทนให้ rounded-lg ชัวร์ */}
-            <select value={selectedPromoId} onChange={e => onSelectPromoId(e.target.value ? Number(e.target.value) : '')} className="flex-1 min-w-0 px-3 py-2.5 bg-brand-bg border border-brand-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150">
+            <select value={selectedPromoId} onChange={e => onSelectPromoId(e.target.value ? Number(e.target.value) : '')} className="flex-1 min-w-0 px-3 py-2.5 bg-white border border-brand-border rounded-lg text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150">
               <option value="">-- โปรโมชั่น (ถ้ามี) --</option>
               {promotions.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.discount_type === 'PERCENT' ? `ลด ${p.discount_value}%` : `ลด ฿${p.discount_value}`})</option>)}
             </select>
@@ -173,7 +173,7 @@ export function CartPanel({
         )}
 
         {/* Totals */}
-        <div className="space-y-1 px-1">
+        <div className="bg-white border border-brand-border rounded-lg shadow-sm p-3 space-y-1">
           <div className="flex justify-between text-xs text-gray-500"><span>ยอดรวม</span><span>฿{grandTotal.toFixed(2)}</span></div>
           {appliedPromo && <div className="flex justify-between text-xs text-emerald-600 font-semibold"><span>ส่วนลดโปรโมชั่น</span><span>-฿{appliedPromo.discount_amount.toFixed(2)}</span></div>}
           {pointsDiscount > 0 && <div className="flex justify-between text-xs text-amber-600 font-semibold"><span>แลกแต้ม</span><span>-฿{pointsDiscount.toFixed(2)}</span></div>}
@@ -185,7 +185,7 @@ export function CartPanel({
         {/* ⭐️ FIX: ปุ่มเลือกวิธีจ่ายเงิน — ปรับให้ตรงกับสไตล์หน้าจอง (rounded-lg แทน rounded-xl, สีตัวอักษร
             ตอนเลือกเงินสดเป็น #FF467E ให้เหมือนกันทั้ง 2 หน้า) */}
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => { onSetPaymentMethod('CASH'); onAmountReceivedChange(''); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${paymentMethod === 'CASH' ? 'border-brand bg-brand-bg text-brand-dark' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>💵 เงินสด</button>
+          <button onClick={() => { onSetPaymentMethod('CASH'); onAmountReceivedChange(''); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${paymentMethod === 'CASH' ? 'border-brand bg-white text-brand-dark shadow-sm' : 'border-gray-200 text-gray-400 hover:border-gray-300 bg-white/50'}`}>💵 เงินสด</button>
           <button onClick={() => { onSetPaymentMethod('QR'); onAmountReceivedChange(finalTotal); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>📱 สแกนจ่าย</button>
         </div>
 
@@ -196,10 +196,10 @@ export function CartPanel({
                 รายการสินค้าด้านบนเหลือพื้นที่น้อยมาก) — เปลี่ยนเป็นพิมพ์ตรงด้วยคีย์บอร์ดตัวเลขของมือถือแทน
                 ปุ่มลัด (10/20/50/100/500/พอดี) — "พอดี" = ใส่ยอดสุทธิเป๊ะ (จ่ายพอดี ไม่ปัดขึ้น) */}
             <input type="number" inputMode="decimal" value={amountReceived} onChange={e => onAmountReceivedChange(e.target.value ? Number(e.target.value) : '')} placeholder="0.00"
-              className="w-full text-right text-xl font-bold px-4 py-3 bg-brand-bg border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
+              className="w-full text-right text-xl font-bold px-4 py-3 bg-white border border-brand-border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
             <div className="flex gap-1.5 mt-2 flex-wrap">
               {[10, 20, 50, 100, 500].map(v => (
-                <button key={v} onClick={() => onAmountReceivedChange(v)} className="flex-1 min-w-[40px] py-1.5 bg-brand-bg border border-brand-border text-brand font-semibold rounded-lg text-xs hover:bg-brand hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">฿{v}</button>
+                <button key={v} onClick={() => onAmountReceivedChange(v)} className="flex-1 min-w-[40px] py-1.5 bg-white border border-brand-border text-brand font-semibold rounded-lg text-xs shadow-sm hover:bg-brand hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">฿{v}</button>
               ))}
               <button onClick={() => onAmountReceivedChange(finalTotal)} className="flex-1 min-w-[40px] py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg text-xs hover:bg-emerald-500 hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1">พอดี</button>
             </div>

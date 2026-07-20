@@ -26,10 +26,10 @@ export function ProductGrid({
     <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
       {/* ⭐️ FIX: มือถือ — ใส่กรอบขาวโค้งมนรอบแท็บหมวดหมู่ให้เหมือนหน้าจอง (Pre-order) เดิมเป็นแค่แถบบาง
           ไม่มีกรอบ ดูกลืนกับพื้นหลัง ส่วนเดสก์ท็อปยังคงเป็น sidebar ตามเดิม (border-r ธรรมดา ไม่ใส่กรอบ) */}
-      <div className="md:w-1/5 bg-white border border-brand-border rounded-xl shadow-sm m-3 mb-0 md:m-0 md:rounded-none md:shadow-none md:border-0 md:border-r p-3 overflow-x-auto md:overflow-y-auto shrink-0 flex flex-row md:flex-col gap-1.5 scrollbar-hide">
-        <button onClick={() => onSelectCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full md:rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${selectedCategory === 'ALL' ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>ทั้งหมด</button>
+      <div className="md:w-1/5 bg-white border border-brand-border rounded-2xl shadow-md m-3 mb-0 md:m-0 md:rounded-none md:shadow-none md:border-0 md:border-r p-3 overflow-x-auto md:overflow-y-auto shrink-0 flex flex-row md:flex-col gap-2 scrollbar-hide">
+        <button onClick={() => onSelectCategory('ALL')} className={`shrink-0 px-4 py-2 rounded-full md:rounded-xl text-sm font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${selectedCategory === 'ALL' ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>ทั้งหมด</button>
         {categories.map(cat => (
-          <button key={cat.id} onClick={() => onSelectCategory(cat.id)} className={`shrink-0 px-3 py-1.5 rounded-full md:rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${selectedCategory === cat.id ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>
+          <button key={cat.id} onClick={() => onSelectCategory(cat.id)} className={`shrink-0 px-4 py-2 rounded-full md:rounded-xl text-sm font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${selectedCategory === cat.id ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>
             {cat.name}
           </button>
         ))}
@@ -72,11 +72,12 @@ export function ProductGrid({
                 <div
                   key={p.id}
                   onClick={() => !isExpired && onAddToCart(p, finalPrice)}
-                  className={`bg-white border rounded-xl p-3 transition-all duration-150 flex flex-col items-center h-full
+                  className={`relative overflow-hidden bg-white border rounded-2xl p-3 shadow-md transition-all duration-150 flex flex-col items-center h-full
                     ${showDiscount ? 'border-yellow-400 bg-yellow-50' : 'border-brand-border'}
-                    ${isExpired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-brand-mid hover:shadow-md hover:-translate-y-0.5 active:scale-95'}
+                    ${isExpired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-brand-mid hover:shadow-lg hover:-translate-y-0.5 active:scale-95'}
                   `}
                 >
+                  {!showDiscount && !isExpired && <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />}
                   <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2 flex items-center justify-center overflow-hidden">
                     {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-brand-mid opacity-50" />}
                   </div>
@@ -119,7 +120,7 @@ export function ProductGrid({
                           <span className="text-amber-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
                         </>
                       ) : (
-                        <p className="text-sm font-bold text-brand">฿{Number(finalPrice).toFixed(2)}</p>
+                        <p className="text-base font-bold text-brand">฿{Number(finalPrice).toFixed(2)}</p>
                       )}
                     </div>
                     {typeof p.stock === 'number' && (
