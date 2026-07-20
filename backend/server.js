@@ -2094,7 +2094,17 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
 
     // 1. เช็คราคาสินค้าและสต๊อก + ⭐️ Sprint 2: เช็ค expiry status
     for (let item of items) {
-      const [productRows] = await conn.query('SELECT id, name, price, stock, expiry_date, discount_percent, promo_percent, promo_start, promo_end FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
+      const [productRows] = await conn.query(`
+        SELECT id, name, price, stock, expiry_date, discount_percent, promo_percent, promo_start, promo_end,
+               GREATEST(
+                 CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
+                        AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
+                      THEN promo_percent ELSE 0 END,
+                 CASE WHEN expiry_date IS NOT NULL
+                        AND DATEDIFF(DATE(expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+                      THEN COALESCE(discount_percent,0) ELSE 0 END
+               ) AS best_discount_percent
+        FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
       if (productRows.length === 0) throw new Error(`ไม่พบสินค้า ID: ${item.product_id}`);
 
       const product = productRows[0];
@@ -2116,8 +2126,8 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
       }
 
       let itemPrice = Number(product.price);
-      // ⭐️ Phase 1: ลดราคาระดับสินค้า (โปรช่วงวันที่ / ใกล้หมดอายุ) — เอาส่วนลดที่ดีที่สุดอันเดียว ไม่ลดซ้อน
-      const bestDiscPct = getBestItemDiscountPercent(product);
+      // ⭐️ Phase 1: ส่วนลดระดับสินค้า (โปรช่วงวันที่ / ใกล้หมดอายุ) — คำนวณใน SQL เวลาไทย ให้ตรงกับที่การ์ดโชว์
+      const bestDiscPct = Number(product.best_discount_percent) || 0;
       if (bestDiscPct > 0) {
         itemPrice -= Math.round(itemPrice * bestDiscPct / 100);
         console.log(`[CHECKOUT] -${bestDiscPct}% applied to ${product.name}`);
@@ -3405,14 +3415,24 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
 
     // คำนวณราคา + เช็คสต๊อกพอจริง (ล็อกแถวสินค้ากันขายเกินตอนมีหลายคนจองพร้อมกัน)
     for (const item of items) {
-      const [rows] = await conn.query('SELECT id, name, price, stock, expiry_date, discount_percent, promo_percent, promo_start, promo_end FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
+      const [rows] = await conn.query(`
+        SELECT id, name, price, stock,
+               GREATEST(
+                 CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
+                        AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
+                      THEN promo_percent ELSE 0 END,
+                 CASE WHEN expiry_date IS NOT NULL
+                        AND DATEDIFF(DATE(expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+                      THEN COALESCE(discount_percent,0) ELSE 0 END
+               ) AS best_discount_percent
+        FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
       if (rows.length === 0) throw new Error(`ไม่พบสินค้า ID ${item.product_id}`);
       if (rows[0].stock < item.quantity) {
         throw new Error(`สต๊อกไม่พอสำหรับ "${rows[0].name}" (เหลือ ${rows[0].stock}, ต้องการ ${item.quantity})`);
       }
-      // ⭐️ Phase 1: pre-order ได้ส่วนลดระดับสินค้าเหมือน POS (โปรช่วงวันที่ / ใกล้หมดอายุ)
+      // ⭐️ Phase 1: pre-order ได้ส่วนลดระดับสินค้าเหมือน POS (คำนวณใน SQL เวลาไทย ให้ตรงกับที่การ์ดโชว์)
       let unitPrice = Number(rows[0].price);
-      const discPct = getBestItemDiscountPercent(rows[0]);
+      const discPct = Number(rows[0].best_discount_percent) || 0;
       if (discPct > 0) unitPrice -= Math.round(unitPrice * discPct / 100);
       const subtotalSatang = toSatang(unitPrice) * item.quantity;
       const subtotal = fromSatang(subtotalSatang);
