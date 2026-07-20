@@ -1,4 +1,5 @@
 import { Search, PackagePlus } from 'lucide-react';
+import { EmptyState } from '../ui/EmptyState';
 
 interface Category { id: number; name: string; }
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
@@ -26,9 +27,9 @@ export function ProductGrid({
       {/* ⭐️ FIX: มือถือ — ใส่กรอบขาวโค้งมนรอบแท็บหมวดหมู่ให้เหมือนหน้าจอง (Pre-order) เดิมเป็นแค่แถบบาง
           ไม่มีกรอบ ดูกลืนกับพื้นหลัง ส่วนเดสก์ท็อปยังคงเป็น sidebar ตามเดิม (border-r ธรรมดา ไม่ใส่กรอบ) */}
       <div className="md:w-1/5 bg-white border border-brand-border rounded-xl shadow-sm m-3 mb-0 md:m-0 md:rounded-none md:shadow-none md:border-0 md:border-r p-3 overflow-x-auto md:overflow-y-auto shrink-0 flex flex-row md:flex-col gap-1.5 scrollbar-hide">
-        <button onClick={() => onSelectCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full md:rounded-xl text-xs font-medium transition-all duration-150 ${selectedCategory === 'ALL' ? 'bg-brand text-white' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>ทั้งหมด</button>
+        <button onClick={() => onSelectCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full md:rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${selectedCategory === 'ALL' ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>ทั้งหมด</button>
         {categories.map(cat => (
-          <button key={cat.id} onClick={() => onSelectCategory(cat.id)} className={`shrink-0 px-3 py-1.5 rounded-full md:rounded-xl text-xs font-medium transition-all duration-150 ${selectedCategory === cat.id ? 'bg-brand text-white' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>
+          <button key={cat.id} onClick={() => onSelectCategory(cat.id)} className={`shrink-0 px-3 py-1.5 rounded-full md:rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${selectedCategory === cat.id ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-gray-600 hover:bg-brand-border'}`}>
             {cat.name}
           </button>
         ))}
@@ -38,7 +39,7 @@ export function ProductGrid({
       <div className="flex-1 p-3 overflow-y-auto pb-28 md:pb-4">
         {/* ⭐️ Phase 2 — แบนเนอร์โปรร้าน (ลดทั้งบิล/BOGO) เตือนแคชเชียร์ว่ามีโปรอะไรใช้ได้ */}
         {storePromos.length > 0 && (
-          <div className="mb-3 bg-gradient-to-r from-brand to-brand-dark text-white rounded-xl p-2.5">
+          <div className="mb-3 bg-gradient-to-r from-brand to-brand-dark text-white rounded-xl p-2.5 shadow-sm animate-fade-in">
             <p className="text-xs font-bold mb-1 flex items-center gap-1">🎉 โปรวันนี้</p>
             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
               {storePromos.map(pr => (
@@ -54,10 +55,7 @@ export function ProductGrid({
         </div>
 
         {filteredProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center">
-            <PackagePlus size={36} className="text-brand-mid mb-3" />
-            <p className="text-sm text-gray-400">ไม่พบสินค้าในหมวดนี้</p>
-          </div>
+          <EmptyState icon={<PackagePlus size={36} />} title="ไม่พบสินค้าในหมวดนี้" />
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredProducts.map(p => {
@@ -76,7 +74,7 @@ export function ProductGrid({
                   onClick={() => !isExpired && onAddToCart(p, finalPrice)}
                   className={`bg-white border rounded-xl p-3 transition-all duration-150 flex flex-col items-center h-full
                     ${showDiscount ? 'border-yellow-400 bg-yellow-50' : 'border-brand-border'}
-                    ${isExpired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-brand-mid hover:shadow-sm active:scale-95'}
+                    ${isExpired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-brand-mid hover:shadow-md hover:-translate-y-0.5 active:scale-95'}
                   `}
                 >
                   <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2 flex items-center justify-center overflow-hidden">
@@ -149,7 +147,7 @@ export function ProductGrid({
                   <button
                     onClick={(e) => { e.stopPropagation(); if (!isExpired) onAddToCart(p, finalPrice); }}
                     disabled={isExpired}
-                    className={`w-full py-1 rounded text-xs font-medium transition-colors duration-150
+                    className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1
                       ${isExpired
                         ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                         : 'bg-brand text-white hover:bg-brand-dark active:scale-95'

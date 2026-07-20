@@ -7,3 +7,11 @@
   --color-brand-border: #F6C7C7;
   --color-brand-bg: #FFF5F7;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-fade-in {
+  animation: fadeIn 200ms ease-out;
+}
