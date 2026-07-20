@@ -33,9 +33,9 @@ export function MyOrdersModal({ myOrders, onClose, onSelectOrder }: MyOrdersModa
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
       {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
-        <div className="p-4 bg-brand-bg border-b border-brand-border flex justify-between items-center shrink-0">
-          <h2 className="font-bold text-lg text-gray-800">ประวัติการสั่งจองของฉัน</h2>
-          <button onClick={onClose} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg"><X size={20} /></button>
+        <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0 shadow-sm">
+          <h2 className="font-semibold text-lg text-white">ประวัติการสั่งจองของฉัน</h2>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={20} /></button>
         </div>
         <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
           {myOrders.length === 0 ? (

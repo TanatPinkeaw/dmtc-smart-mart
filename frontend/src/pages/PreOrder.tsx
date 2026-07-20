@@ -371,15 +371,15 @@ export default function PreOrder() {
       {/* ================= ฝั่งซ้าย: เลือกสินค้า ================= */}
       <div className="w-full md:w-2/3 flex flex-col h-full">
         {/* ⭐️ FIX: ปรับ header ให้เหมือนหน้า POS — แถวเดียว icon box + title ซ้าย ปุ่มขวา ไม่ค่อยสตัดเป็น 2 บรรทัด */}
-        <div className="bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
-              <ShoppingBag size={15} className="text-white" />
+        <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <ShoppingBag size={16} className="text-white" />
             </div>
-            <h1 className="text-base font-bold text-gray-900 truncate">สั่งจองสินค้า (Pre-order)</h1>
+            <h1 className="text-lg font-semibold text-white truncate">สั่งจองสินค้า (Pre-order)</h1>
           </div>
           {/* ⭐️ ปุ่มกดดูประวัติของตัวเอง */}
-          <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-brand bg-brand-bg border border-brand-border hover:bg-brand-border px-3 py-1.5 rounded-full transition-colors duration-150">
+          <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-white/15 border border-white/20 hover:bg-white/25 px-3 py-1.5 rounded-full transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             ประวัติของฉัน
           </button>
         </div>
