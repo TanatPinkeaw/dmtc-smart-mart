@@ -52,9 +52,9 @@ export function ChangePasswordModal({ userId, onClose }: ChangePasswordModalProp
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#F6C7C7] bg-[#FFF5F7]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
           <div className="flex items-center gap-2">
-            <KeyRound size={18} className="text-[#F12B6B]" />
+            <KeyRound size={18} className="text-brand" />
             <h3 className="font-semibold text-gray-900">Change Password</h3>
           </div>
           <button
@@ -76,7 +76,7 @@ export function ChangePasswordModal({ userId, onClose }: ChangePasswordModalProp
               onChange={(e) => setForm({ ...form, current_password: e.target.value })}
               placeholder="Enter current password"
               required
-              className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150"
+              className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150"
             />
           </div>
 
@@ -89,7 +89,7 @@ export function ChangePasswordModal({ userId, onClose }: ChangePasswordModalProp
               onChange={(e) => setForm({ ...form, new_password: e.target.value })}
               placeholder="Enter new password"
               required
-              className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150"
+              className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150"
             />
             <PasswordStrengthMeter password={form.new_password} />
           </div>
@@ -103,7 +103,7 @@ export function ChangePasswordModal({ userId, onClose }: ChangePasswordModalProp
               onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
               placeholder="Confirm new password"
               required
-              className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#F12B6B] transition-colors duration-150"
+              className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150"
             />
           </div>
 
@@ -112,7 +112,7 @@ export function ChangePasswordModal({ userId, onClose }: ChangePasswordModalProp
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50"
+              className="flex-1 py-2.5 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50"
             >
               {loading ? 'Changing...' : 'Change Password'}
             </button>

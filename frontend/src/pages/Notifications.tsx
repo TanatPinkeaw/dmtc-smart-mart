@@ -79,17 +79,17 @@ export default function Notifications() {
 
   return (
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title) แทนหัวข้อใหญ่แบบเดิม
-    <div className="min-h-screen bg-[#FFF5F7] pb-24">
+    <div className="min-h-screen bg-brand-bg pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-[#F6C7C7] px-4 py-3 flex justify-between items-center shadow-sm">
+      <div className="sticky top-0 z-10 bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 bg-[#F12B6B] rounded-lg flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
             <Bell size={15} className="text-white" />
           </div>
           <h1 className="text-base font-bold text-gray-900 truncate">การแจ้งเตือน</h1>
         </div>
         {unread > 0 && (
-          <span className="shrink-0 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-full">
+          <span className="shrink-0 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-3 py-1.5 rounded-full">
             {unread} ยังไม่อ่าน
           </span>
         )}
@@ -97,30 +97,30 @@ export default function Notifications() {
 
       <div className="max-w-2xl mx-auto p-4 sm:p-6">
         {/* ⭐️ FIX: กรอบค้นหา — ใส่พื้นหลังขาว + เงา ให้เป็นกล่องแยกชัดเจนเหมือนกรอบแท็บหมวดหมู่หน้า POS/จอง */}
-        <div className="relative mb-4 bg-white border border-[#F6C7C7] rounded-xl p-2.5 shadow-sm">
+        <div className="relative mb-4 bg-white border border-brand-border rounded-xl p-2.5 shadow-sm">
           <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="ค้นหาการแจ้งเตือน..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-7 pr-2 py-1 bg-transparent text-sm outline-none" />
         </div>
 
         {/* List */}
-        <div className="bg-white border border-[#F6C7C7] rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
           {loading ? (
             <div className="p-8 space-y-3">
               {[1,2,3].map(i => (
                 <div key={i} className="flex gap-3 animate-pulse">
-                  <div className="w-10 h-10 bg-[#F6C7C7]/40 rounded-full shrink-0" />
+                  <div className="w-10 h-10 bg-brand-border/40 rounded-full shrink-0" />
                   <div className="flex-1 space-y-2 pt-1">
-                    <div className="h-3.5 bg-[#F6C7C7]/40 rounded-lg w-3/4" />
-                    <div className="h-3 bg-[#F6C7C7]/40 rounded-lg w-1/3" />
+                    <div className="h-3.5 bg-brand-border/40 rounded-lg w-3/4" />
+                    <div className="h-3 bg-brand-border/40 rounded-lg w-1/3" />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredNotis.length === 0 ? (
             <div className="py-16 flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-[#FFF5F7] rounded-2xl flex items-center justify-center mb-3">
-                <Bell size={24} className="text-[#FD94B4]" />
+              <div className="w-14 h-14 bg-brand-bg rounded-2xl flex items-center justify-center mb-3">
+                <Bell size={24} className="text-brand-mid" />
               </div>
               <p className="text-sm font-medium text-gray-600">ไม่มีการแจ้งเตือน</p>
               <p className="text-xs text-gray-400 mt-1">50 รายการล่าสุดจะแสดงที่นี่</p>
@@ -129,8 +129,8 @@ export default function Notifications() {
             <ul className="divide-y divide-gray-50">
               {filteredNotis.map(noti => (
                 <li key={noti.id} onClick={() => !noti.is_read && handleMarkAsRead(noti.id)}
-                  className={`flex gap-3 p-4 hover:bg-[#FFF5F7] transition-colors duration-150 cursor-pointer ${!noti.is_read ? 'bg-[#FFF5F7]/50' : ''}`}>
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${!noti.is_read ? 'bg-[#F12B6B] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  className={`flex gap-3 p-4 hover:bg-brand-bg transition-colors duration-150 cursor-pointer ${!noti.is_read ? 'bg-brand-bg/50' : ''}`}>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${!noti.is_read ? 'bg-brand text-white' : 'bg-gray-100 text-gray-400'}`}>
                     {noti.is_read ? <CheckCircle2 size={16} /> : <Bell size={16} />}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -139,7 +139,7 @@ export default function Notifications() {
                       <Clock size={10} /> {new Date(noti.created_at).toLocaleString('th-TH')}
                     </p>
                   </div>
-                  {!noti.is_read && <div className="w-2 h-2 bg-[#F12B6B] rounded-full mt-2 shrink-0" />}
+                  {!noti.is_read && <div className="w-2 h-2 bg-brand rounded-full mt-2 shrink-0" />}
                 </li>
               ))}
             </ul>

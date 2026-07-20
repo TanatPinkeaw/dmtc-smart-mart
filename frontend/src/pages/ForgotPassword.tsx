@@ -28,17 +28,17 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FFF5F7] via-white to-[#FFF5F7] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-bg via-white to-brand-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#F12B6B] rounded-2xl shadow-lg mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand rounded-2xl shadow-lg mb-4">
             <KeyRound size={28} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">ลืมรหัสผ่าน</h1>
           <p className="mt-1 text-sm text-gray-500">กรอกรหัสนักศึกษาและเบอร์โทรศัพท์ที่ลงทะเบียนไว้</p>
         </div>
 
-        <div className="bg-white border border-[#F6C7C7] rounded-2xl shadow-sm p-6">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-sm p-6">
           {submitted ? (
             <div className="text-center py-4">
               <p className="text-sm text-gray-700 leading-relaxed">
@@ -49,7 +49,7 @@ export default function ForgotPassword() {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="mt-5 w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
+                className="mt-5 w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
               >
                 กลับไปหน้าเข้าสู่ระบบ
               </button>
@@ -61,7 +61,7 @@ export default function ForgotPassword() {
                 <input
                   type="text" required value={studentId} onChange={e => setStudentId(e.target.value)}
                   placeholder="รหัสนักศึกษา"
-                  className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:border-[#F12B6B] transition-colors duration-150"
+                  className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-colors duration-150"
                 />
               </div>
               <div className="space-y-1">
@@ -69,12 +69,12 @@ export default function ForgotPassword() {
                 <input
                   type="tel" required value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
                   placeholder="0812345678"
-                  className="w-full px-3 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F12B6B] focus:border-[#F12B6B] transition-colors duration-150"
+                  className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-colors duration-150"
                 />
               </div>
               <button
                 type="submit" disabled={loading}
-                className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'กำลังส่งคำขอ...' : 'ขอรีเซ็ตรหัสผ่าน'}
               </button>
@@ -82,7 +82,7 @@ export default function ForgotPassword() {
           )}
         </div>
 
-        <Link to="/login" className="mt-4 flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-[#F12B6B] transition-colors">
+        <Link to="/login" className="mt-4 flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-brand transition-colors">
           <ArrowLeft size={14} /> กลับไปหน้าเข้าสู่ระบบ
         </Link>
       </div>

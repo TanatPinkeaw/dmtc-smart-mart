@@ -139,11 +139,11 @@ export default function Summary() {
     { icon: <TrendingUp size={18} />, label: 'ยอดขายรวมเดือนนี้', value: `฿${Number(overview.total_sales).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: 'text-emerald-600', border: 'border-emerald-200' },
     { icon: <Receipt size={18} />, label: 'จำนวนบิล', value: `${overview.total_bills} บิล`, color: 'text-blue-600', border: 'border-blue-200' },
     { icon: <Users size={18} />, label: 'สมาชิกทั้งหมด', value: `${overview.total_members} คน`, color: 'text-purple-600', border: 'border-purple-200' },
-    { icon: <UserPlus size={18} />, label: 'สมาชิกใหม่เดือนนี้', value: `${overview.new_members} คน`, color: 'text-[#F12B6B]', border: 'border-[#F6C7C7]' },
+    { icon: <UserPlus size={18} />, label: 'สมาชิกใหม่เดือนนี้', value: `${overview.new_members} คน`, color: 'text-brand', border: 'border-brand-border' },
     { icon: <PackageX size={18} />, label: 'สต๊อกใกล้หมด', value: `${overview.low_stock_count} รายการ`, color: 'text-orange-600', border: 'border-orange-200' },
     { icon: <ClipboardList size={18} />, label: 'ออเดอร์จองค้างอยู่', value: `${overview.pending_orders_count} ออเดอร์`, color: 'text-cyan-600', border: 'border-cyan-200' },
     { icon: <XCircle size={18} />, label: 'บิลยกเลิกเดือนนี้', value: `${overview.void_count} บิล (฿${Number(overview.void_amount).toLocaleString()})`, color: 'text-red-600', border: 'border-red-200' },
-    { icon: <Wallet size={18} />, label: 'ค่าจ้างรวมเดือนนี้ (ประมาณการ)', value: `฿${totalPayroll.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: 'text-[#F12B6B]', border: 'border-[#F6C7C7]' },
+    { icon: <Wallet size={18} />, label: 'ค่าจ้างรวมเดือนนี้ (ประมาณการ)', value: `฿${totalPayroll.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: 'text-brand', border: 'border-brand-border' },
   ] : [];
 
   return (
@@ -151,11 +151,11 @@ export default function Summary() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-[#F6C7C7] text-gray-500 transition">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-brand-border text-gray-500 transition">
             <ArrowLeft size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <BarChart3 className="text-[#F12B6B]" size={24} />
+            <BarChart3 className="text-brand" size={24} />
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">สรุปข้อมูล</h1>
           </div>
         </div>
@@ -164,10 +164,10 @@ export default function Summary() {
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="border border-[#F6C7C7] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#F12B6B]"
+            className="border border-brand-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
           />
           {/* ⭐️ ปุ่มปรินต์/บันทึก PDF สำหรับนำไปเสนออาจารย์ */}
-          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 border border-[#F6C7C7] text-[#F12B6B] rounded-xl px-3 py-2 text-sm font-semibold hover:bg-[#FFF5F7] active:scale-95 transition">
+          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 border border-brand-border text-brand rounded-xl px-3 py-2 text-sm font-semibold hover:bg-brand-bg active:scale-95 transition">
             <Printer size={16} /> ปรินต์
           </button>
         </div>
@@ -175,7 +175,7 @@ export default function Summary() {
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
-          <div className="w-10 h-10 border-2 border-[#F12B6B] border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <>
@@ -193,14 +193,14 @@ export default function Summary() {
           </div>
 
           {/* ⭐️ สรุปรายได้ & กำไร (แยกกำไรจาก GP ฝากขาย ออกจากกำไรสินค้าสหกรณ์เอง) */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#F6C7C7] overflow-hidden mb-8">
-            <div className="px-5 py-4 border-b border-[#F6C7C7] flex items-center justify-between flex-wrap gap-2">
+          <div className="bg-white rounded-2xl shadow-sm border border-brand-border overflow-hidden mb-8">
+            <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between flex-wrap gap-2">
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
-                <Coins size={18} className="text-[#F12B6B]" /> สรุปรายได้ &amp; กำไร (แยกกำไรจาก GP)
+                <Coins size={18} className="text-brand" /> สรุปรายได้ &amp; กำไร (แยกกำไรจาก GP)
               </h2>
-              <div className="flex bg-[#FFF5F7] border border-[#F6C7C7] rounded-full p-0.5 print:hidden">
-                <button onClick={() => setProfitView('overall')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'overall' ? 'bg-[#F12B6B] text-white' : 'text-gray-500'}`}>ภาพรวมทั้งหมด</button>
-                <button onClick={() => setProfitView('monthly')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'monthly' ? 'bg-[#F12B6B] text-white' : 'text-gray-500'}`}>รายเดือน</button>
+              <div className="flex bg-brand-bg border border-brand-border rounded-full p-0.5 print:hidden">
+                <button onClick={() => setProfitView('overall')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'overall' ? 'bg-brand text-white' : 'text-gray-500'}`}>ภาพรวมทั้งหมด</button>
+                <button onClick={() => setProfitView('monthly')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'monthly' ? 'bg-brand text-white' : 'text-gray-500'}`}>รายเดือน</button>
               </div>
             </div>
 
@@ -213,9 +213,9 @@ export default function Summary() {
                     <div className="flex items-center gap-1.5 text-emerald-600 mb-1"><TrendingUp size={16} /><span className="text-xs font-semibold">รายได้รวม (ยอดขาย)</span></div>
                     <p className="text-lg font-bold text-gray-800">{baht(profit.overall.revenue)}</p>
                   </div>
-                  <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-4">
-                    <div className="flex items-center gap-1.5 text-[#F12B6B] mb-1"><Wallet size={16} /><span className="text-xs font-semibold">กำไรรวมของสหกรณ์</span></div>
-                    <p className="text-xl font-bold text-[#F12B6B]">{baht(profit.overall.profit_total)}</p>
+                  <div className="bg-brand-bg border border-brand-border rounded-xl p-4">
+                    <div className="flex items-center gap-1.5 text-brand mb-1"><Wallet size={16} /><span className="text-xs font-semibold">กำไรรวมของสหกรณ์</span></div>
+                    <p className="text-xl font-bold text-brand">{baht(profit.overall.profit_total)}</p>
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5 text-blue-600 mb-1"><PiggyBank size={16} /><span className="text-xs font-semibold">กำไรสินค้าสหกรณ์เอง</span></div>
@@ -245,12 +245,12 @@ export default function Summary() {
                   </thead>
                   <tbody>
                     {profit.monthly.map(m => (
-                      <tr key={m.period} className="border-b last:border-0 hover:bg-[#FFF5F7]">
+                      <tr key={m.period} className="border-b last:border-0 hover:bg-brand-bg">
                         <td className="p-3 font-semibold text-gray-800">{m.period}</td>
                         <td className="p-3 text-right">{baht(m.revenue)}</td>
                         <td className="p-3 text-right text-blue-600">{baht(m.profit_own)}</td>
                         <td className="p-3 text-right text-amber-600">{baht(m.profit_gp)}</td>
-                        <td className="p-3 text-right font-bold text-[#F12B6B]">{baht(m.profit_total)}</td>
+                        <td className="p-3 text-right font-bold text-brand">{baht(m.profit_total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -260,22 +260,22 @@ export default function Summary() {
                       <td className="p-3 text-right">{baht(profit.overall.revenue)}</td>
                       <td className="p-3 text-right text-blue-600">{baht(profit.overall.profit_own)}</td>
                       <td className="p-3 text-right text-amber-600">{baht(profit.overall.profit_gp)}</td>
-                      <td className="p-3 text-right text-[#F12B6B]">{baht(profit.overall.profit_total)}</td>
+                      <td className="p-3 text-right text-brand">{baht(profit.overall.profit_total)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             )}
-            <p className="px-5 py-3 text-xs text-gray-400 border-t border-[#F6C7C7]">
+            <p className="px-5 py-3 text-xs text-gray-400 border-t border-brand-border">
               * กำไรสินค้าสหกรณ์เอง = ราคาขาย − ต้นทุน | กำไรจาก GP = ยอดขายสินค้าฝากขาย × %GP (ส่วนที่เหลือคืนผู้ฝากขาย) | รวมทั้งขายหน้าร้าน + พรีออเดอร์ที่สำเร็จแล้ว
             </p>
           </div>
 
           {/* Payroll table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#F6C7C7] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F6C7C7] flex items-center justify-between flex-wrap gap-2">
+          <div className="bg-white rounded-2xl shadow-sm border border-brand-border overflow-hidden">
+            <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between flex-wrap gap-2">
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
-                <Clock size={18} className="text-[#F12B6B]" />
+                <Clock size={18} className="text-brand" />
                 ชั่วโมงทำงาน / มาสาย / ค่าจ้างพนักงาน
               </h2>
               {totalLateHours > 0 && (
@@ -299,7 +299,7 @@ export default function Summary() {
                         {row.role === 'ADMIN' ? 'ผู้จัดการ' : 'แคชเชียร์'}
                       </span>
                     </div>
-                    <span className="font-bold text-[#F12B6B] text-lg">฿{Number(row.calculated_pay).toFixed(2)}</span>
+                    <span className="font-bold text-brand text-lg">฿{Number(row.calculated_pay).toFixed(2)}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
                     <div>ชั่วโมงทำงาน: <span className="font-semibold text-gray-800">{Number(row.total_hours).toFixed(2)}</span></div>
@@ -310,16 +310,16 @@ export default function Summary() {
                       <input
                         type="number" min="0" step="0.01" value={editRateValue}
                         onChange={(e) => setEditRateValue(e.target.value)}
-                        className="flex-1 border border-[#FD94B4] rounded-lg px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-[#F12B6B]"
+                        className="flex-1 border border-brand-mid rounded-lg px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
                         autoFocus
                       />
                       <button onClick={() => saveRate(row.user_id)} disabled={savingRate} className="p-2 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 active:scale-95 transition disabled:opacity-50"><Check size={16} /></button>
                       <button onClick={cancelEditRate} disabled={savingRate} className="p-2 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 active:scale-95 transition disabled:opacity-50"><XIcon size={16} /></button>
                     </div>
                   ) : (
-                    <button onClick={() => startEditRate(row)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#FFF5F7] text-sm active:scale-95 transition">
+                    <button onClick={() => startEditRate(row)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-brand-bg text-sm active:scale-95 transition">
                       <span className="text-gray-500">ค่าจ้าง/ชม.</span>
-                      <span className="font-semibold text-gray-800 flex items-center gap-1.5">฿{Number(row.hourly_rate).toFixed(2)} <Pencil size={12} className="text-[#F12B6B]" /></span>
+                      <span className="font-semibold text-gray-800 flex items-center gap-1.5">฿{Number(row.hourly_rate).toFixed(2)} <Pencil size={12} className="text-brand" /></span>
                     </button>
                   )}
                 </div>
@@ -327,7 +327,7 @@ export default function Summary() {
               {payroll.length > 0 && (
                 <div className="p-4 flex justify-between items-center bg-gray-50 font-bold text-sm">
                   <span>รวมค่าจ้างทั้งหมดเดือนนี้</span>
-                  <span className="text-[#F12B6B]">฿{totalPayroll.toFixed(2)}</span>
+                  <span className="text-brand">฿{totalPayroll.toFixed(2)}</span>
                 </div>
               )}
             </div>
@@ -349,7 +349,7 @@ export default function Summary() {
                     <tr><td colSpan={6} className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลพนักงานในเดือนนี้</td></tr>
                   )}
                   {payroll.map(row => (
-                    <tr key={row.user_id} className="border-b last:border-0 hover:bg-[#FFF5F7] text-sm">
+                    <tr key={row.user_id} className="border-b last:border-0 hover:bg-brand-bg text-sm">
                       <td className="p-3 font-semibold text-gray-800">{row.full_name}</td>
                       <td className="p-3">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -369,7 +369,7 @@ export default function Summary() {
                               step="0.01"
                               value={editRateValue}
                               onChange={(e) => setEditRateValue(e.target.value)}
-                              className="w-20 border border-[#FD94B4] rounded-lg px-2 py-1 text-right text-sm outline-none focus:ring-2 focus:ring-[#F12B6B]"
+                              className="w-20 border border-brand-mid rounded-lg px-2 py-1 text-right text-sm outline-none focus:ring-2 focus:ring-brand"
                               autoFocus
                             />
                             <button
@@ -392,7 +392,7 @@ export default function Summary() {
                             <span>฿{Number(row.hourly_rate).toFixed(2)}</span>
                             <button
                               onClick={() => startEditRate(row)}
-                              className="p-1 rounded-lg text-gray-400 hover:text-[#F12B6B] hover:bg-[#FFF5F7] transition"
+                              className="p-1 rounded-lg text-gray-400 hover:text-brand hover:bg-brand-bg transition"
                               title="แก้ไขอัตราค่าจ้าง"
                             >
                               <Pencil size={13} />
@@ -400,7 +400,7 @@ export default function Summary() {
                           </div>
                         )}
                       </td>
-                      <td className="p-3 text-right font-bold text-[#F12B6B]">฿{Number(row.calculated_pay).toFixed(2)}</td>
+                      <td className="p-3 text-right font-bold text-brand">฿{Number(row.calculated_pay).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -408,7 +408,7 @@ export default function Summary() {
                   <tfoot>
                     <tr className="bg-gray-50 font-bold text-sm">
                       <td className="p-3" colSpan={5}>รวมค่าจ้างทั้งหมดเดือนนี้</td>
-                      <td className="p-3 text-right text-[#F12B6B]">฿{totalPayroll.toFixed(2)}</td>
+                      <td className="p-3 text-right text-brand">฿{totalPayroll.toFixed(2)}</td>
                     </tr>
                   </tfoot>
                 )}

@@ -41,7 +41,7 @@ class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-xs text-gray-500 mb-6 font-mono break-all">{this.state.error?.message}</p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-3 bg-[#F12B6B] hover:bg-[#FF467E] text-white font-semibold rounded-xl transition-all duration-150 active:scale-95"
+              className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold rounded-xl transition-all duration-150 active:scale-95"
             >
               รีเซ็ตแอปฯ
             </button>

@@ -379,19 +379,19 @@ export default function PreOrder() {
   const finalTotal = fromSatang(Math.max(0, grandTotalSatang - toSatang(pointsDiscount)));
 
   return (
-    <div className="flex h-screen bg-[#FFF5F7] font-sans relative">
+    <div className="flex h-screen bg-brand-bg font-sans relative">
       {/* ================= ฝั่งซ้าย: เลือกสินค้า ================= */}
       <div className="w-full md:w-2/3 flex flex-col h-full">
         {/* ⭐️ FIX: ปรับ header ให้เหมือนหน้า POS — แถวเดียว icon box + title ซ้าย ปุ่มขวา ไม่ค่อยสตัดเป็น 2 บรรทัด */}
-        <div className="bg-white border-b border-[#F6C7C7] px-4 py-3 flex justify-between items-center shrink-0">
+        <div className="bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 bg-[#F12B6B] rounded-lg flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
               <ShoppingBag size={15} className="text-white" />
             </div>
             <h1 className="text-base font-bold text-gray-900 truncate">สั่งจองสินค้า (Pre-order)</h1>
           </div>
           {/* ⭐️ ปุ่มกดดูประวัติของตัวเอง */}
-          <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] hover:bg-[#F6C7C7] px-3 py-1.5 rounded-full transition-colors duration-150">
+          <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-brand bg-brand-bg border border-brand-border hover:bg-brand-border px-3 py-1.5 rounded-full transition-colors duration-150">
             ประวัติของฉัน
           </button>
         </div>
@@ -402,12 +402,12 @@ export default function PreOrder() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             {/* ⭐️ FIX: เดิม border-none กลืนกับพื้นหลัง เพิ่มกรอบให้เหมือนช่องค้นหาหน้า POS */}
             <input type="text" placeholder="ค้นหาสินค้า..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#F12B6B] focus:bg-white transition-colors duration-150" />
+              className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
           </div>
 
           {/* ⭐️ Phase 2 — แบนเนอร์โปรร้าน (ลดทั้งบิล/BOGO) — โชว์ตอน browse ปกติ */}
           {selectedCategory === 'ALL' && !productSearch && storePromos.length > 0 && (
-            <div className="mb-4 bg-gradient-to-r from-[#F12B6B] to-[#FF467E] text-white rounded-xl p-3 shadow-sm">
+            <div className="mb-4 bg-gradient-to-r from-brand to-brand-dark text-white rounded-xl p-3 shadow-sm">
               <p className="text-xs font-bold mb-1.5 flex items-center gap-1">🎉 โปรโมชั่นร้านวันนี้ <span className="font-normal text-white/70">(รับสิทธิ์ที่เคาน์เตอร์)</span></p>
               <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                 {storePromos.map(pr => (
@@ -427,11 +427,11 @@ export default function PreOrder() {
                     {highlights.promo.map(p => (
                       <div key={`promo-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-amber-200 rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
                         <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).promo_active ? (p as any).promo_percent : ((p as any).discount_percent || 40)}%</span>
-                        <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-1 flex items-center justify-center overflow-hidden">
-                          {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-[#FD94B4] opacity-50" />}
+                        <div className="w-full aspect-square bg-brand-bg rounded-lg mb-1 flex items-center justify-center overflow-hidden">
+                          {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-brand-mid opacity-50" />}
                         </div>
                         <p className="text-[11px] font-medium text-gray-800 line-clamp-1">{p.name}</p>
-                        <p className="text-xs font-bold text-[#F12B6B]">฿{Number(p.price).toFixed(2)}</p>
+                        <p className="text-xs font-bold text-brand">฿{Number(p.price).toFixed(2)}</p>
                       </div>
                     ))}
                   </div>
@@ -442,13 +442,13 @@ export default function PreOrder() {
                   <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">🔥 สินค้ายอดนิยม</h3>
                   <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                     {highlights.popular.map((p, i) => (
-                      <div key={`pop-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-[#F6C7C7] rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
-                        <span className="absolute top-1 left-1 z-10 bg-[#F12B6B] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{i + 1}</span>
-                        <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-1 flex items-center justify-center overflow-hidden">
-                          {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-[#FD94B4] opacity-50" />}
+                      <div key={`pop-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-brand-border rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
+                        <span className="absolute top-1 left-1 z-10 bg-brand text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{i + 1}</span>
+                        <div className="w-full aspect-square bg-brand-bg rounded-lg mb-1 flex items-center justify-center overflow-hidden">
+                          {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-brand-mid opacity-50" />}
                         </div>
                         <p className="text-[11px] font-medium text-gray-800 line-clamp-1">{p.name}</p>
-                        <p className="text-xs font-bold text-[#F12B6B]">฿{Number(p.price).toFixed(2)}</p>
+                        <p className="text-xs font-bold text-brand">฿{Number(p.price).toFixed(2)}</p>
                       </div>
                     ))}
                   </div>
@@ -459,11 +459,11 @@ export default function PreOrder() {
 
           {/* ⭐️ FIX: หมวดหมู่ — ใส่กรอบขาวรอบแท็บให้ดูเป็นกล่องแยกชัดเจน (เหมือนหน้า POS) เดิมลอยอยู่บนพื้น
               ชมพูเฉยๆ กลืนกับพื้นหลัง มองไม่ออกว่าเป็นส่วนควบคุมแยก + ยังคง fade gradient บอกว่าเลื่อนได้ */}
-          <div className="relative bg-white border border-[#F6C7C7] rounded-xl p-2.5 mb-4 shadow-sm">
+          <div className="relative bg-white border border-brand-border rounded-xl p-2.5 mb-4 shadow-sm">
             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-              <button onClick={() => setSelectedCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === 'ALL' ? 'bg-[#F12B6B] text-white' : 'bg-[#FFF5F7] text-[#F12B6B] hover:bg-[#F6C7C7]'}`}>ทั้งหมด</button>
+              <button onClick={() => setSelectedCategory('ALL')} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === 'ALL' ? 'bg-brand text-white' : 'bg-brand-bg text-brand hover:bg-brand-border'}`}>ทั้งหมด</button>
               {categories.map(c => (
-                <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === c.id ? 'bg-[#F12B6B] text-white' : 'bg-[#FFF5F7] text-[#F12B6B] hover:bg-[#F6C7C7]'}`}>{c.name}</button>
+                <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedCategory === c.id ? 'bg-brand text-white' : 'bg-brand-bg text-brand hover:bg-brand-border'}`}>{c.name}</button>
               ))}
             </div>
             <div className="pointer-events-none absolute right-2.5 top-2.5 bottom-2.5 w-8 bg-gradient-to-l from-white to-transparent rounded-r-xl" />
@@ -478,29 +478,29 @@ export default function PreOrder() {
             {filtered.map((product) => (
               // ⭐️ FIX: เปลี่ยนการ์ดให้เหมือนหน้า POS ทั้งหมด — ขนาด/ระยะห่างเท่ากัน + มีปุ่ม "เพิ่มลงตะกร้า"
               // ชัดเจนแทนการต้องแตะทั้งการ์ด (ปุ่มมี stopPropagation กัน addToCart ยิงซ้อน 2 ครั้งตอนกดปุ่ม)
-              <div key={product.id} onClick={() => addToCart(product)} className="bg-white border border-[#F6C7C7] rounded-xl p-3 transition-all duration-150 flex flex-col items-center cursor-pointer hover:border-[#FD94B4] hover:shadow-sm active:scale-95 h-full">
-                <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-2 flex items-center justify-center overflow-hidden">
-                  {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-[#FD94B4] opacity-50" />}
+              <div key={product.id} onClick={() => addToCart(product)} className="bg-white border border-brand-border rounded-xl p-3 transition-all duration-150 flex flex-col items-center cursor-pointer hover:border-brand-mid hover:shadow-sm active:scale-95 h-full">
+                <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                  {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-brand-mid opacity-50" />}
                 </div>
                 <p className="text-xs font-medium text-gray-800 text-center line-clamp-2 mb-1">{product.name}</p>
 
                 <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
                   {(product as any).promo_active ? (
-                    <p className="text-sm font-bold text-[#F12B6B] flex items-baseline gap-1">
+                    <p className="text-sm font-bold text-brand flex items-baseline gap-1">
                       ฿{(Number(product.price) * (1 - (Number((product as any).promo_percent) || 0) / 100)).toFixed(2)}
                       <span className="text-[9px] text-gray-400 line-through font-normal">฿{Number(product.price).toFixed(2)}</span>
                     </p>
                   ) : (
-                    <p className="text-sm font-bold text-[#F12B6B]">฿{Number(product.price).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-brand">฿{Number(product.price).toFixed(2)}</p>
                   )}
                   {(product as any).promo_active
                     ? <span className="shrink-0 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-bold">-{(product as any).promo_percent}%</span>
-                    : <p className="shrink-0 text-[10px] bg-[#FFF5F7] text-[#F12B6B] px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>}
+                    : <p className="shrink-0 text-[10px] bg-brand-bg text-brand px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>}
                 </div>
 
                 <button
                   onClick={(e) => { e.stopPropagation(); addToCart(product); }}
-                  className="w-full py-1 rounded text-xs font-medium bg-[#F12B6B] text-white hover:bg-[#FF467E] active:scale-95 transition-colors duration-150"
+                  className="w-full py-1 rounded text-xs font-medium bg-brand text-white hover:bg-brand-dark active:scale-95 transition-colors duration-150"
                 >
                   เพิ่มลงตะกร้า
                 </button>
@@ -514,7 +514,7 @@ export default function PreOrder() {
 
       {/* ⭐️ FIX: เดิม bottom-6 ทับ bottom nav bar (h-14 + z-50) เพราะปุ่มนี้ z-40 ต่ำกว่า — เปลี่ยนเป็น
           bottom-20 ให้ตรงกับปุ่มลอยหน้าอื่น (POS.tsx, Inventory.tsx) ที่แก้ถูกไว้แล้ว */}
-      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-20 right-4 bg-[#F12B6B] text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 hover:bg-[#FF467E] active:scale-90 transition">
+      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-20 right-4 bg-brand text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 hover:bg-brand-dark active:scale-90 transition">
         <ShoppingCart size={24} />
         {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
       </button>
@@ -522,28 +522,28 @@ export default function PreOrder() {
       {/* ================= ฝั่งขวา: ตะกร้าและชำระเงิน ================= */}
       {/* ⭐️ FIX: z-50 เดิมชนกับ bottom nav (z-50) เหมือน modal รายละเอียดออเดอร์ — ยกเป็น z-[60] ให้เหนือ nav
           แน่นอน (ตรงกับ z-[60] ที่ตะกร้าหน้า POS ใช้อยู่แล้ว) */}
-      <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex animate-fade-in' : 'hidden'} md:flex md:relative md:w-1/3 flex-col bg-white border-l border-[#F6C7C7] shadow-xl`}>
-        <div className="p-4 bg-[#F12B6B] text-white flex justify-between items-center">
+      <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex animate-fade-in' : 'hidden'} md:flex md:relative md:w-1/3 flex-col bg-white border-l border-brand-border shadow-xl`}>
+        <div className="p-4 bg-brand text-white flex justify-between items-center">
           <h2 className="text-lg font-bold flex items-center gap-2"><ShoppingCart size={20} /> ตะกร้าของฉัน</h2>
-          <button onClick={() => setIsCartOpen(false)} className="md:hidden p-1 bg-[#FF467E] rounded-lg hover:bg-[#FF467E]"><X size={20} /></button>
+          <button onClick={() => setIsCartOpen(false)} className="md:hidden p-1 bg-brand-dark rounded-lg hover:bg-brand-dark"><X size={20} /></button>
         </div>
 
         {/* รายการในตะกร้า */}
-        <div className="flex-1 overflow-y-auto p-4 bg-[#FFF5F7] space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 bg-brand-bg space-y-3">
           {cart.length === 0 ? (
             // ⭐️ FIX: เดิม h-full ยืดเต็มพื้นที่ scroll ทำให้กล่องว่างดูสูงเกินไป เปลี่ยนเป็น min-h คงที่แทน
             // ⭐️ FIX: ลดต่ออีก 220px ยังดูสูงเกินไปเมื่อเทียบกับแผงชำระเงินด้านล่างที่กระชับแล้ว ย่อเหลือ 100px + ไอคอนเล็กลง
             <div className="min-h-[100px] flex flex-col items-center justify-center text-gray-400 opacity-50"><ShoppingCart size={32} className="mb-1.5" /> <p className="text-xs">ยังไม่มีสินค้า</p></div>
           ) : (
             cart.map((item) => (
-              <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-[#F6C7C7] flex flex-col gap-2">
+              <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-brand-border flex flex-col gap-2">
                 <div className="flex justify-between">
                   <p className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</p>
-                  <p className="font-bold text-[#F12B6B]">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
+                  <p className="font-bold text-brand">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-gray-500">฿{Number(item.price).toFixed(2)} / ชิ้น</p>
-                  <div className="flex items-center gap-2 bg-[#FFF5F7] rounded-lg p-1">
+                  <div className="flex items-center gap-2 bg-brand-bg rounded-lg p-1">
                     <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white rounded text-gray-600"><Minus size={14} /></button>
                     <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
                     <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white rounded text-gray-600"><Plus size={14} /></button>
@@ -555,11 +555,11 @@ export default function PreOrder() {
         </div>
 
         {/* ส่วนการชำระเงิน */}
-        <div className="bg-white border-t border-[#F6C7C7] shrink-0">
+        <div className="bg-white border-t border-brand-border shrink-0">
           {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
-          <div className="md:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-[#F6C7C7]">
-            <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-[#F12B6B]">฿{finalTotal.toFixed(2)}</span></div>
-            <button onClick={() => setPayOpen(v => !v)} className="flex items-center gap-1 text-xs font-bold text-[#F12B6B] bg-[#FFF5F7] border border-[#F6C7C7] px-3 py-1.5 rounded-full active:scale-95 transition-all duration-150">
+          <div className="md:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-brand-border">
+            <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-brand">฿{finalTotal.toFixed(2)}</span></div>
+            <button onClick={() => setPayOpen(v => !v)} className="flex items-center gap-1 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-3 py-1.5 rounded-full active:scale-95 transition-all duration-150">
               {payOpen ? <><ChevronDown size={14} /> ย่อลง</> : <><ChevronUp size={14} /> ชำระเงิน</>}
             </button>
           </div>
@@ -573,8 +573,8 @@ export default function PreOrder() {
                 <span>แลกแต้ม ({pointsDiscount} 🌟):</span> <span>-฿{pointsDiscount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between text-xl font-bold text-gray-800 pt-1 border-t border-[#F6C7C7]">
-              <span>ยอดสุทธิ:</span> <span className="text-[#F12B6B]">฿{finalTotal.toFixed(2)}</span>
+            <div className="flex justify-between text-xl font-bold text-gray-800 pt-1 border-t border-brand-border">
+              <span>ยอดสุทธิ:</span> <span className="text-brand">฿{finalTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -583,8 +583,8 @@ export default function PreOrder() {
             <div>
               <label className="block text-xs font-bold text-gray-600 mb-1">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</label>
               <div className="flex gap-2">
-                <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => { setPhoneNumber(e.target.value); setPhoneVerified(null); }} className="flex-1 p-2.5 border border-[#F6C7C7] rounded-lg text-sm outline-none focus:border-[#F12B6B] focus:ring-1 focus:ring-[#F12B6B]" />
-                <button type="button" onClick={handleVerifyPhone} disabled={verifying} className="shrink-0 bg-[#FFF5F7] text-[#FF467E] px-3 py-2 rounded-lg text-sm font-bold hover:bg-[#F6C7C7] transition disabled:opacity-50">
+                <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => { setPhoneNumber(e.target.value); setPhoneVerified(null); }} className="flex-1 p-2.5 border border-brand-border rounded-lg text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
+                <button type="button" onClick={handleVerifyPhone} disabled={verifying} className="shrink-0 bg-brand-bg text-brand-dark px-3 py-2 rounded-lg text-sm font-bold hover:bg-brand-border transition disabled:opacity-50">
                   {verifying ? '...' : 'ตรวจสอบ'}
                 </button>
               </div>
@@ -614,7 +614,7 @@ export default function PreOrder() {
 
             {/* ⭐️ FIX: เลือกวิธีจ่ายเงิน — เดิม text-sm ยาวเกิน ตัวหนังสือชนกันในปุ่มแคบบนมือถือ ลดขนาด + leading-tight */}
             <div className="flex gap-2">
-              <button onClick={() => setPaymentMethod('CASH')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'CASH' ? 'border-[#F12B6B] bg-[#FFF5F7] text-[#FF467E]' : 'border-gray-200 text-gray-400'}`}>
+              <button onClick={() => setPaymentMethod('CASH')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'CASH' ? 'border-brand bg-brand-bg text-brand-dark' : 'border-gray-200 text-gray-400'}`}>
                 💵 จ่ายเงินสดหน้าร้าน
               </button>
               <button onClick={() => setPaymentMethod('QR')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>
@@ -676,7 +676,7 @@ export default function PreOrder() {
           {(() => {
             const qrNotReady = paymentMethod === 'QR' && (slipProcessing || !slipFile || !slipDimensions);
             return (
-              <button onClick={handleCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#F12B6B] hover:bg-[#FF467E]'}`}>
+              <button onClick={handleCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-brand hover:bg-brand-dark'}`}>
                 {loading ? 'กำลังส่งข้อมูล...'
                   : slipProcessing ? 'กำลังเตรียมสลิป...'
                   : (paymentMethod === 'QR' && !slipFile) ? <><Upload size={18} /> แนบสลิปก่อนยืนยัน</>
@@ -692,9 +692,9 @@ export default function PreOrder() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
           {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
-            <div className="p-4 bg-[#FFF5F7] border-b border-[#F6C7C7] flex justify-between items-center shrink-0">
+            <div className="p-4 bg-brand-bg border-b border-brand-border flex justify-between items-center shrink-0">
               <h2 className="font-bold text-lg text-gray-800">ประวัติการสั่งจองของฉัน</h2>
-              <button onClick={() => setShowMyOrders(false)} className="p-1 hover:bg-[#F6C7C7] text-gray-500 rounded-lg"><X size={20} /></button>
+              <button onClick={() => setShowMyOrders(false)} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg"><X size={20} /></button>
             </div>
             <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
               {myOrders.length === 0 ? (
@@ -722,7 +722,7 @@ export default function PreOrder() {
                     REFUND_REQUESTED: '💰 รอคืนเงิน',
                   };
                   return (
-                  <div key={order.id} className="bg-white p-4 rounded-2xl border border-[#F6C7C7] shadow-md hover:shadow-lg hover:border-[#FD94B4] transition-all cursor-pointer"
+                  <div key={order.id} className="bg-white p-4 rounded-2xl border border-brand-border shadow-md hover:shadow-lg hover:border-brand-mid transition-all cursor-pointer"
                     onClick={() => { setSelectedOrder(order); setRefundReason(''); setShowMyOrders(false); }}>
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -748,7 +748,7 @@ export default function PreOrder() {
                     )}
 
                     <div className="flex justify-between items-center border-t border-gray-200 pt-3">
-                      <span className="font-bold text-[#F12B6B] text-base">฿{Number(order.total_amount).toFixed(2)}</span>
+                      <span className="font-bold text-brand text-base">฿{Number(order.total_amount).toFixed(2)}</span>
                       <span className="text-xs text-gray-500">แตะเพื่อดูละเอียด →</span>
                     </div>
                   </div>
@@ -772,7 +772,7 @@ export default function PreOrder() {
               ของการ์ดแม่ (rounded-2xl) ทำให้ขอบบนดูเหลี่ยม ไม่มน ใส่ overflow-hidden ให้ครอบตัดตามการ์ดแม่ */}
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85dvh] flex flex-col overflow-hidden animate-fade-in">
             {/* Header - Sticky */}
-            <div className="shrink-0 bg-[#F12B6B] px-4 py-3 flex justify-between items-center gap-3">
+            <div className="shrink-0 bg-brand px-4 py-3 flex justify-between items-center gap-3">
               <div className="flex-1 min-w-0">
                 <h2 className="text-white font-bold text-base truncate">ออเดอร์ #{selectedOrder.id}</h2>
                 <p className="text-white/80 text-xs mt-0.5">{formatBangkokTime(selectedOrder.created_at)}</p>
@@ -814,7 +814,7 @@ export default function PreOrder() {
 
               {/* Slip Image Section */}
               {(selectedOrder.payment_method === 'QR' || selectedOrder.slip_image) && (
-                <div className="bg-[#FFF5F7] rounded-xl p-4 text-center border border-[#F6C7C7]">
+                <div className="bg-brand-bg rounded-xl p-4 text-center border border-brand-border">
                   <p className="text-xs sm:text-sm text-gray-600 font-semibold mb-3 flex items-center justify-center gap-2">
                     <span className="text-lg">🧾</span> หลักฐานการชำระเงิน
                   </p>
@@ -825,7 +825,7 @@ export default function PreOrder() {
                     <AuthImage
                       path={getSlipImagePath(selectedOrder.created_at, selectedOrder.slip_image)}
                       alt="slip"
-                      className="w-full max-h-64 sm:max-h-80 object-contain rounded-xl border border-[#F6C7C7] bg-white"
+                      className="w-full max-h-64 sm:max-h-80 object-contain rounded-xl border border-brand-border bg-white"
                       fallback={<p className="text-gray-500 text-sm py-8">โหลดรูปสลิปไม่ได้</p>}
                     />
                   ) : (
@@ -848,9 +848,9 @@ export default function PreOrder() {
                       Swal.fire({ icon: 'success', title: 'อัปโหลดสลิปสำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
                     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
                   }} />
-                  <div className="border-2 border-dashed border-[#FD94B4] rounded-2xl p-6 sm:p-7 text-center bg-[#FFF5F7] group-hover:bg-[#F6C7C7] group-active:bg-[#F6C7C7] transition-colors duration-150">
-                    <p className="text-[#F12B6B] font-bold text-sm sm:text-base">📎 แตะเพื่ออัปโหลดสลิป</p>
-                    <p className="text-[#F12B6B] text-xs sm:text-sm mt-2">(รูปภาพขนาดไม่เกิน 5 MB)</p>
+                  <div className="border-2 border-dashed border-brand-mid rounded-2xl p-6 sm:p-7 text-center bg-brand-bg group-hover:bg-brand-border group-active:bg-brand-border transition-colors duration-150">
+                    <p className="text-brand font-bold text-sm sm:text-base">📎 แตะเพื่ออัปโหลดสลิป</p>
+                    <p className="text-brand text-xs sm:text-sm mt-2">(รูปภาพขนาดไม่เกิน 5 MB)</p>
                   </div>
                 </label>
               )}
@@ -888,7 +888,7 @@ export default function PreOrder() {
                         <p className="text-gray-800 font-medium text-sm truncate">{item.product_name}</p>
                         <p className="text-gray-500 text-xs mt-0.5">จำนวน: {item.quantity} ชิ้น</p>
                       </div>
-                      <p className="font-bold text-[#F12B6B] text-sm whitespace-nowrap">฿{Number(item.subtotal).toFixed(2)}</p>
+                      <p className="font-bold text-brand text-sm whitespace-nowrap">฿{Number(item.subtotal).toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
@@ -913,9 +913,9 @@ export default function PreOrder() {
               )}
 
               {/* Total Amount */}
-              <div className="bg-[#FFF5F7] border border-[#F6C7C7] rounded-xl p-4">
+              <div className="bg-brand-bg border border-brand-border rounded-xl p-4">
                 <p className="text-gray-700 text-xs sm:text-sm font-medium mb-1">ยอดรวมทั้งสิ้น</p>
-                <p className="text-2xl sm:text-3xl font-bold text-[#F12B6B]">
+                <p className="text-2xl sm:text-3xl font-bold text-brand">
                   ฿{Number(selectedOrder.total_amount).toFixed(2)}
                 </p>
               </div>
@@ -931,7 +931,7 @@ export default function PreOrder() {
                     placeholder="ระบุเหตุผลการยกเลิก เช่น เปลี่ยนใจ, ส่วนลดน้อยเกินไป, ฯลฯ"
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-[#F12B6B] focus:ring-2 focus:ring-[#F6C7C7] transition-colors duration-150 resize-none h-24 bg-gray-50 placeholder:text-gray-400"
+                    className="w-full p-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand-border transition-colors duration-150 resize-none h-24 bg-gray-50 placeholder:text-gray-400"
                   />
                   <p className="text-xs text-gray-500 text-right">{refundReason.length} / 200</p>
                 </div>
