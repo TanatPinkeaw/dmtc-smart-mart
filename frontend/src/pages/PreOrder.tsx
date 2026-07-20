@@ -406,7 +406,7 @@ export default function PreOrder() {
                   <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                     {highlights.promo.map(p => (
                       <div key={`promo-${p.id}`} onClick={() => addToCart(p)} className="shrink-0 w-28 bg-white border border-amber-200 rounded-xl p-2 cursor-pointer hover:shadow-sm active:scale-95 transition relative">
-                        <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).discount_percent || 40}%</span>
+                        <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).promo_active ? (p as any).promo_percent : ((p as any).discount_percent || 40)}%</span>
                         <div className="w-full aspect-square bg-[#FFF5F7] rounded-lg mb-1 flex items-center justify-center overflow-hidden">
                           {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-[#FD94B4] opacity-50" />}
                         </div>
@@ -465,8 +465,17 @@ export default function PreOrder() {
                 <p className="text-xs font-medium text-gray-800 text-center line-clamp-2 mb-1">{product.name}</p>
 
                 <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
-                  <p className="text-sm font-bold text-[#F12B6B]">฿{Number(product.price).toFixed(2)}</p>
-                  <p className="shrink-0 text-[10px] bg-[#FFF5F7] text-[#F12B6B] px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>
+                  {(product as any).promo_active ? (
+                    <p className="text-sm font-bold text-[#F12B6B] flex items-baseline gap-1">
+                      ฿{(Number(product.price) * (1 - (Number((product as any).promo_percent) || 0) / 100)).toFixed(2)}
+                      <span className="text-[9px] text-gray-400 line-through font-normal">฿{Number(product.price).toFixed(2)}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-[#F12B6B]">฿{Number(product.price).toFixed(2)}</p>
+                  )}
+                  {(product as any).promo_active
+                    ? <span className="shrink-0 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-bold">-{(product as any).promo_percent}%</span>
+                    : <p className="shrink-0 text-[10px] bg-[#FFF5F7] text-[#F12B6B] px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>}
                 </div>
 
                 <button

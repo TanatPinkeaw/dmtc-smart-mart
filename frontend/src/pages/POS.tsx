@@ -336,7 +336,10 @@ export default function POS() {
                   const pWithExpiry = p as any;
                   const showDiscount = pWithExpiry.expiry_status === 'near_expiry';
                   const overridePrice = priceOverride[p.id];
-                  const finalPrice = overridePrice ?? (showDiscount ? pWithExpiry.price_after_discount : p.price);
+                  // ⭐️ Phase 1 — โปรช่วงวันที่ (ใช้เมื่อไม่มีลดใกล้หมดอายุ; ถ้ามีทั้งคู่ server จะเลือกอันดีสุดตอนคิดเงินเอง)
+                  const promoActive = !showDiscount && !!pWithExpiry.promo_active;
+                  const promoPct = Number(pWithExpiry.promo_percent) || 0;
+                  const finalPrice = overridePrice ?? (showDiscount ? pWithExpiry.price_after_discount : (promoActive ? Number(p.price) * (1 - promoPct / 100) : p.price));
                   const isExpired = pWithExpiry.expiry_status === 'expired';
 
                   return (
@@ -369,6 +372,11 @@ export default function POS() {
                           ⚠️ หมดอายุวันนี้
                         </div>
                       )}
+                      {promoActive && (
+                        <div className="bg-amber-200 text-amber-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
+                          🏷️ โปรลดราคา -{promoPct}%
+                        </div>
+                      )}
 
                       {/* ⭐️ FIX: ราคาอยู่มุมซ้ายล่าง จำนวนคงเหลืออยู่มุมขวาล่าง เหมือนการ์ดสินค้าหน้าจอง (Pre-order)
                           mt-auto ดันราคา+ปุ่มด้านล่างทั้งกลุ่มให้ชิดขอบล่างเสมอ แม้การ์ดถูก grid stretch สูงไม่เท่ากัน */}
@@ -378,6 +386,11 @@ export default function POS() {
                             <>
                               <s className="text-gray-400 text-xs block">฿{Number(p.price).toFixed(2)}</s>
                               <span className="text-red-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
+                            </>
+                          ) : promoActive ? (
+                            <>
+                              <s className="text-gray-400 text-xs block">฿{Number(p.price).toFixed(2)}</s>
+                              <span className="text-amber-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
                             </>
                           ) : (
                             <p className="text-sm font-bold text-[#F12B6B]">฿{Number(finalPrice).toFixed(2)}</p>
