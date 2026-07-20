@@ -24,7 +24,7 @@ export function RegisterMemberModal({ regForm, onRegFormChange, regLoading, onSu
     <Modal onClose={onClose} widthClassName="sm:max-w-sm">
       <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-emerald-50">
         <h3 className="text-sm font-semibold text-emerald-800 flex items-center gap-2"><UserPlus size={16} /> สมัครสมาชิกใหม่</h3>
-        <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"><X size={16} /></button>
+        <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400" aria-label="ปิด"><X size={16} /></button>
       </div>
       <form onSubmit={onSubmit} className="p-5 space-y-3">
         {FIELDS.map(f => (

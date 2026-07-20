@@ -455,7 +455,7 @@ export default function OrderManagement() {
             
             <div className="p-4 border-b border-brand-border flex justify-between items-center bg-brand-bg shrink-0">
               <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2">รายละเอียดออเดอร์ #{selectedOrder.id}</h2>
-              <button onClick={() => {setSelectedOrder(null); setRejectReason(''); setVerifyNotes('');}} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg"><X size={20}/></button>
+              <button onClick={() => {setSelectedOrder(null); setRejectReason(''); setVerifyNotes('');}} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg" aria-label="ปิด"><X size={20}/></button>
             </div>
 
             <div className="p-4 md:p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-6">

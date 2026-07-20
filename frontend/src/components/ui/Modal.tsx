@@ -27,6 +27,7 @@ export function Modal({ title, onClose, children, widthClassName = 'sm:max-w-md'
             <h3 className="font-semibold text-gray-900">{title}</h3>
             <button
               onClick={onClose}
+              aria-label="ปิด"
               className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"
             >
               <X size={18} />

@@ -234,15 +234,15 @@ export default function POS() {
           icon: 'warning',
           title: 'สต๊อกไม่เพียงพอสำหรับบางรายการ',
           html: `
-            <div style="text-align: left; margin-top: 10px;">
-              <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+            <div class="text-left mt-2.5">
+              <table class="w-full text-[13px] border-collapse">
                 <tbody>
                   ${issues.map(issue => `
-                    <tr style="border-bottom: 1px solid #ccc; padding: 8px;">
-                      <td style="padding: 6px; font-weight: bold; color: #F12B6B;">${issue.product_name}</td>
-                      <td style="padding: 6px; text-align: right;">
-                        <span style="color: #d9534f;">ขอ: ${issue.requested}</span> |
-                        <span style="color: #5cb85c;">มี: ${issue.available}</span>
+                    <tr class="border-b border-gray-300">
+                      <td class="py-1.5 px-1.5 font-bold text-brand">${issue.product_name}</td>
+                      <td class="py-1.5 px-1.5 text-right">
+                        <span class="text-red-500">ขอ: ${issue.requested}</span> |
+                        <span class="text-emerald-500">มี: ${issue.available}</span>
                       </td>
                     </tr>
                   `).join('')}

@@ -35,7 +35,7 @@ export function MyOrdersModal({ myOrders, onClose, onSelectOrder }: MyOrdersModa
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0 shadow-sm">
           <h2 className="font-semibold text-lg text-white">ประวัติการสั่งจองของฉัน</h2>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={20} /></button>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
         </div>
         <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
           {myOrders.length === 0 ? (

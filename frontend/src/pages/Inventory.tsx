@@ -110,7 +110,7 @@ export default function Inventory() {
             <Truck size={18} className="text-white" />
             <h2 className="text-sm font-semibold text-white">รายการรับของเข้า</h2>
           </div>
-          <button onClick={() => setIsReceiveOpen(false)} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={18} /></button>
+          <button onClick={() => setIsReceiveOpen(false)} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={18} /></button>
         </div>
 
         {/* Supplier */}

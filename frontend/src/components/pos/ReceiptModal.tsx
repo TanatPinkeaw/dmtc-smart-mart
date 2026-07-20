@@ -14,7 +14,7 @@ export function ReceiptModal({ receiptData, storeInfo, onClose }: ReceiptModalPr
     <Modal onClose={onClose} widthClassName="sm:max-w-sm print:max-w-full print:shadow-none print:rounded-none">
       <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg print:hidden">
         <h3 className="text-sm font-semibold text-brand flex items-center gap-2"><CheckCircle size={16} /> ทำรายการสำเร็จ</h3>
-        <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"><X size={16} /></button>
+        <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="ปิด"><X size={16} /></button>
       </div>
       <div id="receipt-print-area" className="p-5 font-mono text-sm text-gray-800">
         <div className="text-center mb-3">

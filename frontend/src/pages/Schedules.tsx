@@ -199,7 +199,7 @@ export default function Schedules() {
               {editingScheduleId ? 'แก้ไขกะ — ' : ''}
               {new Date(popover.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}
             </h3>
-            <button onClick={() => { setPopover(null); setEditingScheduleId(null); }} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-brand-bg rounded-lg transition-colors duration-150"><X size={14} /></button>
+            <button onClick={() => { setPopover(null); setEditingScheduleId(null); }} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-brand-bg rounded-lg transition-colors duration-150" aria-label="ปิด"><X size={14} /></button>
           </div>
           <select value={popForm.cashier_id} onChange={e => setPopForm({ ...popForm, cashier_id: e.target.value })} className={`${inputCls} w-full mb-2`}>
             <option value="">เลือกพนักงาน</option>

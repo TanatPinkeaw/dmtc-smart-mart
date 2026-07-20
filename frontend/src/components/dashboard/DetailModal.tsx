@@ -26,7 +26,7 @@ export function DetailModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center px-4 py-3 border-b border-brand-border">
           <h3 className="text-sm font-semibold text-gray-900">{detailModal.title}</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-brand-bg transition-colors duration-150"><X size={16} /></button>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-brand-bg transition-colors duration-150" aria-label="ปิด"><X size={16} /></button>
         </div>
         <div className="overflow-y-auto max-h-[60dvh] p-4 space-y-2">
           {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีสินค้าสต๊อกใกล้หมด</p> :

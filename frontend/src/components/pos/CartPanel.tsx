@@ -62,7 +62,7 @@ export function CartPanel({
           <h2 className="text-base font-semibold text-white">ตะกร้าสินค้า</h2>
           {cart.length > 0 && <span className="bg-white text-brand text-xs font-bold px-1.5 py-0.5 rounded-full">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
         </div>
-        <button onClick={onCloseCart} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={18} /></button>
+        <button onClick={onCloseCart} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={18} /></button>
       </div>
 
       {/* Cart items */}
@@ -138,7 +138,7 @@ export function CartPanel({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">{currentMember.points} 🌟</span>
-                <button onClick={onClearMember} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150"><X size={14} /></button>
+                <button onClick={onClearMember} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150" aria-label="ปิด"><X size={14} /></button>
               </div>
             </div>
           )}
@@ -158,7 +158,7 @@ export function CartPanel({
         ) : (
           <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
             <p className="text-xs font-semibold text-emerald-700">🏷️ {appliedPromo.name} (-฿{appliedPromo.discount_amount.toFixed(2)})</p>
-            <button onClick={onRemovePromo} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150"><X size={14} /></button>
+            <button onClick={onRemovePromo} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150" aria-label="ปิด"><X size={14} /></button>
           </div>
         )}
 

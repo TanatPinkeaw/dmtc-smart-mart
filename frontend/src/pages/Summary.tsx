@@ -13,6 +13,7 @@ import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
 
 interface Overview {
   month: string;
@@ -174,8 +175,11 @@ export default function Summary() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonDashboardStat key={i} />)}
+          </div>
+          <SkeletonCard />
         </div>
       ) : (
         <>
