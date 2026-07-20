@@ -110,20 +110,20 @@ export default function BackupManagement() {
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center shrink-0">
-              <Database size={18} className="text-brand" />
+            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <Database size={18} className="text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">สำรอง & กู้คืนข้อมูล</h1>
-              <p className="text-xs text-gray-500">ระบบสำรองข้อมูลอัตโนมัติทุกวัน + กดสำรองเองได้ตลอดเวลา</p>
+              <h1 className="text-xl font-semibold text-white">สำรอง & กู้คืนข้อมูล</h1>
+              <p className="text-xs text-white/80">ระบบสำรองข้อมูลอัตโนมัติทุกวัน + กดสำรองเองได้ตลอดเวลา</p>
             </div>
           </div>
           <button
             onClick={handleCreateBackup}
             disabled={loading || isLoadingBackups}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-brand hover:bg-brand-dark active:scale-95 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-brand hover:bg-brand-bg active:scale-95 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             {loading ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูลตอนนี้'}
@@ -137,7 +137,7 @@ export default function BackupManagement() {
             ))}
           </div>
         ) : backups.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 shadow-sm">
+          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 shadow-md">
             <Database size={40} className="mx-auto mb-3 opacity-30" />
             <p>ยังไม่มีไฟล์สำรองข้อมูล</p>
           </div>
@@ -146,7 +146,7 @@ export default function BackupManagement() {
             {/* Mobile cards */}
             <div className="sm:hidden space-y-3">
               {backups.map(backup => (
-                <div key={backup.id} className="bg-white border border-brand-border rounded-xl p-4 shadow-sm">
+                <div key={backup.id} className="bg-white border border-brand-border rounded-xl p-4 shadow-md">
                   <div className="flex justify-between items-start mb-2 gap-2">
                     <p className="font-mono text-xs text-gray-700 break-all">{backup.filename}</p>
                     <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusColor(backup.status)}`}>
@@ -169,7 +169,7 @@ export default function BackupManagement() {
             </div>
 
             {/* Desktop table */}
-            <div className="hidden sm:block bg-white rounded-2xl border border-brand-border shadow-sm overflow-hidden">
+            <div className="hidden sm:block bg-white rounded-2xl border border-brand-border shadow-md overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-brand-bg text-gray-600 text-sm">

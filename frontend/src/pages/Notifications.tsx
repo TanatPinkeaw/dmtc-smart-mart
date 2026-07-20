@@ -81,15 +81,15 @@ export default function Notifications() {
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title) แทนหัวข้อใหญ่แบบเดิม
     <div className="min-h-screen bg-brand-bg pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
-            <Bell size={15} className="text-white" />
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shadow-md">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+            <Bell size={16} className="text-white" />
           </div>
-          <h1 className="text-base font-bold text-gray-900 truncate">การแจ้งเตือน</h1>
+          <h1 className="text-lg font-semibold text-white truncate">การแจ้งเตือน</h1>
         </div>
         {unread > 0 && (
-          <span className="shrink-0 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-3 py-1.5 rounded-full">
+          <span className="shrink-0 text-xs font-bold text-white bg-white/15 border border-white/20 px-3 py-1.5 rounded-full">
             {unread} ยังไม่อ่าน
           </span>
         )}
@@ -97,14 +97,14 @@ export default function Notifications() {
 
       <div className="max-w-2xl mx-auto p-4 sm:p-6">
         {/* ⭐️ FIX: กรอบค้นหา — ใส่พื้นหลังขาว + เงา ให้เป็นกล่องแยกชัดเจนเหมือนกรอบแท็บหมวดหมู่หน้า POS/จอง */}
-        <div className="relative mb-4 bg-white border border-brand-border rounded-xl p-2.5 shadow-sm">
+        <div className="relative mb-4 bg-white border border-brand-border rounded-xl p-2.5 shadow-md">
           <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="ค้นหาการแจ้งเตือน..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-7 pr-2 py-1 bg-transparent text-sm outline-none" />
         </div>
 
         {/* List */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
           {loading ? (
             <div className="p-8 space-y-3">
               {[1,2,3].map(i => (
