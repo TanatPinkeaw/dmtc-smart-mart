@@ -126,14 +126,22 @@ export default function PreOrder() {
 
   const fetchProducts = async () => {
     try {
-      const [prodRes, catRes, hlRes] = await Promise.all([api.get('/products'), api.get('/categories'), api.get('/products/highlights')]);
+      const [prodRes, catRes] = await Promise.all([api.get('/products'), api.get('/categories')]);
       const fresh: Product[] = prodRes.data;
       setProducts(fresh.filter((p) => p.stock > 0));
       setCategories(catRes.data);
-      setHighlights({
-        popular: (hlRes.data.popular || []).filter((p: Product) => p.stock > 0),
-        promo: (hlRes.data.promo || []).filter((p: Product) => p.stock > 0),
-      });
+
+      // ⭐️ ไฮไลต์ (ยอดนิยม/โปร) = ไม่ critical — แยกออกมา ถ้า backend ยังไม่มี endpoint (404) หรือพลาด
+      // จะได้ "ไม่ทำให้รายการสินค้าทั้งหน้าหายไป" (เดิมรวมใน Promise.all เดียวกัน พอ 404 = จอว่างทั้งหน้า)
+      try {
+        const hlRes = await api.get('/products/highlights');
+        setHighlights({
+          popular: (hlRes.data.popular || []).filter((p: Product) => p.stock > 0),
+          promo: (hlRes.data.promo || []).filter((p: Product) => p.stock > 0),
+        });
+      } catch {
+        setHighlights({ popular: [], promo: [] });
+      }
 
       // ⭐️ sync ตะกร้ากับสต๊อกล่าสุด กันข้อมูลเพี้ยน (สินค้าหมด/สต๊อกลดระหว่างที่ลูกค้ากำลังเลือกอยู่)
       setCart((prevCart) => {
