@@ -86,7 +86,7 @@ export default function Login() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-sm p-6">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-lg p-6">
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl">
               {error}
@@ -154,10 +154,10 @@ export default function Login() {
             <h2 className="text-lg font-bold text-gray-900 mb-1">เข้ามาทำอะไรวันนี้?</h2>
             <p className="text-sm text-gray-500 mb-5">เลือกโหมดการใช้งาน</p>
             <div className="space-y-3">
-              <button onClick={handleChooseWork} className="w-full flex items-center justify-center gap-2 py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95">
+              <button onClick={handleChooseWork} className="w-full flex items-center justify-center gap-2 py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
                 <Briefcase size={18} /> เข้างาน
               </button>
-              <button onClick={handleChooseShop} className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-brand-mid text-brand hover:bg-brand-bg font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95">
+              <button onClick={handleChooseShop} className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-brand-mid text-brand hover:bg-brand-bg font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
                 <ShoppingBag size={18} /> ซื้อของ / จองสินค้า
               </button>
             </div>
