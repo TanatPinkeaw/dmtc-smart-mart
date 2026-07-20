@@ -86,17 +86,17 @@ export default function AttendanceManagement() {
       <div className="max-w-5xl mx-auto">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-brand-bg border border-brand-border rounded-xl flex items-center justify-center shrink-0">
-              <ClipboardCheck size={18} className="text-brand" />
+            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <ClipboardCheck size={18} className="text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">จัดการเข้า-ออกงาน</h1>
-              <p className="text-xs text-gray-500">แก้ไขกรณีลืมลงเวลา + ตรวจสอบรูปยืนยันสถานที่</p>
+              <h1 className="text-xl font-semibold text-white">จัดการเข้า-ออกงาน</h1>
+              <p className="text-xs text-white/80">แก้ไขกรณีลืมลงเวลา + ตรวจสอบรูปยืนยันสถานที่</p>
             </div>
           </div>
-          <button onClick={handleRunAutoCheckout} disabled={runningAuto} className="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-orange-100 transition-colors duration-150 disabled:opacity-50">
+          <button onClick={handleRunAutoCheckout} disabled={runningAuto} className="flex items-center gap-2 bg-white/15 border border-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 active:scale-95 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             <RefreshCw size={15} className={runningAuto ? 'animate-spin' : ''} /> รันตรวจสอบลืมออกงาน
           </button>
         </div>
@@ -111,7 +111,7 @@ export default function AttendanceManagement() {
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
           {/* Desktop */}
           <table className="hidden sm:table w-full text-left">
             <thead>
