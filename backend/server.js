@@ -4570,8 +4570,10 @@ process.on('uncaughtException', (err) => {
 
 const PORT = process.env.PORT || 3000; // ⭐️ DEPLOY — อ่านจาก .env ได้ (default 3000)
 // เปลี่ยนจาก app.listen เป็น server.listen
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+// ⭐️ DEPLOY FIX — bind 0.0.0.0 (IPv4 ทุก interface) ไม่งั้น Node default ไปที่ IPv6 '::'
+// แล้ว Render สแกนพอร์ตทาง IPv4 มองไม่เห็น → "No open ports detected" → deploy timeout → คงโค้ดเก่า
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`⚡ WebSocket Server is ready!`);
 
   // ⭐️ Sprint 2 — C3: Cron backup ทุกวัน 19:00 UTC (ตี 2 เวลาไทย วันถัดไป)
