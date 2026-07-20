@@ -33,7 +33,7 @@ export function CloseShiftModal({
           <>
             <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
               <h3 className="text-sm font-semibold text-gray-900">ปิดกะการขาย</h3>
-              <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-colors duration-150"><X size={18} /></button>
+              <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-colors duration-150" aria-label="ปิด"><X size={18} /></button>
             </div>
             <div className="p-5 max-h-[75dvh] overflow-y-auto">
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-xs text-blue-700">

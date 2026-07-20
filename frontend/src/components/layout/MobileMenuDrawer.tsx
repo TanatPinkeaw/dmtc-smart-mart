@@ -16,7 +16,7 @@ export function MobileMenuDrawer({ isAdmin, onClose }: MobileMenuDrawerProps) {
       <div className="relative bg-white rounded-t-2xl shadow-xl w-full max-h-[75dvh] overflow-hidden flex flex-col animate-fade-in">
         <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-brand to-brand-dark shrink-0">
           <h3 className="font-semibold text-white">เมนูเพิ่มเติม</h3>
-          <button onClick={onClose} className="text-white/90 hover:text-white p-1 rounded-lg hover:bg-white/20 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={18} /></button>
+          <button onClick={onClose} className="text-white/90 hover:text-white p-1 rounded-lg hover:bg-white/20 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={18} /></button>
         </div>
         <div className="p-3 space-y-1 overflow-y-auto">
           {STAFF_ITEMS.map(item => (

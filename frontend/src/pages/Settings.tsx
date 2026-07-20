@@ -643,7 +643,7 @@ export default function Settings() {
                       </div>
                       <div className="flex gap-2 mt-auto pt-2">
                         <button onClick={() => handleCopyResetLink(r.reset_token)} className="flex-1 bg-brand hover:bg-brand-dark text-white font-bold text-sm py-2 rounded-xl transition-colors duration-150 flex items-center justify-center gap-1.5"><Copy size={15} /> คัดลอกลิงก์</button>
-                        <button onClick={() => handleRejectPasswordReset(r.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-sm px-3 py-2 rounded-xl transition-colors duration-150"><X size={15} /></button>
+                        <button onClick={() => handleRejectPasswordReset(r.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-sm px-3 py-2 rounded-xl transition-colors duration-150" aria-label="ปิด"><X size={15} /></button>
                       </div>
                     </div>
                   ))}
@@ -968,7 +968,7 @@ const CustomModal = ({ title, onClose, children }: any) => (
     <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-lg w-full max-w-md overflow-hidden flex flex-col transform transition-all">
       <div className="px-5 py-4 flex justify-between items-center bg-gradient-to-r from-brand to-brand-dark rounded-t-2xl md:rounded-t-none shadow-sm">
         <h2 className="text-base md:text-lg font-semibold text-white">{title}</h2>
-        <button onClick={onClose} className="text-white/90 hover:text-white hover:bg-white/20 active:scale-90 p-1.5 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={20} /></button>
+        <button onClick={onClose} className="text-white/90 hover:text-white hover:bg-white/20 active:scale-90 p-1.5 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
       </div>
       <div className="p-5 pb-12 md:pb-5 overflow-y-auto max-h-[75dvh] md:max-h-[85dvh]">
         {children}

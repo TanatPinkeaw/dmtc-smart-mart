@@ -16,6 +16,7 @@ import { Section } from '../components/dashboard/Section';
 import { StatCards } from '../components/dashboard/StatCards';
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
 import { CloseShiftModal } from '../components/dashboard/CloseShiftModal';
+import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
 import { DetailModal } from '../components/dashboard/DetailModal';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
@@ -188,10 +189,15 @@ export default function Dashboard() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-sm text-gray-400">กำลังโหลดข้อมูล...</p>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6 pb-24">
+      <div className="max-w-7xl mx-auto space-y-5">
+        <div className="h-20 bg-brand-border/40 rounded-2xl animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonDashboardStat key={i} />)}
+          </div>
+          <SkeletonCard />
+        </div>
       </div>
     </div>
   );
