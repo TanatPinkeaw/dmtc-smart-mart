@@ -59,6 +59,7 @@ export default function PreOrder() {
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
   const [slipUploadProgress, setSlipUploadProgress] = useState(0); // ⭐️ Sprint 2 — B9
   const [slipDimensions, setSlipDimensions] = useState<{ width: number; height: number } | null>(null); // ⭐️ Sprint 2 — B9
+  const [slipProcessing, setSlipProcessing] = useState(false); // ⭐️ กำลังตรวจ/เตรียมสลิป — ล็อกปุ่มยืนยันไว้ก่อน
 
   // State สำหรับสะสมแต้ม
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -96,11 +97,19 @@ export default function PreOrder() {
     socket.on(`order_update_user_${user.id}`, (data) => {
       // ⭐️ แปลงรหัสสถานะเป็นข้อความเป็นกันเอง แทนโชว์ PREPARING/READY ดิบๆ
       const msg = CUSTOMER_STATUS_MESSAGE[data.status] || { icon: 'info' as const, text: 'ออเดอร์ของคุณมีการอัปเดต' };
+      const isReject = data.status === 'SLIP_REJECTED';
+      // ⭐️ แตะที่แจ้งเตือน → เด้งเข้าออเดอร์นั้นทันที (โดยเฉพาะ SLIP_REJECTED จะเห็นปุ่มส่งสลิปใหม่เลย)
       Swal.fire({
         toast: true, position: 'top-end', icon: msg.icon,
         title: msg.text,
-        text: `ออเดอร์ #${data.order_id}`,
-        showConfirmButton: false, timer: 3500
+        text: `ออเดอร์ #${data.order_id} • ${isReject ? '👉 แตะเพื่อส่งสลิปใหม่' : '👉 แตะเพื่อดู'}`,
+        showConfirmButton: false,
+        timer: isReject ? 8000 : 4500,
+        timerProgressBar: true,
+        didOpen: (el) => {
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', () => { Swal.close(); openMyOrder(data.order_id); });
+        },
       });
     });
     socket.on(`notification_user_${user.id}`, (data) => {
@@ -218,23 +227,29 @@ export default function PreOrder() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate
-    const validation = await validatePaymentSlip(file);
-    if (!validation.valid) {
-      Swal.fire('Invalid File', validation.error, 'warning');
-      e.target.value = ''; // Reset input
-      return;
+    setSlipProcessing(true); // ⭐️ ล็อกปุ่มยืนยันระหว่างตรวจ/เตรียมสลิป
+    try {
+      // Validate
+      const validation = await validatePaymentSlip(file);
+      if (!validation.valid) {
+        Swal.fire('Invalid File', validation.error, 'warning');
+        e.target.value = ''; // Reset input
+        setSlipFile(null); setSlipPreview(null); setSlipDimensions(null);
+        return;
+      }
+
+      setSlipFile(file);
+      setSlipDimensions(validation.dimensions || null);
+
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setSlipPreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setSlipProcessing(false);
     }
-
-    setSlipFile(file);
-    setSlipDimensions(validation.dimensions || null);
-
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setSlipPreview(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   // ⭐️ Sprint 2 — B9: Upload payment slip to specific order
@@ -305,6 +320,18 @@ export default function PreOrder() {
       const res = await api.get(`/orders?t=${Date.now()}`);
       setMyOrders(res.data);
     } catch (err) { console.error(err); }
+  };
+
+  // ⭐️ เปิดออเดอร์เจาะจง (จากการกดแจ้งเตือน) → เด้งเข้า modal รายละเอียดเลย
+  // ถ้าออเดอร์เป็น SLIP_REJECTED จะเห็นปุ่ม "แตะเพื่อส่งสลิปใหม่" ทันที ไม่ต้องหาเอง
+  const openMyOrder = async (orderId: number) => {
+    try {
+      const res = await api.get(`/orders?t=${Date.now()}`);
+      setMyOrders(res.data);
+      const found = (res.data || []).find((o: any) => Number(o.id) === Number(orderId));
+      if (found) { setSelectedOrder(found); setRefundReason(''); }
+      else setShowMyOrders(true);
+    } catch (err) { console.error(err); setShowMyOrders(true); }
   };
 
   // ✅ CHANGED: accept refund reason from modal input
@@ -608,9 +635,18 @@ export default function PreOrder() {
 
           {/* ⭐️ FIX: ปุ่มยืนยัน — ปรับให้ตรงกับปุ่ม "ชำระเงิน" หน้า POS: ขนาด/ฟอนต์เล็กลง (py-3.5, text-sm,
               ไอคอน 18px), เปลี่ยนเป็นสีฟ้าตอนเลือกสแกนจ่าย (เหมือน POS ที่สลับสีตาม paymentMethod) */}
-          <button onClick={handleCheckout} disabled={cart.length === 0 || loading} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${cart.length === 0 ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#F12B6B] hover:bg-[#FF467E]'}`}>
-            {loading ? 'กำลังส่งข้อมูล...' : <><CheckCircle size={18} /> ยืนยันคำสั่งซื้อ</>}
-          </button>
+          {/* ⭐️ QR: ล็อกปุ่มจนกว่าสลิปจะแนบ+ตรวจเสร็จ กันกดยืนยันก่อนสลิปพร้อม (รูปสลิปจะไม่ขึ้น) */}
+          {(() => {
+            const qrNotReady = paymentMethod === 'QR' && (slipProcessing || !slipFile || !slipDimensions);
+            return (
+              <button onClick={handleCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#F12B6B] hover:bg-[#FF467E]'}`}>
+                {loading ? 'กำลังส่งข้อมูล...'
+                  : slipProcessing ? 'กำลังเตรียมสลิป...'
+                  : (paymentMethod === 'QR' && !slipFile) ? <><Upload size={18} /> แนบสลิปก่อนยืนยัน</>
+                  : <><CheckCircle size={18} /> ยืนยันคำสั่งซื้อ</>}
+              </button>
+            );
+          })()}
           </div>
         </div>
       </div>
