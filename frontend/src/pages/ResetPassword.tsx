@@ -69,7 +69,7 @@ export default function ResetPassword() {
           <h1 className="text-2xl font-bold text-gray-900">ตั้งรหัสผ่านใหม่</h1>
         </div>
 
-        <div className="bg-white border border-brand-border rounded-2xl shadow-sm p-6">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-lg p-6">
           {tokenState === 'checking' && (
             <p className="text-center text-sm text-gray-500 py-4">กำลังตรวจสอบลิงก์...</p>
           )}
@@ -110,7 +110,7 @@ export default function ResetPassword() {
 
               <button
                 type="submit" disabled={loading || !isStrong}
-                className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
                 {loading ? 'กำลังบันทึก...' : 'ตั้งรหัสผ่านใหม่'}
               </button>

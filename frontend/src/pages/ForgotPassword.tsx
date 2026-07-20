@@ -38,7 +38,7 @@ export default function ForgotPassword() {
           <p className="mt-1 text-sm text-gray-500">กรอกรหัสนักศึกษาและเบอร์โทรศัพท์ที่ลงทะเบียนไว้</p>
         </div>
 
-        <div className="bg-white border border-brand-border rounded-2xl shadow-sm p-6">
+        <div className="bg-white border border-brand-border rounded-2xl shadow-lg p-6">
           {submitted ? (
             <div className="text-center py-4">
               <p className="text-sm text-gray-700 leading-relaxed">
@@ -49,7 +49,7 @@ export default function ForgotPassword() {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="mt-5 w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
+                className="mt-5 w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
                 กลับไปหน้าเข้าสู่ระบบ
               </button>
@@ -74,7 +74,7 @@ export default function ForgotPassword() {
               </div>
               <button
                 type="submit" disabled={loading}
-                className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
                 {loading ? 'กำลังส่งคำขอ...' : 'ขอรีเซ็ตรหัสผ่าน'}
               </button>
