@@ -20,6 +20,7 @@ import Layout from './components/Layout';
 import Notifications from './pages/Notifications'; // 👈 นำเข้าหน้าใหม่
 import VendorSales from './pages/VendorSales'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
 import Summary from './pages/Summary'; // ⭐️ หน้าสรุปข้อมูล (ชั่วโมงทำงาน/มาสาย/ค่าจ้าง) — ADMIN เท่านั้น
+import BackupManagement from './pages/BackupManagement'; // ⭐️ หน้าสำรอง & กู้คืนข้อมูล — ADMIN เท่านั้น
 
 // 🐛 FIX (MEMBER login bug) — ไม่เคยมี route guard เลยตั้งแต่แรก: MEMBER ที่พิมพ์ URL /pos ตรงๆ
 // (หรือกด back/forward จากแท็บเก่า) โหลดหน้า POS ได้เต็มๆ แม้ Layout.tsx จะซ่อนลิงก์ไปหน้านี้ไว้แล้ว
@@ -135,6 +136,7 @@ function App() {
           <Route path="/attendance-management" element={<RequireStaff><AttendanceManagement /></RequireStaff>} />
           <Route path="/settings" element={<RequireStaff><Settings /></RequireStaff>} />
           <Route path="/summary" element={<RequireAdmin><Summary /></RequireAdmin>} />
+          <Route path="/backup" element={<RequireAdmin><BackupManagement /></RequireAdmin>} />
 
           <Route path="/pre-order" element={<Preorder />} />
           <Route path="/notifications" element={<Notifications />} /> {/* 👈 เพิ่มบรรทัดนี้ */}

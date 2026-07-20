@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Boxes, Settings, CalendarClock, BarChart3,
-  ClipboardCheck, ShoppingBag, PiggyBank,
+  ClipboardCheck, ShoppingBag, PiggyBank, Database,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -29,6 +29,7 @@ export const ADMIN_ITEMS_SIDEBAR: NavItemDef[] = [
   { to: '/inventory', icon: Boxes, label: 'คลังสินค้า' },
   { to: '/settings', icon: Settings, label: 'ตั้งค่า' },
   { to: '/attendance-management', icon: ClipboardCheck, label: 'เข้า-ออกงาน' },
+  { to: '/backup', icon: Database, label: 'สำรอง & กู้คืนข้อมูล' },
 ];
 
 // ADMIN เท่านั้น — ลำดับเดิมของ mobile drawer (ตั้งค่าอยู่ท้ายสุด ต่างจาก sidebar)
@@ -36,5 +37,6 @@ export const ADMIN_ITEMS_DRAWER: NavItemDef[] = [
   { to: '/summary', icon: BarChart3, label: 'สรุปข้อมูล' },
   { to: '/inventory', icon: Boxes, label: 'คลังสินค้า' },
   { to: '/attendance-management', icon: ClipboardCheck, label: 'เข้า-ออกงาน' },
+  { to: '/backup', icon: Database, label: 'สำรอง & กู้คืนข้อมูล' },
   { to: '/settings', icon: Settings, label: 'ตั้งค่า' },
 ];
