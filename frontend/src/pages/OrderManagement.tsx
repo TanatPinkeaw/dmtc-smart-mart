@@ -193,12 +193,12 @@ export default function OrderManagement() {
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title), ช่องค้นหาเป็น
     // bg-brand-bg แบบเดียวกัน และแท็บเปลี่ยนจากขีดเส้นใต้เป็นแบบเม็ดยา (pill) ในกรอบขาวเหมือนแท็บหมวดหมู่
     <div className="bg-brand-bg min-h-screen pb-24">
-      <div className="bg-white border-b border-brand-border px-4 py-3 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
-            <PackageSearch size={15} className="text-white" />
+      <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shadow-md">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+            <PackageSearch size={16} className="text-white" />
           </div>
-          <h1 className="text-base font-bold text-gray-900 truncate">จัดการออเดอร์สั่งจอง</h1>
+          <h1 className="text-lg font-semibold text-white truncate">จัดการออเดอร์สั่งจอง</h1>
         </div>
       </div>
 
@@ -210,13 +210,13 @@ export default function OrderManagement() {
             placeholder="ค้นหา เลขบิล, ชื่อ, เบอร์โทร..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-brand-bg rounded-lg border border-brand-border outline-none focus:outline-none focus:ring-2 focus:ring-brand text-sm transition-colors duration-150"
+            className="w-full pl-10 pr-4 py-2.5 bg-white rounded-lg border border-brand-border shadow-sm outline-none focus:outline-none focus:ring-2 focus:ring-brand text-sm transition-colors duration-150"
           />
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
 
         {/* ⭐️ F3 — แท็บสลับมุมมอง (เม็ดยาในกรอบขาว + fade เลื่อน เหมือนแท็บหมวดหมู่หน้า POS/จอง) */}
-        <div className="relative bg-white border border-brand-border rounded-xl p-2.5 mb-6 shadow-sm">
+        <div className="relative bg-white border border-brand-border rounded-2xl p-2.5 mb-6 shadow-md">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {[
               { key: 'pending' as const, label: 'รอดำเนินการ', count: activeOrders.length },
@@ -227,7 +227,7 @@ export default function OrderManagement() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${activeTab === tab.key ? 'bg-brand text-white' : 'bg-brand-bg text-brand hover:bg-brand-border'}`}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${activeTab === tab.key ? 'bg-brand text-white shadow-sm' : 'bg-brand-bg text-brand hover:bg-brand-border'}`}
               >
                 {tab.label}
                 {tab.count > 0 && (
@@ -255,7 +255,7 @@ export default function OrderManagement() {
             {activeOrders.map(order => (
               // ⭐️ FIX: ออกแบบการ์ดใหม่ให้อ่านง่ายขึ้น — แยกชื่อลูกค้าเป็นแถวมีไอคอน แทนบล็อกตัวหนา
               // ทับกันหมด, ดึงยอดรวมออกมาเป็นแถบไฮไลต์แยกให้เด่นสุดในสายตา (ไม่ใช่แค่บรรทัดสุดท้ายในกล่อง)
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-brand-border hover:shadow-md transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -310,7 +310,7 @@ export default function OrderManagement() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {pendingSlipOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-brand-border hover:shadow-md transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -351,7 +351,7 @@ export default function OrderManagement() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {rejectedSlipOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-brand-border hover:shadow-md transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
