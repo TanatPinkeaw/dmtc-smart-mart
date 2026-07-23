@@ -123,6 +123,11 @@ api.interceptors.response.use(
 
         // Store new access token
         localStorage.setItem('accessToken', data.accessToken);
+        // ⭐️ Security remediation — backend rotates the refresh token on every /auth/refresh call
+        // (old one revoked server-side); must store the new one or the next refresh will fail
+        if (data.refreshToken) {
+          localStorage.setItem('refreshToken', data.refreshToken);
+        }
 
         // Retry original request with new token
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;

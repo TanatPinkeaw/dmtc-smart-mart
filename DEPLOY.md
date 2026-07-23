@@ -123,12 +123,12 @@ pm2 logs dmtc-mart-api            # ดู log ว่าขึ้น "Server run
 ### 3.6 สร้างบัญชี Admin คนแรก
 
 ```bash
-# เรียกครั้งเดียว ใช้ SETUP_KEY ที่ตั้งไว้ใน .env
-curl "http://localhost:3000/api/create-admin?key=<SETUP_KEY ของนาย>"
+# เรียกครั้งเดียว ใช้ SETUP_KEY ที่ตั้งไว้ใน .env — ⭐️ ส่งผ่าน header ไม่ใช่ query string แล้ว (กันหลุดไป access log)
+curl -H "X-Setup-Key: <SETUP_KEY ของนาย>" "http://localhost:3000/api/create-admin"
 ```
 
-จะได้บัญชี **รหัสนักศึกษา: `admin` / รหัสผ่าน: `1234`**
-> ⚠️ **ล็อกอินครั้งแรกแล้วรีบเปลี่ยนรหัสผ่านทันที** (เมนูโปรไฟล์ → เปลี่ยนรหัสผ่าน)
+จะได้บัญชี **รหัสนักศึกษา: `admin`** รหัสผ่านชั่วคราวสุ่มใหม่ทุกครั้ง — ดูใน server log (`pm2 logs dmtc-mart-api`)
+> ⚠️ **ล็อกอินครั้งแรกแล้วรีบเปลี่ยนรหัสผ่านทันที** (ระบบจะบังคับเปลี่ยนก่อนใช้งานหน้าอื่นอยู่แล้ว)
 
 ### 3.7 Build Frontend
 
