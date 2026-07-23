@@ -71,8 +71,8 @@ export default function POS() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) { navigate('/login'); return; }
+    // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
+    // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
     if (localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
     fetchCategories(); fetchProducts(); fetchPromotions(); fetchStoreInfo();
   }, [navigate]);

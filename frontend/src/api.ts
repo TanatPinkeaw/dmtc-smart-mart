@@ -17,9 +17,18 @@ function generateIdempotencyKey(): string {
 // ⭐️ Sprint 2 — B6: Track if we're retrying queued requests
 let isProcessingQueue = false;
 
+// ⭐️ Security remediation — JWT ย้ายไป httpOnly cookie แล้ว (ไม่อยู่ localStorage ให้ XSS อ่านได้อีก)
+// อ่าน csrf_token จาก document.cookie (ตัวเดียวที่ไม่ httpOnly) แนบเป็น header ยืนยันว่า request
+// มาจากหน้าเว็บเราจริง (double-submit CSRF protection คู่กับ requireCsrf ฝั่ง backend)
+function getCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 // 1. ตั้งค่าพื้นฐาน (เปลี่ยน URL ให้ตรงกับพอร์ต Backend ของนายถ้าไม่ใช่ 3000)
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, // ⭐️ Security remediation — ส่ง/รับ httpOnly cookie ข้าม origin (Vercel↔Render)
   headers: {
     'Content-Type': 'application/json'
   }
@@ -28,23 +37,11 @@ const api = axios.create({
 // 2. ใช้ Interceptor ดักจับทุก Request ก่อนวิ่งออกไปที่ Backend
 api.interceptors.request.use(
   (config) => {
-    // ไปค้นหา Token ในกระเป๋า (localStorage)
-    const accessToken = localStorage.getItem('accessToken');
-
-    // ⭐️ F4 — Debug: Log token status for debugging auth issues
-    // ⭐️ Skip warning for public endpoints that don't need auth
-    const publicPaths = ['/version', '/health', '/login', '/register'];
-    const isPublicPath = publicPaths.some(p => config.url?.includes(p));
-
-    if (!accessToken && !isPublicPath) {
-      console.warn(`[API] No accessToken found for request: ${config.method?.toUpperCase()} ${config.url}`);
-    } else if (accessToken) {
-      console.debug(`[API] Token found and sending with request: ${config.method?.toUpperCase()} ${config.url}`);
-    }
-
-    // ถ้ามี Token ให้แนบไปกับ Header
-    if (accessToken) {
-      config.headers['Authorization'] = `Bearer ${accessToken}`;
+    // ⭐️ Security remediation — แนบ CSRF token เฉพาะ request ที่เปลี่ยนแปลงข้อมูล (backend ก็เช็คแค่เท่านี้)
+    const method = config.method?.toUpperCase() || '';
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+      const csrfToken = getCsrfToken();
+      if (csrfToken) config.headers['X-CSRF-Token'] = csrfToken;
     }
 
     // ⭐️ Sprint 2 — B6: Generate idempotency-key for POST/PUT/DELETE
@@ -112,30 +109,20 @@ api.interceptors.response.use(
 
       try {
         // Prevent multiple simultaneous refresh calls
+        // ⭐️ Security remediation — refresh_token อยู่ใน httpOnly cookie (path-scoped ไปที่ endpoint
+        // นี้โดยเฉพาะ) browser แนบให้เองผ่าน withCredentials ไม่ต้องส่งใน body แล้ว
         if (!refreshPromise) {
-          refreshPromise = api.post('/auth/refresh', {
-            refreshToken: localStorage.getItem('refreshToken')
-          });
+          refreshPromise = api.post('/auth/refresh');
         }
 
-        const { data } = await refreshPromise;
+        await refreshPromise;
         refreshPromise = null;
 
-        // Store new access token
-        localStorage.setItem('accessToken', data.accessToken);
-        // ⭐️ Security remediation — backend rotates the refresh token on every /auth/refresh call
-        // (old one revoked server-side); must store the new one or the next refresh will fail
-        if (data.refreshToken) {
-          localStorage.setItem('refreshToken', data.refreshToken);
-        }
-
-        // Retry original request with new token
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        // ⭐️ access_token/refresh_token/csrf_token cookie ใหม่ถูกตั้งโดย backend (Set-Cookie) แล้ว
+        // แค่ retry request เดิม browser จะแนบ cookie ใหม่ให้เองอัตโนมัติ
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed → logout
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         window.location.href = '/login';
         return Promise.reject(refreshError);
@@ -160,8 +147,6 @@ api.interceptors.response.use(
     // เหลือแค่ 401 (token หมดอายุ/ปลอม) ที่ควร force logout จริงๆ
     if (error.response && error.response.status === 401 && originalRequest._retry) {
       // Token refresh failed or already retried, force logout
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
 
       // ข้ามการเตะกลับถ้ากำลังอยู่ที่หน้า login เพื่อไม่ให้ loop

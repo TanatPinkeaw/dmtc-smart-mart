@@ -10,10 +10,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   // ⭐️ F4 — Listen for storage events (cross-tab token changes) and establish/update Socket connection
   useEffect(() => {
     const reconnectSocket = () => {
-      const token = localStorage.getItem('accessToken');
+      // ⭐️ Security remediation — access token อยู่ใน httpOnly cookie แล้ว (อ่านจาก JS ไม่ได้)
+      // ใช้ user object ใน localStorage (ไม่ลับ) เป็นตัวบอกว่า "ควรมี session" แทน ตัว cookie จริง
+      // จะแนบไปกับ handshake ให้เองผ่าน withCredentials
+      const hasUser = !!localStorage.getItem('user');
 
-      if (!token) {
-        console.warn('No accessToken found, skipping Socket.io connection');
+      if (!hasUser) {
         if (socket) {
           socket.disconnect();
           setSocket(null);
@@ -27,7 +29,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       }
 
       const s = io(API_ORIGIN, {
-        auth: { token },
+        withCredentials: true,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,

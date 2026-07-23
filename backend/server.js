@@ -20,6 +20,53 @@ const { saveImage } = require('./cloudinary-config');  // ⭐️ เก็บร
 // หมายเหตุ: ไม่ได้ปิด rate limit ไปเลยแม้ตอน dev เพราะยังอยากให้ทดสอบพฤติกรรม 429 ได้เหมือนเดิม แค่เพดานสูงขึ้น
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
+// ⭐️ Security remediation — ย้าย JWT จาก localStorage (อ่านได้ด้วย JS ตัวไหนก็ได้บนหน้าเว็บ, XSS ตัวเดียว
+// ขโมย token ได้หมด) ไป httpOnly cookie (JS อ่านไม่ได้เลย ต่อให้มี XSS) frontend (Vercel) กับ backend
+// (Render) คนละ domain กัน — cross-site cookie ต้อง SameSite=None+Secure (บังคับ HTTPS) บน production
+// dev (localhost คนละพอร์ต) นับเป็น same-site อยู่แล้ว ใช้ Lax ธรรมดาได้
+const COOKIE_SECURE = IS_PRODUCTION;
+const COOKIE_SAMESITE = IS_PRODUCTION ? 'none' : 'lax';
+const ACCESS_TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000;   // 8h ตรงกับอายุ access token
+const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7d ตรงกับอายุ refresh token
+
+// ⭐️ อ่าน cookie จาก request header เอง (ไม่พึ่ง cookie-parser เพราะไม่ได้ติดตั้งไว้ใน dependencies)
+function parseCookies(req) {
+  const header = req.headers.cookie;
+  const cookies = {};
+  if (!header) return cookies;
+  header.split(';').forEach(pair => {
+    const idx = pair.indexOf('=');
+    if (idx < 0) return;
+    const key = pair.slice(0, idx).trim();
+    const val = pair.slice(idx + 1).trim();
+    if (key) { try { cookies[key] = decodeURIComponent(val); } catch { cookies[key] = val; } }
+  });
+  return cookies;
+}
+
+// ⭐️ ตั้ง cookie ทั้ง 3 ตัวพร้อมกัน: access_token/refresh_token (httpOnly, JS อ่านไม่ได้เลย) +
+// csrf_token (อ่านได้ ให้ frontend ดึงไปแนบเป็น header X-CSRF-Token กัน CSRF บน cookie-based auth)
+function setAuthCookies(res, accessToken, refreshToken) {
+  res.cookie('access_token', accessToken, {
+    httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: ACCESS_TOKEN_MAX_AGE_MS, path: '/',
+  });
+  // ⭐️ path ต้องกว้างพอให้ /api/auth/logout อ่านคุกกี้นี้ได้ด้วย (ไปเพิกถอน refresh token ตอน logout)
+  // ไม่ใช่แค่ /api/auth/refresh เฉยๆ — จำกัดไว้แค่ /api/auth/* เท่านั้น ไม่ใช่ทั้งเว็บ
+  res.cookie('refresh_token', refreshToken, {
+    httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: REFRESH_TOKEN_MAX_AGE_MS, path: '/api/auth',
+  });
+  const csrfToken = crypto.randomBytes(32).toString('hex');
+  res.cookie('csrf_token', csrfToken, {
+    httpOnly: false, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: REFRESH_TOKEN_MAX_AGE_MS, path: '/',
+  });
+}
+
+function clearAuthCookies(res) {
+  res.clearCookie('access_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' });
+  res.clearCookie('refresh_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/api/auth' });
+  res.clearCookie('csrf_token', { httpOnly: false, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' });
+}
+
 // ⭐️ Task 7 — Login: กัน brute-force รหัสผ่าน
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -365,10 +412,13 @@ const io = new Server(server, {
 });
 
 // ⭐️ Task 1A — ปฏิเสธ socket ที่ไม่มี/ไม่ผ่าน JWT ก่อนให้เชื่อมต่อ (เดิม: รับทุก connection โดยไม่เช็คเลย)
+// ⭐️ Security remediation — token อยู่ใน httpOnly cookie แล้ว ไม่ใช่ handshake.auth (client แนบ
+// cookie มาเองอัตโนมัติถ้าเปิด withCredentials); เก็บ auth.token/header ไว้เป็น fallback เฉยๆ
 io.use((socket, next) => {
   try {
+    const cookies = parseCookies({ headers: socket.handshake.headers });
     // ⭐️ SECURITY FIX (#5) — เดิม log JSON.stringify(handshake.auth) = พ่น JWT ลง log ตรงๆ เอาออก
-    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+    const token = cookies.access_token || socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
     if (!token) {
       return next(new Error('Missing JWT token'));
     }
@@ -398,11 +448,19 @@ app.use((req, res, next) => {
 app.use(cors({
   origin: FRONTEND_URL,
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
+  // ⭐️ Security remediation — เพิ่ม X-CSRF-Token (double-submit cookie) และ X-Setup-Key (bootstrap
+  // endpoint) ให้ preflight ผ่าน ไม่งั้น browser บล็อกก่อนถึง server เลย
+  allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key', 'X-CSRF-Token', 'X-Setup-Key'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
 app.use(express.json());
+
+// ⭐️ Security remediation — เติม req.cookies ให้เหมือน cookie-parser (parseCookies ประกาศไว้ข้างบน)
+app.use((req, res, next) => {
+  req.cookies = parseCookies(req);
+  next();
+});
 
 // ⭐️ Task 12 — logging middleware: ทุก request บันทึก method/path/status/duration
 app.use((req, res, next) => {
@@ -488,8 +546,10 @@ function authenticateToken(req, res, next) {
   // browse สินค้า/หมวดหมู่ = public เฉพาะ GET; POST/PUT/DELETE ต้องผ่าน auth + requireRole ตามปกติ
   if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
 
+  // ⭐️ Security remediation — access token อยู่ใน httpOnly cookie เป็นหลัก เก็บ header ไว้เป็น
+  // fallback เฉยๆ (เผื่อ non-browser client/debug ไม่กระทบความปลอดภัย เพราะ verify+revoke check เดียวกัน)
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = req.cookies?.access_token || (authHeader && authHeader.split(' ')[1]);
 
   // ⭐️ F4 — Debug token verification
   if (!token) {
@@ -531,8 +591,28 @@ function requireRole(...roles) {
   };
 }
 
+// ⭐️ Security remediation — CSRF protection สำหรับ cookie-based auth (browser แนบ httpOnly cookie
+// ให้อัตโนมัติแม้ request มาจากเว็บอื่น ต้องเช็ค token คู่กันว่ามาจากหน้าเว็บเราจริง ไม่ใช่ฟอร์มปลอม)
+// double-submit pattern: csrf_token cookie (อ่านได้) ต้องตรงกับ header X-CSRF-Token ที่ frontend แนบมา
+// PUBLIC_PATHS ส่วนใหญ่ยกเว้นได้เพราะยังไม่มี session cookie ตอนนั้น ยกเว้น /api/auth/refresh ที่ใช้
+// refresh_token cookie อยู่แล้ว (มี session ให้ปลอมได้) จึงต้องเช็ค CSRF ด้วย
+const CSRF_EXEMPT_PATHS = PUBLIC_PATHS.filter(p => p !== '/api/auth/refresh');
+function requireCsrf(req, res, next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (CSRF_EXEMPT_PATHS.some(p => req.path.startsWith(p))) return next();
+  if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
+
+  const cookieToken = req.cookies?.csrf_token;
+  const headerToken = req.headers['x-csrf-token'];
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    return res.status(403).json({ error: 'CSRF token ไม่ถูกต้องหรือหายไป กรุณารีเฟรชหน้าเว็บแล้วลองใหม่' });
+  }
+  next();
+}
+
 app.use(authenticateToken);
 app.use(requirePasswordChange);
+app.use(requireCsrf);
 
 // ⭐️ Sprint 2 — B5: Token Refresh Helpers
 function generateAccessToken(user) {
@@ -953,14 +1033,16 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง" });
 
-    // ⭐️ Sprint 2 — B5: Issue both access token (15m) and refresh token (7d)
+    // ⭐️ Sprint 2 — B5: Issue both access token (8h) and refresh token (7d)
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
+    // ⭐️ Security remediation — token ทั้งคู่ไปเป็น httpOnly cookie ไม่คืนใน JSON body แล้ว
+    // (JS ฝั่ง client อ่านไม่ได้เลย ต่อให้มี XSS ก็ขโมย token ไปใช้ที่อื่นไม่ได้)
+    setAuthCookies(res, accessToken, refreshToken);
+
     res.json({
       message: "ล็อกอินสำเร็จ",
-      accessToken,
-      refreshToken,
       user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password },
     });
   } catch (error) {
@@ -973,10 +1055,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 // ⭐️ Sprint 2 — B5: Token Refresh Endpoint
 // ⭐️ Security remediation — rate limited + rotates the refresh token on every use (old jti revoked,
 // new one issued) so a replayed/stolen refresh token stops working the moment the legitimate client
-// refreshes again, instead of staying valid for the full 7-day lifetime
+// refreshes again, instead of staying valid for the full 7-day lifetime. Tokens read/written via
+// httpOnly cookie now, not request body — refresh_token cookie is path-scoped to this route only.
 app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
   try {
-    const refreshToken = req.body.refreshToken;
+    const refreshToken = req.cookies?.refresh_token;
 
     if (!refreshToken) {
       return res.status(401).json({ error: 'ไม่พบ refresh token' });
@@ -1006,18 +1089,20 @@ app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
       );
     }
 
-    // Issue new access + refresh tokens
+    // Issue new access + refresh tokens, set as cookies again (rotates csrf_token too)
     const accessToken = generateAccessToken(users[0]);
     const newRefreshToken = generateRefreshToken(users[0]);
+    setAuthCookies(res, accessToken, newRefreshToken);
 
-    res.json({ accessToken, refreshToken: newRefreshToken });
+    res.json({ success: true });
   } catch (err) {
     res.status(401).json({ error: err.message });
   }
 });
 
 // ⭐️ Sprint 2 — B5: Token Logout Endpoint
-// ⭐️ Security remediation — actually revoke the access token (and refresh token, if sent) server-side
+// ⭐️ Security remediation — actually revoke the access token (and refresh token) server-side, and
+// clear the cookies so the browser stops sending them
 app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
   try {
     if (req.user?.jti && req.user?.exp) {
@@ -1026,7 +1111,7 @@ app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (r
         [req.user.jti, req.user.id, req.user.exp]
       );
     }
-    const refreshToken = req.body?.refreshToken;
+    const refreshToken = req.cookies?.refresh_token;
     if (refreshToken) {
       const decoded = jwt.decode(refreshToken);
       if (decoded?.jti && decoded?.exp) {
@@ -1036,6 +1121,7 @@ app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (r
         );
       }
     }
+    clearAuthCookies(res);
     res.json({ success: true });
   } catch (err) {
     console.error('[500]', err.message);
