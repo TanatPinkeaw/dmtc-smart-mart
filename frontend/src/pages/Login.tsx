@@ -49,9 +49,8 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       const response = await api.post('/auth/login', { username, password });
-      // ⭐️ Sprint 2 — B5: Store both access and refresh tokens
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      // ⭐️ Security remediation — token อยู่ใน httpOnly cookie ที่ backend ตั้งให้แล้ว (Set-Cookie)
+      // เก็บแค่ข้อมูล user (ไม่ลับ) ไว้ใช้แสดงผล/role guard ฝั่ง client เท่านั้น
       localStorage.setItem('user', JSON.stringify(response.data.user));
 
       // ⭐️ F4 — Notify Socket context that token has changed (for same-tab reconnection)

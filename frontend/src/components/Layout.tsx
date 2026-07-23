@@ -96,9 +96,8 @@ function LayoutInner() {
           } catch (err) {
             console.error('Logout error:', err);
           } finally {
-            // Clear localStorage and redirect
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
+            // ⭐️ Security remediation — token cookie ถูก backend เคลียร์เองใน /auth/logout แล้ว
+            // เหลือแค่ล้างข้อมูล user (ไม่ลับ) ฝั่ง client
             localStorage.removeItem('user');
             localStorage.removeItem('session_mode');
             navigate('/login');
