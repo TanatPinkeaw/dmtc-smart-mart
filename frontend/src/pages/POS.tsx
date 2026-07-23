@@ -63,7 +63,12 @@ export default function POS() {
     e.preventDefault(); setRegLoading(true);
     try {
       const res = await api.post('/users/register', regForm);
-      Swal.fire({ icon: 'success', title: 'สมัครสมาชิกสำเร็จ!', text: 'ดึงข้อมูลเข้าบิลให้อัตโนมัติ' });
+      // ⭐️ Security remediation — รหัสผ่านเริ่มต้นสุ่มแล้ว (เดิมใช้เบอร์โทรซึ่งเดาง่าย) ต้องแจ้งให้สมาชิกทราบตรงนี้
+      Swal.fire({
+        icon: 'success',
+        title: 'สมัครสมาชิกสำเร็จ!',
+        html: `ดึงข้อมูลเข้าบิลให้อัตโนมัติ<br/>รหัสผ่านชั่วคราว: <b>${res.data.temp_password}</b><br/>(ระบบจะให้เปลี่ยนรหัสผ่านทันทีที่เข้าสู่ระบบครั้งแรก)`,
+      });
       setShowRegisterModal(false); setCurrentMember(res.data.user);
       setRegForm({ student_id: '', full_name: '', phone_number: '' });
     } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
