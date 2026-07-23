@@ -137,6 +137,16 @@ api.interceptors.response.use(
       }
     }
 
+    // ⭐️ Security remediation — บัญชีที่ยังใช้รหัสผ่านชั่วคราวอยู่ ถูก backend บล็อกทุก endpoint
+    // ยกเว้น change-password/logout (ดู requirePasswordChange middleware). หน้า /shift ไม่ได้ห่อด้วย
+    // Layout (ที่ force-open ChangePasswordModal) เลยต้องดักตรงนี้เป็น fallback แล้วเด้งไปหน้าที่มี Layout
+    if (error.response?.status === 403 && error.response?.data?.code === 'MUST_CHANGE_PASSWORD') {
+      if (!window.location.pathname.startsWith('/settings') && !window.location.pathname.startsWith('/pre-order')) {
+        window.location.href = '/pre-order';
+      }
+      return Promise.reject(error);
+    }
+
     // 🐛 FIX (MEMBER login bug) — เดิมเช็ค 401 กับ 403 รวมกัน แล้ว force logout ทั้งคู่
     // 403 = "login ถูกต้อง แต่ไม่มีสิทธิ์ทำ action นี้" (เช่น MEMBER หลุดเข้าหน้า POS แล้วยิง
     // GET /api/users/search ซึ่งเป็น endpoint เฉพาะ CASHIER/ADMIN) — ไม่ใช่ token เสีย/หมดอายุ

@@ -421,6 +421,18 @@ function requireSetupKey(req, res, next) {
   next();
 }
 
+// ⭐️ Security remediation — token revocation check (logout / password-change invalidation)
+async function isTokenRevoked(payload) {
+  if (payload.jti) {
+    const [rows] = await pool.query('SELECT 1 FROM revoked_tokens WHERE jti = ?', [payload.jti]);
+    if (rows.length > 0) return true;
+  }
+  const [users] = await pool.query('SELECT token_valid_after FROM users WHERE id = ?', [payload.id]);
+  const validAfter = users[0]?.token_valid_after;
+  if (validAfter && payload.iat && new Date(payload.iat * 1000) < new Date(validAfter)) return true;
+  return false;
+}
+
 function authenticateToken(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
   // browse สินค้า/หมวดหมู่ = public เฉพาะ GET; POST/PUT/DELETE ต้องผ่าน auth + requireRole ตามปกติ
@@ -435,7 +447,7 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'ไม่ได้รับอนุญาต กรุณาเข้าสู่ระบบ' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, payload) => {
+  jwt.verify(token, JWT_SECRET, async (err, payload) => {
     if (err) {
       // ⭐️ Task 8 — แยก 401 (หมดอายุ ต้อง login ใหม่) ออกจาก 403 (token ผิด/ปลอม)
       if (err.name === 'TokenExpiredError') {
@@ -445,7 +457,16 @@ function authenticateToken(req, res, next) {
       console.error(`[AUTH] Token verification failed for ${req.method} ${req.path}: ${err.message}`);
       return res.status(403).json({ error: 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
     }
-    req.user = payload; // { id, role, full_name }
+    try {
+      if (await isTokenRevoked(payload)) {
+        console.warn(`[AUTH] Revoked token used for ${req.method} ${req.path}, user_id=${payload.id}`);
+        return res.status(401).json({ error: 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบใหม่' });
+      }
+    } catch (revokeErr) {
+      console.error('[AUTH] Revocation check failed:', revokeErr.message);
+      return res.status(500).json({ error: 'ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาลองใหม่ภายหลัง' });
+    }
+    req.user = payload; // { id, role, full_name, jti }
     console.debug(`[AUTH] Token verified for user_id=${payload.id}, role=${payload.role}`);
     next();
   });
@@ -461,19 +482,28 @@ function requireRole(...roles) {
 }
 
 app.use(authenticateToken);
+app.use(requirePasswordChange);
 
 // ⭐️ Sprint 2 — B5: Token Refresh Helpers
 function generateAccessToken(user) {
   return jwt.sign(
-    { id: user.id, role: user.role, full_name: user.full_name },
+    { id: user.id, role: user.role, full_name: user.full_name, must_change_password: !!user.must_change_password, jti: crypto.randomUUID() },
     JWT_SECRET,
     { expiresIn: '8h' } // ⭐️ Changed from 15m to 8h to reduce token refresh frequency during work hours
   );
 }
 
+// ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
+function requirePasswordChange(req, res, next) {
+  if (!req.user?.must_change_password) return next();
+  const exempt = req.path.endsWith('/change-password') || req.path === '/api/auth/logout';
+  if (exempt) return next();
+  return res.status(403).json({ error: 'ต้องเปลี่ยนรหัสผ่านก่อนใช้งาน', code: 'MUST_CHANGE_PASSWORD' });
+}
+
 function generateRefreshToken(user) {
   return jwt.sign(
-    { id: user.id, type: 'refresh' },
+    { id: user.id, type: 'refresh', jti: crypto.randomUUID() },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -624,7 +654,9 @@ app.get('/api/categories', async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM categories');
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -636,7 +668,9 @@ app.post('/api/categories', requireRole('ADMIN'), async (req, res) => {
     const [result] = await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
     res.status(201).json({ id: result.insertId, name });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -645,7 +679,9 @@ app.delete('/api/categories/:id', requireRole('ADMIN'), async (req, res) => {
     await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
     res.json({ message: "ลบหมวดหมู่สำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -737,7 +773,9 @@ app.get('/api/products', async (req, res) => {
 
     res.json(enrichedProducts);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -782,7 +820,9 @@ app.get('/api/products/highlights', async (req, res) => {
     `);
     res.json({ popular, promo });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -803,7 +843,9 @@ app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: "บาร์โค้ดนี้ซ้ำกับในระบบแล้ว" });
     }
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -831,7 +873,9 @@ app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
 
     res.json({ message: "อัปเดตข้อมูลสินค้าสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -840,7 +884,9 @@ app.delete('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
     await pool.query('DELETE FROM products WHERE id=?', [req.params.id]);
     res.json({ message: "ลบสินค้าสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -865,10 +911,12 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       message: "ล็อกอินสำเร็จ",
       accessToken,
       refreshToken,
-      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role },
+      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -876,25 +924,30 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 app.post('/api/auth/refresh', async (req, res) => {
   try {
     const refreshToken = req.body.refreshToken;
-    
+
     if (!refreshToken) {
       return res.status(401).json({ error: 'ไม่พบ refresh token' });
     }
-    
+
     const decoded = verifyRefreshToken(refreshToken);
     if (!decoded) {
       return res.status(401).json({ error: 'Refresh token ไม่ถูกต้องหรือหมดอายุ' });
     }
-    
+
+    // ⭐️ Security remediation — reject refresh with a revoked/blacklisted refresh token
+    if (await isTokenRevoked(decoded)) {
+      return res.status(401).json({ error: 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบใหม่' });
+    }
+
     // Fetch user to get fresh data
     const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [decoded.id]);
     if (users.length === 0) {
       return res.status(401).json({ error: 'ไม่พบผู้ใช้งาน' });
     }
-    
+
     // Issue new access token
     const accessToken = generateAccessToken(users[0]);
-    
+
     res.json({ accessToken });
   } catch (err) {
     res.status(401).json({ error: err.message });
@@ -902,13 +955,30 @@ app.post('/api/auth/refresh', async (req, res) => {
 });
 
 // ⭐️ Sprint 2 — B5: Token Logout Endpoint
+// ⭐️ Security remediation — actually revoke the access token (and refresh token, if sent) server-side
 app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
   try {
-    // Token is invalidated by removing it from frontend storage
-    // No server-side token blacklist implemented yet (optional enhancement)
+    if (req.user?.jti && req.user?.exp) {
+      await pool.query(
+        'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+        [req.user.jti, req.user.id, req.user.exp]
+      );
+    }
+    const refreshToken = req.body?.refreshToken;
+    if (refreshToken) {
+      const decoded = jwt.decode(refreshToken);
+      if (decoded?.jti && decoded?.exp) {
+        await pool.query(
+          'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+          [decoded.jti, decoded.id, decoded.exp]
+        );
+      }
+    }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -926,7 +996,9 @@ app.get('/api/users/search', requireRole('CASHIER', 'ADMIN'), async (req, res) =
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -946,7 +1018,9 @@ app.post('/api/users/verify-phone', async (req, res) => {
     );
     res.json({ matched: rows.length > 0, member_name: rows[0]?.full_name || null });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -965,7 +1039,9 @@ app.get('/api/users/me', async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: "ไม่พบข้อมูลผู้ใช้" });
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -976,25 +1052,29 @@ app.post('/api/users/register', validateRequest(userRegisterValidator), async (r
   }
 
   try {
-    // ⭐️ ทริค: ตั้งรหัสผ่านเริ่มต้นเป็น "เบอร์โทรศัพท์" ไปก่อน 
-    // อนาคตตอนทำระบบจองออนไลน์ ลูกค้าค่อยเอาเบอร์โทรไปล็อกอินแล้วเปลี่ยนรหัสผ่านเอง
+    // ⭐️ Security remediation — เดิมตั้งรหัสผ่านเริ่มต้นเป็นเบอร์โทรศัพท์ (เดาง่าย/รู้กันในหมู่เพื่อน)
+    // เปลี่ยนเป็นสุ่มรหัสผ่านชั่วคราว + บังคับเปลี่ยนรหัสผ่านก่อนใช้งานจริง (must_change_password)
+    const tempPassword = crypto.randomBytes(9).toString('base64url');
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(phone_number, salt);
+    const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
     const [result] = await pool.query(
-      'INSERT INTO users (student_id, password, full_name, phone_number, role, points) VALUES (?, ?, ?, ?, ?, 0)',
+      'INSERT INTO users (student_id, password, full_name, phone_number, role, points, must_change_password) VALUES (?, ?, ?, ?, ?, 0, TRUE)',
       [student_id, hashedPassword, full_name, phone_number, 'MEMBER']
     );
 
     res.status(201).json({
-      message: "สมัครสมาชิกสำเร็จ",
-      user: { id: result.insertId, student_id, full_name, phone_number, points: 0 }
+      message: "สมัครสมาชิกสำเร็จ กรุณาเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบครั้งแรก",
+      user: { id: result.insertId, student_id, full_name, phone_number, points: 0 },
+      temp_password: tempPassword
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: "รหัสนักศึกษา หรือ เบอร์โทรศัพท์นี้ มีในระบบแล้ว" });
     }
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1035,7 +1115,9 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
 
     res.json({ message: "ถ้าข้อมูลถูกต้อง ระบบจะสร้างลิงก์รีเซ็ตรหัสผ่านให้ (ติดต่อเจ้าหน้าที่หากไม่ได้รับ)" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1047,7 +1129,9 @@ app.get('/api/auth/reset-token/:token', async (req, res) => {
     );
     res.json(tokens.length > 0 ? { valid: true } : { valid: false, reason: 'expired or already used' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1076,7 +1160,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(new_password, 10);
 
     // Update both password and password_hash columns for compatibility
-    await pool.query('UPDATE users SET password = ?, password_hash = ? WHERE id = ?', [hashedPassword, hashedPassword, userId]);
+    // ⭐️ Security remediation — clear must_change_password + bump token_valid_after (invalidate stale tokens)
+    await pool.query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [hashedPassword, hashedPassword, userId]);
     // ⭐️ token ใช้ครั้งเดียว — mark used_at กันเอาไปใช้ซ้ำ
     await pool.query('UPDATE password_resets SET used_at = NOW() WHERE reset_token = ?', [reset_token]);
 
@@ -1087,7 +1172,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
     res.json({ message: "ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1105,7 +1192,9 @@ app.get('/api/admin/password-resets', requireRole('ADMIN'), async (req, res) => 
     );
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1123,7 +1212,9 @@ app.delete('/api/admin/password-resets/:id', requireRole('ADMIN'), async (req, r
 
     res.json({ message: "ปฏิเสธคำขอรีเซ็ตรหัสผ่านแล้ว ลิงก์นี้ใช้งานไม่ได้อีกต่อไป" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1172,7 +1263,9 @@ app.put('/api/users/:id/profile', async (req, res) => {
 
     res.json({ message: "อัปเดตข้อมูลบัญชีสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1182,7 +1275,9 @@ app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
     const [rows] = await pool.query('SELECT id, student_id AS username, full_name, role, is_active FROM users');
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1193,7 +1288,9 @@ app.get('/api/staff-list', requireRole('ADMIN', 'CASHIER'), async (req, res) => 
     );
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1227,7 +1324,9 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
     res.status(201).json({ id: result.insertId, message: "สร้างพนักงานสำเร็จ" });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "ชื่อผู้ใช้งานนี้มีในระบบแล้ว" });
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1240,7 +1339,9 @@ app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     );
     res.json({ message: "อัปเดตข้อมูลพนักงานสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1285,7 +1386,8 @@ app.put('/api/users/:id/change-password', async (req, res) => {
     // Hash and update
     const newHash = await bcrypt.hash(new_password, 10);
     // Update both password and password_hash columns for compatibility
-    await pool.query('UPDATE users SET password = ?, password_hash = ? WHERE id = ?', [newHash, newHash, id]);
+    // ⭐️ Security remediation — clear must_change_password + bump token_valid_after (invalidate stale tokens)
+    await pool.query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [newHash, newHash, id]);
 
     // Audit log
     await pool.query(
@@ -1295,7 +1397,9 @@ app.put('/api/users/:id/change-password', async (req, res) => {
 
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1305,8 +1409,9 @@ app.put('/api/users/update-role', requireRole('ADMIN'), async (req, res) => {
     // ⭐️ Task 5 — เก็บ role เดิมไว้เทียบใน audit log
     const [oldRows] = await pool.query('SELECT id, role FROM users WHERE student_id = ?', [student_id]);
 
+    // ⭐️ Security remediation — bump token_valid_after so tokens issued under the old role stop working
     const [result] = await pool.query(
-      'UPDATE users SET role = ? WHERE student_id = ?',
+      'UPDATE users SET role = ?, token_valid_after = NOW() WHERE student_id = ?',
       [role, student_id]
     );
 
@@ -1321,7 +1426,9 @@ app.put('/api/users/update-role', requireRole('ADMIN'), async (req, res) => {
 
     res.json({ message: `อัปเดตสิทธิ์ ${student_id} เป็น ${role} สำเร็จ` });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1332,7 +1439,9 @@ app.delete('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     await pool.query('UPDATE users SET is_active = FALSE WHERE id = ?', [req.params.id]);
     res.json({ message: "ระงับการใช้งานพนักงานสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1371,15 +1480,18 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
 
     if (dry_run) return res.json({ to_create: toCreate, to_reactivate: toReactivate, to_deactivate: toDeactivate });
 
-    // สร้างสมาชิกใหม่ (password = phone_number)
+    // ⭐️ Security remediation — เดิม password = เบอร์โทร (เดาง่าย) เปลี่ยนเป็นสุ่มรหัสผ่านชั่วคราว
+    // + บังคับเปลี่ยนรหัสผ่านก่อนใช้งานจริง คืนรายการ temp password ให้ ADMIN แจกจ่ายเอง
     let created_count = 0;
+    const created_credentials = [];
     for (const row of toCreate) {
-      const phone = (row.phone_number || row.username).trim();
-      const hashed = await bcrypt.hash(phone, 10);
+      const tempPassword = crypto.randomBytes(9).toString('base64url');
+      const hashed = await bcrypt.hash(tempPassword, 10);
       await pool.query(
-        'INSERT INTO users (student_id, full_name, phone_number, password, role, is_active) VALUES (?, ?, ?, ?, \'MEMBER\', TRUE)',
+        'INSERT INTO users (student_id, full_name, phone_number, password, role, is_active, must_change_password) VALUES (?, ?, ?, ?, \'MEMBER\', TRUE, TRUE)',
         [row.username.trim(), (row.full_name || row.username).trim(), row.phone_number?.trim() || null, hashed]
       );
+      created_credentials.push({ student_id: row.username.trim(), temp_password: tempPassword });
       created_count++;
     }
 
@@ -1403,10 +1515,13 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
 
     res.json({
       message: `เพิ่มใหม่ ${created_count} คน, เปิดใช้งานคืน ${reactivated_count} คน, ปิดการใช้งาน ${toDeactivate.length} คน`,
-      created_count, reactivated_count, deactivated_count: toDeactivate.length
+      created_count, reactivated_count, deactivated_count: toDeactivate.length,
+      created_credentials
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1442,7 +1557,9 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
     );
     res.status(201).json({ shift_id: result.insertId, message: "เปิดกะการขายสำเร็จ", opened_at: formatBangkokTime(new Date()) });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1462,7 +1579,9 @@ app.get('/api/shifts/last-closed', requireRole('CASHIER', 'ADMIN'), async (req, 
     );
     res.json(rows[0] || null);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1483,7 +1602,9 @@ app.get('/api/shifts/current', requireRole('CASHIER', 'ADMIN'), async (req, res)
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(shiftCloseValidator), async (req, res) => {
@@ -1575,7 +1696,9 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
     });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1648,7 +1771,9 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN'), async (req, res) => {
     });
   } catch (error) {
     console.error("Error approving shift:", error);
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1710,7 +1835,9 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN'), async (req, res) => {
     });
   } catch (error) {
     console.error("Error rejecting shift:", error);
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1730,7 +1857,9 @@ app.get('/api/shifts/pending', requireRole('ADMIN'), async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.error("Error fetching pending shifts:", error);
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1756,7 +1885,9 @@ app.post('/api/schedules', requireRole('ADMIN'), async (req, res) => {
     );
     res.status(201).json({ message: "ตั้งตารางเวลาสำเร็จ", id: result.insertId });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1766,7 +1897,9 @@ app.delete('/api/schedules/:id', requireRole('ADMIN'), async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบตารางเวลานี้' });
     res.json({ message: 'ลบตารางเวลาสำเร็จ' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1781,11 +1914,15 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
     const [rows] = await pool.query(query, params);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
-app.post('/api/attendance/upload-photo', shiftPhotoUpload.single('photo'), async (req, res) => {
+// ⭐️ Security remediation — เดิมมีแค่ authenticateToken (global) ไม่มี requireRole เลย ทำให้ MEMBER
+// เรียกตรงได้ทั้งที่หน้า Shift (ที่ใช้ endpoint นี้) จำกัดเฉพาะ ADMIN/CASHIER ฝั่ง frontend เท่านั้น
+app.post('/api/attendance/upload-photo', requireRole('ADMIN', 'CASHIER'), shiftPhotoUpload.single('photo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
   try {
     // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
@@ -1800,7 +1937,9 @@ app.post('/api/attendance/upload-photo', shiftPhotoUpload.single('photo'), async
     const photoUrl = await saveImage(req.file.buffer, `shift-photos/${photoType}/${year}-${month}-${day}`, base, ext);
     res.json({ photo_url: photoUrl });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1823,7 +1962,9 @@ app.post('/api/attendance/check-in', requireRole('ADMIN', 'CASHIER'), async (req
     const [result] = await pool.query('INSERT INTO attendance (user_id, check_in_photo) VALUES (?, ?)', [req.user.id, check_in_photo]);
     res.status(201).json({ message: "ลงชื่อเข้างานสำเร็จ", id: result.insertId });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1846,7 +1987,9 @@ app.put('/api/attendance/check-out', requireRole('ADMIN', 'CASHIER'), async (req
     await pool.query('UPDATE attendance SET check_out = NOW(), check_out_photo = ? WHERE id = ?', [check_out_photo, rows[0].id]);
     res.json({ message: "ลงชื่อออกงานสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1862,7 +2005,9 @@ app.get('/api/attendance/today', async (req, res) => {
     );
     res.json(rows[0] || null);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1896,7 +2041,9 @@ app.get('/api/attendance', requireRole('ADMIN'), async (req, res) => {
     const [rows] = await pool.query(query, [...attParams, ...shiftParams]);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1917,7 +2064,9 @@ app.put('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
     }
     res.json({ message: "แก้ไขข้อมูลลงเวลาสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1932,7 +2081,9 @@ app.delete('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
     }
     res.json({ message: "ลบรายการสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1976,7 +2127,9 @@ app.post('/api/attendance/auto-checkout-stale', requireRole('ADMIN'), async (req
     const result = await runAutoCheckoutStale(req.io);
     res.json({ message: "ตรวจสอบและตัดออกอัตโนมัติเรียบร้อย", ...result });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1988,7 +2141,9 @@ app.post('/api/holidays', requireRole('ADMIN'), async (req, res) => {
     res.status(201).json({ message: "เพิ่มวันหยุดสำเร็จ" });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "วันที่นี้ถูกตั้งเป็นวันหยุดไปแล้ว" });
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -1997,7 +2152,9 @@ app.get('/api/holidays', async (req, res) => {
     const [rows] = await pool.query("SELECT id, DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date, note FROM holidays ORDER BY holiday_date DESC");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2029,7 +2186,9 @@ app.get('/api/reports/attendance', requireRole('ADMIN'), async (req, res) => {
     `, params);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2054,7 +2213,9 @@ app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, 
     res.json({ message: "รับงานสำเร็จ", assigned_to: req.user.id });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally { conn.release(); }
 });
 
@@ -2073,7 +2234,9 @@ app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => 
     req.io.emit('payment_slip_received', { order_id: req.params.id, message: `ออเดอร์ #${req.params.id} ส่งสลิปใหม่ รอตรวจสอบ` });
     res.json({ message: "ส่งสลิปใหม่สำเร็จ รอพนักงานตรวจสอบ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2278,7 +2441,9 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
     });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -2322,7 +2487,9 @@ app.get('/api/sales/history', requireRole('CASHIER', 'ADMIN'), async (req, res) 
     const [rows] = await pool.query(query, params);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2347,7 +2514,9 @@ app.get('/api/sales/history/:id', requireRole('CASHIER', 'ADMIN'), async (req, r
     }
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2457,7 +2626,9 @@ app.get('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
     const [rows] = await pool.query('SELECT * FROM sales WHERE status = "HOLD"');
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2473,7 +2644,9 @@ app.delete('/api/sales/hold/:id', requireRole('CASHIER', 'ADMIN'), async (req, r
     res.json({ message: "ลบบิลที่พักไว้สำเร็จ" });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -2497,24 +2670,32 @@ app.post('/api/members/import', requireRole('ADMIN'), csvUpload.single('file'), 
     .on('data', (data) => results.push(data))
     .on('end', async () => {
       try {
+        // ⭐️ Security remediation — เดิม password = เบอร์โทร/'123456' (เดาง่าย) เปลี่ยนเป็นสุ่มรหัสผ่านชั่วคราว
+        // + บังคับเปลี่ยนรหัสผ่านก่อนใช้งานจริง (เฉพาะแถวที่สร้างใหม่ — ON DUPLICATE ไม่แตะรหัสผ่านคนเดิม)
+        const created_credentials = [];
         for (const row of results) {
           // สมมติใน CSV มีหัวตาราง: student_id, full_name, phone_number
           const { student_id, full_name, phone_number } = row;
           if (!student_id || !full_name) continue; // ข้ามแถวที่ข้อมูลไม่ครบ
 
-          const password = await bcrypt.hash(phone_number || '123456', 10);
+          const tempPassword = crypto.randomBytes(9).toString('base64url');
+          const password = await bcrypt.hash(tempPassword, 10);
 
-          await pool.query(
-            `INSERT INTO users (student_id, password, full_name, phone_number, role) 
-             VALUES (?, ?, ?, ?, 'MEMBER') 
+          // ⭐️ insertId === 0 บน ON DUPLICATE KEY UPDATE ที่ทับแถวเดิม (MySQL ไม่แจก insertId ใหม่) — ใช้แยกว่า insert ใหม่จริงไหม
+          const [result] = await pool.query(
+            `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
+             VALUES (?, ?, ?, ?, 'MEMBER', TRUE)
              ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number)`,
             [student_id, password, full_name, phone_number || null]
           );
+          if (result.insertId) created_credentials.push({ student_id, temp_password: tempPassword });
         }
         fs.unlinkSync(req.file.path); // ลบไฟล์ทิ้งหลัง Import เสร็จ
-        res.json({ message: `นำเข้าสมาชิกสำเร็จ ${results.length} รายการ` });
+        res.json({ message: `นำเข้าสมาชิกสำเร็จ ${results.length} รายการ`, created_credentials });
       } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('[500]', error.message);
+
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
       }
     });
 });
@@ -2560,7 +2741,9 @@ app.get('/api/reports/dashboard', requireRole('CASHIER', 'ADMIN'), async (req, r
       summary: rows[0]
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2589,7 +2772,9 @@ app.get('/api/reports/top-selling', requireRole('CASHIER', 'ADMIN'), async (req,
 
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 // 🐛 FIX (round 2) — แก้รอบแรกเปิดแค่ requireRole('ADMIN','MEMBER') โดยลืมไปว่า CASHIER/ADMIN ก็เห็น
@@ -2635,7 +2820,9 @@ app.get('/api/reports/vendor-sales', async (req, res) => {
     const [rows] = await pool.query(query, params);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2669,7 +2856,9 @@ app.get('/api/reports/vendor-sales/detail', async (req, res) => {
 
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 // =========================================
@@ -2685,7 +2874,9 @@ app.get('/api/reports/void-summary', requireRole('ADMIN'), async (req, res) => {
     `);
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2701,7 +2892,9 @@ app.get('/api/reports/shift-anomalies', requireRole('ADMIN'), async (req, res) =
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2731,7 +2924,9 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN'), async (req, res) 
       pct_vs_last_week: pct(lastWeek)
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2750,7 +2945,9 @@ app.get('/api/reports/hourly-sales', requireRole('ADMIN'), async (req, res) => {
     const result = Array.from({ length: 24 }, (_, h) => ({ hour: h, total: map[h] || 0 }));
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2772,7 +2969,9 @@ app.get('/api/reports/sales-by-cashier', requireRole('ADMIN'), async (req, res) 
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2787,7 +2986,9 @@ app.get('/api/reports/open-shifts', requireRole('ADMIN'), async (req, res) => {
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2803,7 +3004,9 @@ app.get('/api/shifts/pending-approval', requireRole('ADMIN'), async (req, res) =
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2817,7 +3020,9 @@ app.get('/api/reports/pending-orders', requireRole('ADMIN'), async (req, res) =>
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2827,7 +3032,9 @@ app.get('/api/reports/sales-channel', requireRole('ADMIN'), async (req, res) => 
     const [preorder] = await pool.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status='COMPLETED' AND DATE(completed_at)=CURDATE()`);
     res.json({ walkin_sales: Number(walkin[0].total), preorder_sales: Number(preorder[0].total) });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2850,7 +3057,9 @@ app.get('/api/reports/gross-profit', requireRole('ADMIN'), async (req, res) => {
     `);
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2909,7 +3118,9 @@ app.get('/api/reports/profit-summary', requireRole('ADMIN'), async (req, res) =>
     }), { revenue: 0, cogs_own: 0, vendor_payout: 0, profit_own: 0, profit_gp: 0, profit_total: 0 });
     res.json({ overall, monthly });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2930,7 +3141,9 @@ app.get('/api/reports/dead-stock', requireRole('ADMIN'), async (req, res) => {
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -2953,7 +3166,9 @@ app.get('/api/reports/vendor-summary', requireRole('ADMIN'), async (req, res) =>
     `);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3040,7 +3255,9 @@ app.get('/api/reports/payroll', requireRole('ADMIN'), async (req, res) => {
 
     res.json({ month, staff: result });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3056,7 +3273,9 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
     if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบพนักงานนี้' });
     res.json({ message: 'อัปเดตอัตราค่าจ้างสำเร็จ', hourly_rate: rate });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3114,7 +3333,9 @@ app.get('/api/reports/monthly-overview', requireRole('ADMIN'), async (req, res) 
       void_amount: Number(voidRows[0].void_amount),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3127,7 +3348,9 @@ app.get('/api/settings/store', async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM settings WHERE id = 1');
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3140,7 +3363,9 @@ app.put('/api/settings/store', requireRole('ADMIN'), async (req, res) => {
     );
     res.json({ message: "อัปเดตข้อมูลร้านค้าสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3149,7 +3374,9 @@ app.get('/api/settings/receipt', async (req, res) => {
     const [rows] = await pool.query('SELECT receipt_footer FROM settings WHERE id = 1');
     res.json({ receipt_footer: rows[0].receipt_footer });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3177,7 +3404,9 @@ app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req
     // หมายเหตุ: ในระบบจริง อาจจะมีการบันทึกลงตาราง stock_history (ประวัติการปรับสต๊อก) ด้วย
     res.json({ message: `ปรับสต๊อกสำเร็จ (เหตุผล: ${type})` });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3189,7 +3418,9 @@ app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN'), async (req,
     const [rows] = await pool.query('SELECT id, barcode, name, stock FROM products WHERE stock <= 10 AND is_active = TRUE ORDER BY stock ASC');
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3202,7 +3433,9 @@ app.get('/api/promotions', async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM promotions WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURDATE())');
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3230,7 +3463,9 @@ app.get('/api/promotions/active', async (req, res) => {
     });
     res.json(items);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3257,7 +3492,9 @@ app.post('/api/promotions', requireRole('ADMIN'), async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: "สร้างโปรโมชั่นสำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3284,7 +3521,9 @@ app.post('/api/promotions/verify', requireRole('CASHIER', 'ADMIN'), async (req, 
 
     res.json({ discount_amount, net_total, promo_name: promo.name });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3299,7 +3538,9 @@ app.get('/api/suppliers', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM suppliers');
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3309,7 +3550,9 @@ app.post('/api/suppliers', requireRole('ADMIN'), async (req, res) => {
     const [result] = await pool.query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact_info]);
     res.status(201).json({ id: result.insertId, message: "เพิ่มซัพพลายเออร์สำเร็จ" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3323,7 +3566,9 @@ app.delete('/api/suppliers/:id', requireRole('ADMIN'), async (req, res) => {
     if (error.code === 'ER_ROW_IS_REFERENCED_2') {
       return res.status(400).json({ error: "ไม่สามารถลบได้ เนื่องจากซัพพลายเออร์นี้มีประวัติการรับสินค้าในคลังแล้ว" });
     }
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3383,7 +3628,9 @@ app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
     res.status(201).json({ message: "บันทึกการรับสินค้าเข้าคลังสำเร็จ", purchase_id: purchaseId });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -3517,7 +3764,9 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
     });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -3563,7 +3812,9 @@ app.get('/api/orders', async (req, res) => {
 
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3707,7 +3958,9 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
     res.json({ message: "อัปเดตสถานะออเดอร์สำเร็จ" });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -3725,7 +3978,9 @@ app.get('/api/notifications', async (req, res) => {
     const [rows] = await pool.query(query, [req.user.id]);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3739,7 +3994,9 @@ app.put('/api/notifications/read-all', async (req, res) => {
     await pool.query(query, [req.user.id]);
     res.json({ message: "อ่านแจ้งเตือนทั้งหมดแล้ว" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3749,7 +4006,9 @@ app.get('/api/orders/pending-count', requireRole('ADMIN', 'CASHIER'), async (req
     const [rows] = await pool.query("SELECT COUNT(id) as count FROM orders WHERE status IN ('PENDING_VERIFY', 'WAITING_CASH', 'PREPARING')");
     res.json({ count: rows[0].count || 0 });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3796,7 +4055,9 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
     res.json({ message: "ยกเลิกออเดอร์สำเร็จ" });
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -3953,7 +4214,9 @@ app.get('/api/media', async (req, res) => {
     res.setHeader('Cache-Control', 'private, no-store');
     res.sendFile(abs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3990,7 +4253,9 @@ app.delete('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
 
     res.json({ message: "เคลียร์ข้อมูลสำเร็จ! ข้อมูลสินค้าและบิลหายไปแล้ว (แต่ยังคง User ไว้) 🎉" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -3998,6 +4263,8 @@ app.delete('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
 // API สำหรับนำเข้าข้อมูลสินค้าเริ่มต้น (Seed Data)
 // =========================================
 app.get('/api/seed-data', requireSetupKey, async (req, res) => {
+  // ⭐️ Security remediation — bootstrap/dev-only endpoint, must not be reachable in production regardless of SETUP_KEY
+  if (IS_PRODUCTION) return res.status(404).end();
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -4106,7 +4373,9 @@ app.get('/api/seed-data', requireSetupKey, async (req, res) => {
 
   } catch (error) {
     await conn.rollback();
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
   }
@@ -4116,21 +4385,28 @@ app.get('/api/seed-data', requireSetupKey, async (req, res) => {
 // API สร้างผู้จัดการคนแรก (เข้ารหัสผ่านเรียบร้อย!)
 // =========================================
 app.get('/api/create-admin', requireSetupKey, async (req, res) => {
+  // ⭐️ Security remediation — bootstrap/dev-only endpoint, must not be reachable in production regardless of SETUP_KEY
+  if (IS_PRODUCTION) return res.status(404).end();
   try {
+    // ⭐️ Security remediation — เดิม hardcode รหัสผ่าน '1234' เปลี่ยนเป็นสุ่ม + บังคับเปลี่ยนรหัสผ่านก่อนใช้งาน
+    const tempPassword = crypto.randomBytes(9).toString('base64url');
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('1234', salt); // รหัสผ่านคือ 1234
+    const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
     await pool.query("DELETE FROM users WHERE student_id = 'admin'");
 
     // ⭐️ เปลี่ยนจาก username เป็น student_id
     await pool.query(
-      "INSERT INTO users (student_id, password, full_name, role, is_active) VALUES (?, ?, 'ผู้จัดการระบบ', 'ADMIN', 1)",
+      "INSERT INTO users (student_id, password, full_name, role, is_active, must_change_password) VALUES (?, ?, 'ผู้จัดการระบบ', 'ADMIN', 1, TRUE)",
       ['admin', hashedPassword]
     );
 
-    res.json({ message: "สร้างบัญชีสำเร็จ! 🎉 ให้เข้าสู่ระบบด้วย รหัสนักศึกษา: admin / Password: 1234" });
+    console.log(`🔑 [create-admin] สร้างบัญชี admin แล้ว รหัสผ่านชั่วคราว: ${tempPassword}`);
+    res.json({ message: "สร้างบัญชีสำเร็จ! 🎉 ดูรหัสผ่านชั่วคราวใน server log (ต้องเปลี่ยนรหัสผ่านทันทีหลังเข้าสู่ระบบครั้งแรก)" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4138,6 +4414,8 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 // API เวทมนตร์ สร้างตารางฐานข้อมูลอัตโนมัติบน Cloud
 // =========================================
 app.get('/api/init-db', requireSetupKey, async (req, res) => {
+  // ⭐️ Security remediation — bootstrap/dev-only endpoint, must not be reachable in production regardless of SETUP_KEY
+  if (IS_PRODUCTION) return res.status(404).end();
   try {
     const queries = [
       `CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, student_id VARCHAR(50) UNIQUE, password VARCHAR(255), full_name VARCHAR(100), role VARCHAR(20) DEFAULT 'CASHIER', is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
@@ -4167,7 +4445,9 @@ app.get('/api/init-db', requireSetupKey, async (req, res) => {
 
     res.json({ message: "สร้างตารางสำเร็จครบ 11 ตาราง! 🎉 โครงสร้างฐานข้อมูลพร้อมลุยแล้ว" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4190,7 +4470,9 @@ app.post('/api/reports/daily/send', requireRole('ADMIN'), async (req, res) => {
       report: result.data,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4209,7 +4491,9 @@ app.get('/api/admin/backups', requireRole('ADMIN'), async (req, res) => {
 
     res.json(backups);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4223,7 +4507,9 @@ app.post('/api/admin/backups/create', requireRole('ADMIN'), async (req, res) => 
 
     res.json({ success: true, backup: result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4258,7 +4544,9 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
 
     res.json({ success: true, message: `Restored from ${backup.filename}` });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4357,7 +4645,9 @@ app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4378,7 +4668,9 @@ app.get('/api/audit-logs/:id', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async 
 
     res.json(logs[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4429,7 +4721,9 @@ app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => 
     res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
     res.send('﻿' + csv); // BOM for Excel UTF-8
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[500]', err.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -4718,5 +5012,13 @@ server.listen(PORT, '0.0.0.0', () => {
     } catch (e) { console.error('❌ expired products cron ล้มเหลว:', e.message); }
   });
 
-  console.log('🕐 ตั้ง cron: backup (ตี 2), auto-checkout (เที่ยงคืน), รายงานประจำวัน (ตี 6), ตรวจสินค้าหมดอายุ (ทุกชั่วโมง) เรียบร้อย');
+  // ⭐️ Security remediation — ล้าง revoked_tokens ที่หมดอายุแล้วทุกวัน (กันตารางโตไม่จำกัด)
+  cron.schedule('30 19 * * *', async () => {
+    try {
+      const [result] = await pool.query('DELETE FROM revoked_tokens WHERE expires_at < NOW()');
+      console.log(`🧹 ล้าง revoked_tokens ที่หมดอายุแล้ว: ${result.affectedRows} แถว`);
+    } catch (e) { console.error('❌ revoked_tokens cleanup cron ล้มเหลว:', e.message); }
+  });
+
+  console.log('🕐 ตั้ง cron: backup (ตี 2), auto-checkout (เที่ยงคืน), รายงานประจำวัน (ตี 6), ตรวจสินค้าหมดอายุ (ทุกชั่วโมง), ล้าง revoked tokens (ตี 2:30) เรียบร้อย');
 });

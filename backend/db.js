@@ -686,6 +686,34 @@ const initDB = async () => {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE users (hourly_rate) ล้มเหลว:", alterErr.message);
     }
 
+    // ⭐️ Security remediation — must_change_password (weak default password enforcement)
+    // and token_valid_after (bulk token invalidation on password/role change)
+    for (const [col, ddl] of [
+      ['must_change_password', 'ADD COLUMN must_change_password TINYINT(1) DEFAULT 0'],
+      ['token_valid_after', 'ADD COLUMN token_valid_after DATETIME NULL'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE users ${ddl}`);
+        console.log(`🔧 เพิ่มคอลัมน์ users.${col} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE users (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
+    // ⭐️ Security remediation — revoked_tokens (server-side JWT revocation on logout/password change)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS revoked_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        jti VARCHAR(64) UNIQUE NOT NULL,
+        user_id INT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        INDEX idx_jti (jti),
+        INDEX idx_expires (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
     console.log("✅ Ultimate Master Database Schema is Ready!");
     connection.release();
   } catch (err) {

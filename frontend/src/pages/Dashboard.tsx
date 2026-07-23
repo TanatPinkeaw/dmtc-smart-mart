@@ -150,7 +150,6 @@ export default function Dashboard() {
     try {
       const fd = new FormData(); fd.append('photo', closePhoto);
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-out', fd);
-      console.log('[DEBUG] Photo upload response:', uploadRes.data); // ⭐️ Debug
       const response = await api.post('/shifts/close', { cashier_id: user.id, actual_cash: actualCash, note: closeNote || undefined, discrepancy_category: discrepancyCategory || undefined, cash_breakdown: denomCounts, close_photo: uploadRes.data.photo_url }); // ⭐️ D3
       // ⭐️ F2 — status 202 = ส่วนต่างเกิน 100 บาท กะยังไม่ปิดจริง ต้องรอ ADMIN คนอื่นอนุมัติก่อน
       if (response.status === 202) {

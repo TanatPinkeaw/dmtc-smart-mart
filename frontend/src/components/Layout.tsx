@@ -24,7 +24,8 @@ function LayoutInner() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  // ⭐️ Security remediation — บังคับเปลี่ยนรหัสผ่านชั่วคราวก่อนใช้งานหน้าอื่น (ปิด modal เองไม่ได้ ดู ChangePasswordModal forceChange)
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(!!user.must_change_password);
   // ⭐️ FIX: bottom nav มือถือเดิมมีแค่ POS/ออเดอร์/(ตั้งค่าเฉพาะ ADMIN) — ขาดหน้า Dashboard, Schedules,
   // Summary, Inventory, AttendanceManagement ที่ desktop sidebar มีครบ ทำให้กด staff เข้าหน้าพวกนี้จากมือถือไม่ได้เลย
   // เพิ่มปุ่ม "เมนู" เปิด bottom sheet รวมหน้าที่เหลือแทน ให้ครบตาม role เหมือน desktop
@@ -167,6 +168,7 @@ function LayoutInner() {
       {showChangePasswordModal && (
         <ChangePasswordModal
           userId={user.id}
+          forceChange={!!user.must_change_password}
           onClose={() => setShowChangePasswordModal(false)}
         />
       )}
