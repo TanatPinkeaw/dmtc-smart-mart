@@ -50,6 +50,39 @@ const forgotPasswordLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// ⭐️ Security remediation — /api/auth/refresh ไม่เคยมี rate limit เลย token หลุดโดนใครยิงซ้ำได้ไม่จำกัด
+// จำกัดหลวมๆ (คนละสิทธิ์ต่างจาก login limiter) เพราะ client ปกติเรียกเป็นระยะตาม access token หมดอายุ
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: IS_PRODUCTION ? 30 : 200,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  message: { error: 'ขอ refresh token บ่อยเกินไป กรุณารอสักครู่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ⭐️ Security remediation — reset-token/reset-password เป็น public route ไม่มี rate limit เลย
+// token เดายากอยู่แล้ว (สุ่ม 256 บิต) แต่ป้องกัน DB-query spam/DoS ไว้ก่อน
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: IS_PRODUCTION ? 20 : 200,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  message: { error: 'ทำรายการถี่เกินไป กรุณารอสักครู่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ⭐️ Security remediation — endpoint อัปโหลดรูป (เข้างาน/ปิดกะ/สลิป) ไม่มี rate limit เลย
+// บัญชีที่ login ถูกต้อง (หรือถูกขโมย token) อาจสแปมอัปโหลดรูปใหญ่ถี่ๆ จน Cloudinary quota/ดิสก์ Render หมด
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: IS_PRODUCTION ? 20 : 200,
+  keyGenerator: (req) => req.user?.id?.toString() || ipKeyGenerator(req),
+  message: { error: 'อัปโหลดไฟล์ถี่เกินไป กรุณารอสักครู่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const {
   checkoutValidator, productValidator, orderValidator,
   shiftCloseValidator, userRegisterValidator,
@@ -298,9 +331,16 @@ function idempotencyMiddleware(req, res, next) {
 
 const app = express();
 
-// ⭐️ DEPLOY FIX (#7) — prod รันหลัง nginx/reverse proxy ต้องเชื่อ X-Forwarded-For 1 ชั้น
+// ⭐️ DEPLOY FIX (#7) — prod รันหลัง nginx/reverse proxy (Render ก็เช่นกัน) ต้องเชื่อ X-Forwarded-For 1 ชั้น
 // ไม่งั้น rate limiter เห็น IP เดียว (ของ proxy) = login limiter ล็อกคนทั้งระบบพร้อมกัน
 if (IS_PRODUCTION) app.set('trust proxy', 1);
+
+// ⭐️ Security remediation — Render ตั้ง process.env.RENDER ให้อัตโนมัติ ถ้าเจอว่ารันบน Render
+// แต่ NODE_ENV ดันไม่ใช่ 'production' (ลืมตั้งใน dashboard) trust proxy ข้างบนจะไม่ทำงาน
+// rate limiter ทุกตัวจะเห็น IP ของ Render load balancer ตัวเดียว แทน IP ผู้ใช้จริง — เตือนดังๆ ให้เห็นใน log
+if (process.env.RENDER && !IS_PRODUCTION) {
+  console.error('⚠️⚠️⚠️ [BOOT WARNING] รันบน Render แต่ NODE_ENV != production — trust proxy ไม่ถูกเปิด! rate limiter (login/forgot-password) จะเห็น IP ผิดทั้งหมด ตั้ง NODE_ENV=production ใน Render dashboard ด่วน ⚠️⚠️⚠️');
+}
 
 // ⭐️ SECURITY FIX (#8) — security headers (ป้องกัน clickjacking/MIME sniffing ฯลฯ)
 // เป็น API ล้วน (ไม่เสิร์ฟ HTML) ปิด CSP; รูปโหลดข้ามโดเมนผ่าน XHR ตั้ง CORP เป็น cross-origin
@@ -312,8 +352,9 @@ app.use(helmet({
 // 2. สร้าง HTTP Server ครอบ Express
 const server = http.createServer(app);
 
-// 3. ตั้งค่า Socket.io 
+// 3. ตั้งค่า Socket.io
 // ⭐️ Task 9 — ล็อก origin เป็น FRONTEND_URL เดียว (เดิม "*" อนุญาตทุกโดเมน)
+// ⭐️ Security remediation — เหตุผลเดียวกับ CORS ของ Express ด้านล่าง: ห้ามเปลี่ยนเป็น wildcard/regex
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const io = new Server(server, {
   cors: {
@@ -350,6 +391,10 @@ app.use((req, res, next) => {
 });
 
 // ⭐️ Task 9 — ล็อก origin เป็น FRONTEND_URL เดียว (เดิม cors() ไม่ใส่ options = สะท้อนกลับทุก origin)
+// ⭐️ Security remediation — คำเตือนสำหรับคนแก้ทีหลัง: ถ้าจะรองรับ Vercel preview URL (เปลี่ยนทุก
+// branch/PR) ห้ามเปลี่ยน origin ตรงนี้เป็น wildcard/regex แบบกว้างๆ (เช่น /\.vercel\.app$/) เด็ดขาด
+// เพราะเปิดคู่กับ credentials:true = ใครก็ deploy .vercel.app ของตัวเองมายิง request แบบมี cookie/
+// credential ได้ ถ้าต้องรองรับ preview จริงๆ ให้ใช้ allow-list function เทียบกับรายการ URL ที่รู้จักตายตัว
 app.use(cors({
   origin: FRONTEND_URL,
   credentials: true,
@@ -409,13 +454,18 @@ const PUBLIC_GET_PREFIXES = [
 ];
 
 // ป้องกัน endpoint bootstrap ทั้ง 3 ตัว ด้วย key ลับใน .env
-// เรียกใช้แบบ: GET /api/init-db?key=xxxxx
+// เรียกใช้แบบ: GET /api/init-db (header X-Setup-Key: xxxxx)
+// ⭐️ Security remediation — เดิมส่ง key ผ่าน query string (?key=) หลุดไป access log/browser history ได้
+// ย้ายไปส่งผ่าน header แทน + เทียบแบบ constant-time กัน timing side-channel
 function requireSetupKey(req, res, next) {
-  const key = req.query.key;
+  const key = req.headers['x-setup-key'];
   if (!process.env.SETUP_KEY) {
     return res.status(503).json({ error: 'ปิดใช้งาน bootstrap endpoint นี้แล้ว (ไม่พบ SETUP_KEY ใน .env)' });
   }
-  if (key !== process.env.SETUP_KEY) {
+  const provided = Buffer.from(String(key || ''));
+  const expected = Buffer.from(process.env.SETUP_KEY);
+  const isMatch = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+  if (!isMatch) {
     return res.status(403).json({ error: 'setup key ไม่ถูกต้อง' });
   }
   next();
@@ -921,7 +971,10 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 });
 
 // ⭐️ Sprint 2 — B5: Token Refresh Endpoint
-app.post('/api/auth/refresh', async (req, res) => {
+// ⭐️ Security remediation — rate limited + rotates the refresh token on every use (old jti revoked,
+// new one issued) so a replayed/stolen refresh token stops working the moment the legitimate client
+// refreshes again, instead of staying valid for the full 7-day lifetime
+app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
   try {
     const refreshToken = req.body.refreshToken;
 
@@ -945,10 +998,19 @@ app.post('/api/auth/refresh', async (req, res) => {
       return res.status(401).json({ error: 'ไม่พบผู้ใช้งาน' });
     }
 
-    // Issue new access token
-    const accessToken = generateAccessToken(users[0]);
+    // ⭐️ Security remediation — rotate: revoke the refresh token just used, issue a fresh one
+    if (decoded.jti && decoded.exp) {
+      await pool.query(
+        'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+        [decoded.jti, decoded.id, decoded.exp]
+      );
+    }
 
-    res.json({ accessToken });
+    // Issue new access + refresh tokens
+    const accessToken = generateAccessToken(users[0]);
+    const newRefreshToken = generateRefreshToken(users[0]);
+
+    res.json({ accessToken, refreshToken: newRefreshToken });
   } catch (err) {
     res.status(401).json({ error: err.message });
   }
@@ -1052,21 +1114,19 @@ app.post('/api/users/register', validateRequest(userRegisterValidator), async (r
   }
 
   try {
-    // ⭐️ Security remediation — เดิมตั้งรหัสผ่านเริ่มต้นเป็นเบอร์โทรศัพท์ (เดาง่าย/รู้กันในหมู่เพื่อน)
-    // เปลี่ยนเป็นสุ่มรหัสผ่านชั่วคราว + บังคับเปลี่ยนรหัสผ่านก่อนใช้งานจริง (must_change_password)
-    const tempPassword = crypto.randomBytes(9).toString('base64url');
+    // ⭐️ ทริค: ตั้งรหัสผ่านเริ่มต้นเป็น "เบอร์โทรศัพท์" ไปก่อน (ตั้งใจออกแบบไว้แบบนี้)
+    // อนาคตตอนทำระบบจองออนไลน์ ลูกค้าค่อยเอาเบอร์โทรไปล็อกอินแล้วเปลี่ยนรหัสผ่านเอง
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(tempPassword, salt);
+    const hashedPassword = await bcrypt.hash(phone_number, salt);
 
     const [result] = await pool.query(
-      'INSERT INTO users (student_id, password, full_name, phone_number, role, points, must_change_password) VALUES (?, ?, ?, ?, ?, 0, TRUE)',
+      'INSERT INTO users (student_id, password, full_name, phone_number, role, points) VALUES (?, ?, ?, ?, ?, 0)',
       [student_id, hashedPassword, full_name, phone_number, 'MEMBER']
     );
 
     res.status(201).json({
-      message: "สมัครสมาชิกสำเร็จ กรุณาเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบครั้งแรก",
-      user: { id: result.insertId, student_id, full_name, phone_number, points: 0 },
-      temp_password: tempPassword
+      message: "สมัครสมาชิกสำเร็จ",
+      user: { id: result.insertId, student_id, full_name, phone_number, points: 0 }
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -1121,7 +1181,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
   }
 });
 
-app.get('/api/auth/reset-token/:token', async (req, res) => {
+app.get('/api/auth/reset-token/:token', resetPasswordLimiter, async (req, res) => {
   try {
     const [tokens] = await pool.query(
       'SELECT 1 FROM password_resets WHERE reset_token = ? AND expires_at > NOW() AND used_at IS NULL',
@@ -1135,7 +1195,7 @@ app.get('/api/auth/reset-token/:token', async (req, res) => {
   }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
   const { reset_token, new_password } = req.body;
 
   if (!reset_token) return res.status(400).json({ error: "ไม่พบ token" });
@@ -1480,18 +1540,15 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
 
     if (dry_run) return res.json({ to_create: toCreate, to_reactivate: toReactivate, to_deactivate: toDeactivate });
 
-    // ⭐️ Security remediation — เดิม password = เบอร์โทร (เดาง่าย) เปลี่ยนเป็นสุ่มรหัสผ่านชั่วคราว
-    // + บังคับเปลี่ยนรหัสผ่านก่อนใช้งานจริง คืนรายการ temp password ให้ ADMIN แจกจ่ายเอง
+    // สร้างสมาชิกใหม่ (password = phone_number)
     let created_count = 0;
-    const created_credentials = [];
     for (const row of toCreate) {
-      const tempPassword = crypto.randomBytes(9).toString('base64url');
-      const hashed = await bcrypt.hash(tempPassword, 10);
+      const phone = (row.phone_number || row.username).trim();
+      const hashed = await bcrypt.hash(phone, 10);
       await pool.query(
-        'INSERT INTO users (student_id, full_name, phone_number, password, role, is_active, must_change_password) VALUES (?, ?, ?, ?, \'MEMBER\', TRUE, TRUE)',
+        'INSERT INTO users (student_id, full_name, phone_number, password, role, is_active) VALUES (?, ?, ?, ?, \'MEMBER\', TRUE)',
         [row.username.trim(), (row.full_name || row.username).trim(), row.phone_number?.trim() || null, hashed]
       );
-      created_credentials.push({ student_id: row.username.trim(), temp_password: tempPassword });
       created_count++;
     }
 
@@ -1515,8 +1572,7 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
 
     res.json({
       message: `เพิ่มใหม่ ${created_count} คน, เปิดใช้งานคืน ${reactivated_count} คน, ปิดการใช้งาน ${toDeactivate.length} คน`,
-      created_count, reactivated_count, deactivated_count: toDeactivate.length,
-      created_credentials
+      created_count, reactivated_count, deactivated_count: toDeactivate.length
     });
   } catch (error) {
     console.error('[500]', error.message);
@@ -1922,7 +1978,7 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
 
 // ⭐️ Security remediation — เดิมมีแค่ authenticateToken (global) ไม่มี requireRole เลย ทำให้ MEMBER
 // เรียกตรงได้ทั้งที่หน้า Shift (ที่ใช้ endpoint นี้) จำกัดเฉพาะ ADMIN/CASHIER ฝั่ง frontend เท่านั้น
-app.post('/api/attendance/upload-photo', requireRole('ADMIN', 'CASHIER'), shiftPhotoUpload.single('photo'), async (req, res) => {
+app.post('/api/attendance/upload-photo', requireRole('ADMIN', 'CASHIER'), uploadLimiter, shiftPhotoUpload.single('photo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
   try {
     // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
@@ -2670,28 +2726,22 @@ app.post('/api/members/import', requireRole('ADMIN'), csvUpload.single('file'), 
     .on('data', (data) => results.push(data))
     .on('end', async () => {
       try {
-        // ⭐️ Security remediation — เดิม password = เบอร์โทร/'123456' (เดาง่าย) เปลี่ยนเป็นสุ่มรหัสผ่านชั่วคราว
-        // + บังคับเปลี่ยนรหัสผ่านก่อนใช้งานจริง (เฉพาะแถวที่สร้างใหม่ — ON DUPLICATE ไม่แตะรหัสผ่านคนเดิม)
-        const created_credentials = [];
         for (const row of results) {
           // สมมติใน CSV มีหัวตาราง: student_id, full_name, phone_number
           const { student_id, full_name, phone_number } = row;
           if (!student_id || !full_name) continue; // ข้ามแถวที่ข้อมูลไม่ครบ
 
-          const tempPassword = crypto.randomBytes(9).toString('base64url');
-          const password = await bcrypt.hash(tempPassword, 10);
+          const password = await bcrypt.hash(phone_number || '123456', 10);
 
-          // ⭐️ insertId === 0 บน ON DUPLICATE KEY UPDATE ที่ทับแถวเดิม (MySQL ไม่แจก insertId ใหม่) — ใช้แยกว่า insert ใหม่จริงไหม
-          const [result] = await pool.query(
-            `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
-             VALUES (?, ?, ?, ?, 'MEMBER', TRUE)
+          await pool.query(
+            `INSERT INTO users (student_id, password, full_name, phone_number, role)
+             VALUES (?, ?, ?, ?, 'MEMBER')
              ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number)`,
             [student_id, password, full_name, phone_number || null]
           );
-          if (result.insertId) created_credentials.push({ student_id, temp_password: tempPassword });
         }
         fs.unlinkSync(req.file.path); // ลบไฟล์ทิ้งหลัง Import เสร็จ
-        res.json({ message: `นำเข้าสมาชิกสำเร็จ ${results.length} รายการ`, created_credentials });
+        res.json({ message: `นำเข้าสมาชิกสำเร็จ ${results.length} รายการ` });
       } catch (error) {
         console.error('[500]', error.message);
 
@@ -4071,7 +4121,7 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
  * Validates: MIME type (jpeg, png, gif, webp), size (5MB max), dimensions (400×300 to 4000×3000)
  * Returns: { success, filename, path, dimensions }
  */
-app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'), slipUpload.single('slip'), async (req, res) => {
+app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'), uploadLimiter, slipUpload.single('slip'), async (req, res) => {
   const { id } = req.params;
   try {
     if (!req.file) {
@@ -4144,7 +4194,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'
  * Validates: MIME type (jpeg, png only), size (10MB max), dimensions (min 800×600)
  * Returns: { success, filename, path, dimensions }
  */
-app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), shiftPhotoUpload.single('photo'), async (req, res) => {
+app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), uploadLimiter, shiftPhotoUpload.single('photo'), async (req, res) => {
   const { id } = req.params;
 
   try {

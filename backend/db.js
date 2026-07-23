@@ -14,6 +14,18 @@ if (missingDbEnv.length > 0) {
 // ⭐️ SSL สำหรับ MySQL บนคลาวด์ (เช่น Aiven) — เปิดเมื่อ DB_SSL=true
 // - ถ้ามี DB_SSL_CA (เนื้อ CA cert แบบ PEM หรือ base64) จะ verify แบบเต็ม ปลอดภัยสุด
 // - ถ้าไม่มี CA จะเข้ารหัสแต่ไม่ verify (พอสำหรับ demo) ; local dev ไม่ต้องตั้ง DB_SSL เลย
+// ⭐️ Security remediation — production (Render → Aiven) ต้องเข้ารหัสเสมอ ห้ามบูทแบบ plaintext
+// หรือแบบ rejectUnauthorized:false เงียบๆ เพราะ MITM การเชื่อมต่อ DB ได้ ถ้าไม่ตั้ง DB_SSL_CA ให้ครบ ให้บูทไม่ผ่านไปเลย
+const IS_PRODUCTION_DB = process.env.NODE_ENV === 'production';
+if (IS_PRODUCTION_DB && process.env.DB_SSL !== 'true') {
+  console.error('❌ db.js: NODE_ENV=production ต้องตั้ง DB_SSL=true (เข้ารหัสการเชื่อมต่อไป Aiven/MySQL เสมอ)');
+  process.exit(1);
+}
+if (IS_PRODUCTION_DB && process.env.DB_SSL === 'true' && !process.env.DB_SSL_CA) {
+  console.error('❌ db.js: NODE_ENV=production ต้องตั้ง DB_SSL_CA ด้วย (verify cert เต็มรูปแบบ) ห้าม fallback แบบ rejectUnauthorized:false บน production');
+  process.exit(1);
+}
+
 let sslOption;
 if (process.env.DB_SSL === 'true') {
   if (process.env.DB_SSL_CA) {
@@ -22,6 +34,7 @@ if (process.env.DB_SSL === 'true') {
       : Buffer.from(process.env.DB_SSL_CA, 'base64').toString('utf8');
     sslOption = { ca, rejectUnauthorized: true };
   } else {
+    // ⭐️ เข้าถึงจุดนี้ได้เฉพาะ non-production (เช็คไว้ข้างบนแล้ว) — พอสำหรับ demo/dev เท่านั้น
     sslOption = { rejectUnauthorized: false };
   }
 }

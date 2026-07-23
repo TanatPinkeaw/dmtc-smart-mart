@@ -289,16 +289,7 @@ export default function Settings() {
       if (!confirm.isConfirmed) return;
 
       const result = await api.post('/users/sync-csv', { rows, dry_run: false });
-      // ⭐️ Security remediation — สมาชิกใหม่ได้รหัสผ่านชั่วคราวสุ่ม (เดิมใช้เบอร์โทร) ต้องแสดงให้ ADMIN คัดลอกไปแจก
-      const creds = result.data.created_credentials || [];
-      if (creds.length > 0) {
-        Swal.fire({
-          icon: 'success', title: result.data.message,
-          html: `<p class="mb-1 text-sm">รหัสผ่านชั่วคราวสำหรับสมาชิกใหม่ (บังคับเปลี่ยนตอนเข้าสู่ระบบครั้งแรก):</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:200px;overflow-y:auto;background:#f8f8f8;padding:8px;border-radius:8px;">${creds.map((c: any) => `${c.student_id}: ${c.temp_password}`).join('\n')}</pre>`,
-        });
-      } else {
-        Swal.fire({ icon: 'success', title: result.data.message, showConfirmButton: false, timer: 2500 });
-      }
+      Swal.fire({ icon: 'success', title: result.data.message, showConfirmButton: false, timer: 2500 });
       fetchUsers();
     } catch (err: any) {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
