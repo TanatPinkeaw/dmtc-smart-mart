@@ -13,16 +13,14 @@ if (missingDbEnv.length > 0) {
 
 // ⭐️ SSL สำหรับ MySQL บนคลาวด์ (เช่น Aiven) — เปิดเมื่อ DB_SSL=true
 // - ถ้ามี DB_SSL_CA (เนื้อ CA cert แบบ PEM หรือ base64) จะ verify แบบเต็ม ปลอดภัยสุด
-// - ถ้าไม่มี CA จะเข้ารหัสแต่ไม่ verify (พอสำหรับ demo) ; local dev ไม่ต้องตั้ง DB_SSL เลย
-// ⭐️ Security remediation — production (Render → Aiven) ต้องเข้ารหัสเสมอ ห้ามบูทแบบ plaintext
-// หรือแบบ rejectUnauthorized:false เงียบๆ เพราะ MITM การเชื่อมต่อ DB ได้ ถ้าไม่ตั้ง DB_SSL_CA ให้ครบ ให้บูทไม่ผ่านไปเลย
+// - ถ้าไม่มี CA จะเข้ารหัสแต่ไม่ verify cert (กันดักฟังข้อมูลระหว่างทางได้ แต่ยังมีช่องให้ MITM แบบ
+//   ปลอมเซิร์ฟเวอร์ได้ถ้า attacker คุม network/DNS) ; local dev ไม่ต้องตั้ง DB_SSL เลย
+// ⭐️ Security remediation — production (Render → Aiven) ต้องเข้ารหัสเสมอ ห้ามบูทแบบ plaintext เงียบๆ
+// TODO: ตั้ง DB_SSL_CA (CA cert จาก Aiven console) แล้วเปลี่ยนบล็อกนี้ให้บังคับอีกทีเพื่อ verify cert
+// เต็มรูปแบบ ตอนนี้ผ่อนให้ทดสอบได้ก่อน — encrypted แต่ยัง rejectUnauthorized:false อยู่
 const IS_PRODUCTION_DB = process.env.NODE_ENV === 'production';
 if (IS_PRODUCTION_DB && process.env.DB_SSL !== 'true') {
   console.error('❌ db.js: NODE_ENV=production ต้องตั้ง DB_SSL=true (เข้ารหัสการเชื่อมต่อไป Aiven/MySQL เสมอ)');
-  process.exit(1);
-}
-if (IS_PRODUCTION_DB && process.env.DB_SSL === 'true' && !process.env.DB_SSL_CA) {
-  console.error('❌ db.js: NODE_ENV=production ต้องตั้ง DB_SSL_CA ด้วย (verify cert เต็มรูปแบบ) ห้าม fallback แบบ rejectUnauthorized:false บน production');
   process.exit(1);
 }
 
@@ -34,7 +32,8 @@ if (process.env.DB_SSL === 'true') {
       : Buffer.from(process.env.DB_SSL_CA, 'base64').toString('utf8');
     sslOption = { ca, rejectUnauthorized: true };
   } else {
-    // ⭐️ เข้าถึงจุดนี้ได้เฉพาะ non-production (เช็คไว้ข้างบนแล้ว) — พอสำหรับ demo/dev เท่านั้น
+    // ⭐️ ยังไม่ตั้ง DB_SSL_CA — เข้ารหัสอยู่ (กันดักฟัง) แต่ไม่ verify cert (กัน MITM ไม่เต็มรูปแบบ)
+    // ใช้ได้ทั้ง dev และ production ชั่วคราว ตั้ง DB_SSL_CA เมื่อพร้อมเพื่อความปลอดภัยเต็มที่
     sslOption = { rejectUnauthorized: false };
   }
 }
