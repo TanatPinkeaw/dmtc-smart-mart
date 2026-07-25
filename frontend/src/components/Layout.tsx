@@ -32,6 +32,9 @@ function LayoutInner() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [profileForm, setProfileForm] = useState({ phone_number: user.phone_number || '' });
   const [profileLoading, setProfileLoading] = useState(false);
+  // ⭐️ Home page feature — รูปโปรไฟล์
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(user.profile_image_url || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const sessionMode = localStorage.getItem('session_mode');
   const isStaff = ['ADMIN', 'CASHIER'].includes(user.role) && sessionMode !== 'shop';
@@ -86,6 +89,19 @@ function LayoutInner() {
     finally { setProfileLoading(false); }
   };
 
+  // ⭐️ Home page feature — อัปโหลดรูปโปรไฟล์ใหม่
+  const handlePhotoSelected = async (file: File) => {
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData(); fd.append('photo', file);
+      const res = await api.post(`/users/${user.id}/profile-photo`, fd);
+      setProfileImageUrl(res.data.photo_url);
+      localStorage.setItem('user', JSON.stringify({ ...user, profile_image_url: res.data.photo_url }));
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เปลี่ยนรูปโปรไฟล์แล้ว', showConfirmButton: false, timer: 1500 });
+    } catch (error: any) { Swal.fire({ icon: 'error', title: 'อัปโหลดรูปไม่สำเร็จ', text: getErrorMessage(error) }); }
+    finally { setPhotoUploading(false); }
+  };
+
   const handleLogoutClick = () => {
     Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
       .then(async (r) => {
@@ -114,8 +130,6 @@ function LayoutInner() {
     }
   };
 
-  const initials = user.full_name?.charAt(0)?.toUpperCase() || 'U';
-
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
       <Sidebar
@@ -124,9 +138,9 @@ function LayoutInner() {
         unreadCount={unreadCount}
         pendingOrders={pendingOrders}
         onOpenNotifications={handleOpenNotifications}
-        initials={initials}
         fullName={user.full_name}
         role={user.role}
+        profileImageUrl={profileImageUrl}
         onOpenProfile={() => setShowProfileModal(true)}
         onLogoutClick={handleLogoutClick}
       />
@@ -152,11 +166,13 @@ function LayoutInner() {
 
       {showProfileModal && (
         <ProfileModal
-          initials={initials}
           fullName={user.full_name}
           studentIdOrUsername={user.student_id || user.username}
           role={user.role}
           phoneNumber={profileForm.phone_number}
+          profileImageUrl={profileImageUrl}
+          onPhotoSelected={handlePhotoSelected}
+          photoUploading={photoUploading}
           onPhoneNumberChange={(value) => setProfileForm({ ...profileForm, phone_number: value })}
           onSubmit={handleUpdateProfile}
           loading={profileLoading}

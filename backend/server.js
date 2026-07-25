@@ -12,7 +12,7 @@ const cron = require('node-cron');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');  // ← เพิ่มบรรทัดนี้
 const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
-const { slipUpload, shiftPhotoUpload } = require('./multer-config');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
+const { slipUpload, shiftPhotoUpload, profilePhotoUpload } = require('./multer-config');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
 const { saveImage } = require('./cloudinary-config');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
 
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
@@ -1063,7 +1063,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     res.json({
       message: "ล็อกอินสำเร็จ",
-      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password },
+      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password, profile_image_url: user.profile_image_url || null },
       csrfToken,
     });
   } catch (error) {
@@ -1210,7 +1210,7 @@ app.post('/api/users/verify-phone', async (req, res) => {
 app.get('/api/users/me', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, student_id, full_name, phone_number, points, role FROM users WHERE id = ?',
+      'SELECT id, student_id, full_name, phone_number, points, role, profile_image_url FROM users WHERE id = ?',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "ไม่พบข้อมูลผู้ใช้" });
@@ -1437,6 +1437,27 @@ app.put('/api/users/:id/profile', async (req, res) => {
     conn.release();
 
     res.json({ message: "อัปเดตข้อมูลบัญชีสำเร็จ" });
+  } catch (error) {
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ Home page feature — อัปโหลดรูปโปรไฟล์ (self-only เหมือน PUT /profile ด้านบน, เก็บผ่าน
+// Cloudinary/saveImage แบบเดียวกับรูปสลิป/เข้างาน)
+app.post('/api/users/:id/profile-photo', uploadLimiter, profilePhotoUpload.single('photo'), async (req, res) => {
+  const userId = req.params.id;
+  if (req.user.role !== 'ADMIN' && String(req.user.id) !== String(userId)) {
+    return res.status(403).json({ error: "แก้ไขได้เฉพาะโปรไฟล์ของตัวเองเท่านั้น" });
+  }
+  if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
+
+  try {
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+    const photoUrl = await saveImage(req.file.buffer, 'profile-photos', `user_${userId}_${Date.now()}`, ext);
+    await pool.query('UPDATE users SET profile_image_url = ? WHERE id = ?', [photoUrl, userId]);
+    res.json({ photo_url: photoUrl });
   } catch (error) {
     console.error('[500]', error.message);
 
@@ -3419,6 +3440,51 @@ app.get('/api/reports/payroll', requireRole('ADMIN'), async (req, res) => {
     });
 
     res.json({ month, staff: result });
+  } catch (error) {
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ Home page feature — เวอร์ชัน self-service ของ /api/reports/payroll ด้านบน (ADMIN ดูได้ทุกคน)
+// ตัวนี้ดูได้แค่ของตัวเอง (req.user.id) ให้ CASHIER เรียกดูชั่วโมง/ค่าจ้างตัวเองได้โดยไม่ต้องเป็น ADMIN
+// ตรรกะคำนวณชั่วโมงเหมือนกันทุกจุด: CASHIER นับจาก shifts, ADMIN นับจาก attendance
+app.get('/api/reports/my-hours', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    const userId = req.user.id;
+
+    const [users] = await pool.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้' });
+    const me = users[0];
+
+    const [[shiftRow]] = await pool.query(
+      `SELECT SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
+       FROM shifts
+       WHERE cashier_id = ? AND status = 'CLOSED' AND closed_at IS NOT NULL AND DATE_FORMAT(opened_at, '%Y-%m') = ?`,
+      [userId, month]
+    );
+    const [[attendanceRow]] = await pool.query(
+      `SELECT SUM(TIMESTAMPDIFF(MINUTE, check_in, check_out)) as total_minutes
+       FROM attendance
+       WHERE user_id = ? AND check_out IS NOT NULL AND DATE_FORMAT(check_in, '%Y-%m') = ?`,
+      [userId, month]
+    );
+
+    const totalMinutes = Number(shiftRow?.total_minutes || 0) + Number(attendanceRow?.total_minutes || 0);
+    const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+    const hourlyRate = Number(me.hourly_rate) || 0;
+    const calculatedPay = Math.round(totalHours * hourlyRate * 100) / 100;
+
+    res.json({
+      month,
+      full_name: me.full_name,
+      role: me.role,
+      hourly_rate: hourlyRate,
+      total_hours: totalHours,
+      calculated_pay: calculatedPay,
+    });
   } catch (error) {
     console.error('[500]', error.message);
 

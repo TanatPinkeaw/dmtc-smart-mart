@@ -700,9 +700,11 @@ const initDB = async () => {
 
     // ⭐️ Security remediation — must_change_password (weak default password enforcement)
     // and token_valid_after (bulk token invalidation on password/role change)
+    // ⭐️ Home page feature — profile_image_url (รูปโปรไฟล์ผู้ใช้, เก็บ Cloudinary URL เหมือน field อื่น)
     for (const [col, ddl] of [
       ['must_change_password', 'ADD COLUMN must_change_password TINYINT(1) DEFAULT 0'],
       ['token_valid_after', 'ADD COLUMN token_valid_after DATETIME NULL'],
+      ['profile_image_url', 'ADD COLUMN profile_image_url VARCHAR(500) NULL'],
     ]) {
       try {
         await connection.query(`ALTER TABLE users ${ddl}`);
