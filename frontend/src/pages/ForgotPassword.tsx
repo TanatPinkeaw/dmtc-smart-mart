@@ -1,3 +1,7 @@
+// ✅ CHANGED: visual refresh to match Home/Login design language (rounded-3xl card, gradient
+//   button + loading spinner, bolder heading)
+// 🔒 UNCHANGED: handleSubmit, API call, all state
+
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { KeyRound, ArrowLeft } from 'lucide-react';
@@ -28,20 +32,20 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-bg via-white to-brand-bg flex items-center justify-center p-4">
+    <div className="min-h-dvh bg-brand-bg flex flex-col items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand rounded-2xl shadow-lg mb-4">
-            <KeyRound size={28} className="text-white" />
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center mb-4 shadow-lg">
+            <KeyRound size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ลืมรหัสผ่าน</h1>
-          <p className="mt-1 text-sm text-gray-500">กรอกรหัสนักศึกษาและเบอร์โทรศัพท์ที่ลงทะเบียนไว้</p>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">ลืมรหัสผ่าน</h1>
+          <p className="mt-1 text-sm text-gray-500 font-medium text-center">กรอกรหัสนักศึกษาและเบอร์โทรศัพท์ที่ลงทะเบียนไว้</p>
         </div>
 
-        <div className="bg-white border border-brand-border rounded-2xl shadow-lg p-6">
+        <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-6">
           {submitted ? (
             <div className="text-center py-4">
-              <p className="text-sm text-gray-700 leading-relaxed">
+              <p className="text-sm text-gray-700 leading-relaxed font-medium">
                 ถ้าข้อมูลถูกต้อง คำขอของคุณถูกส่งให้เจ้าหน้าที่แล้ว
               </p>
               <p className="mt-2 text-xs text-gray-400">
@@ -49,40 +53,47 @@ export default function ForgotPassword() {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="mt-5 w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                className="mt-5 w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
                 กลับไปหน้าเข้าสู่ระบบ
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-gray-500">รหัสนักศึกษา</label>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสนักศึกษา</label>
                 <input
                   type="text" required value={studentId} onChange={e => setStudentId(e.target.value)}
                   placeholder="รหัสนักศึกษา"
-                  className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-colors duration-150"
+                  className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-gray-500">เบอร์โทรศัพท์</label>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">เบอร์โทรศัพท์</label>
                 <input
                   type="tel" required value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
                   placeholder="0812345678"
-                  className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-colors duration-150"
+                  className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
                 />
               </div>
               <button
                 type="submit" disabled={loading}
-                className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                className="w-full py-3.5 mt-1 rounded-2xl text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+                  enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
-                {loading ? 'กำลังส่งคำขอ...' : 'ขอรีเซ็ตรหัสผ่าน'}
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    กำลังส่งคำขอ...
+                  </span>
+                ) : 'ขอรีเซ็ตรหัสผ่าน'}
               </button>
             </form>
           )}
         </div>
 
-        <Link to="/login" className="mt-4 flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-brand transition-colors">
+        <Link to="/login" className="mt-6 flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-brand font-medium transition-colors duration-150">
           <ArrowLeft size={14} /> กลับไปหน้าเข้าสู่ระบบ
         </Link>
       </div>

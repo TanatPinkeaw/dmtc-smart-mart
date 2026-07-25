@@ -210,13 +210,13 @@ export default function OrderManagement() {
             placeholder="ค้นหา เลขบิล, ชื่อ, เบอร์โทร..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white rounded-lg border border-brand-border shadow-sm outline-none focus:outline-none focus:ring-2 focus:ring-brand text-sm transition-colors duration-150"
+            className="w-full pl-10 pr-4 py-2.5 bg-white rounded-2xl border border-brand-border shadow-sm outline-none focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white text-sm font-medium transition-colors duration-150"
           />
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
 
         {/* ⭐️ F3 — แท็บสลับมุมมอง (เม็ดยาในกรอบขาว + fade เลื่อน เหมือนแท็บหมวดหมู่หน้า POS/จอง) */}
-        <div className="relative bg-white border border-brand-border rounded-2xl p-2.5 mb-6 shadow-md">
+        <div className="relative bg-white border border-brand-border rounded-3xl p-2.5 mb-6 shadow-md">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {[
               { key: 'pending' as const, label: 'รอดำเนินการ', count: activeOrders.length },
@@ -246,7 +246,7 @@ export default function OrderManagement() {
         </h2>
 
         {activeOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
+          <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
             <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
             <p>{searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ใหม่ในขณะนี้'}</p>
           </div>
@@ -255,7 +255,7 @@ export default function OrderManagement() {
             {activeOrders.map(order => (
               // ⭐️ FIX: ออกแบบการ์ดใหม่ให้อ่านง่ายขึ้น — แยกชื่อลูกค้าเป็นแถวมีไอคอน แทนบล็อกตัวหนา
               // ทับกันหมด, ดึงยอดรวมออกมาเป็นแถบไฮไลต์แยกให้เด่นสุดในสายตา (ไม่ใช่แค่บรรทัดสุดท้ายในกล่อง)
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-3xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -288,7 +288,7 @@ export default function OrderManagement() {
                 </div>
 
                 {/* ⭐️ ปุ่มกดที่จะเปลี่ยนคำพูดตามสถานะบิล */}
-                <button onClick={() => setSelectedOrder(order)} className="w-full bg-brand-bg border border-brand-border text-brand-dark font-bold py-2.5 rounded-xl hover:bg-brand-border transition-colors duration-150 flex items-center justify-center gap-2">
+                <button onClick={() => setSelectedOrder(order)} className="w-full bg-brand-bg border border-brand-border text-brand-dark font-bold py-2.5 rounded-2xl transition-colors duration-150 active:scale-[0.98] hover:bg-brand-border flex items-center justify-center gap-2">
                   {getButtonActionText(order.status)}
                 </button>
               </div>
@@ -303,14 +303,14 @@ export default function OrderManagement() {
           <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span> ออเดอร์รอตรวจสลิป
         </h2>
         {pendingSlipOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
+          <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
             <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
             <p>ไม่มีสลิปรอตรวจสอบในขณะนี้</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {pendingSlipOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-3xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -329,7 +329,7 @@ export default function OrderManagement() {
                   <span className="text-lg font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</span>
                 </div>
 
-                <button onClick={() => setSelectedOrder(order)} className="w-full bg-blue-50 border border-blue-200 text-blue-700 font-bold py-2.5 rounded-xl hover:bg-blue-100 transition-colors duration-150 flex items-center justify-center gap-2">
+                <button onClick={() => setSelectedOrder(order)} className="w-full bg-blue-50 border border-blue-200 text-blue-700 font-bold py-2.5 rounded-2xl transition-colors duration-150 active:scale-[0.98] hover:bg-blue-100 flex items-center justify-center gap-2">
                   <Eye size={18}/> ดูสลิป & ตรวจสอบ
                 </button>
               </div>
@@ -344,14 +344,14 @@ export default function OrderManagement() {
           <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span> ออเดอร์รอสลิปใหม่
         </h2>
         {rejectedSlipOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
+          <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
             <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
             <p>ไม่มีสลิปที่ถูกปฏิเสธในขณะนี้</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {rejectedSlipOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
+              <div key={order.id} className="bg-white p-4 rounded-3xl shadow-md border border-brand-border hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
@@ -376,7 +376,7 @@ export default function OrderManagement() {
                   </div>
                 )}
 
-                <button onClick={() => setSelectedOrder(order)} className="w-full bg-red-50 border border-red-200 text-red-700 font-bold py-2.5 rounded-xl hover:bg-red-100 transition-colors duration-150 flex items-center justify-center gap-2">
+                <button onClick={() => setSelectedOrder(order)} className="w-full bg-red-50 border border-red-200 text-red-700 font-bold py-2.5 rounded-2xl transition-colors duration-150 active:scale-[0.98] hover:bg-red-100 flex items-center justify-center gap-2">
                   <Eye size={18}/> ดูสลิปเดิม & รับสลิปใหม่
                 </button>
               </div>
@@ -393,7 +393,7 @@ export default function OrderManagement() {
             อ่านยาก เพิ่ม card list สำหรับ mobile (< sm) ตรงนี้ */}
         <div className="sm:hidden space-y-3 mb-8">
           {completedOrders.length === 0 ? (
-            <div className="bg-white p-8 rounded-2xl border border-brand-border text-center text-gray-400 shadow-sm">
+            <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 shadow-sm">
               <CheckCircle size={40} className="mx-auto mb-3 opacity-30" />
               <p>{searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ที่เสร็จสมบูรณ์'}</p>
             </div>
@@ -413,7 +413,7 @@ export default function OrderManagement() {
           ))}
         </div>
 
-        <div className="hidden sm:block bg-white rounded-2xl shadow-sm border border-brand-border overflow-hidden">
+        <div className="hidden sm:block bg-white rounded-3xl shadow-sm border border-brand-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left whitespace-nowrap">
               <thead className="bg-gray-50 text-gray-600 text-sm">
@@ -451,7 +451,7 @@ export default function OrderManagement() {
       {/* ================= ⭐️ Modal แสดงรายละเอียดออเดอร์ ================= */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden">
             
             <div className="p-4 border-b border-brand-border flex justify-between items-center bg-brand-bg shrink-0">
               <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2">รายละเอียดออเดอร์ #{selectedOrder.id}</h2>
@@ -536,7 +536,7 @@ export default function OrderManagement() {
                   {isUnclaimed && <span>⚡ ยังไม่มีพนักงานรับงาน</span>}
                   {selectedOrder.assigned_name && !isMine && <span>{isTaken ? '🔒 ' : '👤 '}{selectedOrder.assigned_name} รับงานนี้แล้ว</span>}
                   {(isUnclaimed) && (
-                    <button onClick={() => handleClaim(selectedOrder.id)} disabled={claiming} className="bg-yellow-400 text-yellow-900 px-3 py-1 rounded-lg hover:bg-yellow-500 transition disabled:opacity-50">
+                    <button onClick={() => handleClaim(selectedOrder.id)} disabled={claiming} className="bg-gradient-to-br from-yellow-400 to-yellow-500 text-yellow-900 px-3 py-1 rounded-xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
                       {claiming ? '...' : '✋ รับงานนี้'}
                     </button>
                   )}
@@ -558,7 +558,7 @@ export default function OrderManagement() {
                     <button
                       onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')}
                       disabled={loading}
-                      className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       ✅ ยืนยันสลิปถูกต้อง → เริ่มเตรียมของ
                     </button>
@@ -566,9 +566,9 @@ export default function OrderManagement() {
                       <p className="text-xs font-bold text-red-600">สลิปผิด / มีปัญหา (จำเป็น อย่างน้อย 5 ตัวอักษร):</p>
                       <textarea rows={2} placeholder="ระบุเหตุผล..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-red-500 resize-none"/>
                       <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'SLIP_REJECTED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition text-xs disabled:opacity-40 disabled:cursor-not-allowed">↩️ ขอสลิปใหม่</button>
-                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'REFUND_REQUESTED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-purple-500 text-white font-bold py-2 rounded-lg hover:bg-purple-600 transition text-xs disabled:opacity-40 disabled:cursor-not-allowed">💰 คืนเงิน</button>
-                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-red-500 text-white font-bold py-2 rounded-lg hover:bg-red-600 transition text-xs disabled:opacity-40 disabled:cursor-not-allowed">🚫 ยกเลิก</button>
+                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'SLIP_REJECTED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white font-bold py-2 rounded-xl transition-all duration-150 active:scale-[0.98] text-xs disabled:opacity-40 disabled:cursor-not-allowed">↩️ ขอสลิปใหม่</button>
+                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'REFUND_REQUESTED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-gradient-to-br from-purple-500 to-purple-600 text-white font-bold py-2 rounded-xl transition-all duration-150 active:scale-[0.98] text-xs disabled:opacity-40 disabled:cursor-not-allowed">💰 คืนเงิน</button>
+                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-gradient-to-br from-red-500 to-red-600 text-white font-bold py-2 rounded-xl transition-all duration-150 active:scale-[0.98] text-xs disabled:opacity-40 disabled:cursor-not-allowed">🚫 ยกเลิก</button>
                       </div>
                     </div>
                   </>
@@ -578,30 +578,30 @@ export default function OrderManagement() {
                 {selectedOrder.status === 'SLIP_REJECTED' && (
                   <>
                     <p className="text-sm font-bold text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">⚠️ รอลูกค้าส่งสลิปใหม่ — พอลูกค้าส่งสลิปใหม่มาให้กดตรวจสอบ</p>
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'PENDING_VERIFY')} disabled={loading} className="w-full bg-blue-100 text-blue-700 font-bold py-3 rounded-xl hover:bg-blue-200 transition">🔍 ตรวจสลิปใหม่</button>
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-xl hover:bg-gray-300 transition text-sm">ยกเลิกบิล</button>
+                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'PENDING_VERIFY')} disabled={loading} className="w-full bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98]">🔍 ตรวจสลิปใหม่</button>
+                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-2xl hover:bg-gray-300 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิกบิล</button>
                   </>
                 )}
 
                 {/* CASH: ยืนยัน order */}
                 {selectedOrder.status === 'WAITING_CASH' && (
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')} disabled={loading} className="flex-1 bg-orange-500 text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition">✅ ยืนยัน → เริ่มเตรียมของ</button>
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="bg-gray-400 text-white font-bold px-4 py-3 rounded-xl hover:bg-gray-500 transition text-sm">ยกเลิก</button>
+                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')} disabled={loading} className="flex-1 bg-gradient-to-br from-orange-500 to-orange-600 text-white font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98]">✅ ยืนยัน → เริ่มเตรียมของ</button>
+                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="bg-gray-400 text-white font-bold px-4 py-3 rounded-2xl hover:bg-gray-500 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิก</button>
                   </div>
                 )}
 
                 {/* เตรียมของเสร็จ — ⭐️ FIX: เอาปุ่ม "ยกเลิกบิล" ออก เพราะ backend บล็อกยกเลิกออเดอร์สถานะ
                     PREPARING/READY ไว้แล้ว (เริ่มเตรียมสินค้าไปแล้ว) กดไปก็เจอ error ทุกครั้ง ปุ่มนี้ไม่มีประโยชน์ */}
                 {selectedOrder.status === 'PREPARING' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'READY')} disabled={loading} className="w-full bg-green-500 text-white font-bold py-3 rounded-xl hover:bg-green-600 flex items-center justify-center gap-2 transition">
+                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'READY')} disabled={loading} className="w-full bg-gradient-to-br from-green-500 to-green-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98]">
                     <CheckCircle size={20}/> เตรียมของเสร็จ → แจ้งลูกค้ามารับ
                   </button>
                 )}
 
                 {/* ลูกค้ามารับ */}
                 {selectedOrder.status === 'READY' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'COMPLETED')} disabled={loading} className="w-full bg-brand text-white font-bold py-3 rounded-xl hover:bg-brand-dark flex items-center justify-center gap-2 transition">
+                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'COMPLETED')} disabled={loading} className="w-full bg-gradient-to-br from-brand to-brand-dark text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98]">
                     <CheckCircle size={20}/> {selectedOrder.payment_method === 'CASH' ? 'รับเงิน ทอนแล้ว → ปิดบิล' : 'ลูกค้ารับของแล้ว → ปิดบิล'}
                   </button>
                 )}
@@ -613,7 +613,7 @@ export default function OrderManagement() {
             {selectedOrder.status === 'REFUND_REQUESTED' && (
               <div className="p-4 border-t border-purple-100 bg-purple-50 shrink-0">
                 <p className="text-sm font-bold text-purple-700 mb-2">💰 รอคืนเงิน — ลูกค้าต้องนำหลักฐานการโอนมาที่ร้าน</p>
-                <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED')} disabled={loading} className="w-full bg-purple-600 text-white font-bold py-3 rounded-xl hover:bg-purple-700 transition">✅ คืนเงินสดแล้ว → ปิดบิล</button>
+                <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED')} disabled={loading} className="w-full bg-gradient-to-br from-purple-600 to-purple-700 text-white font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98]">✅ คืนเงินสดแล้ว → ปิดบิล</button>
               </div>
             )}
             

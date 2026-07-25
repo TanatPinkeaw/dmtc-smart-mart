@@ -153,11 +153,11 @@ export default function PendingShiftClosesWidget() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
+      <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-6 mb-6">
         <div className="flex items-center justify-center h-32">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
-            <p className="text-gray-600 mt-2">กำลังโหลด...</p>
+            <p className="text-gray-600 mt-2 font-medium">กำลังโหลด...</p>
           </div>
         </div>
       </div>
@@ -166,7 +166,7 @@ export default function PendingShiftClosesWidget() {
 
   if (pending.length === 0) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+      <div className="bg-green-50 border border-green-200 rounded-3xl p-6 mb-6">
         <div className="flex items-center gap-3">
           <CheckCircle className="w-6 h-6 text-green-600" />
           <div>
@@ -179,8 +179,8 @@ export default function PendingShiftClosesWidget() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow mb-6">
-      <div className="bg-gradient-to-r from-brand to-[#E91E5F] px-6 py-4 rounded-t-lg">
+    <div className="bg-white border border-brand-border rounded-3xl shadow-sm mb-6 overflow-hidden">
+      <div className="bg-gradient-to-r from-brand to-brand-dark px-6 py-4">
         <div className="flex items-center gap-2">
           <Clock className="w-6 h-6 text-white" />
           <h2 className="text-xl font-bold text-white">
@@ -301,13 +301,13 @@ export default function PendingShiftClosesWidget() {
               <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => handleApprove(shift)}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-br from-green-600 to-green-700 text-white font-bold py-2.5 px-4 rounded-2xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   ✅ อนุมัติ
                 </button>
                 <button
                   onClick={() => handleReject(shift)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-br from-red-600 to-red-700 text-white font-bold py-2.5 px-4 rounded-2xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   ❌ ปฏิเสธ
                 </button>

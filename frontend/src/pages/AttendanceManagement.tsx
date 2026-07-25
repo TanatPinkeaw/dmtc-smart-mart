@@ -79,14 +79,14 @@ export default function AttendanceManagement() {
     finally { setRunningAuto(false); }
   };
 
-  const inputCls = "px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150";
+  const inputCls = "px-4 py-2.5 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
               <ClipboardCheck size={18} className="text-white" />
@@ -111,7 +111,7 @@ export default function AttendanceManagement() {
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
           {/* Desktop */}
           <table className="hidden sm:table w-full text-left">
             <thead>
@@ -189,15 +189,15 @@ export default function AttendanceManagement() {
       {editing && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditing(null)} />
-          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md p-5">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">แก้ไขเวลา: {editing.full_name}</h3>
+          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-xl w-full sm:max-w-md p-5">
+            <h3 className="text-base font-bold text-gray-900 mb-4">แก้ไขเวลา: {editing.full_name}</h3>
             <form onSubmit={handleSaveEdit} className="space-y-3">
-              <div><label className="block text-xs font-medium text-gray-500 mb-1">เวลาเข้างาน</label><input type="datetime-local" value={editForm.check_in} onChange={e => setEditForm({ ...editForm, check_in: e.target.value })} className={`${inputCls} w-full`} /></div>
-              <div><label className="block text-xs font-medium text-gray-500 mb-1">เวลาออกงาน</label><input type="datetime-local" value={editForm.check_out} onChange={e => setEditForm({ ...editForm, check_out: e.target.value })} className={`${inputCls} w-full`} /></div>
-              <div><label className="block text-xs font-medium text-gray-500 mb-1">หมายเหตุ</label><input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="เช่น ลืมลงชื่อออก..." className={`${inputCls} w-full`} /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาเข้างาน</label><input type="datetime-local" value={editForm.check_in} onChange={e => setEditForm({ ...editForm, check_in: e.target.value })} className={`${inputCls} w-full`} /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาออกงาน</label><input type="datetime-local" value={editForm.check_out} onChange={e => setEditForm({ ...editForm, check_out: e.target.value })} className={`${inputCls} w-full`} /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">หมายเหตุ</label><input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="เช่น ลืมลงชื่อออก..." className={`${inputCls} w-full`} /></div>
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setEditing(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors duration-150">ยกเลิก</button>
-                <button type="submit" className="flex-1 py-2.5 bg-brand hover:bg-brand-dark text-white rounded-xl text-sm font-semibold transition-all duration-150 active:scale-95">บันทึก</button>
+                <button type="button" onClick={() => setEditing(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-all duration-150 active:scale-[0.98]">ยกเลิก</button>
+                <button type="submit" className="flex-1 py-2.5 bg-gradient-to-br from-brand to-brand-dark text-white rounded-2xl text-sm font-bold transition-all duration-150 active:scale-[0.98]">บันทึก</button>
               </div>
             </form>
           </div>

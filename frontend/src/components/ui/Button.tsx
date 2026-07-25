@@ -12,9 +12,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-brand hover:bg-brand-dark text-white',
-  secondary: 'bg-white border border-brand-border text-brand hover:bg-brand-bg',
-  danger: 'bg-red-500 hover:bg-red-600 text-white',
+  primary: 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold',
+  secondary: 'bg-white border border-brand-border text-brand hover:bg-brand-bg font-bold',
+  danger: 'bg-red-500 hover:bg-red-600 text-white font-bold',
   ghost: 'bg-transparent hover:bg-brand-bg text-gray-700',
 };
 
@@ -36,7 +36,7 @@ export function Button({
   return (
     <button
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...rest}
     >
       {loading && <Loader2 size={16} className="animate-spin" />}

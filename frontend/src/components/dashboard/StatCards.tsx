@@ -1,6 +1,6 @@
 import { TrendingUp, Receipt, Banknote, CreditCard, Package } from 'lucide-react';
 
-const card = "relative overflow-hidden bg-white border border-brand-border rounded-2xl shadow-md";
+const card = "relative overflow-hidden bg-white border border-brand-border rounded-3xl shadow-md";
 const accentBar = <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />;
 
 interface StatCardsProps {
@@ -13,7 +13,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
       <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Total sales */}
-        <div className="bg-brand rounded-2xl p-5 text-white shadow-sm">
+        <div className="bg-brand rounded-3xl p-5 text-white shadow-sm">
           <div className="flex justify-between items-start mb-3">
             <p className="text-pink-100 text-xs font-medium">ยอดขายรวมวันนี้</p>
             <div className="bg-white/20 p-2 rounded-xl"><TrendingUp size={18} className="text-white" /></div>

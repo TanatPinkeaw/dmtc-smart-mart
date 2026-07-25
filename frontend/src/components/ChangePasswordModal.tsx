@@ -60,7 +60,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={forceChange ? undefined : onClose} />
-      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md overflow-hidden">
+      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-xl w-full sm:max-w-md overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
           <div className="flex items-center gap-2">
@@ -93,7 +93,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               onChange={(e) => setForm({ ...form, current_password: e.target.value })}
               placeholder="Enter current password"
               required
-              className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150"
+              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
           </div>
 
@@ -106,7 +106,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               onChange={(e) => setForm({ ...form, new_password: e.target.value })}
               placeholder="Enter new password"
               required
-              className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150"
+              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
             <PasswordStrengthMeter password={form.new_password} />
           </div>
@@ -120,7 +120,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
               placeholder="Confirm new password"
               required
-              className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150"
+              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
           </div>
 
@@ -129,15 +129,21 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50"
+              className="flex-1 py-3 text-white font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+                enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70"
             >
-              {loading ? 'Changing...' : 'Change Password'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Changing...
+                </span>
+              ) : 'Change Password'}
             </button>
             {!forceChange && (
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95"
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98]"
               >
                 Cancel
               </button>

@@ -3,7 +3,7 @@ export const SkeletonLine = ({ width = 'w-full', height = 'h-4' }: { width?: str
 );
 
 export const SkeletonCard = () => (
-  <div className="bg-white border border-brand-border rounded-2xl p-4 sm:p-6 space-y-3 shadow-md">
+  <div className="bg-white border border-brand-border rounded-3xl p-4 sm:p-6 space-y-3 shadow-md">
     <SkeletonLine width="w-1/3" height="h-4" />
     <SkeletonLine width="w-full" height="h-3" />
     <SkeletonLine width="w-4/5" height="h-3" />
@@ -11,7 +11,7 @@ export const SkeletonCard = () => (
 );
 
 export const SkeletonDashboardStat = () => (
-  <div className="bg-white border border-brand-border rounded-2xl p-4 sm:p-6 space-y-3 shadow-md animate-pulse">
+  <div className="bg-white border border-brand-border rounded-3xl p-4 sm:p-6 space-y-3 shadow-md animate-pulse">
     <div className="flex justify-between items-center">
       <SkeletonLine width="w-1/3" height="h-4" />
       <div className="bg-brand-border/40 rounded-xl h-9 w-9" />

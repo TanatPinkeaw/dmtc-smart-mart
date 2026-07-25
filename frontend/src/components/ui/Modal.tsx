@@ -21,7 +21,7 @@ export function Modal({ title, onClose, children, widthClassName = 'sm:max-w-md'
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full overflow-hidden ${widthClassName}`}>
+      <div className={`relative bg-white rounded-t-3xl sm:rounded-3xl shadow-xl w-full overflow-hidden ${widthClassName}`}>
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
             <h3 className="font-semibold text-gray-900">{title}</h3>

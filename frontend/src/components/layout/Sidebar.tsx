@@ -1,4 +1,4 @@
-import { Bell, Store, ClipboardList, LogOut } from 'lucide-react';
+import { Bell, Store, ClipboardList, LogOut, Home } from 'lucide-react';
 import { NavItem } from './NavItem';
 import { MEMBER_ITEMS, STAFF_ITEMS, ADMIN_ITEMS_SIDEBAR } from './navConfig';
 
@@ -32,6 +32,9 @@ export function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-hide">
+        {/* ⭐️ ทางกลับหน้า Home กลาง — ไม่งั้นเข้าโมดูลนึงแล้วจะสลับ work/shop หรือไปโมดูลอื่นไม่ได้เลย
+            นอกจากพิมพ์ URL เอง (ผู้ใช้สับสนว่าตัวเลือก "เข้างาน/ซื้อของ" หายไปไหน — จริงๆ ย้ายไปอยู่ที่นี่) */}
+        <NavItem to="/home" icon={<Home size={18} />} label="หน้าหลัก" />
         <NavItem to="/notifications" icon={<Bell size={18} />} label="แจ้งเตือน" badge={unreadCount} onClick={onOpenNotifications} />
 
         {!isStaff && MEMBER_ITEMS.map(item => (

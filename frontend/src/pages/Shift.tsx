@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, LogOut, Camera, Banknote } from 'lucide-react';
+import { ShoppingBag, LogOut, Camera, Banknote, Home } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -93,7 +93,11 @@ export default function Shift() {
             <p className="text-white font-bold text-sm">DMTC Mart</p>
             <p className="text-pink-200 text-xs">{user.full_name}</p>
           </div>
-          <button onClick={() => { localStorage.clear(); navigate('/login'); }} className="ml-auto p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
+          {/* ⭐️ ทางกลับหน้า Home กลาง — หน้านี้ไม่มี Sidebar/bottom nav (standalone เหมือนหน้า login) */}
+          <button onClick={() => navigate('/home')} className="ml-auto p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="กลับหน้าหลัก">
+            <Home size={16} className="text-white" />
+          </button>
+          <button onClick={() => { localStorage.clear(); navigate('/login'); }} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
             <LogOut size={16} className="text-white" />
           </button>
         </div>

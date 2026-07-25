@@ -36,7 +36,7 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
           เดิม max-h-[90vh] บนมือถือจริง vh นับรวมแถบ URL bar ทำให้ modal โดนตัดปุ่มด้านล่าง เปลี่ยนเป็น dvh */}
       {/* ⭐️ FIX: เดิมไม่มี overflow-hidden — header สีชมพูมุมตรง (ไม่ได้ใส่ rounded-t) เลยล้นทับมุมโค้ง
           ของการ์ดแม่ (rounded-2xl) ทำให้ขอบบนดูเหลี่ยม ไม่มน ใส่ overflow-hidden ให้ครอบตัดตามการ์ดแม่ */}
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85dvh] flex flex-col overflow-hidden animate-fade-in">
+      <div className="bg-white rounded-3xl shadow-xl max-w-md w-full max-h-[85dvh] flex flex-col overflow-hidden animate-fade-in">
         {/* Header - Sticky */}
         <div className="shrink-0 bg-gradient-to-r from-brand to-brand-dark px-4 py-3 flex justify-between items-center gap-3 shadow-sm">
           <div className="flex-1 min-w-0">
@@ -207,7 +207,7 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
           <div className="flex gap-2.5 pt-2 pb-1">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 active:scale-95 text-gray-800 font-bold rounded-xl transition-all duration-150 text-sm"
+              className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 active:scale-[0.98] text-gray-700 font-bold rounded-2xl transition-all duration-150 text-sm"
             >
               ปิด
             </button>
@@ -215,7 +215,7 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
               <button
                 onClick={() => onCancelOrder(selectedOrder, refundReason)}
                 disabled={!refundReason.trim()}
-                className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="flex-1 px-4 py-3 bg-gradient-to-br from-red-500 to-red-600 active:scale-[0.98] text-white font-bold rounded-2xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 ยกเลิกออเดอร์
               </button>

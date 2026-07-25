@@ -97,14 +97,14 @@ export default function Notifications() {
 
       <div className="max-w-2xl mx-auto p-4 sm:p-6">
         {/* ⭐️ FIX: กรอบค้นหา — ใส่พื้นหลังขาว + เงา ให้เป็นกล่องแยกชัดเจนเหมือนกรอบแท็บหมวดหมู่หน้า POS/จอง */}
-        <div className="relative mb-4 bg-white border border-brand-border rounded-xl p-2.5 shadow-md">
+        <div className="relative mb-4 bg-white border border-brand-border rounded-2xl p-2.5 shadow-md">
           <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="ค้นหาการแจ้งเตือน..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-7 pr-2 py-1 bg-transparent text-sm outline-none" />
+            className="w-full pl-7 pr-2 py-1 bg-transparent text-sm font-medium outline-none" />
         </div>
 
         {/* List */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
           {loading ? (
             <div className="p-8 space-y-3">
               {[1,2,3].map(i => (

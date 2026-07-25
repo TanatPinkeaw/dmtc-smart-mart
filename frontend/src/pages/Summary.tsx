@@ -150,7 +150,7 @@ export default function Summary() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4 print:bg-none print:shadow-none print:p-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4 print:bg-none print:shadow-none print:p-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="print:hidden p-2 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             <ArrowLeft size={20} />
@@ -165,10 +165,10 @@ export default function Summary() {
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="bg-white border border-brand-border rounded-xl px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-brand"
+            className="bg-white border border-brand-border rounded-2xl px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand"
           />
           {/* ⭐️ ปุ่มปรินต์/บันทึก PDF สำหรับนำไปเสนออาจารย์ */}
-          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-xl px-3 py-2 text-sm font-semibold shadow-sm hover:bg-brand-bg active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-2xl px-3 py-2 text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
             <Printer size={16} /> ปรินต์
           </button>
         </div>
@@ -186,7 +186,7 @@ export default function Summary() {
           {/* Overview cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {overviewCards.map((c, i) => (
-              <div key={i} className={`bg-white border ${c.border} rounded-2xl p-4 shadow-md hover:shadow-lg transition-all duration-150`}>
+              <div key={i} className={`bg-white border ${c.border} rounded-3xl p-4 shadow-md hover:shadow-lg transition-all duration-150`}>
                 <div className={`flex items-center gap-1.5 mb-2 ${c.color}`}>
                   {c.icon}
                   <span className="text-xs font-semibold">{c.label}</span>
@@ -197,7 +197,7 @@ export default function Summary() {
           </div>
 
           {/* ⭐️ สรุปรายได้ & กำไร (แยกกำไรจาก GP ฝากขาย ออกจากกำไรสินค้าสหกรณ์เอง) */}
-          <div className="bg-white rounded-2xl shadow-md border border-brand-border overflow-hidden mb-8">
+          <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden mb-8">
             <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between flex-wrap gap-2">
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
                 <Coins size={18} className="text-brand" /> สรุปรายได้ &amp; กำไร (แยกกำไรจาก GP)
@@ -276,7 +276,7 @@ export default function Summary() {
           </div>
 
           {/* Payroll table */}
-          <div className="bg-white rounded-2xl shadow-md border border-brand-border overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden">
             <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between flex-wrap gap-2">
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
                 <Clock size={18} className="text-brand" />

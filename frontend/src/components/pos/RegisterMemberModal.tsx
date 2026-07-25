@@ -33,7 +33,9 @@ export function RegisterMemberModal({ regForm, onRegFormChange, regLoading, onSu
             <Input type={f.type} required placeholder={f.placeholder} value={regForm[f.key]} onChange={e => onRegFormChange({ ...regForm, [f.key]: e.target.value })} />
           </div>
         ))}
-        <Button type="submit" variant="primary" loading={regLoading} className="w-full mt-2 bg-emerald-500 hover:bg-emerald-600 focus-visible:ring-emerald-400">
+        {/* ⭐️ !important — Button variant="primary" ตอนนี้เป็น bg-gradient-to-br (brand) แล้ว bg-color
+            override เฉยๆ จะโดน gradient ทับ (background-image วาดทับ background-color) ต้องบังคับด้วย ! */}
+        <Button type="submit" variant="primary" loading={regLoading} className="w-full mt-2 !bg-gradient-to-br !from-emerald-500 !to-emerald-600 focus-visible:ring-emerald-400">
           {regLoading ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
         </Button>
       </form>
