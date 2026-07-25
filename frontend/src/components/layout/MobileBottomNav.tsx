@@ -1,4 +1,4 @@
-import { Bell, Store, ClipboardList, Menu, User, LogOut } from 'lucide-react';
+import { Bell, Store, ClipboardList, Menu, User, LogOut, Home } from 'lucide-react';
 import { MobNavItem } from './NavItem';
 import { MEMBER_ITEMS } from './navConfig';
 
@@ -18,6 +18,8 @@ export function MobileBottomNav({
 }: MobileBottomNavProps) {
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-brand-border flex h-14 z-50 shadow-[0_-2px_8px_rgba(241,43,107,0.06)]">
+      {/* ⭐️ ทางกลับหน้า Home กลาง (ดูเหตุผลเดียวกับ Sidebar.tsx) */}
+      <MobNavItem to="/home" icon={<Home size={20} />} label="หน้าหลัก" />
       <MobNavItem to="/notifications" icon={<Bell size={20} />} label="แจ้งเตือน" badge={unreadCount} onClick={onOpenNotifications} />
 
       {!isStaff && MEMBER_ITEMS.map(item => (

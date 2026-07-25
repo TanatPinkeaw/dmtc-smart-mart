@@ -47,7 +47,7 @@ export default function VendorSales() {
   if (loading) return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 pb-24">
       <div className="max-w-2xl mx-auto space-y-4">
-        {[1,2,3].map(i => <div key={i} className="h-24 bg-white border border-brand-border rounded-2xl animate-pulse" />)}
+        {[1,2,3].map(i => <div key={i} className="h-24 bg-white border border-brand-border rounded-3xl animate-pulse" />)}
       </div>
     </div>
   );
@@ -57,7 +57,7 @@ export default function VendorSales() {
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4">
+        <div className="flex items-center gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
             <PiggyBank size={20} className="text-white" />
           </div>
@@ -68,8 +68,8 @@ export default function VendorSales() {
         </div>
 
         {!summary || items.length === 0 ? (
-          <div className="bg-white border border-brand-border rounded-2xl shadow-md py-16 flex flex-col items-center text-center">
-            <div className="w-14 h-14 bg-brand-bg rounded-2xl flex items-center justify-center mb-3">
+          <div className="bg-white border border-brand-border rounded-3xl shadow-md py-16 flex flex-col items-center text-center">
+            <div className="w-14 h-14 bg-brand-bg rounded-3xl flex items-center justify-center mb-3">
               <Package size={24} className="text-brand-mid" />
             </div>
             <p className="text-sm font-medium text-gray-600">ยังไม่มีสินค้าฝากขาย</p>
@@ -79,14 +79,14 @@ export default function VendorSales() {
           <>
             {/* Stat cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-              <div className="bg-brand rounded-2xl p-4 text-white">
+              <div className="bg-gradient-to-br from-brand to-brand-dark rounded-3xl p-4 text-white shadow-md">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-pink-100">รายได้ที่จะได้รับ</p>
                   <Wallet size={18} className="text-pink-200" />
                 </div>
                 <p className="text-2xl font-bold">฿{fmt(Number(summary.vendor_earnings))}</p>
               </div>
-              <div className="bg-white border border-brand-border rounded-2xl p-4 shadow-md">
+              <div className="bg-white border border-brand-border rounded-3xl p-4 shadow-md">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-gray-500">ยอดขายรวม</p>
                   <TrendingUp size={18} className="text-emerald-500" />
@@ -94,7 +94,7 @@ export default function VendorSales() {
                 <p className="text-xl font-bold text-gray-900">฿{fmt(Number(summary.total_sales))}</p>
                 <p className="text-[10px] text-gray-400 mt-0.5">ขาย {summary.total_items_sold} ชิ้น</p>
               </div>
-              <div className="bg-white border border-brand-border rounded-2xl p-4 shadow-md">
+              <div className="bg-white border border-brand-border rounded-3xl p-4 shadow-md">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-gray-500">หัก GP สหกรณ์</p>
                   <Package size={18} className="text-orange-400" />
@@ -104,7 +104,7 @@ export default function VendorSales() {
             </div>
 
             {/* Detail list */}
-            <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
+            <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
               <div className="px-4 py-3 border-b border-brand-border">
                 <h2 className="text-sm font-semibold text-gray-800">รายละเอียดตามสินค้า</h2>
               </div>

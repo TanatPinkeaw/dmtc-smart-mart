@@ -323,7 +323,7 @@ export default function POS() {
       </div>
 
       {/* ── Mobile cart FAB ───────────────────────────────────────────────── */}
-      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 bg-brand hover:bg-brand-dark text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-150 active:scale-90">
+      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-150 active:scale-90">
         <ShoppingCart size={22} />
         {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
       </button>

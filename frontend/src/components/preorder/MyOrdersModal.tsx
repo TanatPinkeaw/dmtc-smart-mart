@@ -32,7 +32,7 @@ export function MyOrdersModal({ myOrders, onClose, onSelectOrder }: MyOrdersModa
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
       {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0 shadow-sm">
           <h2 className="font-semibold text-lg text-white">ประวัติการสั่งจองของฉัน</h2>
           <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
@@ -42,7 +42,7 @@ export function MyOrdersModal({ myOrders, onClose, onSelectOrder }: MyOrdersModa
             <p className="text-center text-gray-400 py-10">ยังไม่มีประวัติการสั่งจอง</p>
           ) : (
             myOrders.map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-2xl border border-brand-border shadow-md hover:shadow-lg hover:border-brand-mid transition-all cursor-pointer"
+              <div key={order.id} className="bg-white p-4 rounded-3xl border border-brand-border shadow-md hover:shadow-lg hover:border-brand-mid transition-all cursor-pointer"
                 onClick={() => onSelectOrder(order)}>
                 <div className="flex justify-between items-start mb-3">
                   <div>

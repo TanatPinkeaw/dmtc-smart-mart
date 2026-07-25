@@ -62,7 +62,7 @@ export function CartPanel({
           <div className="min-h-[100px] flex flex-col items-center justify-center text-gray-400 opacity-50"><ShoppingCart size={32} className="mb-1.5" /> <p className="text-xs">ยังไม่มีสินค้า</p></div>
         ) : (
           cart.map((item) => (
-            <div key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-l-4 border-brand-border border-l-brand flex flex-col gap-2">
+            <div key={item.id} className="bg-white p-3 rounded-2xl shadow-sm border border-l-4 border-brand-border border-l-brand flex flex-col gap-2">
               <div className="flex justify-between">
                 <p className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</p>
                 <p className="font-bold text-brand">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
@@ -81,7 +81,7 @@ export function CartPanel({
       </div>
 
       {/* ส่วนการชำระเงิน */}
-      <div className="bg-brand-bg border-t border-brand-border rounded-t-2xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
+      <div className="bg-brand-bg border-t border-brand-border rounded-t-3xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
         {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
         <div className="md:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-brand-border">
           <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-brand">฿{finalTotal.toFixed(2)}</span></div>
@@ -199,9 +199,10 @@ export function CartPanel({
         {/* ⭐️ FIX: ปุ่มยืนยัน — ปรับให้ตรงกับปุ่ม "ชำระเงิน" หน้า POS: ขนาด/ฟอนต์เล็กลง (py-3.5, text-sm,
             ไอคอน 18px), เปลี่ยนเป็นสีฟ้าตอนเลือกสแกนจ่าย (เหมือน POS ที่สลับสีตาม paymentMethod) */}
         {/* ⭐️ QR: ล็อกปุ่มจนกว่าสลิปจะแนบ+ตรวจเสร็จ กันกดยืนยันก่อนสลิปพร้อม (รูปสลิปจะไม่ขึ้น) */}
-        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500' : 'bg-brand hover:bg-brand-dark focus-visible:ring-brand'}`}>
-          {loading ? 'กำลังส่งข้อมูล...'
-            : slipProcessing ? 'กำลังเตรียมสลิป...'
+        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-2xl text-sm font-bold text-white shadow-sm transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-gradient-to-br from-blue-600 to-blue-700 focus-visible:ring-blue-500' : 'bg-gradient-to-br from-brand to-brand-dark focus-visible:ring-brand'}`}>
+          {loading ? (
+            <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังส่งข้อมูล...</>
+          ) : slipProcessing ? 'กำลังเตรียมสลิป...'
             : (paymentMethod === 'QR' && !slipFile) ? <><Upload size={18} /> แนบสลิปก่อนยืนยัน</>
             : <><CheckCircle size={18} /> ยืนยันคำสั่งซื้อ</>}
         </button>

@@ -104,14 +104,14 @@ export default function Schedules() {
     catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
-  const inputCls = "px-3 py-2 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150";
+  const inputCls = "px-3 py-2 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
               <CalendarClock size={18} className="text-white" />
@@ -130,7 +130,7 @@ export default function Schedules() {
 
         {/* Holiday panel */}
         {isAdmin && showHolidayPanel && (
-          <div className="bg-white border border-orange-200 rounded-2xl shadow-md p-4 mb-5">
+          <div className="bg-white border border-orange-200 rounded-3xl shadow-md p-4 mb-5">
             <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><CalendarOff size={15} className="text-orange-500" /> จัดการวันหยุดพิเศษ</h2>
             <form onSubmit={handleAddHoliday} className="flex flex-wrap gap-2 mb-4">
               <input type="date" required value={holidayForm.holiday_date} onChange={e => setHolidayForm({ ...holidayForm, holiday_date: e.target.value })} className="px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
@@ -145,7 +145,7 @@ export default function Schedules() {
         )}
 
         {/* Calendar */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
+        <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border">
             <button onClick={prevMonth} className="p-2 hover:bg-brand-bg rounded-lg transition-colors duration-150 text-gray-500 hover:text-brand"><ChevronLeft size={18} /></button>
             <span className="text-sm font-bold text-gray-900">{MONTHS_TH[viewDate.getMonth()]} {viewDate.getFullYear() + 543}</span>
@@ -192,7 +192,7 @@ export default function Schedules() {
 
       {/* Popover */}
       {popover && (
-        <div ref={popRef} className="fixed z-[100] bg-white border border-brand-border rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-top-2 duration-150"
+        <div ref={popRef} className="fixed z-[100] bg-white border border-brand-border rounded-3xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-top-2 duration-150"
           style={{ left: Math.min(popover.x, window.innerWidth - 280), top: popover.y + 8 }}>
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-semibold text-gray-900">
@@ -221,7 +221,9 @@ export default function Schedules() {
               </button>
             </div>
           ))}
-          <button onClick={handleSave} disabled={saving} className="w-full mt-1 py-2 bg-brand hover:bg-brand-dark text-white text-sm font-semibold rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
+          <button onClick={handleSave} disabled={saving}
+            className="w-full mt-1 py-2.5 text-white text-sm font-bold rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+              enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
             {saving ? 'กำลังบันทึก...' : editingScheduleId ? 'บันทึกการแก้ไข' : '+ เพิ่มกะ'}
           </button>
         </div>

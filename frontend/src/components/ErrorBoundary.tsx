@@ -34,14 +34,14 @@ class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-red-300 rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
+          <div className="bg-white border border-red-300 rounded-3xl shadow-lg p-8 max-w-sm w-full text-center">
             <div className="text-4xl text-red-500 mb-4">⚠️</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">เกิดข้อผิดพลาด</h1>
-            <p className="text-sm text-gray-600 mb-1">ระบบเกิดข้อผิดพลาดที่ไม่คาดคิด</p>
+            <h1 className="text-2xl font-extrabold text-gray-900 mb-2">เกิดข้อผิดพลาด</h1>
+            <p className="text-sm text-gray-600 font-medium mb-1">ระบบเกิดข้อผิดพลาดที่ไม่คาดคิด</p>
             <p className="text-xs text-gray-500 mb-6 font-mono break-all">{this.state.error?.message}</p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold rounded-xl transition-all duration-150 active:scale-95"
+              className="w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold rounded-2xl transition-all duration-150 active:scale-[0.98]"
             >
               รีเซ็ตแอปฯ
             </button>

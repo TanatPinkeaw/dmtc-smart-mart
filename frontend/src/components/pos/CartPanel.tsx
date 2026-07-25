@@ -56,7 +56,7 @@ export function CartPanel({
   return (
     <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex' : 'hidden'} md:flex md:relative md:w-2/5 flex-col bg-white border-l border-brand-border`}>
       {/* Cart header */}
-      <div className="bg-brand px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
+      <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
         <div className="flex items-center gap-2">
           <ShoppingCart size={18} className="text-white" />
           <h2 className="text-base font-semibold text-white">ตะกร้าสินค้า</h2>
@@ -76,7 +76,7 @@ export function CartPanel({
           const product = products.find(p => p.id === item.id);
           const isStockExceeded = product && item.quantity > (product.stock ?? 0);
           return (
-          <div key={item.id} className={`flex justify-between items-center rounded-xl px-3 py-2 border border-l-4 shadow-sm transition-all duration-150 hover:shadow-md ${
+          <div key={item.id} className={`flex justify-between items-center rounded-2xl px-3 py-2 border border-l-4 shadow-sm transition-all duration-150 hover:shadow-md ${
             isStockExceeded
               ? 'bg-yellow-50 border-yellow-300 border-l-yellow-400'
               : 'bg-brand-bg border-brand-border border-l-brand'
@@ -106,7 +106,7 @@ export function CartPanel({
       {/* ⭐️ FIX: เดิม pb-20 กันชนกับ bottom nav แต่ตะกร้ามือถือเป็น fixed inset-0 z-[60] คลุมเต็มจอ
           ทับ nav (z-50) อยู่แล้ว 100% เลยไม่มี nav ให้ต้องกันเว้นระยะ — เหลือ pb-20 ไว้กลายเป็นช่องว่างเปล่าๆ
           ใต้ปุ่ม "ชำระเงิน" เอาออกให้เนื้อหาทั้งแผงขยับลงมาชิดขอบล่างจริง */}
-      <div className="border-t border-brand-border bg-brand-bg rounded-t-2xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
+      <div className="border-t border-brand-border bg-brand-bg rounded-t-3xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
         {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
         <div className="md:hidden flex items-center justify-between gap-2 px-3 py-2 border-b border-brand-border">
           <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-brand">฿{finalTotal.toFixed(2)}</span></div>
@@ -215,8 +215,10 @@ export function CartPanel({
         {/* Checkout button */}
         {/* ⭐️ F5 — เพิ่ม !!checkoutValidationError เข้าเงื่อนไข disabled (เช่น payment_method ผิด/items ว่าง/quantity ผิดรูปแบบ) */}
         <button onClick={onCheckout} disabled={checkoutDisabled}
-          className={`w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-150 active:scale-95 flex items-center justify-center gap-2 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${checkoutDisabled ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500' : 'bg-brand hover:bg-brand-dark focus-visible:ring-brand'}`}>
-          {loading ? 'กำลังประมวลผล...' : <><CheckCircle size={18} /> {paymentMethod === 'QR' ? 'ยืนยันตรวจสอบสลิปแล้ว' : 'ชำระเงิน'}</>}
+          className={`w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${checkoutDisabled ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-gradient-to-br from-blue-600 to-blue-700 focus-visible:ring-blue-500' : 'bg-gradient-to-br from-brand to-brand-dark focus-visible:ring-brand'}`}>
+          {loading ? (
+            <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังประมวลผล...</>
+          ) : <><CheckCircle size={18} /> {paymentMethod === 'QR' ? 'ยืนยันตรวจสอบสลิปแล้ว' : 'ชำระเงิน'}</>}
         </button>
         </div>
       </div>

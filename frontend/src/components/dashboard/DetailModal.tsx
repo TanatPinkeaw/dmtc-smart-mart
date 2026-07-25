@@ -23,7 +23,7 @@ export function DetailModal({
 }: DetailModalProps) {
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg max-h-[80dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center px-4 py-3 border-b border-brand-border">
           <h3 className="text-sm font-semibold text-gray-900">{detailModal.title}</h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-brand-bg transition-colors duration-150" aria-label="ปิด"><X size={16} /></button>
@@ -72,7 +72,7 @@ export function DetailModal({
                 </div>
                 <button
                   onClick={() => onApproveShift(s.id)}
-                  className="w-full py-2 bg-brand hover:bg-brand-dark text-white text-sm font-semibold rounded-lg transition-all duration-150 active:scale-95"
+                  className="w-full py-2 bg-gradient-to-br from-brand to-brand-dark text-white text-sm font-semibold rounded-xl transition-all duration-150 active:scale-[0.98]"
                 >
                   อนุมัติปิดกะ
                 </button>
