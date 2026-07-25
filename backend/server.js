@@ -44,8 +44,15 @@ function parseCookies(req) {
   return cookies;
 }
 
-// ⭐️ ตั้ง cookie ทั้ง 3 ตัวพร้อมกัน: access_token/refresh_token (httpOnly, JS อ่านไม่ได้เลย) +
-// csrf_token (อ่านได้ ให้ frontend ดึงไปแนบเป็น header X-CSRF-Token กัน CSRF บน cookie-based auth)
+// ⭐️ Security fix — เดิม csrf_token เป็น cookie แบบอ่านได้ (httpOnly:false) โดยหวังให้ frontend JS
+// อ่าน document.cookie มาแนบเป็น header เอง (double-submit pattern) แต่ frontend (Vercel) กับ backend
+// (Render) อยู่คนละ domain กัน — JS หน้าเว็บ "อ่าน cookie ของ domain อื่นไม่ได้เลย" ต่อให้ cookie นั้น
+// ไม่ใช่ httpOnly ก็ตาม (นี่คือกฎ same-origin ของ browser, cookie ยังส่งไป backend ได้ปกติเพราะ
+// browser แนบ cookie ตาม "domain ปลายทาง" ไม่ใช่ "domain หน้าเว็บ" แต่ JS อ่านค่ามันไม่ได้)
+// ผลคือ requireCsrf ปฏิเสธทุก mutating request บน production จริงเสมอ (403 CSRF)
+// แก้โดยเปลี่ยนช่องทางส่ง csrf token: ฝัง "csrf" claim ไว้ใน JWT ที่เซ็นแล้ว (ปลอมไม่ได้) แล้วส่งค่า
+// เดียวกันกลับไปทาง JSON response body แทน (ไม่ใช่ cookie) — body อ่านข้าม origin ได้ปกติผ่าน fetch/axios
+// frontend เก็บไว้ในตัวแปร JS (ไม่ persist) แล้วแนบเป็น header ทุก mutating request
 function setAuthCookies(res, accessToken, refreshToken) {
   res.cookie('access_token', accessToken, {
     httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: ACCESS_TOKEN_MAX_AGE_MS, path: '/',
@@ -55,16 +62,11 @@ function setAuthCookies(res, accessToken, refreshToken) {
   res.cookie('refresh_token', refreshToken, {
     httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: REFRESH_TOKEN_MAX_AGE_MS, path: '/api/auth',
   });
-  const csrfToken = crypto.randomBytes(32).toString('hex');
-  res.cookie('csrf_token', csrfToken, {
-    httpOnly: false, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: REFRESH_TOKEN_MAX_AGE_MS, path: '/',
-  });
 }
 
 function clearAuthCookies(res) {
   res.clearCookie('access_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' });
   res.clearCookie('refresh_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/api/auth' });
-  res.clearCookie('csrf_token', { httpOnly: false, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' });
 }
 
 // ⭐️ Task 7 — Login: กัน brute-force รหัสผ่าน
@@ -599,20 +601,21 @@ function requireRole(...roles) {
   };
 }
 
-// ⭐️ Security remediation — CSRF protection สำหรับ cookie-based auth (browser แนบ httpOnly cookie
-// ให้อัตโนมัติแม้ request มาจากเว็บอื่น ต้องเช็ค token คู่กันว่ามาจากหน้าเว็บเราจริง ไม่ใช่ฟอร์มปลอม)
-// double-submit pattern: csrf_token cookie (อ่านได้) ต้องตรงกับ header X-CSRF-Token ที่ frontend แนบมา
-// PUBLIC_PATHS ส่วนใหญ่ยกเว้นได้เพราะยังไม่มี session cookie ตอนนั้น ยกเว้น /api/auth/refresh ที่ใช้
-// refresh_token cookie อยู่แล้ว (มี session ให้ปลอมได้) จึงต้องเช็ค CSRF ด้วย
-const CSRF_EXEMPT_PATHS = PUBLIC_PATHS.filter(p => p !== '/api/auth/refresh');
+// ⭐️ Security fix — เช็ค CSRF จาก claim ที่ฝังในตัว JWT ที่ authenticateToken ถอดรหัสไว้แล้วใน
+// req.user.csrf (เซ็นด้วย JWT_SECRET ปลอมไม่ได้) เทียบกับ header X-CSRF-Token ที่ frontend แนบมา
+// (ได้ค่านี้จาก response body ตอน login/refresh — ไม่ใช่จาก cookie แล้ว เพราะ frontend/backend
+// คนละ domain กัน อ่าน cookie ข้าม origin ไม่ได้ ดู setAuthCookies ด้านบนสำหรับรายละเอียด)
+// PUBLIC_PATHS ยกเว้นได้ทั้งหมดรวม /api/auth/refresh — endpoint นั้น gate ด้วย refresh_token cookie
+// อยู่แล้ว (bearer ของ cookie เท่านั้นที่เรียกได้) และ CSRF ยิงมาที่มันได้แค่ rotate token ของ
+// เจ้าของ session เอง ไม่มีทางอ่าน response หรือเข้าถึงข้อมูลอะไรเพิ่ม จึงไม่คุ้มความซับซ้อนที่ต้องเพิ่ม
+const CSRF_EXEMPT_PATHS = PUBLIC_PATHS;
 function requireCsrf(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (CSRF_EXEMPT_PATHS.some(p => req.path.startsWith(p))) return next();
   if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
 
-  const cookieToken = req.cookies?.csrf_token;
   const headerToken = req.headers['x-csrf-token'];
-  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+  if (!req.user?.csrf || !headerToken || req.user.csrf !== headerToken) {
     return res.status(403).json({ error: 'CSRF token ไม่ถูกต้องหรือหายไป กรุณารีเฟรชหน้าเว็บแล้วลองใหม่' });
   }
   next();
@@ -623,18 +626,24 @@ app.use(requirePasswordChange);
 app.use(requireCsrf);
 
 // ⭐️ Sprint 2 — B5: Token Refresh Helpers
-function generateAccessToken(user) {
+// ⭐️ Security fix — csrfToken ฝังเป็น claim ในนี้ (เซ็นแล้ว ปลอมไม่ได้) แทนการเก็บใน cookie แยก
+// เรียกด้วย generateAccessToken(user, csrfToken) เสมอ — csrfToken สุ่มไว้ที่ผู้เรียก (login/refresh)
+// แล้วส่งค่าเดียวกันกลับไปทาง JSON response body ให้ frontend เก็บไว้แนบเป็น header ทีหลัง
+function generateAccessToken(user, csrfToken) {
   return jwt.sign(
-    { id: user.id, role: user.role, full_name: user.full_name, must_change_password: !!user.must_change_password, jti: crypto.randomUUID() },
+    { id: user.id, role: user.role, full_name: user.full_name, must_change_password: !!user.must_change_password, csrf: csrfToken, jti: crypto.randomUUID() },
     JWT_SECRET,
     { expiresIn: '8h' } // ⭐️ Changed from 15m to 8h to reduce token refresh frequency during work hours
   );
 }
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
+// ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่
+// ถ้า refresh หน้าเว็บกลางทาง (in-memory csrf token หาย) ต้องเรียก endpoint นี้ได้เพื่อเอา csrf token
+// มาแนบตอนยิง PUT change-password (ซึ่งก็ต้องมี CSRF header เหมือนกัน) ไม่งั้นจะติดลูปออกไม่ได้เลย
 function requirePasswordChange(req, res, next) {
   if (!req.user?.must_change_password) return next();
-  const exempt = req.path.endsWith('/change-password') || req.path === '/api/auth/logout';
+  const exempt = req.path.endsWith('/change-password') || req.path === '/api/auth/logout' || req.path === '/api/auth/csrf-token';
   if (exempt) return next();
   return res.status(403).json({ error: 'ต้องเปลี่ยนรหัสผ่านก่อนใช้งาน', code: 'MUST_CHANGE_PASSWORD' });
 }
@@ -1042,7 +1051,10 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     if (!isMatch) return res.status(401).json({ error: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง" });
 
     // ⭐️ Sprint 2 — B5: Issue both access token (8h) and refresh token (7d)
-    const accessToken = generateAccessToken(user);
+    // ⭐️ Security fix — สุ่ม csrf token ที่นี่ ฝังลง access token (เซ็นแล้ว) แล้วคืนค่าเดียวกันทาง
+    // response body ให้ frontend เก็บไว้แนบเป็น header (ไม่ใช่ cookie — อ่านข้าม origin ไม่ได้)
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const accessToken = generateAccessToken(user, csrfToken);
     const refreshToken = generateRefreshToken(user);
 
     // ⭐️ Security remediation — token ทั้งคู่ไปเป็น httpOnly cookie ไม่คืนใน JSON body แล้ว
@@ -1052,6 +1064,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     res.json({
       message: "ล็อกอินสำเร็จ",
       user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password },
+      csrfToken,
     });
   } catch (error) {
     console.error('[500]', error.message);
@@ -1097,15 +1110,23 @@ app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
       );
     }
 
-    // Issue new access + refresh tokens, set as cookies again (rotates csrf_token too)
-    const accessToken = generateAccessToken(users[0]);
+    // Issue new access + refresh tokens (rotates csrf token too), set as cookies again
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const accessToken = generateAccessToken(users[0], csrfToken);
     const newRefreshToken = generateRefreshToken(users[0]);
     setAuthCookies(res, accessToken, newRefreshToken);
 
-    res.json({ success: true });
+    res.json({ success: true, csrfToken });
   } catch (err) {
     res.status(401).json({ error: err.message });
   }
+});
+
+// ⭐️ Security fix — fallback สำหรับตอน frontend refresh หน้าเว็บ (in-memory csrf token หายไปกับ JS
+// state แต่ access_token cookie ยังอยู่) ให้ดึง csrf claim จาก token ปัจจุบันกลับมาใหม่ได้โดยไม่ต้อง
+// login/refresh ใหม่ทั้งกระบวนการ — เป็น GET จึงไม่โดน requireCsrf บล็อกตัวเอง (chicken-and-egg)
+app.get('/api/auth/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.user?.csrf || null });
 });
 
 // ⭐️ Sprint 2 — B5: Token Logout Endpoint

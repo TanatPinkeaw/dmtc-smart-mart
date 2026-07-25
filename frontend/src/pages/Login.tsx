@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, Briefcase, Eye, EyeOff } from 'lucide-react';
-import api from '../api';
+import api, { setCsrfToken } from '../api';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -53,6 +53,8 @@ export default function Login() {
       // ⭐️ Security remediation — token อยู่ใน httpOnly cookie ที่ backend ตั้งให้แล้ว (Set-Cookie)
       // เก็บแค่ข้อมูล user (ไม่ลับ) ไว้ใช้แสดงผล/role guard ฝั่ง client เท่านั้น
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      // ⭐️ Security fix — csrf token ต้องมาทาง response body (อ่านข้าม origin ได้) ไม่ใช่ cookie
+      setCsrfToken(response.data.csrfToken);
 
       // ⭐️ F4 — Notify Socket context that token has changed (for same-tab reconnection)
       window.dispatchEvent(new Event('tokenChanged'));
