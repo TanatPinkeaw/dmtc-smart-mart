@@ -1,12 +1,15 @@
-import { User, Phone, KeyRound } from 'lucide-react';
+import { useRef } from 'react';
+import { User, Phone, KeyRound, Camera } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 
 interface ProfileModalProps {
-  initials: string;
   fullName: string;
   studentIdOrUsername: string;
   role: string;
   phoneNumber: string;
+  profileImageUrl?: string | null; // ⭐️ Home page feature — รูปโปรไฟล์
+  onPhotoSelected: (file: File) => void;
+  photoUploading?: boolean;
   onPhoneNumberChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   loading: boolean;
@@ -15,9 +18,12 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({
-  initials, fullName, studentIdOrUsername, role, phoneNumber,
+  fullName, studentIdOrUsername, role, phoneNumber,
+  profileImageUrl, onPhotoSelected, photoUploading,
   onPhoneNumberChange, onSubmit, loading, onClose, onOpenChangePassword,
 }: ProfileModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <Modal onClose={onClose} title={undefined}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
@@ -28,9 +34,31 @@ export function ProfileModal({
       </div>
 
       <form onSubmit={onSubmit} className="p-5 space-y-4">
-        {/* Avatar */}
+        {/* Avatar — ⭐️ Home page feature — คลิกรูปเพื่ออัปโหลดรูปโปรไฟล์ใหม่ (fallback: Default profile.png) */}
         <div className="flex flex-col items-center pt-1 pb-3">
-          <div className="w-14 h-14 bg-brand rounded-full flex items-center justify-center text-white text-xl font-bold mb-2">{initials}</div>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) onPhotoSelected(f); }} />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={photoUploading}
+            className="relative w-14 h-14 rounded-full mb-2 group disabled:opacity-60"
+            title="เปลี่ยนรูปโปรไฟล์"
+          >
+            {profileImageUrl ? (
+              <img src={profileImageUrl} alt={fullName} className="w-14 h-14 rounded-full object-cover" />
+            ) : (
+              <img src="/Default profile.png" alt={fullName} className="w-14 h-14 rounded-full object-cover" />
+            )}
+            <span className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-colors duration-150">
+              <Camera size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+            </span>
+            {photoUploading && (
+              <span className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              </span>
+            )}
+          </button>
           <p className="font-semibold text-gray-900 text-sm">{fullName}</p>
           <p className="text-xs text-gray-400">{studentIdOrUsername}</p>
           <span className="mt-1.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-bg text-brand border border-brand-mid">{role}</span>

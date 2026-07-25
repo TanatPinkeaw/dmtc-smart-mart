@@ -47,4 +47,11 @@ const shiftPhotoUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10 MB
 });
 
-module.exports = { slipUpload, shiftPhotoUpload, getBangkokDate, getBangkokTime };
+// ⭐️ Home page feature — รูปโปรไฟล์ผู้ใช้ ไม่จำเป็นต้องใหญ่เท่าสลิป/รูปเข้างาน จำกัดเล็กกว่า
+const profilePhotoUpload = multer({
+  storage: memoryStorage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB
+});
+
+module.exports = { slipUpload, shiftPhotoUpload, profilePhotoUpload, getBangkokDate, getBangkokTime };

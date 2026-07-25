@@ -1,10 +1,12 @@
 // ✅ CHANGED: visual refresh from Figma Make reference (School Co-op POS UI Design/LoginScreen.tsx)
 //   — gradient button + loading spinner, rounder card/inputs (3xl/2xl), bolder heading, softer shadow
-// 🔒 UNCHANGED: handleLogin, handleChooseWork, handleChooseShop, API call, localStorage, modal state
+// ✅ CHANGED: post-login now always lands on /home (hub page) for every role — replaced the old
+//   work/shop choice modal, which Home.tsx's module cards subsume (each card sets session_mode itself)
+// 🔒 UNCHANGED: handleLogin, API call, localStorage, error/rate-limit state
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShoppingBag, Briefcase, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
 
 export default function Login() {
@@ -14,9 +16,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  const [showChoiceModal, setShowChoiceModal] = useState(false);
-  const [loggedInRole, setLoggedInRole] = useState<string | null>(null);
 
   // ⭐️ F4 — countdown ตอนโดน rate limit (429)
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
@@ -59,12 +58,9 @@ export default function Login() {
       // ⭐️ F4 — Notify Socket context that token has changed (for same-tab reconnection)
       window.dispatchEvent(new Event('tokenChanged'));
 
-      const role = response.data.user.role;
-      if (role === 'ADMIN' || role === 'CASHIER') {
-        setLoggedInRole(role); setShowChoiceModal(true); setLoading(false); return;
-      }
+      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ — session_mode เลือกใหม่ตอนกดการ์ดโมดูลใน Home.tsx
       localStorage.removeItem('session_mode');
-      navigate('/pre-order');
+      navigate('/home');
     } catch (err: any) {
       if (err.response?.status !== 429) {
         setError(err.response?.data?.error || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
@@ -72,9 +68,6 @@ export default function Login() {
       setLoading(false);
     }
   };
-
-  const handleChooseWork = () => { localStorage.setItem('session_mode', 'work'); navigate('/shift'); };
-  const handleChooseShop = () => { localStorage.setItem('session_mode', 'shop'); navigate('/pre-order'); };
 
   return (
     <div className="min-h-dvh bg-brand-bg flex flex-col items-center justify-center px-5 py-10">
@@ -157,28 +150,6 @@ export default function Login() {
 
         <p className="mt-6 text-center text-xs text-gray-400 font-medium">DMTC Mart © 2026</p>
       </div>
-
-      {/* Choice modal */}
-      {showChoiceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative bg-white border border-brand-border rounded-3xl shadow-xl w-full max-w-xs p-6 text-center">
-            <div className="w-12 h-12 bg-brand-bg rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <ShoppingBag size={22} className="text-brand" />
-            </div>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">เข้ามาทำอะไรวันนี้?</h2>
-            <p className="text-sm text-gray-500 mb-5">เลือกโหมดการใช้งาน</p>
-            <div className="space-y-3">
-              <button onClick={handleChooseWork} className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
-                <Briefcase size={18} /> เข้างาน
-              </button>
-              <button onClick={handleChooseShop} className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-brand-mid text-brand hover:bg-brand-bg font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
-                <ShoppingBag size={18} /> ซื้อของ / จองสินค้า
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

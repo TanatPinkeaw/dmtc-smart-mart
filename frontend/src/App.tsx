@@ -5,6 +5,7 @@ import { getCurrentUser } from './utils/getCurrentUser'; // ⭐️ Sprint 0 — 
 import api from './api';
 import Swal from './swal';
 import Login from './pages/Login';
+import Home from './pages/Home'; // ⭐️ หน้ากลางหลัง login (ทุก role) — เลือกโมดูลที่จะเข้าใช้งาน
 import ForgotPassword from './pages/ForgotPassword'; // ⭐️ F1 — ลืมรหัสผ่าน
 import ResetPassword from './pages/ResetPassword'; // ⭐️ F1 — ตั้งรหัสผ่านใหม่
 import Shift from './pages/Shift';
@@ -57,14 +58,11 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-// ⭐️ Sprint 0 — A1: หน้าแรก ("/") เดิม hardcode ไป /shift เสมอ ทำให้ MEMBER ที่เพิ่ง login (หรือ
-// refresh ที่ "/") โดนพาไปหน้า Shift (staff clock-in) — ตอนนี้แยกตาม role: staff ไป /shift,
-// MEMBER ไป /pre-order ไม่ login เลยก็ไป /pre-order เหมือนกัน (RequireStaff ใน /shift จะเตะออกอยู่ดี
-// ถ้าดันเข้าไปแบบ URL ตรง แต่กันไว้ตั้งแต่ default route เลยดีกว่า)
+// ⭐️ Sprint 0 — A1 (แก้ต่อ): หน้าแรก ("/") เดิม hardcode ไป /shift หรือ /pre-order ตาม role — ตอนนี้
+// ทุก role (รวม MEMBER) ผ่านหน้า Home กลางก่อนเสมอ ให้เลือกเองว่าจะเข้าโมดูลไหน ไม่ login เลยไป /login
 function DefaultRoute() {
   const user = getCurrentUser();
-  const target = user && (user.role === 'ADMIN' || user.role === 'CASHIER') ? '/shift' : '/pre-order';
-  return <Navigate to={target} replace />;
+  return <Navigate to={user ? '/home' : '/login'} replace />;
 }
 
 // ⭐️ Sprint 0 — A4: ตรวจ backend restart ระหว่างที่ user เปิดแอปค้างไว้
@@ -122,6 +120,9 @@ function App() {
         
         {/* ⭐️ Sprint 0 — A1: หน้าแรกแยกตาม role แล้ว (ดู DefaultRoute ด้านบน) */}
         <Route path="/" element={<DefaultRoute />} />
+        {/* ⭐️ หน้ากลางหลัง login — ทุก role (ADMIN/CASHIER/MEMBER) เข้าที่นี่ก่อนเสมอ ไม่มี Sidebar
+            ครอบ (เหมือน /shift) เพราะเป็นจุดเลือกโมดูล ไม่ใช่หน้าใช้งานจริง */}
+        <Route path="/home" element={<Home />} />
         {/* ⭐️ Sprint 0 — A1: /shift เดิมไม่มี guard เลย MEMBER พิมพ์ URL ตรงเข้าได้ ห่อ RequireStaff แล้ว */}
         <Route path="/shift" element={<RequireStaff><Shift /></RequireStaff>} />
         

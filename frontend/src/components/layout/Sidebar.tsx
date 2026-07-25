@@ -8,16 +8,16 @@ interface SidebarProps {
   unreadCount: number;
   pendingOrders: number;
   onOpenNotifications: () => void;
-  initials: string;
   fullName: string;
   role: string;
+  profileImageUrl?: string | null; // ⭐️ Home page feature — รูปโปรไฟล์ (fallback: Default profile.png)
   onOpenProfile: () => void;
   onLogoutClick: () => void;
 }
 
 export function Sidebar({
   isStaff, isAdmin, unreadCount, pendingOrders, onOpenNotifications,
-  initials, fullName, role, onOpenProfile, onLogoutClick,
+  fullName, role, profileImageUrl, onOpenProfile, onLogoutClick,
 }: SidebarProps) {
   return (
     <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border shadow-sm flex-col shrink-0 z-40">
@@ -62,7 +62,7 @@ export function Sidebar({
       {/* User footer */}
       <div className="border-t border-brand-border p-3 space-y-1">
         <button onClick={onOpenProfile} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-brand-bg hover:text-brand transition-colors duration-150">
-          <div className="w-7 h-7 bg-brand rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">{initials}</div>
+          <img src={profileImageUrl || '/Default profile.png'} alt={fullName} className="w-7 h-7 rounded-full object-cover shrink-0" />
           <div className="flex-1 text-left min-w-0">
             <p className="text-xs font-semibold text-gray-800 truncate">{fullName}</p>
             <p className="text-[10px] text-gray-400">{role}</p>
