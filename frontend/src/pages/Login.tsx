@@ -1,4 +1,5 @@
-// ✅ CHANGED: Layout, colors, typography → DMTC Mart theme
+// ✅ CHANGED: visual refresh from Figma Make reference (School Co-op POS UI Design/LoginScreen.tsx)
+//   — gradient button + loading spinner, rounder card/inputs (3xl/2xl), bolder heading, softer shadow
 // 🔒 UNCHANGED: handleLogin, handleChooseWork, handleChooseShop, API call, localStorage, modal state
 
 import { useState, useEffect, useRef } from 'react';
@@ -74,89 +75,102 @@ export default function Login() {
   const handleChooseShop = () => { localStorage.setItem('session_mode', 'shop'); navigate('/pre-order'); };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-bg via-white to-brand-bg flex items-center justify-center p-4">
+    <div className="min-h-dvh bg-brand-bg flex flex-col items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
 
         {/* Brand — ⭐️ FIX: ใช้โลโก้จริงของร้านแทนกล่องไอคอน ShoppingBag เดิม */}
-        <div className="text-center mb-8">
-          <img src="/logo-192.png" alt="DMTC Mart" className="inline-flex w-16 h-16 rounded-2xl shadow-lg mb-4 object-contain" />
-          <h1 className="text-2xl font-bold text-gray-900">DMTC Mart</h1>
-          <p className="mt-1 text-sm text-gray-500">ระบบ POS สหกรณ์โรงเรียน</p>
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center mb-4 shadow-lg overflow-hidden">
+            <img src="/logo-192.png" alt="DMTC Mart" className="w-full h-full object-contain p-2" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">DMTC Mart</h1>
+          <p className="mt-1 text-sm text-gray-500 font-medium">ระบบ POS สหกรณ์โรงเรียน</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-brand-border rounded-2xl shadow-lg p-6">
+        <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-6">
           {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl">
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl">
               {error}
             </div>
           )}
 
           {/* ⭐️ F4 — แจ้งเตือน rate limit + countdown */}
           {isRateLimited && (
-            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl text-center">
+            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-2xl text-center">
               พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารออีก <span className="font-bold">{rateLimitCountdown}</span> วินาที
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-500">ชื่อผู้ใช้งาน</label>
+          <h2 className="text-lg font-bold text-gray-800 mb-5">เข้าสู่ระบบ</h2>
+
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">ชื่อผู้ใช้งาน</label>
               <input
                 type="text" required value={username} onChange={e => setUsername(e.target.value)}
                 placeholder="Username / รหัสนักศึกษา" disabled={isRateLimited}
-                className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-500">รหัสผ่าน</label>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสผ่าน</label>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" disabled={isRateLimited}
-                  className="w-full px-3 py-2.5 pr-10 bg-brand-bg border border-brand-border rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-3 pr-12 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <button type="button" onClick={() => setShowPw(!showPw)} disabled={isRateLimited} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50">
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                <button type="button" onClick={() => setShowPw(!showPw)} disabled={isRateLimited} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand transition-colors duration-150 p-1 disabled:opacity-50">
+                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             <button
               type="submit" disabled={loading || isRateLimited}
-              className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+              className="w-full py-3.5 mt-1 rounded-2xl text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+                enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
+                focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
             >
-              {isRateLimited ? `กรุณารอ ${rateLimitCountdown} วินาที` : loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+              {isRateLimited ? (
+                `กรุณารอ ${rateLimitCountdown} วินาที`
+              ) : loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  กำลังเข้าสู่ระบบ...
+                </span>
+              ) : 'เข้าสู่ระบบ'}
             </button>
           </form>
 
           {/* ⭐️ F1 — ลืมรหัสผ่าน */}
-          <div className="mt-4 text-center">
-            <Link to="/forgot-password" className="text-sm text-brand hover:underline">
+          <div className="mt-5 pt-5 border-t border-brand-border text-center">
+            <Link to="/forgot-password" className="text-sm text-brand font-semibold hover:underline">
               ลืมรหัสผ่าน?
             </Link>
           </div>
         </div>
 
-        <p className="mt-4 text-center text-xs text-gray-400">DMTC Mart © 2026</p>
+        <p className="mt-6 text-center text-xs text-gray-400 font-medium">DMTC Mart © 2026</p>
       </div>
 
       {/* Choice modal */}
       {showChoiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative bg-white border border-brand-border rounded-2xl shadow-xl w-full max-w-xs p-6 text-center">
+          <div className="relative bg-white border border-brand-border rounded-3xl shadow-xl w-full max-w-xs p-6 text-center">
             <div className="w-12 h-12 bg-brand-bg rounded-2xl flex items-center justify-center mx-auto mb-4">
               <ShoppingBag size={22} className="text-brand" />
             </div>
             <h2 className="text-lg font-bold text-gray-900 mb-1">เข้ามาทำอะไรวันนี้?</h2>
             <p className="text-sm text-gray-500 mb-5">เลือกโหมดการใช้งาน</p>
             <div className="space-y-3">
-              <button onClick={handleChooseWork} className="w-full flex items-center justify-center gap-2 py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
+              <button onClick={handleChooseWork} className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
                 <Briefcase size={18} /> เข้างาน
               </button>
-              <button onClick={handleChooseShop} className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-brand-mid text-brand hover:bg-brand-bg font-semibold text-sm rounded-xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
+              <button onClick={handleChooseShop} className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-brand-mid text-brand hover:bg-brand-bg font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
                 <ShoppingBag size={18} /> ซื้อของ / จองสินค้า
               </button>
             </div>

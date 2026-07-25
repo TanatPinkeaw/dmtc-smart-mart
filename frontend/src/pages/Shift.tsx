@@ -85,9 +85,9 @@ export default function Shift() {
   // ── Shared wrapper ────────────────────────────────────────────────────────────
   const Card = ({ children }: { children: React.ReactNode }) => (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
+      <div className="w-full max-w-sm bg-white border border-brand-border rounded-3xl shadow-sm overflow-hidden">
         {/* Brand strip */}
-        <div className="bg-brand px-5 py-4 flex items-center gap-3">
+        <div className="bg-gradient-to-r from-brand to-brand-dark px-5 py-4 flex items-center gap-3">
           <ShoppingBag size={22} className="text-white" />
           <div>
             <p className="text-white font-bold text-sm">DMTC Mart</p>
@@ -122,7 +122,9 @@ export default function Shift() {
         }
       </label>
 
-      <button onClick={handleAdminCheckIn} disabled={checkInLoading} className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50">
+      <button onClick={handleAdminCheckIn} disabled={checkInLoading}
+        className="w-full py-3.5 text-white font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+          enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
       </button>
     </Card>
@@ -174,7 +176,9 @@ export default function Shift() {
           </label>
         </div>
 
-        <button type="submit" disabled={loading} className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-semibold text-sm rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+        <button type="submit" disabled={loading}
+          className="w-full py-3.5 text-white font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
+            enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
           <Banknote size={16} /> {loading ? 'กำลังเปิดกะ...' : 'เริ่มขายสินค้า'}
         </button>
       </form>
