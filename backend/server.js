@@ -403,6 +403,14 @@ const server = http.createServer(app);
 // ⭐️ Task 9 — ล็อก origin เป็น FRONTEND_URL เดียว (เดิม "*" อนุญาตทุกโดเมน)
 // ⭐️ Security remediation — เหตุผลเดียวกับ CORS ของ Express ด้านล่าง: ห้ามเปลี่ยนเป็น wildcard/regex
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// ⭐️ Security remediation — FRONTEND_URL ผิด/ลืมตั้งบน Render = CORS/Socket.io ล็อกเป็น localhost
+// เงียบๆ (fail closed อยู่แล้ว ไม่ใช่ช่องโหว่ แต่ debug ยาก เพราะ error ที่ผู้ใช้เห็นคือ CORS ทั่วไป
+// ไม่บอกสาเหตุจริง) เตือนดังๆ ให้เห็นใน log ตอนบูต เหมือน BOOT WARNING ด้านบน
+if (IS_PRODUCTION && (!process.env.FRONTEND_URL || FRONTEND_URL === 'http://localhost:5173' || !FRONTEND_URL.startsWith('https://'))) {
+  console.error(`⚠️⚠️⚠️ [BOOT WARNING] NODE_ENV=production แต่ FRONTEND_URL ${!process.env.FRONTEND_URL ? 'ไม่ได้ตั้งค่า (fallback เป็น localhost)' : `ดูผิดปกติ (ค่าปัจจุบัน: ${FRONTEND_URL})`} — CORS/Socket.io จะปฏิเสธ origin จริงของเว็บทั้งหมด (fail closed แต่ผู้ใช้จริงจะเจอ CORS error งงๆ) ตั้ง FRONTEND_URL=https://<โดเมน Vercel จริง> ใน Render dashboard ด่วน ⚠️⚠️⚠️`);
+}
+
 const io = new Server(server, {
   cors: {
     origin: FRONTEND_URL,

@@ -6,7 +6,8 @@ services:
     container_name: pos_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      # ⭐️ Security remediation — เดิมฮาร์ดโค้ด อ่านจาก .env แทน (มี fallback เผื่อ local dev ยังไม่ตั้งค่า)
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-devpassword}
       MYSQL_DATABASE: pos_coop
     ports:
       - "3306:3306"
