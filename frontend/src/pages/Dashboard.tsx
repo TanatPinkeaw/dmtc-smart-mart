@@ -202,13 +202,13 @@ export default function Dashboard() {
   );
 
   // ── shared card class ────────────────────────────────────────────────────
-  const card = "bg-white border border-brand-border rounded-2xl shadow-sm";
+  const card = "bg-white border border-brand-border rounded-3xl shadow-sm";
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6 pb-24">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gradient-to-r from-brand to-brand-dark rounded-2xl shadow-md p-4 mb-5 gap-3">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4 mb-5 gap-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
             <LayoutDashboard size={16} className="text-white" />

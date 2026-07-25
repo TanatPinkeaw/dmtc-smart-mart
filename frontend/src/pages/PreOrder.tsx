@@ -390,7 +390,7 @@ export default function PreOrder() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             {/* ⭐️ FIX: เดิม border-none กลืนกับพื้นหลัง เพิ่มกรอบให้เหมือนช่องค้นหาหน้า POS */}
             <input type="text" placeholder="ค้นหาสินค้า..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
+              className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
           </div>
 
           <PromoPopularRow
