@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import Swal from '../swal';
 import { BRAND } from '../theme';
-import api from '../api';
+import api, { setCsrfToken } from '../api';
 import { SocketProvider, useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
@@ -97,9 +97,10 @@ function LayoutInner() {
             console.error('Logout error:', err);
           } finally {
             // ⭐️ Security remediation — token cookie ถูก backend เคลียร์เองใน /auth/logout แล้ว
-            // เหลือแค่ล้างข้อมูล user (ไม่ลับ) ฝั่ง client
+            // เหลือแค่ล้างข้อมูล user (ไม่ลับ) ฝั่ง client + csrf token ในตัวแปร JS
             localStorage.removeItem('user');
             localStorage.removeItem('session_mode');
+            setCsrfToken(null);
             navigate('/login');
           }
         }

@@ -17,13 +17,27 @@ function generateIdempotencyKey(): string {
 // ⭐️ Sprint 2 — B6: Track if we're retrying queued requests
 let isProcessingQueue = false;
 
-// ⭐️ Security remediation — JWT ย้ายไป httpOnly cookie แล้ว (ไม่อยู่ localStorage ให้ XSS อ่านได้อีก)
-// อ่าน csrf_token จาก document.cookie (ตัวเดียวที่ไม่ httpOnly) แนบเป็น header ยืนยันว่า request
-// มาจากหน้าเว็บเราจริง (double-submit CSRF protection คู่กับ requireCsrf ฝั่ง backend)
-function getCsrfToken(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+// ⭐️ Security fix — เดิมอ่าน csrf token จาก document.cookie แต่ frontend (Vercel) กับ backend (Render)
+// อยู่คนละ domain กัน หน้าเว็บอ่าน cookie ของ domain อื่นไม่ได้เลยแม้จะไม่ใช่ httpOnly (กฎ same-origin
+// ของ browser) ทำให้ CSRF token เป็น null เสมอ = ทุก mutating request โดน backend ปฏิเสธ 403 จริง
+// (bug ที่เจอจาก production จริง: POST /attendance/upload-photo 403 CSRF token ไม่ถูกต้องหรือหายไป)
+// แก้โดยเก็บ csrf token ไว้ในตัวแปร JS แทน (ไม่ persist ข้าม reload) ได้ค่ามาจาก login/refresh response
+// body (อ่านข้าม origin ได้ปกติผ่าน fetch/axios ต่างจาก cookie) หรือ fetch ใหม่จาก /auth/csrf-token
+// ตอน reload หน้าเว็บ (คนละ token ต่อ access token ที่ backend ฝังไว้เป็น JWT claim อยู่แล้ว)
+let csrfToken: string | null = null;
+export function setCsrfToken(token: string | null) { csrfToken = token; }
+
+// เรียกครั้งเดียวตอนโหลดแอป (module init) — ถ้ามี access_token cookie ที่ valid อยู่แล้ว (เช่น
+// reload หน้าเว็บ) จะได้ csrf token กลับมาเก็บไว้ใช้ทันที ถ้ายังไม่ login ก็แค่ล้มเหลวเงียบๆ (401)
+// ⭐️ เก็บ promise ไว้ด้วย (ไม่ใช่แค่ fire-and-forget) กัน race: ถ้าหน้าเว็บที่ reload ยิง mutating
+// request ออกไปเร็วกว่านี้ resolve interceptor ด้านล่างจะ await ให้เสร็จก่อนค่อยแนบ header
+async function bootstrapCsrfToken() {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/auth/csrf-token`, { withCredentials: true });
+    if (res.data?.csrfToken) csrfToken = res.data.csrfToken;
+  } catch { /* ยังไม่ login หรือ token หมดอายุ — ไม่ต้องทำอะไร ตอน login จริงจะได้ค่าใหม่มาเอง */ }
 }
+let csrfBootstrapPromise: Promise<void> | null = bootstrapCsrfToken();
 
 // 1. ตั้งค่าพื้นฐาน (เปลี่ยน URL ให้ตรงกับพอร์ต Backend ของนายถ้าไม่ใช่ 3000)
 const api = axios.create({
@@ -36,11 +50,15 @@ const api = axios.create({
 
 // 2. ใช้ Interceptor ดักจับทุก Request ก่อนวิ่งออกไปที่ Backend
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     // ⭐️ Security remediation — แนบ CSRF token เฉพาะ request ที่เปลี่ยนแปลงข้อมูล (backend ก็เช็คแค่เท่านี้)
     const method = config.method?.toUpperCase() || '';
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-      const csrfToken = getCsrfToken();
+      // ⭐️ กัน race ตอน reload หน้าเว็บ: ถ้า bootstrap ยังไม่เสร็จและยังไม่มี token ในมือ รอให้เสร็จก่อน
+      if (!csrfToken && csrfBootstrapPromise) {
+        await csrfBootstrapPromise;
+        csrfBootstrapPromise = null;
+      }
       if (csrfToken) config.headers['X-CSRF-Token'] = csrfToken;
     }
 
@@ -115,11 +133,12 @@ api.interceptors.response.use(
           refreshPromise = api.post('/auth/refresh');
         }
 
-        await refreshPromise;
+        const { data } = await refreshPromise;
         refreshPromise = null;
 
-        // ⭐️ access_token/refresh_token/csrf_token cookie ใหม่ถูกตั้งโดย backend (Set-Cookie) แล้ว
-        // แค่ retry request เดิม browser จะแนบ cookie ใหม่ให้เองอัตโนมัติ
+        // ⭐️ access_token/refresh_token cookie ใหม่ถูกตั้งโดย backend (Set-Cookie) แล้ว — แค่ retry
+        // request เดิม browser จะแนบ cookie ใหม่ให้เองอัตโนมัติ ส่วน csrf token ต้องอัปเดตในตัวแปร JS เอง
+        if (data?.csrfToken) csrfToken = data.csrfToken;
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed → logout
