@@ -14,6 +14,7 @@ import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import PendingShiftClosesWidget from '../components/PendingShiftClosesWidget'; // ⭐️ Sprint 2 — D1
 import { Section } from '../components/dashboard/Section';
 import { StatCards } from '../components/dashboard/StatCards';
+import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
 import { CloseShiftModal } from '../components/dashboard/CloseShiftModal';
 import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
@@ -50,6 +51,8 @@ export default function Dashboard() {
   const [deadStock, setDeadStock] = useState<any[]>([]);
   const [vendorSummary, setVendorSummary] = useState<any[]>([]);
   const [attendanceReport, setAttendanceReport] = useState<any[]>([]);
+  const [weeklySales, setWeeklySales] = useState<any[]>([]); // ⭐️ Design-ref — กราฟยอดขายรายสัปดาห์
+  const [recentOrders, setRecentOrders] = useState<any[]>([]); // ⭐️ Design-ref — feed ออเดอร์ล่าสุด
   const [openInsights, setOpenInsights] = useState(true);
   const [openDetails, setOpenDetails] = useState(false);
   const [detailModal, setDetailModal] = useState<{ type: string; title: string } | null>(null);
@@ -109,6 +112,7 @@ export default function Dashboard() {
         get('/reports/sales-channel', setChannel), get('/reports/gross-profit', setGrossProfit),
         get('/reports/dead-stock', setDeadStock), get('/reports/vendor-summary', setVendorSummary),
         get(`/reports/attendance?month=${new Date().toISOString().slice(0, 7)}`, setAttendanceReport),
+        get('/reports/weekly-sales', setWeeklySales), get('/sales/history', setRecentOrders),
       ]);
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
@@ -249,7 +253,19 @@ export default function Dashboard() {
         </div>
       )}
 
-      <StatCards summary={summary} topProducts={topProducts} />
+      {isAdmin ? (
+        <AdminDashboardHero
+          summary={summary}
+          comparison={comparison}
+          lowStockCount={lowStock.length}
+          voidSummary={voidSummary}
+          weeklySales={weeklySales}
+          topProducts={topProducts}
+          recentOrders={recentOrders}
+        />
+      ) : (
+        <StatCards summary={summary} topProducts={topProducts} />
+      )}
 
       {/* ── Admin sections ────────────────────────────────────────────────── */}
       {isAdmin && (

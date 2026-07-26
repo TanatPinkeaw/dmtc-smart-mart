@@ -3116,6 +3116,37 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN'), async (req, res) 
   }
 });
 
+// ⭐️ Design-ref — กราฟยอดขายรายสัปดาห์ (AdminDashboardScreen) รวมบิลหน้าร้าน + บิลจองที่ปิดแล้ว
+// ต่อวัน ย้อนหลัง 7 วัน (รวมวันนี้) เติมวันที่ไม่มียอดขายให้เป็น 0 ให้กราฟต่อเนื่อง
+app.get('/api/reports/weekly-sales', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT d, COALESCE(SUM(total), 0) as total FROM (
+        SELECT DATE(created_at) as d, total_amount as total FROM sales
+          WHERE status = 'COMPLETED' AND created_at >= CURDATE() - INTERVAL 6 DAY
+        UNION ALL
+        SELECT DATE(completed_at) as d, total_amount as total FROM orders
+          WHERE status = 'COMPLETED' AND completed_at >= CURDATE() - INTERVAL 6 DAY
+      ) combined
+      GROUP BY d
+    `);
+    const map = {};
+    rows.forEach(r => { map[new Date(r.d).toISOString().slice(0, 10)] = Number(r.total); });
+    const DAY_LABELS = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      result.push({ date: key, day: DAY_LABELS[d.getDay()], total: map[key] || 0 });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
 app.get('/api/reports/hourly-sales', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
