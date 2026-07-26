@@ -9,6 +9,30 @@ let rateLimitSwalOpen = false;
 // ⭐️ Sprint 2 — B5: Track refresh in-flight to prevent multiple refresh calls
 let refreshPromise: Promise<any> | null = null;
 
+// 🐛 FIX (production bug) — เดิมพอ refresh พังก็ยิง `window.location.href = '/login'` ตรงๆ ทันที
+// จากทุก request ที่ 401 พร้อมกัน (เช่นหน้า Dashboard ยิง 6 endpoint พร้อมกันตอน mount) — ถ้าเบราว์เซอร์
+// ยัง render หน้าเดิมค้างอยู่ (Render เย็น/เน็ตช้า) การ set href ซ้ำๆ จากหลาย request เกือบพร้อมกัน
+// จะ "แย่งกัน" ยกเลิก navigation ของกันเองซ้ำไปเรื่อยๆ จนไม่เคย navigate สำเร็จสักที (หน้าเว็บค้างที่
+// เดิม ยิง 401 ต่อเนื่องไม่มีที่สิ้นสุด ตามที่เจอจริงใน production) แก้โดย gate ด้วย flag เดียว ให้
+// แสดง Swal ให้ผู้ใช้กดยืนยันครั้งเดียว แล้วค่อย navigate จริงตอนนั้น (คลิกจริงของผู้ใช้ = execution
+// context ใหม่ ไม่โดนแย่งจาก request อื่นที่ยัง 401 ค้างอยู่)
+let sessionExpiredHandled = false;
+function forceLogout() {
+  if (sessionExpiredHandled) return;
+  sessionExpiredHandled = true;
+  Swal.fire({
+    icon: 'warning',
+    title: 'เซสชันหมดอายุ',
+    text: 'กรุณาเข้าสู่ระบบใหม่อีกครั้ง',
+    confirmButtonText: 'เข้าสู่ระบบ',
+    allowOutsideClick: false,
+  }).then(() => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('session_mode');
+    window.location.href = '/login';
+  });
+}
+
 // ⭐️ Sprint 2 — B6: Idempotency key generator (UUID-like)
 function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -141,9 +165,9 @@ api.interceptors.response.use(
         if (data?.csrfToken) csrfToken = data.csrfToken;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed → logout
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        // Refresh failed → session หมดจริง
+        refreshPromise = null; // 🐛 FIX — เดิมไม่ reset ตอนพัง ทำให้ request 401 รอบถัดไปได้ promise ที่ reject ค้างไปตลอด
+        forceLogout();
         return Promise.reject(refreshError);
       }
     }
@@ -166,11 +190,9 @@ api.interceptors.response.use(
     // เหลือแค่ 401 (token หมดอายุ/ปลอม) ที่ควร force logout จริงๆ
     if (error.response && error.response.status === 401 && originalRequest._retry) {
       // Token refresh failed or already retried, force logout
-      localStorage.removeItem('user');
-
       // ข้ามการเตะกลับถ้ากำลังอยู่ที่หน้า login เพื่อไม่ให้ loop
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        forceLogout();
       }
     }
 
