@@ -483,8 +483,7 @@ const PUBLIC_PATHS = [
   '/api/auth/refresh',
   '/api/users/register',   // สมัครสมาชิกหน้าเคาน์เตอร์ (ยังไม่มี token)
   '/api/docs',
-  '/api/init-db',          // bootstrap เท่านั้น — guard ด้วย SETUP_KEY แทน JWT (ดูด้านล่าง)
-  '/api/seed-data',
+  '/api/seed-data',        // bootstrap เท่านั้น — guard ด้วย SETUP_KEY แทน JWT (ดูด้านล่าง)
   '/api/create-admin',
   '/api/health',            // ⭐️ Task 12 — uptime monitor ต้องเรียกได้โดยไม่ต้องมี JWT
   '/api/version',           // ⭐️ Sprint 0 — A4 — frontend poll เช็ค stale backend, ต้องเรียกได้แม้ token จะหมดอายุ/ยังไม่ login
@@ -4683,47 +4682,6 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 
     console.log(`🔑 [create-admin] สร้างบัญชี admin แล้ว รหัสผ่านชั่วคราว: ${tempPassword}`);
     res.json({ message: "สร้างบัญชีสำเร็จ! 🎉 ดูรหัสผ่านชั่วคราวใน server log (ต้องเปลี่ยนรหัสผ่านทันทีหลังเข้าสู่ระบบครั้งแรก)" });
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-// =========================================
-// API เวทมนตร์ สร้างตารางฐานข้อมูลอัตโนมัติบน Cloud
-// =========================================
-app.get('/api/init-db', requireSetupKey, async (req, res) => {
-  // ⭐️ Security remediation — bootstrap/dev-only endpoint, must not be reachable in production regardless of SETUP_KEY
-  if (IS_PRODUCTION) return res.status(404).end();
-  try {
-    const queries = [
-      `CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, student_id VARCHAR(50) UNIQUE, password VARCHAR(255), full_name VARCHAR(100), role VARCHAR(20) DEFAULT 'CASHIER', is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS categories (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100))`,
-      `CREATE TABLE IF NOT EXISTS products (id INT AUTO_INCREMENT PRIMARY KEY, barcode VARCHAR(50), name VARCHAR(255), category_id INT, price DECIMAL(10,2), cost DECIMAL(10,2) DEFAULT 0, stock INT DEFAULT 0, image_url TEXT, vendor_id INT NULL, gp_rate DECIMAL(5,2) DEFAULT 0, is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS suppliers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), contact_info TEXT)`,
-      `CREATE TABLE IF NOT EXISTS purchases (id INT AUTO_INCREMENT PRIMARY KEY, supplier_id INT, user_id INT, total_amount DECIMAL(10,2), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS purchase_items (id INT AUTO_INCREMENT PRIMARY KEY, purchase_id INT, product_id INT, quantity INT, unit_cost DECIMAL(10,2), subtotal DECIMAL(10,2))`,
-      `CREATE TABLE IF NOT EXISTS shifts (id INT AUTO_INCREMENT PRIMARY KEY, cashier_id INT, opening_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, closing_time TIMESTAMP NULL, opening_cash DECIMAL(10,2), expected_cash DECIMAL(10,2), actual_cash DECIMAL(10,2), difference DECIMAL(10,2), status VARCHAR(20) DEFAULT 'OPEN')`,
-      `CREATE TABLE IF NOT EXISTS members (id INT AUTO_INCREMENT PRIMARY KEY, student_id VARCHAR(50) UNIQUE, full_name VARCHAR(100), points INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS sales (id INT AUTO_INCREMENT PRIMARY KEY, cashier_id INT, member_id INT, total_amount DECIMAL(10,2), payment_method VARCHAR(50), amount_received DECIMAL(10,2), change_amount DECIMAL(10,2), status VARCHAR(50) DEFAULT 'COMPLETED', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS sale_items (id INT AUTO_INCREMENT PRIMARY KEY, sale_id INT, product_id INT, quantity INT, price DECIMAL(10,2), subtotal DECIMAL(10,2))`,
-      `CREATE TABLE IF NOT EXISTS settings (id INT AUTO_INCREMENT PRIMARY KEY, store_name VARCHAR(255) DEFAULT 'ร้านค้าสหกรณ์', tax_id VARCHAR(50), address TEXT, receipt_footer TEXT)`,
-      
-      // ⭐️ 3 ตารางใหม่สำหรับระบบ Pre-order
-      `CREATE TABLE IF NOT EXISTS orders (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, total_amount DECIMAL(10,2), payment_method VARCHAR(50), slip_image TEXT NULL, earn_points INT DEFAULT 0, status VARCHAR(50) DEFAULT 'PENDING_VERIFY', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-      `CREATE TABLE IF NOT EXISTS order_items (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT, product_id INT, quantity INT, price DECIMAL(10,2), subtotal DECIMAL(10,2))`,
-      `CREATE TABLE IF NOT EXISTS notifications (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, message TEXT, is_read TINYINT(1) DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`
-    ];
-
-    for (let q of queries) {
-      await pool.query(q);
-    }
-
-    // ตั้งค่าชื่อร้านเริ่มต้น
-    await pool.query("INSERT IGNORE INTO settings (id, store_name) VALUES (1, 'ร้านค้าสหกรณ์')");
-
-    res.json({ message: "สร้างตารางสำเร็จครบ 11 ตาราง! 🎉 โครงสร้างฐานข้อมูลพร้อมลุยแล้ว" });
   } catch (error) {
     console.error('[500]', error.message);
 

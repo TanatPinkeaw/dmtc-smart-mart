@@ -576,12 +576,11 @@ const initDB = async () => {
     } catch (alterErr) {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE products (discount_percent) ล้มเหลว:", alterErr.message);
     }
-    try {
-      await connection.query(`ALTER TABLE products ADD COLUMN is_expired BOOLEAN GENERATED ALWAYS AS (expiry_date IS NOT NULL AND expiry_date < CURDATE()) STORED`);
-      console.log("🔧 เพิ่มคอลัมน์ products.is_expired (GENERATED) ที่ขาดไปให้แล้ว");
-    } catch (alterErr) {
-      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE products (is_expired) ล้มเหลว:", alterErr.message);
-    }
+    // ⭐️ Removed: ALTER TABLE products ADD COLUMN is_expired BOOLEAN GENERATED ALWAYS AS (...)
+    // MySQL rejects CURDATE() in a generated column (non-deterministic), so this ALTER has
+    // failed silently on every single boot since it was added — the column never existed.
+    // Not a functional bug: the real expiry feature computes `expiry_status` as a plain SQL
+    // CASE expression at query time (see server.js's `expiryCase`), independent of this column.
 
     // ⭐️ Phase 1 — โปรโมชั่นระดับสินค้า มีช่วงวันที่ (promo_percent ลด % ระหว่าง promo_start..promo_end)
     for (const [col, ddl] of [
@@ -630,19 +629,19 @@ const initDB = async () => {
       await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_created_at (created_at)`);
       console.log("🔧 เพิ่ม index audit_logs.idx_created_at ที่ขาดไปให้แล้ว");
     } catch (indexErr) {
-      if (indexErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_created_at) ล้มเหลว:", indexErr.message);
+      if (indexErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_created_at) ล้มเหลว:", indexErr.message);
     }
     try {
       await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_action (action)`);
       console.log("🔧 เพิ่ม index audit_logs.idx_action ที่ขาดไปให้แล้ว");
     } catch (indexErr) {
-      if (indexErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_action) ล้มเหลว:", indexErr.message);
+      if (indexErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_action) ล้มเหลว:", indexErr.message);
     }
     try {
       await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_user_id (user_id)`);
       console.log("🔧 เพิ่ม index audit_logs.idx_user_id ที่ขาดไปให้แล้ว");
     } catch (indexErr) {
-      if (indexErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_user_id) ล้มเหลว:", indexErr.message);
+      if (indexErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_user_id) ล้มเหลว:", indexErr.message);
     }
 
     // ⭐️ Sprint 2 — C3: Backup & Restore
