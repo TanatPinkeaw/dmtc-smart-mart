@@ -11,6 +11,7 @@
 // that happens to trigger a report send.
 
 const nodemailer = require('nodemailer');
+const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = require('./config');
 
 let transporter = null;
 let attemptedInit = false;
@@ -19,7 +20,6 @@ function getTransporter() {
   if (attemptedInit) return transporter;
   attemptedInit = true;
 
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     console.warn('⚠️ Mailer: SMTP_HOST/SMTP_USER/SMTP_PASS ยังไม่ได้ตั้งค่าใน .env — จะ log แทนการส่งอีเมลจริง');
     return null;
@@ -50,7 +50,7 @@ async function sendMail({ to, subject, html, text }) {
 
   try {
     await t.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from: SMTP_FROM || SMTP_USER,
       to,
       subject,
       html,

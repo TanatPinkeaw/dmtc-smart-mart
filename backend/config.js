@@ -1,0 +1,82 @@
+// ⭐️ Single source of truth for backend config — replaces scattered process.env.X reads
+// across server.js/db.js/cloudinary-config.js/mailer.js/daily-report.js.
+//
+// This is the ONLY file in the backend that should read raw process.env. Everything else
+// requires('./config') and uses the exported values instead. Benefits over the old scattered
+// version: one place to see every setting the app needs, .env loaded exactly once (previously
+// server.js AND db.js each called dotenv.config() themselves), and the required-vars check that
+// used to be duplicated almost verbatim in both server.js and db.js now lives in one place.
+//
+// Node caches modules, so it doesn't matter which file requires('./config') first — the
+// validation below runs exactly once no matter how many files import this.
+
+// ⭐️ quiet:true — dotenv (v17+) prints a random promo "tip" line to console on every boot
+// otherwise; harmless but clutters Render's boot logs with unrelated ad text
+require('dotenv').config({ quiet: true });
+
+// ⭐️ Task 6 — no fallback for these; a missing value must stop boot, not silently run with a
+// weak default (e.g. the old hardcoded 'rootpassword' DB fallback this replaced).
+const REQUIRED = ['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missing = REQUIRED.filter(key => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`❌ config.js: ไม่พบ environment variable ที่จำเป็น: ${missing.join(', ')} — ห้ามรันระบบโดยไม่มีค่านี้`);
+  process.exit(1);
+}
+console.log('✓ All required environment variables loaded');
+
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PRODUCTION = NODE_ENV === 'production';
+
+// ⭐️ Security remediation — production (Render → Aiven) ต้องเข้ารหัสเสมอ ห้ามบูทแบบ plaintext เงียบๆ
+if (IS_PRODUCTION && process.env.DB_SSL !== 'true') {
+  console.error('❌ config.js: NODE_ENV=production ต้องตั้ง DB_SSL=true (เข้ารหัสการเชื่อมต่อไป Aiven/MySQL เสมอ)');
+  process.exit(1);
+}
+
+// ⭐️ Render ตั้ง process.env.RENDER ให้อัตโนมัติ ถ้าเจอว่ารันบน Render แต่ NODE_ENV ดันไม่ใช่
+// 'production' (ลืมตั้งใน dashboard) trust proxy ใน server.js จะไม่ทำงาน — เตือนดังๆ ให้เห็นใน log
+const IS_RENDER = !!process.env.RENDER;
+if (IS_RENDER && !IS_PRODUCTION) {
+  console.error('⚠️⚠️⚠️ [BOOT WARNING] รันบน Render แต่ NODE_ENV != production — trust proxy ไม่ถูกเปิด! rate limiter (login/forgot-password) จะเห็น IP ผิดทั้งหมด ตั้ง NODE_ENV=production ใน Render dashboard ด่วน ⚠️⚠️⚠️');
+}
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// ⭐️ FRONTEND_URL ผิด/ลืมตั้งบน Render = CORS/Socket.io ล็อกเป็น localhost เงียบๆ (fail closed
+// อยู่แล้ว ไม่ใช่ช่องโหว่ แต่ debug ยาก เพราะ error ที่ผู้ใช้เห็นคือ CORS ทั่วไป ไม่บอกสาเหตุจริง)
+if (IS_PRODUCTION && (!process.env.FRONTEND_URL || FRONTEND_URL === 'http://localhost:5173' || !FRONTEND_URL.startsWith('https://'))) {
+  console.error(`⚠️⚠️⚠️ [BOOT WARNING] NODE_ENV=production แต่ FRONTEND_URL ${!process.env.FRONTEND_URL ? 'ไม่ได้ตั้งค่า (fallback เป็น localhost)' : `ดูผิดปกติ (ค่าปัจจุบัน: ${FRONTEND_URL})`} — CORS/Socket.io จะปฏิเสธ origin จริงของเว็บทั้งหมด (fail closed แต่ผู้ใช้จริงจะเจอ CORS error งงๆ) ตั้ง FRONTEND_URL=https://<โดเมน Vercel จริง> ใน Render dashboard ด่วน ⚠️⚠️⚠️`);
+}
+
+module.exports = {
+  NODE_ENV,
+  IS_PRODUCTION,
+  IS_RENDER,
+  PORT: process.env.PORT || 3000,
+
+  JWT_SECRET: process.env.JWT_SECRET,
+  SETUP_KEY: process.env.SETUP_KEY || null, // null = bootstrap endpoints stay disabled (503)
+  FRONTEND_URL,
+
+  DB_HOST: process.env.DB_HOST,
+  DB_USER: process.env.DB_USER,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_NAME: process.env.DB_NAME,
+  DB_PORT: process.env.DB_PORT || 3306,
+  DB_SSL: process.env.DB_SSL === 'true',
+  DB_SSL_CA: process.env.DB_SSL_CA || null, // null = encrypted but cert not verified, see db.js
+
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || null,
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || null,
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || null,
+
+  SMTP_HOST: process.env.SMTP_HOST || null,
+  SMTP_PORT: process.env.SMTP_PORT || null,
+  SMTP_USER: process.env.SMTP_USER || null,
+  SMTP_PASS: process.env.SMTP_PASS || null,
+  SMTP_FROM: process.env.SMTP_FROM || null,
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL || null,
+  ENABLE_BACKUP_EMAIL: process.env.ENABLE_BACKUP_EMAIL === 'true',
+
+  GIT_HASH: process.env.GIT_HASH || 'dev-local',
+};

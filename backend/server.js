@@ -1,6 +1,7 @@
 const express = require('express');
 const helmet = require('helmet'); // ⭐️ SECURITY FIX (#8) — security headers
 const cors = require('cors');
+const config = require('./config'); // ⭐️ Single source of truth for all env config — see config.js
 const pool = require('./db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -18,7 +19,7 @@ const { saveImage } = require('./cloudinary-config');  // ⭐️ เก็บร
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
 // รอบเดียวก็โดนล็อกยาว) NODE_ENV=production ยังคงเข้มเท่าเดิม, ค่าอื่นๆ (development/undefined) ผ่อนให้
 // หมายเหตุ: ไม่ได้ปิด rate limit ไปเลยแม้ตอน dev เพราะยังอยากให้ทดสอบพฤติกรรม 429 ได้เหมือนเดิม แค่เพดานสูงขึ้น
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_PRODUCTION = config.IS_PRODUCTION;
 
 // ⭐️ Security remediation — ย้าย JWT จาก localStorage (อ่านได้ด้วย JS ตัวไหนก็ได้บนหน้าเว็บ, XSS ตัวเดียว
 // ขโมย token ได้หมด) ไป httpOnly cookie (JS อ่านไม่ได้เลย ต่อให้มี XSS) frontend (Vercel) กับ backend
@@ -145,7 +146,7 @@ const { createBackup, restoreBackup } = require('./backup'); // ⭐️ Sprint 2 
 // (poll ทุก 1 นาที) แปลว่า backend ถูก restart ไปแล้วตั้งแต่โหลดหน้าเว็บครั้งล่าสุด ควร reload
 const BUILD_INFO = {
   timestamp: new Date().toISOString(),
-  git_hash: process.env.GIT_HASH || 'dev-local',
+  git_hash: config.GIT_HASH,
 };
 
 // ⭐️ Sprint 2 — B8: Timezone Helpers (Bangkok UTC+7)
@@ -323,20 +324,9 @@ async function validateImageDimensions(filePath, minWidth, minHeight, maxWidth, 
 const http = require('http');
 const { Server } = require('socket.io');
 
-require('dotenv').config();
-
-// ⭐️ Task 6 — ตรวจ environment variable ที่จำเป็นทั้งหมดก่อนบูท ไม่ใช่แค่ JWT_SECRET
-// (เดิม db.js มี fallback รหัสผ่านเริ่มต้น 'rootpassword' ซ่อนอยู่ — ถ้า DB_PASSWORD หายจาก .env
-//  ระบบจะบูทต่อแบบเงียบๆ ด้วยรหัสผ่านอ่อนแอแทนที่จะพัง เอาออกแล้ว ดู db.js)
-const REQUIRED_ENV = ['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
-if (missingEnv.length > 0) {
-  console.error(`❌ ไม่พบ environment variable ที่จำเป็น: ${missingEnv.join(', ')} — ห้ามรันระบบโดยไม่มีค่านี้`);
-  process.exit(1);
-}
-console.log('✓ All required environment variables loaded');
-
-const JWT_SECRET = process.env.JWT_SECRET;
+// ⭐️ Task 6 — env โหลด + ตรวจ required vars แล้วที่ config.js ที่เดียว (เดิมเช็คซ้ำเกือบทุกตัวอักษร
+// กับ db.js ในไฟล์นี้เอง) ดู config.js สำหรับรายละเอียด
+const JWT_SECRET = config.JWT_SECRET;
 
 // ⭐️ Sprint 2 — B6: Idempotency Middleware
 const idempotencyCache = new Map(); // In-memory cache for idempotent responses
@@ -384,12 +374,11 @@ const app = express();
 // ไม่งั้น rate limiter เห็น IP เดียว (ของ proxy) = login limiter ล็อกคนทั้งระบบพร้อมกัน
 if (IS_PRODUCTION) app.set('trust proxy', 1);
 
-// ⭐️ Security remediation — Render ตั้ง process.env.RENDER ให้อัตโนมัติ ถ้าเจอว่ารันบน Render
-// แต่ NODE_ENV ดันไม่ใช่ 'production' (ลืมตั้งใน dashboard) trust proxy ข้างบนจะไม่ทำงาน
-// rate limiter ทุกตัวจะเห็น IP ของ Render load balancer ตัวเดียว แทน IP ผู้ใช้จริง — เตือนดังๆ ให้เห็นใน log
-if (process.env.RENDER && !IS_PRODUCTION) {
-  console.error('⚠️⚠️⚠️ [BOOT WARNING] รันบน Render แต่ NODE_ENV != production — trust proxy ไม่ถูกเปิด! rate limiter (login/forgot-password) จะเห็น IP ผิดทั้งหมด ตั้ง NODE_ENV=production ใน Render dashboard ด่วน ⚠️⚠️⚠️');
-}
+// ⭐️ Security remediation — เช็ค/เตือนเรื่องนี้ย้ายไป config.js แล้ว (รันตอน require ครั้งแรก
+// ก่อนถึงบรรทัดนี้ด้วยซ้ำ) เก็บ comment นี้ไว้อธิบายว่าทำไม trust proxy ด้านบนถึงสำคัญ:
+// Render ตั้ง process.env.RENDER ให้อัตโนมัติ ถ้าเจอว่ารันบน Render แต่ NODE_ENV ดันไม่ใช่
+// 'production' (ลืมตั้งใน dashboard) trust proxy ข้างบนจะไม่ทำงาน rate limiter ทุกตัวจะเห็น IP ของ
+// Render load balancer ตัวเดียว แทน IP ผู้ใช้จริง
 
 // ⭐️ SECURITY FIX (#8) — security headers (ป้องกัน clickjacking/MIME sniffing ฯลฯ)
 // เป็น API ล้วน (ไม่เสิร์ฟ HTML) ปิด CSP; รูปโหลดข้ามโดเมนผ่าน XHR ตั้ง CORP เป็น cross-origin
@@ -404,14 +393,8 @@ const server = http.createServer(app);
 // 3. ตั้งค่า Socket.io
 // ⭐️ Task 9 — ล็อก origin เป็น FRONTEND_URL เดียว (เดิม "*" อนุญาตทุกโดเมน)
 // ⭐️ Security remediation — เหตุผลเดียวกับ CORS ของ Express ด้านล่าง: ห้ามเปลี่ยนเป็น wildcard/regex
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-// ⭐️ Security remediation — FRONTEND_URL ผิด/ลืมตั้งบน Render = CORS/Socket.io ล็อกเป็น localhost
-// เงียบๆ (fail closed อยู่แล้ว ไม่ใช่ช่องโหว่ แต่ debug ยาก เพราะ error ที่ผู้ใช้เห็นคือ CORS ทั่วไป
-// ไม่บอกสาเหตุจริง) เตือนดังๆ ให้เห็นใน log ตอนบูต เหมือน BOOT WARNING ด้านบน
-if (IS_PRODUCTION && (!process.env.FRONTEND_URL || FRONTEND_URL === 'http://localhost:5173' || !FRONTEND_URL.startsWith('https://'))) {
-  console.error(`⚠️⚠️⚠️ [BOOT WARNING] NODE_ENV=production แต่ FRONTEND_URL ${!process.env.FRONTEND_URL ? 'ไม่ได้ตั้งค่า (fallback เป็น localhost)' : `ดูผิดปกติ (ค่าปัจจุบัน: ${FRONTEND_URL})`} — CORS/Socket.io จะปฏิเสธ origin จริงของเว็บทั้งหมด (fail closed แต่ผู้ใช้จริงจะเจอ CORS error งงๆ) ตั้ง FRONTEND_URL=https://<โดเมน Vercel จริง> ใน Render dashboard ด่วน ⚠️⚠️⚠️`);
-}
+// (เช็ค/เตือนถ้าค่าผิดปกติตอน production ย้ายไป config.js แล้ว รันตั้งแต่ตอน require ครั้งแรก)
+const FRONTEND_URL = config.FRONTEND_URL;
 
 const io = new Server(server, {
   cors: {
@@ -527,11 +510,11 @@ const PUBLIC_GET_PREFIXES = [
 // ย้ายไปส่งผ่าน header แทน + เทียบแบบ constant-time กัน timing side-channel
 function requireSetupKey(req, res, next) {
   const key = req.headers['x-setup-key'];
-  if (!process.env.SETUP_KEY) {
+  if (!config.SETUP_KEY) {
     return res.status(503).json({ error: 'ปิดใช้งาน bootstrap endpoint นี้แล้ว (ไม่พบ SETUP_KEY ใน .env)' });
   }
   const provided = Buffer.from(String(key || ''));
-  const expected = Buffer.from(process.env.SETUP_KEY);
+  const expected = Buffer.from(config.SETUP_KEY);
   const isMatch = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
   if (!isMatch) {
     return res.status(403).json({ error: 'setup key ไม่ถูกต้อง' });
@@ -5236,7 +5219,7 @@ process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
 });
 
-const PORT = process.env.PORT || 3000; // ⭐️ DEPLOY — อ่านจาก .env ได้ (default 3000)
+const PORT = config.PORT; // ⭐️ DEPLOY — อ่านจาก .env ได้ (default 3000)
 // เปลี่ยนจาก app.listen เป็น server.listen
 // ⭐️ DEPLOY FIX — bind 0.0.0.0 (IPv4 ทุก interface) ไม่งั้น Node default ไปที่ IPv6 '::'
 // แล้ว Render สแกนพอร์ตทาง IPv4 มองไม่เห็น → "No open ports detected" → deploy timeout → คงโค้ดเก่า
@@ -5254,9 +5237,9 @@ server.listen(PORT, '0.0.0.0', () => {
         console.log(`[CRON] ✅ Backup successful: ${result.filename}`);
 
         // Send email notification if enabled
-        if (process.env.ENABLE_BACKUP_EMAIL === 'true') {
+        if (config.ENABLE_BACKUP_EMAIL) {
           // TODO: implement email sending if needed
-          console.log(`[CRON] Email would be sent to ${process.env.ADMIN_EMAIL}`);
+          console.log(`[CRON] Email would be sent to ${config.ADMIN_EMAIL}`);
         }
       } else {
         console.log('[CRON] ⏭️  Backup skipped (already exists today)');
@@ -5265,9 +5248,9 @@ server.listen(PORT, '0.0.0.0', () => {
       console.error('[CRON] ❌ Backup failed:', err.message);
 
       // Send error email if enabled
-      if (process.env.ENABLE_BACKUP_EMAIL === 'true') {
+      if (config.ENABLE_BACKUP_EMAIL) {
         // TODO: implement email error notification if needed
-        console.log(`[CRON] Error email would be sent to ${process.env.ADMIN_EMAIL}`);
+        console.log(`[CRON] Error email would be sent to ${config.ADMIN_EMAIL}`);
       }
     }
   });
