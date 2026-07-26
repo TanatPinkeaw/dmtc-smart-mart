@@ -78,6 +78,10 @@ export default function Shift() {
       const fd = new FormData(); fd.append('photo', checkInPhoto);
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/attendance/check-in', { check_in_photo: uploadRes.data.photo_url });
+      // 🐛 FIX — ต้องตั้งโหมดทำงานก่อนเด้งไป /dashboard ไม่งั้นถ้ามาถึงหน้านี้ตอน session_mode='shop'
+      //   (เช่นพิมพ์ URL ตรง/กด back) Dashboard.tsx จะเห็น 'shop' แล้วเตะไป /pre-order ทันที
+      //   ทั้งที่เพิ่งลงชื่อเข้างานสำเร็จ — คู่กับตอนออกงานที่ตั้งกลับเป็น 'shop'
+      localStorage.setItem('session_mode', 'work');
       navigate('/dashboard');
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckInLoading(false); }
@@ -110,6 +114,8 @@ export default function Shift() {
       const fd = new FormData(); fd.append('photo', checkInPhoto);
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/shifts/open', { cashier_id: user.id, opening_cash: openingCash, cash_breakdown: denomCounts, open_photo: uploadRes.data.photo_url });
+      // 🐛 FIX — เหตุผลเดียวกับ check-in: POS.tsx เตะไป /pre-order ถ้า session_mode ยังเป็น 'shop'
+      localStorage.setItem('session_mode', 'work');
       navigate('/pos');
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
