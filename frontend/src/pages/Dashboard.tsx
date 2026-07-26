@@ -107,7 +107,8 @@ export default function Dashboard() {
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
-  const handleLogout = () => { localStorage.clear(); navigate('/login'); };
+  // ⭐️ handleLogout เดิมถูกลบทิ้ง — ไม่มีใครเรียกแล้วหลังย้ายปุ่มลงชื่อออกงาน/ปิดกะไป Shift.tsx
+  //   (ออกจากระบบใช้ปุ่มใน Layout sidebar/เมนู ซึ่งเรียก performLogout ให้ถูกต้องอยู่แล้ว)
 
   // ⭐️ F2 — ADMIN อนุมัติปิดกะที่รออนุมัติ (ส่วนต่างเกิน 100 บาท)
   const handleApproveShift = async (shiftId: number) => {

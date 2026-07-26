@@ -5,7 +5,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag } from 'lucide-react';
-import api, { setCsrfToken } from '../api';
+import api from '../api';
+import { performLogout } from '../utils/logout';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { BRAND } from '../theme';
@@ -52,10 +53,7 @@ export default function Home() {
     Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
       .then(async (r) => {
         if (!r.isConfirmed) return;
-        try { await api.post('/auth/logout'); } catch { /* เคลียร์ client ต่อได้แม้ logout API พลาด */ }
-        localStorage.removeItem('user');
-        localStorage.removeItem('session_mode');
-        setCsrfToken(null);
+        await performLogout();
         navigate('/login');
       });
   };

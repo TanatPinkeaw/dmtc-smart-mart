@@ -109,21 +109,21 @@ export default function BackupManagement() {
   return (
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-              <Database size={18} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-white">สำรอง & กู้คืนข้อมูล</h1>
-              <p className="text-xs text-white/80">ระบบสำรองข้อมูลอัตโนมัติทุกวัน + กดสำรองเองได้ตลอดเวลา</p>
-            </div>
+        {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ปุ่ม/คำอธิบายย้ายออกมานอกการ์ด */}
+        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
+          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+            <Database size={18} className="text-white" />
           </div>
+          <h1 className="text-xl font-semibold text-white">สำรอง & กู้คืนข้อมูล</h1>
+        </div>
+
+        <p className="text-xs text-gray-400 mb-3 px-1">ระบบสำรองข้อมูลอัตโนมัติทุกวัน + กดสำรองเองได้ตลอดเวลา</p>
+
+        <div className="mb-5">
           <button
             onClick={handleCreateBackup}
             disabled={loading || isLoadingBackups}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-brand hover:bg-brand-bg active:scale-[0.98] px-4 py-2.5 rounded-full text-sm font-bold shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-brand border border-brand-border hover:bg-brand-bg active:scale-[0.98] px-4 py-2.5 rounded-full text-sm font-bold shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             {loading ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูลตอนนี้'}

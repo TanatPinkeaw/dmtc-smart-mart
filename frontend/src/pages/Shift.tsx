@@ -13,6 +13,7 @@ import Swal from '../swal';
 import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { performLogout } from '../utils/logout'; // 🐛 FIX — ออกจากระบบต้องเพิกถอน session ฝั่ง backend ด้วย
 import { CloseShiftModal } from '../components/dashboard/CloseShiftModal';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
@@ -92,7 +93,8 @@ export default function Shift() {
       const uploadRes = await api.post('/attendance/upload-photo', fd);
       await api.put('/attendance/check-out', { check_out_photo: uploadRes.data.photo_url });
       Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
-      setTimeout(() => { localStorage.clear(); navigate('/login'); }, 1500);
+      // ⭐️ ลงชื่อออกงานเสร็จแล้วไม่ต้องเตะออกจากระบบ (ตามคำขอผู้ใช้) — กลับหน้า Home ให้เลือกทำอย่างอื่นต่อได้
+      setTimeout(() => navigate('/home'), 1500);
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckOutLoading(false); }
   };
@@ -131,7 +133,9 @@ export default function Shift() {
           confirmButtonText: 'ออกจากระบบ',
           allowOutsideClick: false,
         });
-        localStorage.clear();
+        // ⭐️ F2 — เคสนี้ยังบังคับออกจากระบบอยู่ (ต่างจาก flow ปกติ) เพราะกะยังไม่ปิดจริง
+        //   ห้ามให้ขายต่อระหว่างรอ ADMIN อนุมัติ — แต่ต้องเพิกถอน session ฝั่ง backend ให้ถูกต้อง
+        await performLogout();
         navigate('/login');
         return;
       }
@@ -165,7 +169,7 @@ export default function Shift() {
           <button onClick={() => navigate('/home')} className="ml-auto p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="กลับหน้าหลัก">
             <Home size={16} className="text-white" />
           </button>
-          <button onClick={() => { localStorage.clear(); navigate('/login'); }} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
+          <button onClick={async () => { await performLogout(); navigate('/login'); }} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
             <LogOut size={16} className="text-white" />
           </button>
         </div>
@@ -246,7 +250,7 @@ export default function Shift() {
       shiftSummary={shiftSummary}
       onSubmit={handleCloseShift}
       onClose={() => navigate('/home')}
-      onLogout={() => { localStorage.clear(); navigate('/login'); }}
+      onDone={() => navigate('/home')}
     />
   );
 
