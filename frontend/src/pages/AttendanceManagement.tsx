@@ -85,18 +85,18 @@ export default function AttendanceManagement() {
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-              <ClipboardCheck size={18} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-white">จัดการเข้า-ออกงาน</h1>
-              <p className="text-xs text-white/80">แก้ไขกรณีลืมลงเวลา + ตรวจสอบรูปยืนยันสถานที่</p>
-            </div>
+        {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ปุ่ม/คำอธิบายย้ายออกมานอกการ์ด */}
+        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
+          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+            <ClipboardCheck size={18} className="text-white" />
           </div>
-          <button onClick={handleRunAutoCheckout} disabled={runningAuto} className="flex items-center gap-2 bg-white/15 border border-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 active:scale-95 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <h1 className="text-xl font-semibold text-white">จัดการเข้า-ออกงาน</h1>
+        </div>
+
+        <p className="text-xs text-gray-400 mb-3 px-1">แก้ไขกรณีลืมลงเวลา + ตรวจสอบรูปยืนยันสถานที่</p>
+
+        <div className="mb-5">
+          <button onClick={handleRunAutoCheckout} disabled={runningAuto} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-brand border border-brand-border px-4 py-2.5 rounded-full text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
             <RefreshCw size={15} className={runningAuto ? 'animate-spin' : ''} /> รันตรวจสอบลืมออกงาน
           </button>
         </div>
