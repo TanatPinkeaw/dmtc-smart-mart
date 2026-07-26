@@ -18,13 +18,14 @@ interface CloseShiftModalProps {
   shiftSummary: any;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
-  onLogout: () => void;
+  // ⭐️ เดิมชื่อ onLogout (ปิดกะเสร็จแล้วบังคับออกจากระบบ) — ตอนนี้แค่จบ flow กลับหน้าหลัก
+  onDone: () => void;
 }
 
 export function CloseShiftModal({
   denomCounts, onDenomChange, discrepancyCategory, onDiscrepancyCategoryChange,
   closeNote, onCloseNoteChange, closePhotoPreview, onPhotoSelected,
-  closeLoading, actualCash, shiftSummary, onSubmit, onClose, onLogout,
+  closeLoading, actualCash, shiftSummary, onSubmit, onClose, onDone,
 }: CloseShiftModalProps) {
   return (
     <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -105,7 +106,7 @@ export function CloseShiftModal({
                 </span>
               </div>
             </div>
-            <button onClick={onLogout} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold rounded-full transition-all duration-150 active:scale-[0.98]">ออกจากระบบ</button>
+            <button onClick={onDone} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold rounded-full transition-all duration-150 active:scale-[0.98]">กลับหน้าหลัก</button>
           </div>
         )}
       </div>

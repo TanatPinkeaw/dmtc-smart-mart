@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import Swal from '../swal';
 import { BRAND } from '../theme';
-import api, { setCsrfToken } from '../api';
+import api from '../api';
+import { performLogout } from '../utils/logout';
 import { SocketProvider, useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
@@ -106,19 +107,10 @@ function LayoutInner() {
     Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
       .then(async (r) => {
         if (r.isConfirmed) {
-          try {
-            // ⭐️ Sprint 2 — B5: Call logout endpoint
-            await api.post('/auth/logout');
-          } catch (err) {
-            console.error('Logout error:', err);
-          } finally {
-            // ⭐️ Security remediation — token cookie ถูก backend เคลียร์เองใน /auth/logout แล้ว
-            // เหลือแค่ล้างข้อมูล user (ไม่ลับ) ฝั่ง client + csrf token ในตัวแปร JS
-            localStorage.removeItem('user');
-            localStorage.removeItem('session_mode');
-            setCsrfToken(null);
-            navigate('/login');
-          }
+          // ⭐️ Sprint 2 — B5 / Security remediation: performLogout เรียก POST /auth/logout ให้ backend
+          // เคลียร์ cookie + เพิกถอน token ก่อน แล้วค่อยล้าง user/session_mode/csrf ฝั่ง client
+          await performLogout();
+          navigate('/login');
         }
       });
   };
