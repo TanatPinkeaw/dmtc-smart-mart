@@ -1,9 +1,12 @@
 // ✅ CHANGED: colors → DMTC Mart theme (#F12B6B primary)
-// 🔒 UNCHANGED: all handlers (handleCloseShift, handleAdminCheckOut, handleCheckOutPhotoSelected, handleLogout, fetchDashboardData), socket listeners, all state, Section component logic
+// ✅ CHANGED: ตัดปุ่ม/flow "ลงชื่อออกงาน" (ADMIN) และ "ปิดกะการขาย" (CASHIER) ออกจากหน้านี้ — รวมไป
+//   อยู่ที่หน้า /shift หน้าเดียวแล้ว (ทั้งเข้างานและออกงาน) ตามคำขอผู้ใช้ที่ไม่อยากให้ check-in/out
+//   กระจายอยู่คนละหน้า ดู Shift.tsx สำหรับ flow ใหม่
+// 🔒 UNCHANGED: handleLogout, fetchDashboardData, socket listeners, all remaining state, Section component logic
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, LogOut, ArrowLeft, Users, PiggyBank, Store, ShoppingBag, Package } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, ArrowLeft, Users, PiggyBank, Store, ShoppingBag, Package } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
@@ -16,11 +19,8 @@ import { Section } from '../components/dashboard/Section';
 import { StatCards } from '../components/dashboard/StatCards';
 import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
-import { CloseShiftModal } from '../components/dashboard/CloseShiftModal';
 import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
 import { DetailModal } from '../components/dashboard/DetailModal';
-
-const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
 // ⭐️ FIX: แปลงรหัสสถานะ pre-order (PENDING_VERIFY ฯลฯ) เป็นคำไทยที่พนักงานเข้าใจง่าย
 const ORDER_STATUS_LABELS: Record<string, string> = {
@@ -56,17 +56,7 @@ export default function Dashboard() {
   const [openInsights, setOpenInsights] = useState(true);
   const [openDetails, setOpenDetails] = useState(false);
   const [detailModal, setDetailModal] = useState<{ type: string; title: string } | null>(null);
-  const [showCloseModal, setShowCloseModal] = useState(false);
-  const [denomCounts, setDenomCounts] = useState<Record<number, number | ''>>({});
-  const [closeNote, setCloseNote] = useState('');
-  const [discrepancyCategory, setDiscrepancyCategory] = useState(''); // ⭐️ Sprint 1 — D3
-  const [closeLoading, setCloseLoading] = useState(false);
-  const [closePhoto, setClosePhoto] = useState<File | null>(null);
-  const [closePhotoPreview, setClosePhotoPreview] = useState<string | null>(null);
-  const [shiftSummary, setShiftSummary] = useState<any>(null);
-  const [checkOutLoading, setCheckOutLoading] = useState(false);
   const [healthOk, setHealthOk] = useState<boolean | null>(null); // ⭐️ F10 — null = ยังไม่เช็ค, true = ok, false = degraded/เช็คไม่ได้
-  const actualCash = DENOMINATIONS.reduce((sum, d) => sum + d * (Number(denomCounts[d]) || 0), 0);
   const socket = useSocket();
   const navigate = useNavigate();
 
@@ -146,51 +136,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleCloseShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (actualCash <= 0) return Swal.fire({ icon: 'warning', title: 'กรุณานับเงินสดในลิ้นชักก่อน' });
-    if (!closePhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อนปิดกะ' });
-    setCloseLoading(true);
-    try {
-      const fd = new FormData(); fd.append('photo', closePhoto);
-      const uploadRes = await api.post('/attendance/upload-photo?type=clock-out', fd);
-      const response = await api.post('/shifts/close', { cashier_id: user.id, actual_cash: actualCash, note: closeNote || undefined, discrepancy_category: discrepancyCategory || undefined, cash_breakdown: denomCounts, close_photo: uploadRes.data.photo_url }); // ⭐️ D3
-      // ⭐️ F2 — status 202 = ส่วนต่างเกิน 100 บาท กะยังไม่ปิดจริง ต้องรอ ADMIN คนอื่นอนุมัติก่อน
-      if (response.status === 202) {
-        setShowCloseModal(false);
-        await Swal.fire({
-          icon: 'warning',
-          title: 'ส่วนต่างเงินสดเกิน 100 บาท',
-          text: `${response.data.message || 'กะนี้ต้องรอ ADMIN อนุมัติก่อนถึงจะปิดกะสำเร็จ'} กรุณาออกจากระบบ`,
-          confirmButtonColor: BRAND,
-          confirmButtonText: 'ออกจากระบบ',
-          allowOutsideClick: false,
-        });
-        handleLogout();
-        return;
-      }
-      setShiftSummary(response.data.summary);
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
-    finally { setCloseLoading(false); }
-  };
-
-  const checkOutFileRef = useRef<HTMLInputElement>(null);
-  const handleAdminCheckOut = () => { checkOutFileRef.current?.click(); };
-  const handleCheckOutPhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
-    const confirm = await Swal.fire({ title: 'ลงชื่อออกงาน?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ลงชื่อออกงาน', cancelButtonText: 'ยกเลิก' });
-    if (!confirm.isConfirmed) return;
-    setCheckOutLoading(true);
-    try {
-      const fd = new FormData(); fd.append('photo', file);
-      const uploadRes = await api.post('/attendance/upload-photo', fd);
-      await api.put('/attendance/check-out', { check_out_photo: uploadRes.data.photo_url });
-      Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
-      setTimeout(() => { localStorage.clear(); navigate('/login'); }, 1500);
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
-    finally { setCheckOutLoading(false); }
-  };
-
   if (loading) return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6 pb-24">
       <div className="max-w-7xl mx-auto space-y-5">
@@ -231,18 +176,6 @@ export default function Dashboard() {
             <ArrowLeft size={14} /> กลับไปหน้า POS
           </button>
           <span className="text-xs text-white/90 font-medium hidden sm:block">{user.full_name}</span>
-          {isAdmin ? (
-            <>
-              <button onClick={handleAdminCheckOut} disabled={checkOutLoading} className="flex items-center gap-1.5 bg-white text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                <LogOut size={14} /> {checkOutLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อออกงาน'}
-              </button>
-              <input type="file" accept="image/*" capture="environment" ref={checkOutFileRef} onChange={handleCheckOutPhotoSelected} className="hidden" />
-            </>
-          ) : (
-            <button onClick={() => setShowCloseModal(true)} className="flex items-center gap-1.5 bg-white text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-              <LogOut size={14} /> ปิดกะการขาย
-            </button>
-          )}
         </div>
       </div>
 
@@ -421,25 +354,6 @@ export default function Dashboard() {
             </div>
           </Section>
         </>
-      )}
-
-      {showCloseModal && (
-        <CloseShiftModal
-          denomCounts={denomCounts}
-          onDenomChange={(d, value) => setDenomCounts({ ...denomCounts, [d]: value })}
-          discrepancyCategory={discrepancyCategory}
-          onDiscrepancyCategoryChange={setDiscrepancyCategory}
-          closeNote={closeNote}
-          onCloseNoteChange={setCloseNote}
-          closePhotoPreview={closePhotoPreview}
-          onPhotoSelected={(file) => { setClosePhoto(file); setClosePhotoPreview(URL.createObjectURL(file)); }}
-          closeLoading={closeLoading}
-          actualCash={actualCash}
-          shiftSummary={shiftSummary}
-          onSubmit={handleCloseShift}
-          onClose={() => setShowCloseModal(false)}
-          onLogout={handleLogout}
-        />
       )}
 
       {detailModal && (

@@ -1,13 +1,19 @@
-// ✅ CHANGED: colors, layout → DMTC Mart theme
-// 🔒 UNCHANGED: handleAdminCheckIn, handleOpenShift, checkAttendance, checkCurrentShift, all state/logic
+// ✅ CHANGED: consolidated check-in AND check-out (ADMIN attendance + CASHIER shift open/close) into
+//   this single page — check-out used to live on Dashboard.tsx (ADMIN "ลงชื่อออกงาน" button +
+//   CASHIER "ปิดกะการขาย" → CloseShiftModal), scattered across two pages. Now /shift alone shows
+//   whichever of the 4 states applies (check-in / check-out / open shift / close shift) based on
+//   today's attendance/shift status, reusing CloseShiftModal as-is for the close-shift step.
+// 🔒 UNCHANGED: handleAdminCheckIn, handleOpenShift, checkAttendance/checkCurrentShift logic, denom counting
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, LogOut, Camera, Banknote, Home } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
+import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { CloseShiftModal } from '../components/dashboard/CloseShiftModal';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
@@ -25,18 +31,36 @@ export default function Shift() {
   const [checkInPhotoPreview, setCheckInPhotoPreview] = useState<string | null>(null);
   const [lastClosedCash, setLastClosedCash] = useState<number | null>(null);
 
+  // ⭐️ NEW — ADMIN check-out (ย้ายมาจาก Dashboard.tsx)
+  const [checkOutLoading, setCheckOutLoading] = useState(false);
+  const [checkOutPhoto, setCheckOutPhoto] = useState<File | null>(null);
+  const [checkOutPhotoPreview, setCheckOutPhotoPreview] = useState<string | null>(null);
+
+  // ⭐️ NEW — CASHIER close shift (ย้ายมาจาก Dashboard.tsx)
+  const [hasOpenShift, setHasOpenShift] = useState(false);
+  const [closeNote, setCloseNote] = useState('');
+  const [discrepancyCategory, setDiscrepancyCategory] = useState('');
+  const [closeLoading, setCloseLoading] = useState(false);
+  const [closePhoto, setClosePhoto] = useState<File | null>(null);
+  const [closePhotoPreview, setClosePhotoPreview] = useState<string | null>(null);
+  const [shiftSummary, setShiftSummary] = useState<any>(null);
+
   const openingCash = DENOMINATIONS.reduce((sum, d) => sum + d * (Number(denomCounts[d]) || 0), 0);
+  const actualCash = openingCash; // เลขเดียวกัน ใช้ทั้งนับเงินเปิดกะและปิดกะ (denomCounts คนละรอบ)
 
   useEffect(() => {
     if (isAdmin) {
       const checkAttendance = async () => {
-        try { const res = await api.get('/attendance/today'); if (res.data) { navigate('/dashboard'); return; } setNeedsCheckIn(true); }
+        try { const res = await api.get('/attendance/today'); setNeedsCheckIn(!res.data); }
         catch { setNeedsCheckIn(true); } finally { setPageLoading(false); }
       };
       checkAttendance(); return;
     }
     const checkCurrentShift = async () => {
-      try { const res = await api.get(`/shifts/current?cashier_id=${user.id}`); if (res.data?.id) { navigate('/pos'); return; } } catch {}
+      try {
+        const res = await api.get(`/shifts/current?cashier_id=${user.id}`);
+        if (res.data?.id) { setHasOpenShift(true); setPageLoading(false); return; }
+      } catch {}
       try {
         const lastRes = await api.get(`/shifts/last-closed?cashier_id=${user.id}`);
         if (lastRes.data) { setLastClosedCash(Number(lastRes.data.actual_cash)); if (lastRes.data.closing_cash_breakdown) setDenomCounts(lastRes.data.closing_cash_breakdown); }
@@ -44,7 +68,7 @@ export default function Shift() {
       setPageLoading(false);
     };
     checkCurrentShift();
-  }, [user.id, user.role, navigate]);
+  }, [user.id, user.role]);
 
   const handleAdminCheckIn = async () => {
     if (!checkInPhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อน' });
@@ -56,6 +80,21 @@ export default function Shift() {
       navigate('/dashboard');
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckInLoading(false); }
+  };
+
+  // ⭐️ NEW — ย้ายมาจาก Dashboard.tsx handleCheckOutPhotoSelected (ตัด confirm dialog ออกเพราะ
+  // หน้านี้เป็นจุดหมายที่ตั้งใจมาแล้ว ไม่ต้องถามซ้ำ)
+  const handleAdminCheckOut = async () => {
+    if (!checkOutPhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อน' });
+    setCheckOutLoading(true);
+    try {
+      const fd = new FormData(); fd.append('photo', checkOutPhoto);
+      const uploadRes = await api.post('/attendance/upload-photo', fd);
+      await api.put('/attendance/check-out', { check_out_photo: uploadRes.data.photo_url });
+      Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
+      setTimeout(() => { localStorage.clear(); navigate('/login'); }, 1500);
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    finally { setCheckOutLoading(false); }
   };
 
   const handleOpenShift = async (e: React.FormEvent) => {
@@ -70,6 +109,35 @@ export default function Shift() {
       navigate('/pos');
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
+  };
+
+  // ⭐️ NEW — ย้ายมาจาก Dashboard.tsx handleCloseShift
+  const handleCloseShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (actualCash <= 0) return Swal.fire({ icon: 'warning', title: 'กรุณานับเงินสดในลิ้นชักก่อน' });
+    if (!closePhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อนปิดกะ' });
+    setCloseLoading(true);
+    try {
+      const fd = new FormData(); fd.append('photo', closePhoto);
+      const uploadRes = await api.post('/attendance/upload-photo?type=clock-out', fd);
+      const response = await api.post('/shifts/close', { cashier_id: user.id, actual_cash: actualCash, note: closeNote || undefined, discrepancy_category: discrepancyCategory || undefined, cash_breakdown: denomCounts, close_photo: uploadRes.data.photo_url });
+      // ⭐️ F2 — status 202 = ส่วนต่างเกิน 100 บาท กะยังไม่ปิดจริง ต้องรอ ADMIN คนอื่นอนุมัติก่อน
+      if (response.status === 202) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'ส่วนต่างเงินสดเกิน 100 บาท',
+          text: `${response.data.message || 'กะนี้ต้องรอ ADMIN อนุมัติก่อนถึงจะปิดกะสำเร็จ'} กรุณาออกจากระบบ`,
+          confirmButtonColor: BRAND,
+          confirmButtonText: 'ออกจากระบบ',
+          allowOutsideClick: false,
+        });
+        localStorage.clear();
+        navigate('/login');
+        return;
+      }
+      setShiftSummary(response.data.summary);
+    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
+    finally { setCloseLoading(false); }
   };
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -132,6 +200,54 @@ export default function Shift() {
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
       </button>
     </Card>
+  );
+
+  // ── ADMIN check-out (⭐️ NEW — เดิมอยู่ปุ่ม "ลงชื่อออกงาน" ในหน้า Dashboard) ─────────────────
+  if (isAdmin) return (
+    <Card>
+      <div className="text-center mb-5">
+        <h2 className="text-lg font-bold text-gray-900">ลงชื่อออกงาน</h2>
+        <p className="text-xs text-gray-500 mt-1">ถ่ายรูปยืนยันก่อนออกจากระบบ</p>
+      </div>
+
+      <label className="block cursor-pointer mb-4">
+        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => {
+          const f = e.target.files?.[0]; if (f) { setCheckOutPhoto(f); setCheckOutPhotoPreview(URL.createObjectURL(f)); }
+        }} />
+        {checkOutPhotoPreview
+          ? <img src={checkOutPhotoPreview} alt="preview" className="w-full h-44 object-cover rounded-xl border border-brand-border" />
+          : <div className="w-full h-44 rounded-xl border-2 border-dashed border-brand-border flex flex-col items-center justify-center gap-2 text-brand-mid hover:bg-brand-bg transition-colors duration-150">
+              <Camera size={28} /> <span className="text-sm font-medium">แตะเพื่อถ่ายรูป</span>
+            </div>
+        }
+      </label>
+
+      <button onClick={handleAdminCheckOut} disabled={checkOutLoading}
+        className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+          enabled:bg-gradient-to-br enabled:from-red-500 enabled:to-red-600 disabled:bg-brand-border disabled:opacity-70">
+        {checkOutLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อออกงาน'}
+      </button>
+    </Card>
+  );
+
+  // ── CASHIER close shift (⭐️ NEW — เดิมอยู่ปุ่ม "ปิดกะการขาย" ในหน้า Dashboard) ────────────────
+  if (hasOpenShift) return (
+    <CloseShiftModal
+      denomCounts={denomCounts}
+      onDenomChange={(d, value) => setDenomCounts({ ...denomCounts, [d]: value })}
+      discrepancyCategory={discrepancyCategory}
+      onDiscrepancyCategoryChange={setDiscrepancyCategory}
+      closeNote={closeNote}
+      onCloseNoteChange={setCloseNote}
+      closePhotoPreview={closePhotoPreview}
+      onPhotoSelected={(file) => { setClosePhoto(file); setClosePhotoPreview(URL.createObjectURL(file)); }}
+      closeLoading={closeLoading}
+      actualCash={actualCash}
+      shiftSummary={shiftSummary}
+      onSubmit={handleCloseShift}
+      onClose={() => navigate('/home')}
+      onLogout={() => { localStorage.clear(); navigate('/login'); }}
+    />
   );
 
   // ── Cashier open shift ────────────────────────────────────────────────────────
