@@ -7,6 +7,9 @@ node_modules/
 # โฟลเดอร์รูปภาพ/สลิปที่ผู้ใช้รันขึ้นมา
 uploads/
 
+# โฟลเดอร์ backup ฐานข้อมูล (สร้างโดย createBackup(), มีข้อมูลจริง ห้ามเข้า git)
+backend/backups/
+
 # โฟลเดอร์ Build
 dist/
 build/

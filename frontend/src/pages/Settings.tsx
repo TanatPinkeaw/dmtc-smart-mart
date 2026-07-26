@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download } from 'lucide-react';
+import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 import { useSocket } from '../SocketContext';
@@ -57,6 +57,7 @@ export default function Settings() {
   const [endDate, setEndDate] = useState(getLocalDate());
   const [exportLevel, setExportLevel] = useState<'item' | 'bill' | 'daily'>('item'); // ⭐️ ระดับความละเอียด CSV
   const [exporting, setExporting] = useState(false);
+  const [exportingExecutive, setExportingExecutive] = useState<'excel' | 'csv' | null>(null);
   const [viewingBillItems, setViewingBillItems] = useState<any[] | null>(null);
   const [viewingBillInfo, setViewingBillInfo] = useState<any | null>(null);
   const [vendors, setVendors] = useState<any[]>([]);
@@ -119,6 +120,29 @@ export default function Settings() {
       Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setExporting(false);
+    }
+  };
+  // ⭐️ Phase 4 Part 2 — Executive Summary export (KPI/top-products/category/inventory + full
+  // transaction detail). เดียวกับ handleExportCsv แค่ยิงคนละ endpoint กับคนละนามสกุลไฟล์
+  const handleExportExecutive = async (format: 'excel' | 'csv') => {
+    setExportingExecutive(format);
+    try {
+      const res = await api.get('/reports/executive-export', {
+        params: { startDate, endDate, format },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `executive-summary_${startDate}_ถึง_${endDate}.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setExportingExecutive(null);
     }
   };
   // ⭐️ FIX — โหลดคิวคำขอรีเซ็ตรหัสผ่าน
@@ -377,6 +401,30 @@ export default function Settings() {
                 >
                   <Download size={15} /> {exporting ? 'กำลังสร้างไฟล์...' : 'ดาวน์โหลด CSV'}
                 </button>
+              </div>
+
+              {/* ⭐️ Phase 4 Part 2 — Executive Summary: KPI/สินค้าขายดี/หมวดหมู่/คลังสินค้า
+                  ในไฟล์ Excel 2 ชีท (หรือ CSV เฉพาะรายการธุรกรรม) ใช้ช่วงวันที่เดียวกันด้านบน */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-white border border-brand-border rounded-xl p-2.5">
+                <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 px-1">
+                  <FileSpreadsheet size={14} className="text-brand" /> รายงานสรุปผู้บริหาร (Executive Summary)
+                </span>
+                <div className="flex gap-2 sm:ml-auto">
+                  <button
+                    onClick={() => handleExportExecutive('excel')}
+                    disabled={exportingExecutive !== null}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                    <FileSpreadsheet size={15} /> {exportingExecutive === 'excel' ? 'กำลังสร้างไฟล์...' : 'Export Excel'}
+                  </button>
+                  <button
+                    onClick={() => handleExportExecutive('csv')}
+                    disabled={exportingExecutive !== null}
+                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                    <Download size={15} /> {exportingExecutive === 'csv' ? 'กำลังสร้างไฟล์...' : 'Export CSV'}
+                  </button>
+                </div>
               </div>
               {/* ⭐️ FIX: เดิม table มีแค่ hidden md:block ไม่มี mobile fallback เลย — บนมือถือหน้านี้ว่างเปล่า
                   ไม่เห็นประวัติการขายเลย เพิ่ม card list สำหรับ mobile (< md) ตรงนี้ */}

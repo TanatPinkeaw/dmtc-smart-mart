@@ -140,6 +140,8 @@ const {
 const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
 const { createBackup, restoreBackup } = require('./backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
+const { sendMail } = require('./mailer'); // ⭐️ Phase 4 — backup success/failure notifications
+const reportsExport = require('./reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
 // ⭐️ Sprint 0 — A4: evaluated once at module load = ตอนที่ process นี้ boot ขึ้นมาจริงๆ
 // ใช้เป็นลายนิ้วมือของ "process ที่กำลังรันอยู่ตอนนี้" — ถ้า frontend เห็นค่านี้เปลี่ยนระหว่าง session
@@ -5122,6 +5124,41 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN'), async (req, res) 
   }
 });
 
+// ⭐️ Phase 4 Part 2 — Executive Summary export (Excel with KPI/top-products/category/inventory
+// sheet + full transaction detail sheet, or a CSV fallback of just the transaction detail).
+app.get('/api/reports/executive-export', requireRole('ADMIN'), async (req, res) => {
+  const { startDate, endDate, format = 'excel' } = req.query;
+  if (format !== 'excel' && format !== 'csv') {
+    return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });
+  }
+  try {
+    const rows = await reportsExport.fetchLineItems(pool, startDate, endDate);
+    const range = startDate && endDate ? `_${startDate}_to_${endDate}` : ''; // ⭐️ ASCII เท่านั้นใน HTTP header
+
+    if (format === 'csv') {
+      const csv = reportsExport.buildCsv(rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="executive-summary${range}.csv"`);
+      return res.send(csv);
+    }
+
+    const [storeName, inventory] = await Promise.all([
+      reportsExport.fetchStoreName(pool),
+      reportsExport.fetchInventorySummary(pool),
+    ]);
+    const kpis = reportsExport.aggregate(rows);
+    const workbook = await reportsExport.buildWorkbook({ storeName, startDate, endDate, kpis, inventory, rows });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="executive-summary${range}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[executive-export] ERROR:', err.code || '', err.sqlMessage || err.message);
+    res.status(500).json({ error: err.sqlMessage || err.message });
+  }
+});
+
 // ⭐️ Task 12A — centralized error handler (must be the LAST app.use()).
 // Express 5 auto-forwards rejected promises from async route handlers here, and multer
 // upload errors (bad mimetype / oversized file) also land here via next(err).
@@ -5195,9 +5232,17 @@ server.listen(PORT, '0.0.0.0', () => {
         console.log(`[CRON] ✅ Backup successful: ${result.filename}`);
 
         // Send email notification if enabled
-        if (config.ENABLE_BACKUP_EMAIL) {
-          // TODO: implement email sending if needed
-          console.log(`[CRON] Email would be sent to ${config.ADMIN_EMAIL}`);
+        if (config.ENABLE_BACKUP_EMAIL && config.ADMIN_EMAIL) {
+          await sendMail({
+            to: config.ADMIN_EMAIL,
+            subject: `✅ สำรองข้อมูลสำเร็จ ${result.filename} — DMTC Mart`,
+            html: `<div style="font-family:sans-serif;">
+              <h2>สำรองข้อมูลประจำวันสำเร็จ</h2>
+              <p>ไฟล์: <b>${result.filename}</b></p>
+              <p>ขนาด: <b>${result.size} MB</b></p>
+              <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันตี 2 — DMTC Mart</p>
+            </div>`,
+          });
         }
       } else {
         console.log('[CRON] ⏭️  Backup skipped (already exists today)');
@@ -5206,9 +5251,16 @@ server.listen(PORT, '0.0.0.0', () => {
       console.error('[CRON] ❌ Backup failed:', err.message);
 
       // Send error email if enabled
-      if (config.ENABLE_BACKUP_EMAIL) {
-        // TODO: implement email error notification if needed
-        console.log(`[CRON] Error email would be sent to ${config.ADMIN_EMAIL}`);
+      if (config.ENABLE_BACKUP_EMAIL && config.ADMIN_EMAIL) {
+        await sendMail({
+          to: config.ADMIN_EMAIL,
+          subject: `❌ สำรองข้อมูลล้มเหลว — DMTC Mart`,
+          html: `<div style="font-family:sans-serif;">
+            <h2>สำรองข้อมูลประจำวันล้มเหลว</h2>
+            <p style="color:#c00;">${err.message}</p>
+            <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันตี 2 — DMTC Mart</p>
+          </div>`,
+        });
       }
     }
   });

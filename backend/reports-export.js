@@ -1,0 +1,319 @@
+// ⭐️ Phase 4 Part 2 — Executive Summary export (Excel + CSV).
+//
+// Reuses the same combined sales+orders query pattern already established in
+// /api/reports/export/sales-csv (server.js) and the same gross-profit formula used in
+// /api/reports/gross-profit / /api/reports/profit-summary: normal products earn
+// subtotal - cost*qty, consigned (vendor) products earn subtotal * gp_rate/100 for the co-op,
+// the rest goes to the vendor.
+//
+// One query fetches every line item in the date range; KPIs / top products / category summary
+// are all aggregated from that same result set in JS rather than four separate queries — at this
+// project's scale (a single school co-op) that's simpler and cheaper than round-tripping the DB
+// four times for numbers that are all derived from the same rows.
+
+const LOW_STOCK_THRESHOLD = 10; // ⭐️ matches server.js's LOW_STOCK_THRESHOLD / /api/inventory/low-stock
+
+async function fetchLineItems(pool, startDate, endDate) {
+  const hasRange = !!(startDate && endDate);
+  const params = [];
+  let wSale = "s.status = 'COMPLETED'";
+  let wOrder = "o.status = 'COMPLETED'";
+  if (hasRange) {
+    wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+    wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+    params.push(startDate, endDate, startDate, endDate);
+  }
+
+  const profitExpr = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal * p.gp_rate/100 ELSE it.subtotal - p.cost*it.quantity END`;
+
+  const [rows] = await pool.query(
+    `SELECT * FROM (
+      SELECT s.created_at AS sort_at,
+             DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+             'POS' AS channel, s.id AS transaction_id,
+             p.barcode, p.name AS product_name, c.name AS category_name,
+             p.cost, it.price, it.quantity, it.subtotal,
+             ${profitExpr} AS profit, s.payment_method
+      FROM sale_items it
+      JOIN sales s ON it.sale_id = s.id
+      JOIN products p ON it.product_id = p.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE ${wSale}
+      UNION ALL
+      SELECT o.completed_at AS sort_at,
+             DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+             'พรีออเดอร์' AS channel, o.id AS transaction_id,
+             p.barcode, p.name AS product_name, c.name AS category_name,
+             p.cost, it.price, it.quantity, it.subtotal,
+             ${profitExpr} AS profit, o.payment_method
+      FROM order_items it
+      JOIN orders o ON it.order_id = o.id
+      JOIN products p ON it.product_id = p.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE ${wOrder}
+    ) t ORDER BY sort_at DESC`,
+    params
+  );
+  return rows;
+}
+
+async function fetchInventorySummary(pool) {
+  const [[row]] = await pool.query(
+    `SELECT COALESCE(SUM(stock * cost), 0) AS total_stock_value,
+            SUM(CASE WHEN stock <= ? THEN 1 ELSE 0 END) AS low_stock_count
+     FROM products WHERE is_active = TRUE`,
+    [LOW_STOCK_THRESHOLD]
+  );
+  return {
+    totalStockValue: Number(row.total_stock_value),
+    lowStockCount: Number(row.low_stock_count),
+  };
+}
+
+async function fetchStoreName(pool) {
+  const [rows] = await pool.query('SELECT store_name FROM settings WHERE id = 1');
+  return rows[0]?.store_name || 'สหกรณ์วิทยาลัย';
+}
+
+function aggregate(rows) {
+  let totalRevenue = 0;
+  let totalProfit = 0;
+  const transactionKeys = new Set(); // channel+id, since sales.id and orders.id are separate sequences
+  const byProduct = new Map();
+  const byCategory = new Map();
+
+  for (const r of rows) {
+    const revenue = Number(r.subtotal);
+    const profit = Number(r.profit);
+    totalRevenue += revenue;
+    totalProfit += profit;
+    transactionKeys.add(`${r.channel}-${r.transaction_id}`);
+
+    const product = byProduct.get(r.product_name) || {
+      name: r.product_name,
+      category: r.category_name || 'ไม่ระบุหมวดหมู่',
+      qty: 0,
+      revenue: 0,
+      profit: 0,
+    };
+    product.qty += Number(r.quantity);
+    product.revenue += revenue;
+    product.profit += profit;
+    byProduct.set(r.product_name, product);
+
+    const catKey = r.category_name || 'ไม่ระบุหมวดหมู่';
+    const category = byCategory.get(catKey) || { name: catKey, sales: 0 };
+    category.sales += revenue;
+    byCategory.set(catKey, category);
+  }
+
+  const totalOrders = transactionKeys.size;
+  const topProducts = [...byProduct.values()]
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+  const categorySummary = [...byCategory.values()]
+    .sort((a, b) => b.sales - a.sales)
+    .map((c) => ({ ...c, percentage: totalRevenue > 0 ? (c.sales / totalRevenue) * 100 : 0 }));
+
+  return {
+    totalRevenue,
+    totalProfit,
+    totalOrders,
+    aov: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+    topProducts,
+    categorySummary,
+  };
+}
+
+// ⭐️ ExcelJS has no true "auto-fit" — approximate it from the longest rendered value per column.
+function autoFitColumns(sheet, headers, rows, minWidth = 10, maxWidth = 40) {
+  headers.forEach((header, i) => {
+    let maxLen = String(header).length;
+    for (const row of rows) {
+      const len = String(row[i] ?? '').length;
+      if (len > maxLen) maxLen = len;
+    }
+    sheet.getColumn(i + 1).width = Math.min(Math.max(maxLen + 2, minWidth), maxWidth);
+  });
+}
+
+const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } };
+const HEADER_FONT = { bold: true, color: { argb: 'FFFFFFFF' } };
+const THB_FORMAT = '#,##0.00 "฿"';
+const THIN_BORDER = { style: 'thin', color: { argb: 'FFCCCCCC' } };
+
+function styleHeaderRow(row) {
+  row.eachCell((cell) => {
+    cell.fill = HEADER_FILL;
+    cell.font = HEADER_FONT;
+    cell.border = { top: THIN_BORDER, left: THIN_BORDER, bottom: THIN_BORDER, right: THIN_BORDER };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+}
+
+function addGridlines(sheet, fromRow, toRow, colCount) {
+  for (let r = fromRow; r <= toRow; r++) {
+    for (let c = 1; c <= colCount; c++) {
+      sheet.getCell(r, c).border = { top: THIN_BORDER, left: THIN_BORDER, bottom: THIN_BORDER, right: THIN_BORDER };
+    }
+  }
+}
+
+async function buildWorkbook({ storeName, startDate, endDate, kpis, inventory, rows }) {
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'DMTC Mart';
+  workbook.created = new Date();
+
+  // ===== Sheet 1: Executive Summary =====
+  const summary = workbook.addWorksheet('Executive Summary');
+  const rangeLabel = startDate && endDate ? `${startDate} ถึง ${endDate}` : 'ทั้งหมด (ไม่ระบุช่วงวันที่)';
+
+  summary.mergeCells('A1:F1');
+  summary.getCell('A1').value = storeName;
+  summary.getCell('A1').font = { bold: true, size: 16 };
+
+  summary.mergeCells('A2:F2');
+  summary.getCell('A2').value = 'Executive Summary Report';
+  summary.getCell('A2').font = { bold: true, size: 13, color: { argb: 'FF2E7D32' } };
+
+  summary.getCell('A3').value = 'ช่วงวันที่:';
+  summary.getCell('B3').value = rangeLabel;
+  summary.getCell('A4').value = 'วันที่สร้างรายงาน:';
+  summary.getCell('B4').value = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+  let r = 6;
+  summary.getCell(`A${r}`).value = 'ตัวชี้วัดหลัก (KPI)';
+  summary.getCell(`A${r}`).font = { bold: true, size: 12 };
+  r += 1;
+  const kpiRows = [
+    ['ยอดขายรวม (Total Sales Revenue)', kpis.totalRevenue],
+    ['กำไรขั้นต้นรวม (Total Gross Profit)', kpis.totalProfit],
+    ['จำนวนบิลทั้งหมด (Total Orders)', kpis.totalOrders],
+    ['ยอดเฉลี่ยต่อบิล (AOV)', kpis.aov],
+  ];
+  for (const [label, value] of kpiRows) {
+    summary.getCell(`A${r}`).value = label;
+    const cell = summary.getCell(`B${r}`);
+    cell.value = value;
+    if (label !== 'จำนวนบิลทั้งหมด (Total Orders)') cell.numFmt = THB_FORMAT;
+    r += 1;
+  }
+
+  r += 1;
+  summary.getCell(`A${r}`).value = 'สินค้าขายดี 10 อันดับ (Top 10 Products)';
+  summary.getCell(`A${r}`).font = { bold: true, size: 12 };
+  r += 1;
+  const topHeaderRow = r;
+  const topHeaders = ['อันดับ', 'สินค้า', 'หมวดหมู่', 'จำนวนที่ขายได้', 'ยอดขายรวม', 'กำไรรวม'];
+  summary.getRow(r).values = topHeaders;
+  styleHeaderRow(summary.getRow(r));
+  r += 1;
+  const topStart = r;
+  kpis.topProducts.forEach((p, i) => {
+    summary.getRow(r).values = [i + 1, p.name, p.category, p.qty, p.revenue, p.profit];
+    summary.getCell(`E${r}`).numFmt = THB_FORMAT;
+    summary.getCell(`F${r}`).numFmt = THB_FORMAT;
+    r += 1;
+  });
+  if (kpis.topProducts.length > 0) addGridlines(summary, topStart, r - 1, topHeaders.length);
+
+  r += 1;
+  summary.getCell(`A${r}`).value = 'สรุปยอดขายตามหมวดหมู่ (Category Summary)';
+  summary.getCell(`A${r}`).font = { bold: true, size: 12 };
+  r += 1;
+  summary.getRow(r).values = ['หมวดหมู่', 'ยอดขายรวม', 'สัดส่วน (%)'];
+  styleHeaderRow(summary.getRow(r));
+  r += 1;
+  const catStart = r;
+  kpis.categorySummary.forEach((c) => {
+    summary.getRow(r).values = [c.name, c.sales, c.percentage];
+    summary.getCell(`B${r}`).numFmt = THB_FORMAT;
+    summary.getCell(`C${r}`).numFmt = '0.0"%"';
+    r += 1;
+  });
+  if (kpis.categorySummary.length > 0) addGridlines(summary, catStart, r - 1, 3);
+
+  r += 1;
+  summary.getCell(`A${r}`).value = 'สรุปคลังสินค้า (Inventory Summary)';
+  summary.getCell(`A${r}`).font = { bold: true, size: 12 };
+  r += 1;
+  summary.getCell(`A${r}`).value = 'มูลค่าสต๊อกรวม (Total Stock Value)';
+  summary.getCell(`B${r}`).value = inventory.totalStockValue;
+  summary.getCell(`B${r}`).numFmt = THB_FORMAT;
+  r += 1;
+  summary.getCell(`A${r}`).value = `จำนวนสินค้าใกล้หมด (Low-stock Items, ≤${LOW_STOCK_THRESHOLD} ชิ้น)`;
+  summary.getCell(`B${r}`).value = inventory.lowStockCount;
+
+  summary.getColumn(1).width = 42;
+  summary.getColumn(2).width = 22;
+  summary.getColumn(3).width = 18;
+  summary.getColumn(4).width = 16;
+  summary.getColumn(5).width = 16;
+  summary.getColumn(6).width = 16;
+
+  // ===== Sheet 2: Transaction Details =====
+  const detail = workbook.addWorksheet('Transaction Details');
+  const detailHeaders = [
+    'วันที่-เวลา', 'เลขที่ธุรกรรม', 'บาร์โค้ด/SKU', 'สินค้า', 'หมวดหมู่',
+    'ต้นทุน', 'ราคา', 'จำนวน', 'ยอดรวม', 'ช่องทางชำระ',
+  ];
+  detail.getRow(1).values = detailHeaders;
+  styleHeaderRow(detail.getRow(1));
+
+  const detailRows = rows.map((row) => [
+    row.dt,
+    `${row.channel}-${row.transaction_id}`,
+    row.barcode || '-',
+    row.product_name,
+    row.category_name || 'ไม่ระบุหมวดหมู่',
+    Number(row.cost),
+    Number(row.price),
+    Number(row.quantity),
+    Number(row.subtotal),
+    row.payment_method === 'QR' ? 'โอน/QR' : row.payment_method === 'CASH' ? 'เงินสด' : row.payment_method,
+  ]);
+  detailRows.forEach((values, i) => {
+    const rowIdx = i + 2;
+    detail.getRow(rowIdx).values = values;
+    detail.getCell(`F${rowIdx}`).numFmt = THB_FORMAT;
+    detail.getCell(`G${rowIdx}`).numFmt = THB_FORMAT;
+    detail.getCell(`I${rowIdx}`).numFmt = THB_FORMAT;
+  });
+  if (detailRows.length > 0) addGridlines(detail, 2, detailRows.length + 1, detailHeaders.length);
+  autoFitColumns(detail, detailHeaders, detailRows);
+
+  return workbook;
+}
+
+function buildCsv(rows) {
+  const headers = [
+    'วันที่-เวลา', 'เลขที่ธุรกรรม', 'บาร์โค้ด/SKU', 'สินค้า', 'หมวดหมู่',
+    'ต้นทุน', 'ราคา', 'จำนวน', 'ยอดรวม', 'ช่องทางชำระ',
+  ];
+  const dataRows = rows.map((row) => [
+    row.dt,
+    `${row.channel}-${row.transaction_id}`,
+    row.barcode || '-',
+    row.product_name,
+    row.category_name || 'ไม่ระบุหมวดหมู่',
+    Number(row.cost).toFixed(2),
+    Number(row.price).toFixed(2),
+    row.quantity,
+    Number(row.subtotal).toFixed(2),
+    row.payment_method === 'QR' ? 'โอน/QR' : row.payment_method === 'CASH' ? 'เงินสด' : row.payment_method,
+  ]);
+  const csv = [headers, ...dataRows]
+    .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  return '﻿' + csv; // BOM so Excel reads Thai text correctly
+}
+
+module.exports = {
+  fetchLineItems,
+  fetchInventorySummary,
+  fetchStoreName,
+  aggregate,
+  buildWorkbook,
+  buildCsv,
+};
