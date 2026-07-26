@@ -76,10 +76,21 @@ async function dumpDatabaseToSql(pool) {
 // ด้วย ";\n" บรรทัดเดียว ไม่มี newline ดิบแทรกกลาง statement เพราะ pool.escape() แปลง \n ในข้อมูลเป็น
 // อักขระ \\n literal ไปแล้วตอน dump) จึง split ด้วย ";\n" ได้อย่างปลอดภัย โดยไม่ต้องพึ่ง SQL parser ภายนอก
 async function restoreDatabaseFromSql(pool, sql) {
-  const statements = sql
+  // ⭐️ Bug fix — strip full-line comments BEFORE splitting on ';\n', not after. The dump's leading
+  // "-- DMTC Mart backup..." line has no trailing ';\n', so it used to glue onto the very next
+  // statement (SET FOREIGN_KEY_CHECKS=0). That merged chunk starts with '--', so the old
+  // post-split filter threw the WHOLE thing away — meaning FOREIGN_KEY_CHECKS was never actually
+  // set to 0, and restore failed on the first DROP TABLE referenced by another table's FK (i.e.
+  // any restore of this schema, every time — not just missing-file cases).
+  const sqlWithoutComments = sql
+    .split('\n')
+    .filter(line => !line.trimStart().startsWith('--'))
+    .join('\n');
+
+  const statements = sqlWithoutComments
     .split(';\n')
     .map(s => s.trim())
-    .filter(s => s.length > 0 && !s.startsWith('--'));
+    .filter(s => s.length > 0);
 
   const conn = await pool.getConnection();
   try {

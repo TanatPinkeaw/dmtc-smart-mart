@@ -4773,6 +4773,17 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
 
     const backup = backups[0];
 
+    // ⭐️ backup_path ชี้ไปไฟล์บน local disk (backend/backups/) — บน Render filesystem เป็น ephemeral
+    // (เหมือน uploads/ ก่อนย้ายไป Cloudinary) redeploy/restart ล้างไฟล์ทิ้งได้ แต่ row ใน DB ยังอยู่
+    // เช็คไฟล์จริงก่อน แยก error case นี้ออกจาก error อื่นๆ ให้ admin เห็นสาเหตุจริงทันที ไม่ใช่ 500 เปล่าๆ
+    if (!fs.existsSync(backup.backup_path)) {
+      console.error(`[restore] ไม่พบไฟล์ backup บน disk: ${backup.backup_path} (id=${id}) — อาจถูกลบตอน Render redeploy/restart เพราะ filesystem เป็น ephemeral`);
+      return res.status(410).json({
+        error: `ไม่พบไฟล์ backup บนเซิร์ฟเวอร์ (${backup.backup_path}) — ไฟล์อาจถูกลบไปตอน redeploy/restart เพราะ Render filesystem ไม่ถาวร กู้คืนจากไฟล์นี้ไม่ได้แล้ว ต้องใช้ backup อันใหม่กว่า`,
+        code: 'BACKUP_FILE_MISSING',
+      });
+    }
+
     // Perform restore
     await restoreBackup(pool, backup.backup_path);
 
@@ -4784,9 +4795,12 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
 
     res.json({ success: true, message: `Restored from ${backup.filename}` });
   } catch (err) {
-    console.error('[500]', err.message);
+    // ⭐️ endpoint นี้ ADMIN เท่านั้น (requireRole('ADMIN')) — โชว์ error จริงได้ปลอดภัย ไม่ใช่ user ทั่วไป
+    // เหมือน pattern ที่ใช้ใน /api/reports/export/sales-csv และ /api/reports/executive-export
+    console.error('[restore] ERROR:', err.code || '', err.sqlMessage || err.message);
+    console.error(err.stack);
 
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    res.status(500).json({ error: err.sqlMessage || err.message });
   }
 });
 
