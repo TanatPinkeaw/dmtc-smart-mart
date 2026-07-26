@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag } from 'lucide-react';
+import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock } from 'lucide-react';
 import api from '../api';
 import { performLogout } from '../utils/logout';
 import Swal from '../swal';
@@ -25,6 +25,12 @@ export default function Home() {
   const [productCount, setProductCount] = useState(0);
   const [myHours, setMyHours] = useState<MyHours | null>(null); // ⭐️ Home page feature — ชม.ทำงาน/ค่าจ้างเดือนนี้
   const [activePromo, setActivePromo] = useState<ActivePromo | null>(null); // ⭐️ Design-ref — แบนเนอร์โปรฯ สำหรับสมาชิก
+  // ⭐️ CASHIER ที่ยังไม่เปิดกะ ใช้งานได้เท่าสมาชิก — ล็อกการ์ดฝั่งทำงานไว้จนกว่าจะเปิดกะ
+  //   (ADMIN ไม่ต้องเช็ค เข้าได้ตลอด) null = ยังโหลดไม่เสร็จ ระหว่างนี้ยังไม่ล็อกเพื่อกันจอกระพริบ
+  const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
+  const isCashier = user.role === 'CASHIER';
+  // ล็อกเฉพาะตอนรู้ผลแล้วว่าไม่มีกะเปิดจริงๆ
+  const workLocked = isCashier && hasOpenShift === false;
 
   useEffect(() => {
     if (isStaff) {
@@ -34,8 +40,13 @@ export default function Home() {
     } else {
       api.get('/promotions/active').then(res => setActivePromo((res.data || [])[0] || null)).catch(() => {});
     }
+    if (isCashier) {
+      api.get(`/shifts/current?cashier_id=${user.id}`)
+        .then(res => setHasOpenShift(!!res.data?.id))
+        .catch(() => setHasOpenShift(null)); // เรียกไม่ได้ = ไม่ล็อก ปล่อยให้ backend เป็นคนกัน
+    }
     api.get('/products').then(res => setProductCount(res.data.length)).catch(() => {});
-  }, [isStaff]);
+  }, [isStaff, isCashier, user.id]);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -67,21 +78,23 @@ export default function Home() {
       badge: productCount > 0 ? `${productCount} รายการ` : null,
       onClick: () => goTo('shop', '/pre-order'),
     },
+    // ⭐️ 3 การ์ดนี้ล็อกพร้อมกันตอน CASHIER ยังไม่เปิดกะ — ล็อกแค่ POS ใบเดียวไม่พอ เพราะกดใบอื่น
+    //   จะตั้ง session_mode เป็น 'work' ทำให้เมนู staff (รวมลิงก์ POS) กลับมาโผล่ = อ้อมกติกาได้
     {
-      key: 'pos', show: isStaff, icon: CreditCard,
-      title: 'หน้าขาย (POS)', subtitle: 'ขายสินค้า/รับชำระเงิน',
+      key: 'pos', show: isStaff, icon: CreditCard, locked: workLocked,
+      title: 'หน้าขาย (POS)', subtitle: workLocked ? 'ต้องเปิดกะก่อนถึงจะขายได้' : 'ขายสินค้า/รับชำระเงิน',
       badge: null,
       onClick: () => goTo('work', '/pos'),
     },
     {
-      key: 'dashboard', show: isStaff, icon: LayoutDashboard,
-      title: 'สรุปยอดขาย', subtitle: 'รายงาน/สถิติการขาย',
+      key: 'dashboard', show: isStaff, icon: LayoutDashboard, locked: workLocked,
+      title: 'สรุปยอดขาย', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'รายงาน/สถิติการขาย',
       badge: summary ? `วันนี้ ฿${Number(summary.total_sales).toLocaleString()}` : null,
       onClick: () => goTo('work', '/dashboard'),
     },
     {
-      key: 'inventory', show: isStaff, icon: Boxes,
-      title: 'คลังสินค้า', subtitle: 'จัดการสินค้าและสต๊อก',
+      key: 'inventory', show: isStaff, icon: Boxes, locked: workLocked,
+      title: 'คลังสินค้า', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'จัดการสินค้าและสต๊อก',
       badge: lowStockCount > 0 ? `${lowStockCount} ใกล้หมด` : null,
       onClick: () => goTo('work', '/inventory'),
     },
@@ -177,25 +190,35 @@ export default function Home() {
         <div className="space-y-3">
           {modules.map(m => {
             const Icon = m.icon;
+            // ⭐️ การ์ดที่ถูกล็อก (CASHIER ยังไม่เปิดกะ) — โชว์ไว้แบบจางๆ พร้อมบอกเหตุผล ดีกว่าซ่อนหาย
+            //   ให้รู้ว่ามีเมนูนี้อยู่ แค่ต้องเปิดกะก่อน (การ์ด "จัดการกะการขาย" ไม่ถูกล็อกอยู่แล้ว)
+            const locked = !!m.locked;
             return (
               <button
                 key={m.key}
                 onClick={m.onClick}
-                className="w-full flex items-center gap-3 bg-white border border-brand-border rounded-3xl shadow-sm p-4 text-left hover:border-brand-mid hover:shadow-md active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                disabled={locked}
+                aria-disabled={locked}
+                title={locked ? 'ต้องเปิดกะการขายก่อนถึงจะใช้เมนูนี้ได้' : undefined}
+                className={`w-full flex items-center gap-3 bg-white border rounded-3xl shadow-sm p-4 text-left transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                  locked
+                    ? 'border-brand-border opacity-55 cursor-not-allowed'
+                    : 'border-brand-border hover:border-brand-mid hover:shadow-md active:scale-[0.98]'
+                }`}
               >
-                <div className="w-11 h-11 bg-brand-bg rounded-xl flex items-center justify-center shrink-0">
-                  <Icon size={20} className="text-brand" />
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${locked ? 'bg-gray-100' : 'bg-brand-bg'}`}>
+                  {locked ? <Lock size={18} className="text-gray-400" /> : <Icon size={20} className="text-brand" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-gray-900 text-sm truncate">{m.title}</p>
-                    {m.badge && (
+                    <p className={`font-bold text-sm truncate ${locked ? 'text-gray-500' : 'text-gray-900'}`}>{m.title}</p>
+                    {m.badge && !locked && (
                       <span className="shrink-0 text-[10px] font-bold text-brand bg-brand-bg px-2 py-0.5 rounded-full">{m.badge}</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 font-medium truncate">{m.subtitle}</p>
+                  <p className={`text-xs font-medium truncate ${locked ? 'text-amber-600' : 'text-gray-400'}`}>{m.subtitle}</p>
                 </div>
-                <ChevronRight size={18} className="text-gray-300 shrink-0" />
+                {!locked && <ChevronRight size={18} className="text-gray-300 shrink-0" />}
               </button>
             );
           })}

@@ -65,8 +65,11 @@ export default function Login() {
       // 🐛 FIX — ต้องแยก undefined (backend รุ่นเก่ายังไม่ deploy = ไม่มี field นี้) ออกจาก false
       //   ไม่งั้น `undefined ? 'work' : 'shop'` จะเหวี่ยง staff ทุกคนไปโหมดซื้อของ ทั้งที่เข้างานอยู่จริง
       //   กรณีไม่มี field ให้คงพฤติกรรมเดิม (ไม่ตั้งค่า = Layout ถือว่าเป็น staff) จนกว่า backend จะอัปเดต
+      // ⭐️ ADMIN เข้าโหมดทำงานเสมอ ไม่ต้องลงชื่อเข้างานก่อน (งานหลังบ้านไม่ใช่กะขายของ)
+      //   กติกาเช็คกะใช้กับ CASHIER เท่านั้น
       const workFlag = response.data.has_active_work_session;
-      if (workFlag === undefined) localStorage.removeItem('session_mode');
+      if (response.data.user.role === 'ADMIN') localStorage.setItem('session_mode', 'work');
+      else if (workFlag === undefined) localStorage.removeItem('session_mode');
       else localStorage.setItem('session_mode', workFlag ? 'work' : 'shop');
       // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ
       navigate('/home');

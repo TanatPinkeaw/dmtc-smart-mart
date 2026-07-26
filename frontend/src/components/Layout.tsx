@@ -33,8 +33,11 @@ function LayoutInner() {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(user.profile_image_url || null);
 
   const sessionMode = localStorage.getItem('session_mode');
-  const isStaff = ['ADMIN', 'CASHIER'].includes(user.role) && sessionMode !== 'shop';
-  const isAdmin = isStaff && user.role === 'ADMIN';
+  // ⭐️ ADMIN ไม่ถูกกรองด้วยสถานะเข้างาน — งานหลังบ้าน (ตั้งค่า/รายงาน/จัดการพนักงาน) ไม่ใช่กะขายของ
+  //   จะบังคับให้ลงชื่อเข้างานก่อนถึงจะเข้าเมนูผู้จัดการได้ไม่สมเหตุสมผล
+  //   ส่วน CASHIER ยังกรองตามโหมด (ไม่ได้เปิดกะ = ใช้งานได้เท่าสมาชิก) ตามที่ตกลงไว้
+  const isStaff = user.role === 'ADMIN' || (user.role === 'CASHIER' && sessionMode !== 'shop');
+  const isAdmin = user.role === 'ADMIN';
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const fetchNotificationsAndBadge = async () => {

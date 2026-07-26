@@ -2568,6 +2568,19 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
     const [openShiftRows] = await conn.query(`SELECT id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1`, [cashier_id]);
     const shiftId = openShiftRows[0]?.id || null;
 
+    // 🐛 FIX (เงินหาย) — เดิมถ้าไม่มีกะเปิดอยู่ บิลจะถูกบันทึกด้วย shift_id = NULL เฉยๆ คือ "ขายผ่าน"
+    //   รับเงินสด ตัดสต๊อก ออกใบเสร็จครบ แต่เงินก้อนนั้นไม่ถูกนับเข้ากะไหนเลย พอปิดกะยอดที่ควรมีจึงไม่ตรง
+    //   และตามไม่ได้ว่าเงินไปอยู่กับใคร — บล็อกไปเลยดีกว่าปล่อยให้เกิดเงินที่ไม่มีเจ้าของ
+    //   จำกัดเฉพาะ CASHIER เพราะ ADMIN เปิดกะผ่าน UI ไม่ได้ (หน้า /shift ส่ง ADMIN ไปลงชื่อเข้า-ออกงานแทน)
+    //   ถ้าบล็อก ADMIN ด้วยจะขายไม่ได้เลย — ดูหมายเหตุที่ฝากไว้ให้ผู้ใช้ตัดสินใจเรื่องนี้ต่อ
+    if (!shiftId && req.user.role === 'CASHIER') {
+      await conn.rollback();
+      return res.status(400).json({
+        error: 'ยังไม่ได้เปิดกะการขาย กรุณาเปิดกะก่อนเริ่มขายสินค้า',
+        code: 'NO_OPEN_SHIFT',
+      });
+    }
+
     // 3. สร้างหัวบิลใบเสร็จ (ผูก member_id, promotion_id, discount_amount, points_redeemed, shift_id ลงไป)
     // ⭐️ Sprint 2 — B6: Store idempotency_key for offline handling
     const idempotencyKey = req.headers['idempotency-key'];
