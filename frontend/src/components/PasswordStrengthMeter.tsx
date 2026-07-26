@@ -15,10 +15,10 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
   };
 
   const strengthLabels = {
-    weak: 'Weak',
-    fair: 'Fair',
-    good: 'Good',
-    strong: 'Strong'
+    weak: 'อ่อน',
+    fair: 'พอใช้',
+    good: 'ดี',
+    strong: 'แข็งแรง'
   };
 
   return (
@@ -53,27 +53,27 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
           <div className="text-gray-600 space-y-0.5 pt-1">
             {password.length >= 8 && (
               <p className="flex items-center gap-1 text-green-600">
-                <span className="text-green-500">✓</span> At least 8 characters
+                <span className="text-green-500">✓</span> ยาวอย่างน้อย 8 ตัวอักษร
               </p>
             )}
             {/[A-Z]/.test(password) && (
               <p className="flex items-center gap-1 text-green-600">
-                <span className="text-green-500">✓</span> Contains uppercase letter
+                <span className="text-green-500">✓</span> มีตัวพิมพ์ใหญ่
               </p>
             )}
             {/[a-z]/.test(password) && (
               <p className="flex items-center gap-1 text-green-600">
-                <span className="text-green-500">✓</span> Contains lowercase letter
+                <span className="text-green-500">✓</span> มีตัวพิมพ์เล็ก
               </p>
             )}
             {/[0-9]/.test(password) && (
               <p className="flex items-center gap-1 text-green-600">
-                <span className="text-green-500">✓</span> Contains number
+                <span className="text-green-500">✓</span> มีตัวเลข
               </p>
             )}
             {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) && (
               <p className="flex items-center gap-1 text-green-600">
-                <span className="text-green-500">✓</span> Contains special character (bonus)
+                <span className="text-green-500">✓</span> มีอักขระพิเศษ (คะแนนโบนัส)
               </p>
             )}
           </div>
