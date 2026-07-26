@@ -126,7 +126,7 @@ export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSum
               <BarChart data={topProducts.slice(0, 5)} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: '#9CA3AF', fontWeight: 600 }} axisLine={false} tickLine={false} width={70} />
-                <Tooltip formatter={(v: number) => [`${v} ชิ้น`, '']} contentStyle={{ border: '1px solid #F6C7C7', borderRadius: 12, fontSize: 11, fontWeight: 700 }} />
+                <Tooltip formatter={(value) => [`${value} ชิ้น`, '']} contentStyle={{ border: '1px solid #F6C7C7', borderRadius: 12, fontSize: 11, fontWeight: 700 }} />
                 <Bar dataKey="total_quantity" fill="#F12B6B" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
