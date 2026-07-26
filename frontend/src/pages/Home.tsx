@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight } from 'lucide-react';
+import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
@@ -12,6 +12,7 @@ import { BRAND } from '../theme';
 
 interface DashboardSummary { total_sales: number; total_bills: number; }
 interface MyHours { total_hours: number; hourly_rate: number; calculated_pay: number; }
+interface ActivePromo { id: number; name: string; label: string; end_date: string | null; }
 
 export default function Home() {
   const user = getCurrentUserOrRedirect();
@@ -22,12 +23,15 @@ export default function Home() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [myHours, setMyHours] = useState<MyHours | null>(null); // ⭐️ Home page feature — ชม.ทำงาน/ค่าจ้างเดือนนี้
+  const [activePromo, setActivePromo] = useState<ActivePromo | null>(null); // ⭐️ Design-ref — แบนเนอร์โปรฯ สำหรับสมาชิก
 
   useEffect(() => {
     if (isStaff) {
       api.get('/reports/dashboard').then(res => setSummary(res.data.summary)).catch(() => {});
       api.get('/inventory/low-stock').then(res => setLowStockCount(res.data.length)).catch(() => {});
       api.get('/reports/my-hours').then(res => setMyHours(res.data)).catch(() => {});
+    } else {
+      api.get('/promotions/active').then(res => setActivePromo((res.data || [])[0] || null)).catch(() => {});
     }
     api.get('/products').then(res => setProductCount(res.data.length)).catch(() => {});
   }, [isStaff]);
@@ -93,53 +97,45 @@ export default function Home() {
 
   return (
     <div className="min-h-dvh bg-brand-bg">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-brand to-brand-dark px-5 pt-6 pb-14 relative overflow-hidden">
+      {/* Header — ⭐️ Design-ref: รวมแถวโลโก้/แถวอวตารเดิมเป็นแถวเดียว (อวตาร+ทักทาย ซ้าย, ออกจากระบบ ขวา) */}
+      <div className="bg-gradient-to-br from-brand to-brand-dark px-5 pt-16 pb-16 relative overflow-hidden">
         <div className="flex items-start justify-between relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
-              <img src="/logo-192.png" alt="DMTC Mart" className="w-8 h-8 object-contain" />
-            </div>
-            <div>
-              <p className="text-white font-extrabold text-sm leading-tight">DMTC Mart</p>
-              <p className="text-white/70 text-xs font-medium">สหกรณ์โรงเรียน</p>
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src={user.profile_image_url || '/Default profile.png'}
+              alt={user.full_name}
+              className="w-11 h-11 rounded-2xl object-cover border-2 border-white/40 shrink-0"
+            />
+            <div className="min-w-0">
+              <p className="text-white/80 text-sm font-medium">{greeting()}</p>
+              <h1 className="text-white text-xl font-extrabold truncate">{user.full_name || user.student_id}</h1>
             </div>
           </div>
-          <button onClick={handleLogout} className="p-2 bg-white/15 hover:bg-white/25 rounded-xl transition-colors duration-150" title="ออกจากระบบ">
+          <button onClick={handleLogout} className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl transition-colors duration-150 shrink-0" title="ออกจากระบบ">
             <LogOut size={18} className="text-white" />
           </button>
         </div>
 
-        <div className="mt-6 relative z-10 flex items-center gap-3">
-          <img
-            src={user.profile_image_url || '/Default profile.png'}
-            alt={user.full_name}
-            className="w-14 h-14 rounded-2xl object-cover border-2 border-white/40 shrink-0"
-          />
-          <div className="min-w-0">
-            <p className="text-white/80 text-sm font-medium">{greeting()},</p>
-            <h1 className="text-white text-2xl font-extrabold truncate">{user.full_name || user.student_id}</h1>
-            <span className="inline-flex items-center gap-1 mt-1 bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">
-              {user.role}
-            </span>
-          </div>
-        </div>
+        <span className="relative z-10 inline-flex items-center gap-1 mt-3 bg-white/20 text-white text-xs font-bold px-3 py-1.5 rounded-full">
+          {user.role}
+        </span>
+        <p className="relative z-10 text-white/70 text-[11px] mt-2.5">เมนูด้านล่างแสดงตามสิทธิ์การใช้งานของคุณ</p>
       </div>
 
-      {/* Stat card (staff only) — ลอยคาบเส้นขอบล่างของ header ตามดีไซน์อ้างอิง */}
+      {/* Stat card (staff only) — ลอยคาบเส้นขอบล่างของ header ตามดีไซน์อ้างอิง สีต่างกันตามประเภทข้อมูล */}
       {isStaff && summary && (
-        <div className="px-5 -mt-8 relative z-10">
+        <div className="px-5 -mt-12 relative z-10">
           <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 grid grid-cols-3 divide-x divide-brand-border">
             <div className="text-center px-1">
-              <p className="text-base font-extrabold text-gray-900">฿{Number(summary.total_sales).toLocaleString()}</p>
+              <p className="text-base font-extrabold text-brand">฿{Number(summary.total_sales).toLocaleString()}</p>
               <p className="text-[11px] text-gray-400 font-medium mt-0.5">ยอดขายวันนี้</p>
             </div>
             <div className="text-center px-1">
-              <p className="text-base font-extrabold text-gray-900">{summary.total_bills}</p>
+              <p className="text-base font-extrabold text-blue-500">{summary.total_bills}</p>
               <p className="text-[11px] text-gray-400 font-medium mt-0.5">ออเดอร์</p>
             </div>
             <div className="text-center px-1">
-              <p className={`text-base font-extrabold ${lowStockCount > 0 ? 'text-amber-500' : 'text-gray-900'}`}>{lowStockCount}</p>
+              <p className="text-base font-extrabold text-amber-500">{lowStockCount}</p>
               <p className="text-[11px] text-gray-400 font-medium mt-0.5">สต๊อกใกล้หมด</p>
             </div>
           </div>
@@ -149,7 +145,7 @@ export default function Home() {
       {/* ⭐️ Home page feature — ชั่วโมงทำงาน + ค่าจ้างประมาณการเดือนนี้ (self-service, staff เท่านั้น) */}
       {isStaff && myHours && (
         <div className="px-5 mt-4 max-w-lg mx-auto">
-          <div className="bg-white border border-brand-border rounded-2xl shadow-sm p-4 flex items-center justify-between">
+          <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">เดือนนี้</p>
               <p className="text-sm font-semibold text-gray-800 mt-0.5">{myHours.total_hours} ชม. ทำงาน</p>
@@ -162,9 +158,24 @@ export default function Home() {
         </div>
       )}
 
+      {/* ⭐️ Design-ref — แบนเนอร์โปรโมชั่นวันนี้ (สมาชิกเท่านั้น) ดึงจาก /promotions/active ตัวแรก */}
+      {!isStaff && activePromo && (
+        <div className="px-5 -mt-6 relative z-10 max-w-lg mx-auto">
+          <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 flex items-center gap-3">
+            <div className="w-11 h-11 bg-brand-bg rounded-xl flex items-center justify-center shrink-0">
+              <Tag size={20} className="text-brand" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-gray-900 text-sm truncate">{activePromo.name}</p>
+              <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">{activePromo.label}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Module list */}
-      <div className={`px-5 ${isStaff ? 'mt-5' : '-mt-6 relative z-10'} pb-10 max-w-lg mx-auto`}>
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">เมนู</p>
+      <div className={`px-5 ${isStaff ? 'mt-5' : (activePromo ? 'mt-5' : '-mt-6 relative z-10')} pb-10 max-w-lg mx-auto`}>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">เมนูสำหรับคุณ</p>
         <div className="space-y-3">
           {modules.map(m => {
             const Icon = m.icon;
@@ -172,7 +183,7 @@ export default function Home() {
               <button
                 key={m.key}
                 onClick={m.onClick}
-                className="w-full flex items-center gap-3 bg-white border border-brand-border rounded-2xl shadow-sm p-4 text-left hover:border-brand-mid hover:shadow-md active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="w-full flex items-center gap-3 bg-white border border-brand-border rounded-3xl shadow-sm p-4 text-left hover:border-brand-mid hover:shadow-md active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <div className="w-11 h-11 bg-brand-bg rounded-xl flex items-center justify-center shrink-0">
                   <Icon size={20} className="text-brand" />
