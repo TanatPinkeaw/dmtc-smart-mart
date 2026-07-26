@@ -301,13 +301,13 @@ export default function PendingShiftClosesWidget() {
               <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => handleApprove(shift)}
-                  className="flex-1 bg-gradient-to-br from-green-600 to-green-700 text-white font-bold py-2.5 px-4 rounded-2xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-br from-green-600 to-green-700 text-white font-bold py-2.5 px-4 rounded-full transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   ✅ อนุมัติ
                 </button>
                 <button
                   onClick={() => handleReject(shift)}
-                  className="flex-1 bg-gradient-to-br from-red-600 to-red-700 text-white font-bold py-2.5 px-4 rounded-2xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-br from-red-600 to-red-700 text-white font-bold py-2.5 px-4 rounded-full transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   ❌ ปฏิเสธ
                 </button>

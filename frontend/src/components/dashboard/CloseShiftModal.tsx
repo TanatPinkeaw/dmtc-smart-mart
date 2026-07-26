@@ -1,6 +1,6 @@
 import { Camera, X } from 'lucide-react';
 
-const inputCls = "w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
+const inputCls = "w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
@@ -81,7 +81,7 @@ export function CloseShiftModal({
                     }
                   </label>
                 </div>
-                <button type="submit" disabled={closeLoading} className="w-full py-3 bg-gradient-to-br from-red-500 to-red-600 text-white font-semibold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
+                <button type="submit" disabled={closeLoading} className="w-full py-3 bg-gradient-to-br from-red-500 to-red-600 text-white font-semibold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
                   {closeLoading ? 'กำลังตรวจสอบ...' : 'ยืนยันการปิดกะ'}
                 </button>
               </form>
@@ -105,7 +105,7 @@ export function CloseShiftModal({
                 </span>
               </div>
             </div>
-            <button onClick={onLogout} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold rounded-2xl transition-all duration-150 active:scale-[0.98]">ออกจากระบบ</button>
+            <button onClick={onLogout} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold rounded-full transition-all duration-150 active:scale-[0.98]">ออกจากระบบ</button>
           </div>
         )}
       </div>

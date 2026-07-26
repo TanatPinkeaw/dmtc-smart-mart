@@ -79,7 +79,7 @@ export default function AttendanceManagement() {
     finally { setRunningAuto(false); }
   };
 
-  const inputCls = "px-4 py-2.5 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
+  const inputCls = "px-4 py-2.5 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
@@ -196,8 +196,8 @@ export default function AttendanceManagement() {
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาออกงาน</label><input type="datetime-local" value={editForm.check_out} onChange={e => setEditForm({ ...editForm, check_out: e.target.value })} className={`${inputCls} w-full`} /></div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">หมายเหตุ</label><input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="เช่น ลืมลงชื่อออก..." className={`${inputCls} w-full`} /></div>
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setEditing(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-all duration-150 active:scale-[0.98]">ยกเลิก</button>
-                <button type="submit" className="flex-1 py-2.5 bg-gradient-to-br from-brand to-brand-dark text-white rounded-2xl text-sm font-bold transition-all duration-150 active:scale-[0.98]">บันทึก</button>
+                <button type="button" onClick={() => setEditing(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-full text-sm font-bold hover:bg-gray-200 transition-all duration-150 active:scale-[0.98]">ยกเลิก</button>
+                <button type="submit" className="flex-1 py-2.5 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full text-sm font-bold transition-all duration-150 active:scale-[0.98]">บันทึก</button>
               </div>
             </form>
           </div>

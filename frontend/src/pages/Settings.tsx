@@ -338,7 +338,7 @@ export default function Settings() {
               </div>
               <Input label="ที่อยู่" value={storeInfo.address || ''} required={false} onChange={(v: any) => setStoreInfo({ ...storeInfo, address: v })} />
               <Input label="ข้อความท้ายใบเสร็จ" value={storeInfo.receipt_footer || ''} required={false} onChange={(v: any) => setStoreInfo({ ...storeInfo, receipt_footer: v })} />
-              <button type="submit" className="w-full md:w-auto bg-gradient-to-br from-brand to-brand-dark text-white px-8 py-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 mt-4"><Save size={20} /> บันทึกข้อมูล</button>
+              <button type="submit" className="w-full md:w-auto bg-gradient-to-br from-brand to-brand-dark text-white px-8 py-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 mt-4"><Save size={20} /> บันทึกข้อมูล</button>
             </form>
           )}
 
@@ -438,10 +438,10 @@ export default function Settings() {
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Package className="text-brand" /> สินค้าในระบบ</h2>
                 <div className="flex w-full md:w-auto gap-2">
                   <div className="relative flex-1 md:w-64">
-                    <input type="text" placeholder="ค้นหาสินค้า..." value={searchProduct} onChange={e => setSearchProduct(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-2xl focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
+                    <input type="text" placeholder="ค้นหาสินค้า..." value={searchProduct} onChange={e => setSearchProduct(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
-                  <button onClick={() => { setActiveModal('ADD_PRODUCT'); setVendorSearch(''); }} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มสินค้า</span></button>
+                  <button onClick={() => { setActiveModal('ADD_PRODUCT'); setVendorSearch(''); }} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มสินค้า</span></button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -477,10 +477,10 @@ export default function Settings() {
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Tags className="text-brand" /> หมวดหมู่สินค้า</h2>
                 <div className="flex w-full md:w-auto gap-2">
                   <div className="relative flex-1 md:w-64">
-                    <input type="text" placeholder="ค้นหาหมวดหมู่..." value={searchCategory} onChange={e => setSearchCategory(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-2xl focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
+                    <input type="text" placeholder="ค้นหาหมวดหมู่..." value={searchCategory} onChange={e => setSearchCategory(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
-                  <button onClick={() => setActiveModal('ADD_CATEGORY')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มหมวดหมู่</span></button>
+                  <button onClick={() => setActiveModal('ADD_CATEGORY')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มหมวดหมู่</span></button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -501,10 +501,10 @@ export default function Settings() {
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Truck className="text-brand" /> ซัพพลายเออร์</h2>
                 <div className="flex w-full md:w-auto gap-2">
                   <div className="relative flex-1 md:w-64">
-                    <input type="text" placeholder="ค้นหาชื่อ, เบอร์ติดต่อ..." value={searchSupplier} onChange={e => setSearchSupplier(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-2xl focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
+                    <input type="text" placeholder="ค้นหาชื่อ, เบอร์ติดต่อ..." value={searchSupplier} onChange={e => setSearchSupplier(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
-                  <button onClick={() => setActiveModal('ADD_SUPPLIER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มบริษัท</span></button>
+                  <button onClick={() => setActiveModal('ADD_SUPPLIER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มบริษัท</span></button>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -531,7 +531,7 @@ export default function Settings() {
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Users className="text-brand" /> พนักงานในระบบ</h2>
                 <div className="flex w-full md:w-auto gap-2">
                   <div className="relative flex-1 md:w-64">
-                    <input type="text" placeholder="ค้นหาชื่อ, รหัสนักศึกษา..." value={searchUser} onChange={e => setSearchUser(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-2xl focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
+                    <input type="text" placeholder="ค้นหาชื่อ, รหัสนักศึกษา..." value={searchUser} onChange={e => setSearchUser(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
                   {/* ⭐️ ซิงค์รายชื่อจาก CSV */}
@@ -540,7 +540,7 @@ export default function Settings() {
                     <input type="file" accept=".csv,text/csv" onChange={handleCsvImport} className="hidden" />
                   </label>
                   {/* ปุ่มเปลี่ยนชื่อจาก เพิ่มพนักงาน เป็น แต่งตั้งสิทธิ์ */}
-                  <button onClick={() => setActiveModal('ADD_USER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">แต่งตั้งสิทธิ์</span></button>
+                  <button onClick={() => setActiveModal('ADD_USER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">แต่งตั้งสิทธิ์</span></button>
                 </div>
               </div>
 
@@ -582,10 +582,10 @@ export default function Settings() {
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Gift className="text-brand" /> โปรโมชั่น / ส่วนลด</h2>
                 <div className="flex w-full md:w-auto gap-2">
                   <div className="relative flex-1 md:w-64">
-                    <input type="text" placeholder="ค้นหาชื่อโปรโมชั่น..." value={searchPromotion} onChange={e => setSearchPromotion(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-2xl focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
+                    <input type="text" placeholder="ค้นหาชื่อโปรโมชั่น..." value={searchPromotion} onChange={e => setSearchPromotion(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
-                  <button onClick={() => setActiveModal('ADD_PROMOTION')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">สร้างโปรโมชั่น</span></button>
+                  <button onClick={() => setActiveModal('ADD_PROMOTION')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">สร้างโปรโมชั่น</span></button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -666,7 +666,7 @@ export default function Settings() {
 
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">หมวดหมู่</label>
-              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-2xl outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingProduct.category_id || ''} onChange={e => setEditingProduct({ ...editingProduct, category_id: e.target.value })}>
+              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingProduct.category_id || ''} onChange={e => setEditingProduct({ ...editingProduct, category_id: e.target.value })}>
                 <option value="">-- ไม่ระบุ --</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -735,7 +735,7 @@ export default function Settings() {
               />
             </div>
 
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกการแก้ไข</button>
+            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกการแก้ไข</button>
           </form>
         </CustomModal>
       )}
@@ -810,7 +810,7 @@ export default function Settings() {
               />
             </div>
 
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสินค้าใหม่</button>
+            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสินค้าใหม่</button>
           </form>
         </CustomModal>
       )}
@@ -829,13 +829,13 @@ export default function Settings() {
             <Input label="รหัสนักศึกษาที่ต้องการจัดการ" value={newUser.username} onChange={(v: any) => setNewUser({ ...newUser, username: v })} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">เลือกบทบาท (Role)</label>
-              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-2xl outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
                 <option value="MEMBER">นักศึกษาทั่วไป (MEMBER)</option>
                 <option value="CASHIER">แคชเชียร์ (CASHIER)</option>
                 <option value="ADMIN">ผู้จัดการ (ADMIN)</option>
               </select>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">ยืนยัน</button>
+            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">ยืนยัน</button>
           </form>
         </CustomModal>
       )}
@@ -848,13 +848,13 @@ export default function Settings() {
             <Input label="รหัสนักศึกษา" value={editingUser.username} disabled={true} onChange={()=>{}} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">เลือกบทบาทใหม่ (Role)</label>
-              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-2xl outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}>
+              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}>
                 <option value="MEMBER">ลดขั้นเป็นนักศึกษาทั่วไป (MEMBER)</option>
                 <option value="CASHIER">แคชเชียร์ (CASHIER)</option>
                 <option value="ADMIN">ผู้จัดการ (ADMIN)</option>
               </select>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสิทธิ์</button>
+            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสิทธิ์</button>
           </form>
         </CustomModal>
       )}
@@ -866,7 +866,7 @@ export default function Settings() {
             <Input label="ชื่อโปรโมชั่น" value={newPromotion.name} onChange={(v:any) => setNewPromotion({...newPromotion, name: v})} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">ประเภทส่วนลด</label>
-              <select className="w-full p-2.5 border border-brand-border rounded-2xl outline-none focus:ring-2 focus:ring-brand text-sm font-medium" value={newPromotion.discount_type} onChange={e => setNewPromotion({...newPromotion, discount_type: e.target.value})}>
+              <select className="w-full p-2.5 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm font-medium" value={newPromotion.discount_type} onChange={e => setNewPromotion({...newPromotion, discount_type: e.target.value})}>
                 <option value="PERCENT">ลดเป็นเปอร์เซ็นต์ (%)</option>
                 <option value="FIXED">ลดเป็นจำนวนเงิน (฿)</option>
                 <option value="BOGO">ซื้อครบแถม (เช่น ซื้อ 1 แถม 1, ซื้อ 2 แถม 1)</option>
@@ -914,7 +914,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกโปรโมชั่น</button>
+            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกโปรโมชั่น</button>
           </form>
         </CustomModal>
       )}
@@ -937,12 +937,12 @@ export default function Settings() {
             <span className="font-bold text-brand-dark text-sm">ยอดรวมทั้งสิ้น</span><span className="text-xl md:text-2xl font-bold text-brand">฿{Number(viewingBillInfo.total_amount).toFixed(2)}</span>
           </div>
           {viewingBillInfo.status !== 'VOIDED' && (
-            <button onClick={() => handleVoidBill(viewingBillInfo.id)} className="w-full bg-gradient-to-br from-red-500 to-red-600 text-white font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Trash2 size={18} /> ยกเลิกบิล (Void)</button>
+            <button onClick={() => handleVoidBill(viewingBillInfo.id)} className="w-full bg-gradient-to-br from-red-500 to-red-600 text-white font-bold py-3 rounded-full transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Trash2 size={18} /> ยกเลิกบิล (Void)</button>
           )}
         </CustomModal>
       )}
-      {activeModal === 'ADD_CATEGORY' && (<CustomModal title="เพิ่มหมวดหมู่" onClose={() => setActiveModal(null)}><form onSubmit={handleAddCategory} className="space-y-4"><Input label="ชื่อหมวดหมู่" value={newCategory} onChange={setNewCategory} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">เพิ่มหมวดหมู่</button></form></CustomModal>)}
-      {activeModal === 'ADD_SUPPLIER' && (<CustomModal title="เพิ่มตัวแทนจำหน่าย" onClose={() => setActiveModal(null)}><form onSubmit={handleAddSupplier} className="space-y-4"><Input label="ชื่อบริษัท / บุคคล" value={newSupplier.name} onChange={(v: any) => setNewSupplier({ ...newSupplier, name: v })} /><Input label="ข้อมูลติดต่อ" value={newSupplier.contact_info} required={false} onChange={(v: any) => setNewSupplier({ ...newSupplier, contact_info: v })} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-2xl font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกข้อมูล</button></form></CustomModal>)}
+      {activeModal === 'ADD_CATEGORY' && (<CustomModal title="เพิ่มหมวดหมู่" onClose={() => setActiveModal(null)}><form onSubmit={handleAddCategory} className="space-y-4"><Input label="ชื่อหมวดหมู่" value={newCategory} onChange={setNewCategory} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">เพิ่มหมวดหมู่</button></form></CustomModal>)}
+      {activeModal === 'ADD_SUPPLIER' && (<CustomModal title="เพิ่มตัวแทนจำหน่าย" onClose={() => setActiveModal(null)}><form onSubmit={handleAddSupplier} className="space-y-4"><Input label="ชื่อบริษัท / บุคคล" value={newSupplier.name} onChange={(v: any) => setNewSupplier({ ...newSupplier, name: v })} /><Input label="ข้อมูลติดต่อ" value={newSupplier.contact_info} required={false} onChange={(v: any) => setNewSupplier({ ...newSupplier, contact_info: v })} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกข้อมูล</button></form></CustomModal>)}
       
       <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
     </div>
@@ -950,7 +950,7 @@ export default function Settings() {
 }
 
 const TabButton = ({ icon, label, isActive, onClick, badge }: any) => (
-  <button onClick={onClick} className={`shrink-0 snap-start flex items-center gap-2 px-4 py-3 md:p-4 rounded-2xl font-bold text-sm md:text-base transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${isActive ? 'bg-gradient-to-br from-brand to-brand-dark text-white shadow-md' : 'bg-white text-gray-600 hover:bg-brand-border border border-brand-border shadow-sm'}`}>
+  <button onClick={onClick} className={`shrink-0 snap-start flex items-center gap-2 px-4 py-3 md:p-4 rounded-full font-bold text-sm md:text-base transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${isActive ? 'bg-gradient-to-br from-brand to-brand-dark text-white shadow-md' : 'bg-white text-gray-600 hover:bg-brand-border border border-brand-border shadow-sm'}`}>
     {icon} <span className="whitespace-nowrap">{label}</span>
     {!!badge && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/25 text-white' : 'bg-brand-bg text-brand'}`}>{badge}</span>}
   </button>
@@ -959,7 +959,7 @@ const TabButton = ({ icon, label, isActive, onClick, badge }: any) => (
 const Input = ({ label, value, onChange, type = "text", required = true, disabled = false }: any) => (
   <div>
     <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{label}</label>
-    <input type={type} required={required} disabled={disabled} value={value} onChange={e => onChange(e.target.value)} className={`w-full p-2.5 md:p-3 border border-brand-border rounded-2xl focus:ring-2 focus:ring-brand outline-none transition-colors duration-150 text-sm md:text-base font-medium ${disabled ? 'bg-brand-bg text-gray-400 cursor-not-allowed' : ''}`} />
+    <input type={type} required={required} disabled={disabled} value={value} onChange={e => onChange(e.target.value)} className={`w-full p-2.5 md:p-3 border border-brand-border rounded-full focus:ring-2 focus:ring-brand outline-none transition-colors duration-150 text-sm md:text-base font-medium ${disabled ? 'bg-brand-bg text-gray-400 cursor-not-allowed' : ''}`} />
   </div>
 );
 

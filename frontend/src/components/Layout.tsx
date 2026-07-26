@@ -146,7 +146,7 @@ function LayoutInner() {
       />
 
       {/* ── Main ─────────────────────────────────────────────────────────────── */}
-      <main className="flex-1 h-screen overflow-y-auto pb-16 md:pb-0">
+      <main className="flex-1 h-screen overflow-y-auto pb-28 md:pb-0">
         <Outlet />
       </main>
 
@@ -157,11 +157,16 @@ function LayoutInner() {
         onOpenNotifications={handleOpenNotifications}
         onOpenMobileMenu={() => setShowMobileMenu(true)}
         onOpenProfile={() => setShowProfileModal(true)}
-        onLogoutClick={handleLogoutClick}
       />
 
       {showMobileMenu && (
-        <MobileMenuDrawer isAdmin={isAdmin} onClose={() => setShowMobileMenu(false)} />
+        <MobileMenuDrawer
+          isStaff={isStaff}
+          isAdmin={isAdmin}
+          pendingOrders={pendingOrders}
+          onClose={() => setShowMobileMenu(false)}
+          onLogoutClick={handleLogoutClick}
+        />
       )}
 
       {showProfileModal && (

@@ -93,7 +93,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               onChange={(e) => setForm({ ...form, current_password: e.target.value })}
               placeholder="Enter current password"
               required
-              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
+              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
           </div>
 
@@ -106,7 +106,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               onChange={(e) => setForm({ ...form, new_password: e.target.value })}
               placeholder="Enter new password"
               required
-              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
+              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
             <PasswordStrengthMeter password={form.new_password} />
           </div>
@@ -120,7 +120,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
               placeholder="Confirm new password"
               required
-              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
+              className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
           </div>
 
@@ -129,7 +129,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 text-white font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+              className="flex-1 py-3 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
                 enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70"
             >
               {loading ? (
@@ -143,7 +143,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98]"
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98]"
               >
                 Cancel
               </button>

@@ -165,10 +165,10 @@ export default function Summary() {
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="bg-white border border-brand-border rounded-2xl px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand"
+            className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand"
           />
           {/* ⭐️ ปุ่มปรินต์/บันทึก PDF สำหรับนำไปเสนออาจารย์ */}
-          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-2xl px-3 py-2 text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+          <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-full px-3 py-2 text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
             <Printer size={16} /> ปรินต์
           </button>
         </div>
