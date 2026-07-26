@@ -173,9 +173,12 @@ export default function Dashboard() {
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-white hover:bg-white/25 bg-white/15 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-            <ArrowLeft size={14} /> กลับไปหน้า POS
-          </button>
+          {/* ⭐️ ปุ่มกลับหน้า POS โชว์เฉพาะ CASHIER — ADMIN เข้าหน้า POS ไม่ได้แล้ว (route ก็กันไว้) */}
+          {!isAdmin && (
+            <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-white hover:bg-white/25 bg-white/15 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              <ArrowLeft size={14} /> กลับไปหน้า POS
+            </button>
+          )}
           <span className="text-xs text-white/90 font-medium hidden sm:block">{user.full_name}</span>
         </div>
       </div>

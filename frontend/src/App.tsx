@@ -50,6 +50,17 @@ function RequireMember({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// ⭐️ Require CASHIER only (หน้า POS) — ADMIN ขายหน้าร้านไม่ได้ตามนโยบาย เพราะเปิดกะไม่ได้
+//   บิลจึงผูก shift_id ไม่ได้ = เงินสดไม่มีกะรองรับ ตอนปิดกะยอดจะไม่ตรง (backend บล็อกไว้อีกชั้นที่
+//   POST /api/sales/checkout ซึ่งเปิดให้เฉพาะ CASHIER) ตัวนี้กันไม่ให้เปิดหน้า POS ตั้งแต่แรก
+function RequireCashier({ children }: { children: ReactNode }) {
+  const user = getCurrentUser();
+  if (!user || user.role !== 'CASHIER') {
+    return <Navigate to="/home" replace />;
+  }
+  return <>{children}</>;
+}
+
 // ⭐️ Require ADMIN only (หน้าสรุปข้อมูล/payroll — ข้อมูลค่าจ้างพนักงาน ห้าม CASHIER เห็น)
 function RequireAdmin({ children }: { children: ReactNode }) {
   const user = getCurrentUser();
@@ -130,7 +141,7 @@ function App() {
         {/* โซนที่ต้องมี Sidebar ครอบอยู่ */}
         <Route element={<Layout />}>
           {/* 🐛 FIX — หน้าเหล่านี้เป็นของ CASHIER/ADMIN เท่านั้น ห่อด้วย RequireStaff กันเข้าตรงด้วย URL */}
-          <Route path="/pos" element={<RequireStaff><POS /></RequireStaff>} />
+          <Route path="/pos" element={<RequireCashier><POS /></RequireCashier>} />
           <Route path="/dashboard" element={<RequireStaff><Dashboard /></RequireStaff>} />
           <Route path="/inventory" element={<RequireStaff><Inventory /></RequireStaff>} />
           <Route path="/orders" element={<RequireStaff><OrderManagement /></RequireStaff>} />
