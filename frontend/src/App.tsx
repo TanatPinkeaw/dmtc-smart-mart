@@ -6,6 +6,7 @@ import api from './api';
 import Swal from './swal';
 import Login from './pages/Login';
 import Home from './pages/Home'; // ⭐️ หน้ากลางหลัง login (ทุก role) — เลือกโมดูลที่จะเข้าใช้งาน
+import Profile from './pages/Profile'; // ⭐️ บัญชีของฉัน (เดิมเป็น ProfileModal)
 import ForgotPassword from './pages/ForgotPassword'; // ⭐️ F1 — ลืมรหัสผ่าน
 import ResetPassword from './pages/ResetPassword'; // ⭐️ F1 — ตั้งรหัสผ่านใหม่
 import Shift from './pages/Shift';
@@ -142,6 +143,7 @@ function App() {
           <Route path="/pre-order" element={<Preorder />} />
           <Route path="/notifications" element={<Notifications />} /> {/* 👈 เพิ่มบรรทัดนี้ */}
           <Route path="/my-sales" element={<VendorSales />} /> {/* ⭐️ ยอดฝากขายของฉัน */}
+          <Route path="/profile" element={<Profile />} /> {/* ⭐️ เดิมเป็น modal — ย้ายมาเป็นหน้าเต็ม */}
         </Route>
 
       </Routes>

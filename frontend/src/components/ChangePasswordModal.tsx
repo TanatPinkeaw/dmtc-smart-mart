@@ -28,13 +28,13 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
     // Validate new password strength
     const passwordCheck = validatePasswordStrength(form.new_password);
     if (!passwordCheck.valid) {
-      Swal.fire('Weak Password', passwordCheck.errors.join('\n'), 'warning');
+      Swal.fire('รหัสผ่านยังไม่ปลอดภัยพอ', passwordCheck.errors.join('\n'), 'warning');
       return;
     }
 
     // Check passwords match
     if (form.new_password !== form.confirm_password) {
-      Swal.fire('Error', 'New passwords do not match', 'error');
+      Swal.fire('รหัสผ่านไม่ตรงกัน', 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน กรุณากรอกใหม่', 'error');
       return;
     }
 
@@ -48,10 +48,10 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
           localStorage.setItem('user', JSON.stringify({ ...cached, must_change_password: false }));
         } catch { /* localStorage.user corrupted — ไม่ต้อง block การเปลี่ยนรหัสผ่านที่สำเร็จแล้ว */ }
       }
-      Swal.fire('Success', 'Password changed successfully', 'success');
+      Swal.fire('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว', 'success');
       onClose();
     } catch (err: any) {
-      Swal.fire('Error', getErrorMessage(err), 'error');
+      Swal.fire('ผิดพลาด', getErrorMessage(err), 'error');
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
         <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
           <div className="flex items-center gap-2">
             <KeyRound size={18} className="text-brand" />
-            <h3 className="font-semibold text-gray-900">Change Password</h3>
+            <h3 className="font-semibold text-gray-900">เปลี่ยนรหัสผ่าน</h3>
           </div>
           {!forceChange && (
             <button
@@ -86,12 +86,12 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
         <form onSubmit={handleChangePassword} className="p-5 space-y-4 max-h-[80dvh] overflow-y-auto">
           {/* Current Password */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600">Current Password</label>
+            <label className="block text-xs font-medium text-gray-600">รหัสผ่านปัจจุบัน</label>
             <input
               type="password"
               value={form.current_password}
               onChange={(e) => setForm({ ...form, current_password: e.target.value })}
-              placeholder="Enter current password"
+              placeholder="กรอกรหัสผ่านปัจจุบัน"
               required
               className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
@@ -99,12 +99,12 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
 
           {/* New Password */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600">New Password</label>
+            <label className="block text-xs font-medium text-gray-600">รหัสผ่านใหม่</label>
             <input
               type="password"
               value={form.new_password}
               onChange={(e) => setForm({ ...form, new_password: e.target.value })}
-              placeholder="Enter new password"
+              placeholder="ตั้งรหัสผ่านใหม่"
               required
               className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
@@ -113,12 +113,12 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
 
           {/* Confirm Password */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600">Confirm New Password</label>
+            <label className="block text-xs font-medium text-gray-600">ยืนยันรหัสผ่านใหม่</label>
             <input
               type="password"
               value={form.confirm_password}
               onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
-              placeholder="Confirm new password"
+              placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
               required
               className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150"
             />
@@ -135,9 +135,9 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Changing...
+                  กำลังเปลี่ยน...
                 </span>
-              ) : 'Change Password'}
+              ) : 'เปลี่ยนรหัสผ่าน'}
             </button>
             {!forceChange && (
               <button
@@ -145,7 +145,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
                 onClick={onClose}
                 className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98]"
               >
-                Cancel
+                ยกเลิก
               </button>
             )}
           </div>
