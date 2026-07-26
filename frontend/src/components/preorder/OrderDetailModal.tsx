@@ -207,7 +207,7 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
           <div className="flex gap-2.5 pt-2 pb-1">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 active:scale-[0.98] text-gray-700 font-bold rounded-2xl transition-all duration-150 text-sm"
+              className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 active:scale-[0.98] text-gray-700 font-bold rounded-full transition-all duration-150 text-sm"
             >
               ปิด
             </button>
@@ -215,7 +215,7 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
               <button
                 onClick={() => onCancelOrder(selectedOrder, refundReason)}
                 disabled={!refundReason.trim()}
-                className="flex-1 px-4 py-3 bg-gradient-to-br from-red-500 to-red-600 active:scale-[0.98] text-white font-bold rounded-2xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="flex-1 px-4 py-3 bg-gradient-to-br from-red-500 to-red-600 active:scale-[0.98] text-white font-bold rounded-full transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 ยกเลิกออเดอร์
               </button>

@@ -105,7 +105,7 @@ export default function Login() {
               <input
                 type="text" required value={username} onChange={e => setUsername(e.target.value)}
                 placeholder="Username / รหัสนักศึกษา" disabled={isRateLimited}
-                className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -115,7 +115,7 @@ export default function Login() {
                 <input
                   type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" disabled={isRateLimited}
-                  className="w-full px-4 py-3 pr-12 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-3 pr-12 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)} disabled={isRateLimited} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand transition-colors duration-150 p-1 disabled:opacity-50">
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -125,7 +125,7 @@ export default function Login() {
 
             <button
               type="submit" disabled={loading || isRateLimited}
-              className="w-full py-3.5 mt-1 rounded-2xl text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+              className="w-full py-3.5 mt-1 rounded-full text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
                 enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
                 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
             >

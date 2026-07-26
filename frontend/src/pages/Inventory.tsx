@@ -72,7 +72,7 @@ export default function Inventory() {
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input type="text" placeholder="ค้นหาสินค้า / บาร์โค้ด..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-4 py-2 bg-white border border-brand-border rounded-2xl text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
+              className="w-full pl-8 pr-4 py-2 bg-white border border-brand-border rounded-full text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export default function Inventory() {
       </div>
 
       {/* ── Mobile FAB ───────────────────────────────────────────────────────── */}
-      <button onClick={() => setIsReceiveOpen(true)} className="md:hidden fixed bottom-20 right-4 z-40 bg-brand text-white px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 font-semibold text-sm hover:bg-brand-dark transition-all duration-150 active:scale-95">
+      <button onClick={() => setIsReceiveOpen(true)} className="md:hidden fixed bottom-28 right-4 z-40 bg-brand text-white px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 font-semibold text-sm hover:bg-brand-dark transition-all duration-150 active:scale-95">
         <Truck size={18} /> รายการรับของ
         {receiveList.length > 0 && <span className="bg-white text-brand text-xs font-bold px-1.5 py-0.5 rounded-full">{receiveList.length}</span>}
       </button>
@@ -162,7 +162,7 @@ export default function Inventory() {
             <span className="text-brand font-bold">฿{totalCost.toFixed(2)}</span>
           </div>
           <button onClick={handleSubmitPurchase} disabled={receiveList.length === 0 || loading}
-            className="w-full py-3.5 text-white font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
+            className="w-full py-3.5 text-white font-bold text-sm rounded-full shadow-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
               enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70
               focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
             <Truck size={16} /> {loading ? 'กำลังบันทึก...' : 'บันทึกเข้าคลัง'}

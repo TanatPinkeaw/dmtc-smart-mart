@@ -199,7 +199,7 @@ export function CartPanel({
         {/* ⭐️ FIX: ปุ่มยืนยัน — ปรับให้ตรงกับปุ่ม "ชำระเงิน" หน้า POS: ขนาด/ฟอนต์เล็กลง (py-3.5, text-sm,
             ไอคอน 18px), เปลี่ยนเป็นสีฟ้าตอนเลือกสแกนจ่าย (เหมือน POS ที่สลับสีตาม paymentMethod) */}
         {/* ⭐️ QR: ล็อกปุ่มจนกว่าสลิปจะแนบ+ตรวจเสร็จ กันกดยืนยันก่อนสลิปพร้อม (รูปสลิปจะไม่ขึ้น) */}
-        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-2xl text-sm font-bold text-white shadow-sm transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-gradient-to-br from-blue-600 to-blue-700 focus-visible:ring-blue-500' : 'bg-gradient-to-br from-brand to-brand-dark focus-visible:ring-brand'}`}>
+        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-full text-sm font-bold text-white shadow-sm transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-gradient-to-br from-blue-600 to-blue-700 focus-visible:ring-blue-500' : 'bg-gradient-to-br from-brand to-brand-dark focus-visible:ring-brand'}`}>
           {loading ? (
             <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังส่งข้อมูล...</>
           ) : slipProcessing ? 'กำลังเตรียมสลิป...'

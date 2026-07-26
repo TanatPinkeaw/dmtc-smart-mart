@@ -51,7 +51,7 @@ export function ProductGrid({
         <div className="relative mb-3">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="ค้นหาสินค้า / บาร์โค้ด..." value={productSearchQuery} onChange={e => onSearchChange(e.target.value)}
-            className="w-full pl-8 pr-4 py-2 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
+            className="w-full pl-8 pr-4 py-2 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
         </div>
 
         {filteredProducts.length === 0 ? (

@@ -104,7 +104,7 @@ export default function Schedules() {
     catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
-  const inputCls = "px-3 py-2 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
+  const inputCls = "px-3 py-2 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
@@ -222,7 +222,7 @@ export default function Schedules() {
             </div>
           ))}
           <button onClick={handleSave} disabled={saving}
-            className="w-full mt-1 py-2.5 text-white text-sm font-bold rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+            className="w-full mt-1 py-2.5 text-white text-sm font-bold rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
               enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
             {saving ? 'กำลังบันทึก...' : editingScheduleId ? 'บันทึกการแก้ไข' : '+ เพิ่มกะ'}
           </button>

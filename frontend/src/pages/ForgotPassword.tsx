@@ -53,7 +53,7 @@ export default function ForgotPassword() {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="mt-5 w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-2xl shadow-sm transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                className="mt-5 w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-full shadow-sm transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
                 กลับไปหน้าเข้าสู่ระบบ
               </button>
@@ -65,7 +65,7 @@ export default function ForgotPassword() {
                 <input
                   type="text" required value={studentId} onChange={e => setStudentId(e.target.value)}
                   placeholder="รหัสนักศึกษา"
-                  className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
+                  className="w-full px-4 py-3 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
                 />
               </div>
               <div>
@@ -73,12 +73,12 @@ export default function ForgotPassword() {
                 <input
                   type="tel" required value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
                   placeholder="0812345678"
-                  className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
+                  className="w-full px-4 py-3 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
                 />
               </div>
               <button
                 type="submit" disabled={loading}
-                className="w-full py-3.5 mt-1 rounded-2xl text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+                className="w-full py-3.5 mt-1 rounded-full text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
                   enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >

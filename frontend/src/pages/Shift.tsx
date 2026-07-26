@@ -127,7 +127,7 @@ export default function Shift() {
       </label>
 
       <button onClick={handleAdminCheckIn} disabled={checkInLoading}
-        className="w-full py-3.5 text-white font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
+        className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
           enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
       </button>
@@ -181,7 +181,7 @@ export default function Shift() {
         </div>
 
         <button type="submit" disabled={loading}
-          className="w-full py-3.5 text-white font-bold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
+          className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
             enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
           <Banknote size={16} /> {loading ? 'กำลังเปิดกะ...' : 'เริ่มขายสินค้า'}
         </button>

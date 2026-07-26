@@ -67,7 +67,7 @@ export function ProfileModal({
         {/* Phone */}
         <div className="space-y-1">
           <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500"><Phone size={13} /> เบอร์โทรศัพท์</label>
-          <input type="tel" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} placeholder="08X-XXX-XXXX" className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
+          <input type="tel" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} placeholder="08X-XXX-XXXX" className="w-full px-3 py-2.5 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
           <p className="text-[11px] text-amber-600">⚠️ รหัสผ่านเริ่มต้นคือเบอร์โทรตอนสมัคร ถ้าเปลี่ยนเบอร์ควรเปลี่ยนรหัสผ่านด้วย</p>
         </div>
 
@@ -76,13 +76,13 @@ export function ProfileModal({
           <button
             type="button"
             onClick={onOpenChangePassword}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold text-sm rounded-full transition-all duration-150 active:scale-[0.98]"
           >
             <KeyRound size={16} /> เปลี่ยนรหัสผ่าน
           </button>
         </div>
 
-        <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold text-sm rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
+        <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
           {loading ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
         </button>
       </form>

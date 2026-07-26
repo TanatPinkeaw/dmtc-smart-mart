@@ -390,7 +390,7 @@ export default function PreOrder() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             {/* ⭐️ FIX: เดิม border-none กลืนกับพื้นหลัง เพิ่มกรอบให้เหมือนช่องค้นหาหน้า POS */}
             <input type="text" placeholder="ค้นหาสินค้า..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-2xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
+              className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-full text-sm font-medium outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
           </div>
 
           <PromoPopularRow
@@ -414,7 +414,7 @@ export default function PreOrder() {
 
       {/* ⭐️ FIX: เดิม bottom-6 ทับ bottom nav bar (h-14 + z-50) เพราะปุ่มนี้ z-40 ต่ำกว่า — เปลี่ยนเป็น
           bottom-20 ให้ตรงกับปุ่มลอยหน้าอื่น (POS.tsx, Inventory.tsx) ที่แก้ถูกไว้แล้ว */}
-      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-20 right-4 bg-gradient-to-br from-brand to-brand-dark text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 active:scale-90 transition-all duration-150">
+      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-28 right-4 bg-gradient-to-br from-brand to-brand-dark text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 active:scale-90 transition-all duration-150">
         <ShoppingCart size={24} />
         {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
       </button>
