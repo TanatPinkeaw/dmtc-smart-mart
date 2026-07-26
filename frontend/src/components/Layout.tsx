@@ -8,13 +8,11 @@ import { BRAND } from '../theme';
 import api from '../api';
 import { performLogout } from '../utils/logout';
 import { SocketProvider, useSocket } from '../SocketContext';
-import { getErrorMessage } from '../utils/errorMessage';
-import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { getCurrentUser, getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { Sidebar } from './layout/Sidebar';
 import { MobileBottomNav } from './layout/MobileBottomNav';
 import { MobileMenuDrawer } from './layout/MobileMenuDrawer';
-import { ProfileModal } from './layout/ProfileModal';
 
 // ─── LayoutInner ─────────────────────────────────────────────────────────────
 function LayoutInner() {
@@ -24,18 +22,15 @@ function LayoutInner() {
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   // ⭐️ Security remediation — บังคับเปลี่ยนรหัสผ่านชั่วคราวก่อนใช้งานหน้าอื่น (ปิด modal เองไม่ได้ ดู ChangePasswordModal forceChange)
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(!!user.must_change_password);
   // ⭐️ FIX: bottom nav มือถือเดิมมีแค่ POS/ออเดอร์/(ตั้งค่าเฉพาะ ADMIN) — ขาดหน้า Dashboard, Schedules,
   // Summary, Inventory, AttendanceManagement ที่ desktop sidebar มีครบ ทำให้กด staff เข้าหน้าพวกนี้จากมือถือไม่ได้เลย
   // เพิ่มปุ่ม "เมนู" เปิด bottom sheet รวมหน้าที่เหลือแทน ให้ครบตาม role เหมือน desktop
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [profileForm, setProfileForm] = useState({ phone_number: user.phone_number || '' });
-  const [profileLoading, setProfileLoading] = useState(false);
-  // ⭐️ Home page feature — รูปโปรไฟล์
+  // ⭐️ รูปโปรไฟล์โชว์ใน sidebar — หน้า /profile เป็นคนอัปโหลด แล้วยิง event 'profilePhotoChanged'
+  //   มาบอกให้อ่านค่าใหม่จาก localStorage (ไม่งั้นรูปในเมนูค้างเป็นรูปเก่าจนกว่าจะรีเฟรชหน้า)
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(user.profile_image_url || null);
-  const [photoUploading, setPhotoUploading] = useState(false);
 
   const sessionMode = localStorage.getItem('session_mode');
   const isStaff = ['ADMIN', 'CASHIER'].includes(user.role) && sessionMode !== 'shop';
@@ -76,32 +71,12 @@ function LayoutInner() {
     };
   }, [user.id, socket]);
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // ⭐️ SECURITY FIX (#4) — เปลี่ยนรหัสผ่านย้ายไปโมดัล "เปลี่ยนรหัสผ่าน" (ยืนยันรหัสเดิม) ทางเดียว
-    //   ฟอร์มนี้อัปเดตแค่เบอร์โทร
-    setProfileLoading(true);
-    try {
-      await api.put(`/users/${user.id}/profile`, { full_name: user.full_name, phone_number: profileForm.phone_number || null });
-      localStorage.setItem('user', JSON.stringify({ ...user, phone_number: profileForm.phone_number }));
-      Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ!', showConfirmButton: false, timer: 1500 });
-      setShowProfileModal(false);
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
-    finally { setProfileLoading(false); }
-  };
-
-  // ⭐️ Home page feature — อัปโหลดรูปโปรไฟล์ใหม่
-  const handlePhotoSelected = async (file: File) => {
-    setPhotoUploading(true);
-    try {
-      const fd = new FormData(); fd.append('photo', file);
-      const res = await api.post(`/users/${user.id}/profile-photo`, fd);
-      setProfileImageUrl(res.data.photo_url);
-      localStorage.setItem('user', JSON.stringify({ ...user, profile_image_url: res.data.photo_url }));
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เปลี่ยนรูปโปรไฟล์แล้ว', showConfirmButton: false, timer: 1500 });
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'อัปโหลดรูปไม่สำเร็จ', text: getErrorMessage(error) }); }
-    finally { setPhotoUploading(false); }
-  };
+  // ⭐️ ฟอร์มแก้เบอร์/อัปโหลดรูป ย้ายไปหน้า /profile แล้ว — ที่นี่แค่ฟัง event เพื่ออัปเดตรูปใน sidebar
+  useEffect(() => {
+    const syncPhoto = () => setProfileImageUrl(getCurrentUser()?.profile_image_url || null);
+    window.addEventListener('profilePhotoChanged', syncPhoto);
+    return () => window.removeEventListener('profilePhotoChanged', syncPhoto);
+  }, []);
 
   const handleLogoutClick = () => {
     Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
@@ -133,7 +108,7 @@ function LayoutInner() {
         fullName={user.full_name}
         role={user.role}
         profileImageUrl={profileImageUrl}
-        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenProfile={() => navigate('/profile')}
         onLogoutClick={handleLogoutClick}
       />
 
@@ -148,7 +123,7 @@ function LayoutInner() {
         pendingOrders={pendingOrders}
         onOpenNotifications={handleOpenNotifications}
         onOpenMobileMenu={() => setShowMobileMenu(true)}
-        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenProfile={() => navigate('/profile')}
       />
 
       {showMobileMenu && (
@@ -158,23 +133,6 @@ function LayoutInner() {
           pendingOrders={pendingOrders}
           onClose={() => setShowMobileMenu(false)}
           onLogoutClick={handleLogoutClick}
-        />
-      )}
-
-      {showProfileModal && (
-        <ProfileModal
-          fullName={user.full_name}
-          studentIdOrUsername={user.student_id || user.username}
-          role={user.role}
-          phoneNumber={profileForm.phone_number}
-          profileImageUrl={profileImageUrl}
-          onPhotoSelected={handlePhotoSelected}
-          photoUploading={photoUploading}
-          onPhoneNumberChange={(value) => setProfileForm({ ...profileForm, phone_number: value })}
-          onSubmit={handleUpdateProfile}
-          loading={profileLoading}
-          onClose={() => setShowProfileModal(false)}
-          onOpenChangePassword={() => { setShowProfileModal(false); setShowChangePasswordModal(true); }}
         />
       )}
 
