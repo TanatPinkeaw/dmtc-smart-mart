@@ -4,6 +4,7 @@ import { MobNavItem } from './NavItem';
 
 interface MobileBottomNavProps {
   isStaff: boolean;
+  isCashier: boolean; // ⭐️ ช่อง POS เป็นของ CASHIER เท่านั้น — ADMIN ให้เป็นช่องสั่งจองแทน
   unreadCount: number;
   pendingOrders: number;
   onOpenNotifications: () => void;
@@ -17,7 +18,7 @@ interface MobileBottomNavProps {
 // หน้าหลักเป็นจุดศูนย์กลางเด่นสุดของแถบ) ส่วน "เมนู" (รวมออเดอร์/ฝากขาย/ออกจากระบบ/เมนูผู้จัดการ
 // ผ่าน MobileMenuDrawer) ย้ายไปอยู่ช่องซ้ายแทนที่หน้าหลักเดิม — badge ออเดอร์ค้างย้ายตามไปด้วย
 export function MobileBottomNav({
-  isStaff, unreadCount, pendingOrders, onOpenNotifications,
+  isStaff, isCashier, unreadCount, pendingOrders, onOpenNotifications,
   onOpenMobileMenu, onOpenProfile,
 }: MobileBottomNavProps) {
   const moreBadge = isStaff ? pendingOrders : 0;
@@ -44,7 +45,7 @@ export function MobileBottomNav({
         <div className="w-16 shrink-0" />
 
         <div className="flex-1 flex items-center justify-around h-full">
-          {isStaff
+          {isStaff && isCashier
             ? <MobNavItem to="/pos" icon={<Store size={20} />} label="POS" />
             : <MobNavItem to="/pre-order" icon={<ShoppingBag size={20} />} label="จอง" />}
           <button onClick={onOpenProfile} className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-gray-400 hover:text-brand transition-colors duration-150">

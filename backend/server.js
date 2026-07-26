@@ -2451,7 +2451,11 @@ app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => 
   }
 });
 
-app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter, validateRequest(checkoutValidator), async (req, res) => {
+// ⭐️ ขายหน้าร้านเป็นงานของ CASHIER เท่านั้น — ตัด ADMIN ออกตามนโยบายที่ตกลงกับผู้ใช้
+//   เหตุผล: เงินสดต้องผูกกับกะเสมอเพื่อให้ปิดกะแล้วยอดตรง แต่ ADMIN เปิดกะผ่าน UI ไม่ได้
+//   (หน้า /shift ส่ง ADMIN ไปลงชื่อเข้า-ออกงาน) ถ้าปล่อยให้ขายได้ บิลจะผูก shift_id = NULL
+//   = เงินไม่มีเจ้าของ ตามไม่ได้ — งานคืนเงิน/ยกเลิกบิลของ ADMIN ยังทำได้ที่หน้าตั้งค่า (ประวัติขาย)
+app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validateRequest(checkoutValidator), async (req, res) => {
   // ⭐️ เพิ่มการรับค่า member_id, promotion_id, redeem_points เข้ามาด้วย
   const { cashier_id, member_id, promotion_id, redeem_points, payment_method, amount_received, items } = req.body;
   if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าสินค้าว่างเปล่า" });
@@ -2571,9 +2575,8 @@ app.post('/api/sales/checkout', requireRole('CASHIER', 'ADMIN'), checkoutLimiter
     // 🐛 FIX (เงินหาย) — เดิมถ้าไม่มีกะเปิดอยู่ บิลจะถูกบันทึกด้วย shift_id = NULL เฉยๆ คือ "ขายผ่าน"
     //   รับเงินสด ตัดสต๊อก ออกใบเสร็จครบ แต่เงินก้อนนั้นไม่ถูกนับเข้ากะไหนเลย พอปิดกะยอดที่ควรมีจึงไม่ตรง
     //   และตามไม่ได้ว่าเงินไปอยู่กับใคร — บล็อกไปเลยดีกว่าปล่อยให้เกิดเงินที่ไม่มีเจ้าของ
-    //   จำกัดเฉพาะ CASHIER เพราะ ADMIN เปิดกะผ่าน UI ไม่ได้ (หน้า /shift ส่ง ADMIN ไปลงชื่อเข้า-ออกงานแทน)
-    //   ถ้าบล็อก ADMIN ด้วยจะขายไม่ได้เลย — ดูหมายเหตุที่ฝากไว้ให้ผู้ใช้ตัดสินใจเรื่องนี้ต่อ
-    if (!shiftId && req.user.role === 'CASHIER') {
+    //   ตอนนี้ endpoint นี้เปิดให้เฉพาะ CASHIER แล้ว (ดู requireRole ด้านบน) จึงไม่ต้องเช็ค role ซ้ำ
+    if (!shiftId) {
       await conn.rollback();
       return res.status(400).json({
         error: 'ยังไม่ได้เปิดกะการขาย กรุณาเปิดกะก่อนเริ่มขายสินค้า',

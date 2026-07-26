@@ -5,6 +5,7 @@ import { MEMBER_ITEMS, STAFF_ITEMS, ADMIN_ITEMS_SIDEBAR } from './navConfig';
 interface SidebarProps {
   isStaff: boolean;
   isAdmin: boolean;
+  isCashier: boolean; // ⭐️ POS เป็นเมนูของ CASHIER เท่านั้น (ADMIN ขายหน้าร้านไม่ได้)
   unreadCount: number;
   pendingOrders: number;
   onOpenNotifications: () => void;
@@ -16,7 +17,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  isStaff, isAdmin, unreadCount, pendingOrders, onOpenNotifications,
+  isStaff, isAdmin, isCashier, unreadCount, pendingOrders, onOpenNotifications,
   fullName, role, profileImageUrl, onOpenProfile, onLogoutClick,
 }: SidebarProps) {
   return (
@@ -44,7 +45,7 @@ export function Sidebar({
         {isStaff && (
           <>
             <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">พนักงาน</p></div>
-            <NavItem to="/pos" icon={<Store size={18} />} label="หน้าขาย (POS)" />
+            {isCashier && <NavItem to="/pos" icon={<Store size={18} />} label="หน้าขาย (POS)" />}
             <NavItem to="/orders" icon={<ClipboardList size={18} />} label="จัดการออเดอร์" badge={pendingOrders} />
             {STAFF_ITEMS.map(item => (
               <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />

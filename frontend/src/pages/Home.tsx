@@ -81,7 +81,8 @@ export default function Home() {
     // ⭐️ 3 การ์ดนี้ล็อกพร้อมกันตอน CASHIER ยังไม่เปิดกะ — ล็อกแค่ POS ใบเดียวไม่พอ เพราะกดใบอื่น
     //   จะตั้ง session_mode เป็น 'work' ทำให้เมนู staff (รวมลิงก์ POS) กลับมาโผล่ = อ้อมกติกาได้
     {
-      key: 'pos', show: isStaff, icon: CreditCard, locked: workLocked,
+      // ⭐️ POS โชว์เฉพาะ CASHIER — ADMIN ขายหน้าร้านไม่ได้ (เปิดกะไม่ได้ = บิลผูก shift_id ไม่ได้)
+      key: 'pos', show: isCashier, icon: CreditCard, locked: workLocked,
       title: 'หน้าขาย (POS)', subtitle: workLocked ? 'ต้องเปิดกะก่อนถึงจะขายได้' : 'ขายสินค้า/รับชำระเงิน',
       badge: null,
       onClick: () => goTo('work', '/pos'),
