@@ -5,6 +5,7 @@
 const pool = require('./db');
 const { toSatang, fromSatang } = require('./money');
 const { sendMail } = require('./mailer');
+const { ADMIN_EMAIL } = require('./config');
 
 // ⭐️ Sprint 2 — B8: Timezone Constants (Bangkok UTC+7)
 const TZ_BANGKOK = 'Asia/Bangkok';
@@ -153,7 +154,7 @@ function buildReportHtml(data) {
 
 async function sendDailyReport(targetDateStr) {
   const data = await generateDailyReportData(targetDateStr);
-  const to = process.env.ADMIN_EMAIL;
+  const to = ADMIN_EMAIL;
   if (!to) {
     console.warn('⚠️ Daily report: ไม่พบ ADMIN_EMAIL ใน .env — สร้างรายงานแล้วแต่ไม่ได้ส่ง');
     return { sent: false, data };

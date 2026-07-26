@@ -2,20 +2,21 @@
 // ถ้าไม่ได้ตั้งค่า Cloudinary (เช่น dev บนเครื่อง local) จะ fallback เขียนลงดิสก์ uploads/ เหมือนเดิม
 const fs = require('fs');
 const path = require('path');
+const config = require('./config'); // ⭐️ ค่า CLOUDINARY_* มาจากที่นี่แทน process.env ตรงๆ
 
 const CLOUDINARY_ENABLED = !!(
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
+  config.CLOUDINARY_CLOUD_NAME &&
+  config.CLOUDINARY_API_KEY &&
+  config.CLOUDINARY_API_SECRET
 );
 
 let cloudinary = null;
 if (CLOUDINARY_ENABLED) {
   cloudinary = require('cloudinary').v2;
   cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: config.CLOUDINARY_CLOUD_NAME,
+    api_key: config.CLOUDINARY_API_KEY,
+    api_secret: config.CLOUDINARY_API_SECRET,
     secure: true,
   });
   console.log('☁️  Cloudinary storage: ENABLED (รูปเก็บถาวรบนคลาวด์)');

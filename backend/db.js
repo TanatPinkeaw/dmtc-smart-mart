@@ -1,35 +1,20 @@
 const mysql = require('mysql2/promise');
-require('dotenv').config(); // ⭐️ 1. เพิ่มบรรทัดนี้ เพื่อให้ db.js อ่านไฟล์ .env ได้
-
-// ⭐️ Task 6 — เอา fallback รหัสผ่านฮาร์ดโค้ด ('rootpassword') ออก
-// เดิมถ้า DB_PASSWORD หายจาก .env ระบบจะบูทต่อแบบเงียบๆ ด้วยรหัสผ่านอ่อนแอ — อันตรายเวลา deploy จริง
-// ตอนนี้ต้องมี DB_HOST/DB_USER/DB_PASSWORD/DB_NAME ใน .env จริงเท่านั้น ไม่มี fallback ให้ค่าอ่อนแอ
-const REQUIRED_DB_ENV = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-const missingDbEnv = REQUIRED_DB_ENV.filter(key => !process.env[key]);
-if (missingDbEnv.length > 0) {
-  console.error(`❌ db.js: ไม่พบ environment variable ที่จำเป็น: ${missingDbEnv.join(', ')}`);
-  process.exit(1);
-}
+// ⭐️ env โหลด + validate แล้วที่ config.js ที่เดียว (เดิม db.js เรียก dotenv.config() และเช็ค
+// required vars ซ้ำกับ server.js เกือบทุกตัวอักษร) ดู config.js สำหรับรายละเอียด
+const config = require('./config');
 
 // ⭐️ SSL สำหรับ MySQL บนคลาวด์ (เช่น Aiven) — เปิดเมื่อ DB_SSL=true
 // - ถ้ามี DB_SSL_CA (เนื้อ CA cert แบบ PEM หรือ base64) จะ verify แบบเต็ม ปลอดภัยสุด
 // - ถ้าไม่มี CA จะเข้ารหัสแต่ไม่ verify cert (กันดักฟังข้อมูลระหว่างทางได้ แต่ยังมีช่องให้ MITM แบบ
 //   ปลอมเซิร์ฟเวอร์ได้ถ้า attacker คุม network/DNS) ; local dev ไม่ต้องตั้ง DB_SSL เลย
-// ⭐️ Security remediation — production (Render → Aiven) ต้องเข้ารหัสเสมอ ห้ามบูทแบบ plaintext เงียบๆ
 // TODO: ตั้ง DB_SSL_CA (CA cert จาก Aiven console) แล้วเปลี่ยนบล็อกนี้ให้บังคับอีกทีเพื่อ verify cert
 // เต็มรูปแบบ ตอนนี้ผ่อนให้ทดสอบได้ก่อน — encrypted แต่ยัง rejectUnauthorized:false อยู่
-const IS_PRODUCTION_DB = process.env.NODE_ENV === 'production';
-if (IS_PRODUCTION_DB && process.env.DB_SSL !== 'true') {
-  console.error('❌ db.js: NODE_ENV=production ต้องตั้ง DB_SSL=true (เข้ารหัสการเชื่อมต่อไป Aiven/MySQL เสมอ)');
-  process.exit(1);
-}
-
 let sslOption;
-if (process.env.DB_SSL === 'true') {
-  if (process.env.DB_SSL_CA) {
-    const ca = process.env.DB_SSL_CA.includes('BEGIN CERTIFICATE')
-      ? process.env.DB_SSL_CA
-      : Buffer.from(process.env.DB_SSL_CA, 'base64').toString('utf8');
+if (config.DB_SSL) {
+  if (config.DB_SSL_CA) {
+    const ca = config.DB_SSL_CA.includes('BEGIN CERTIFICATE')
+      ? config.DB_SSL_CA
+      : Buffer.from(config.DB_SSL_CA, 'base64').toString('utf8');
     sslOption = { ca, rejectUnauthorized: true };
   } else {
     // ⭐️ ยังไม่ตั้ง DB_SSL_CA — เข้ารหัสอยู่ (กันดักฟัง) แต่ไม่ verify cert (กัน MITM ไม่เต็มรูปแบบ)
@@ -38,13 +23,12 @@ if (process.env.DB_SSL === 'true') {
   }
 }
 
-// ⭐️ 2. เปลี่ยนบล็อก const pool เดิม ให้เป็นแบบนี้
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
+  host: config.DB_HOST,
+  user: config.DB_USER,
+  password: config.DB_PASSWORD,
+  database: config.DB_NAME,
+  port: config.DB_PORT,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -58,16 +42,6 @@ const pool = mysql.createPool({
 pool.on('connection', (conn) => {
   conn.query("SET time_zone = '+07:00'");
 });
-// const pool = mysql.createPool({
-//   host: process.env.DB_HOST || 'localhost',
-//   user: process.env.DB_USER || 'root',
-//   password: process.env.DB_PASSWORD || '',
-//   database: process.env.DB_NAME || 'pos_coop',
-//   port: process.env.DB_PORT || 3306,
-//   waitForConnections: true,
-//   connectionLimit: 10,
-//   queueLimit: 0
-// });
 
 // const pool = mysql.createPool({
 //   host: 'localhost',
