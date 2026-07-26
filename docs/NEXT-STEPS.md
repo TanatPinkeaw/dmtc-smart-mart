@@ -44,12 +44,12 @@
 
 ที่เหลือ: ต้องตั้ง 3 ค่าเดียวกันนี้ใน **Render environment variables** ด้วย (ตอนนี้ตั้งแค่ local `.env`) ไม่งั้น production ยังเขียนลง local disk เหมือนเดิม (แล้วจะหายตอน Render redeploy)
 
-### 3. Cron ส่งอีเมล backup รายวัน — ✅ โค้ดเสร็จแล้ว (2026-07-26, Phase 4A), รอ SMTP จริง
-`server.js`'s backup cron (ทั้ง branch สำเร็จ/ล้มเหลว) เรียก `mailer.sendMail()` จริงแล้ว ไม่ใช่ `console.log` stub — `ADMIN_EMAIL=dmtcmart@gmail.com` และ `ENABLE_BACKUP_EMAIL=true` ตั้งใน `backend/.env` แล้ว
+### 3. Cron ส่งอีเมล backup รายวัน — ✅ เสร็จสมบูรณ์ + ส่งจริงแล้ว (2026-07-27)
+`server.js`'s backup cron เรียก `mailer.sendMail()` จริง, `ADMIN_EMAIL`/`ENABLE_BACKUP_EMAIL` ตั้งแล้ว, และตอนนี้ `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` ตั้งครบใน local `.env` แล้ว (Gmail App Password ของ `dmtcmart@gmail.com`)
 
-ทดสอบแล้ว: รัน `createBackup()` + `sendMail()` จริงแบบ manual (ไม่รอ cron ตี 2) — สร้างไฟล์ backup จริงสำเร็จ, เรียก `sendMail()` ด้วยหัวข้อ/ผู้รับถูกต้อง แต่ยังไม่ได้ส่งจริงเพราะ `.env` ยังไม่มี `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` เลยสักตัว (mailer.js fail soft ตามที่ออกแบบไว้ — log "จะส่ง" แทน ไม่ throw) — พฤติกรรมถูกต้องตามที่ตั้งใจ ไม่ใช่บั๊ก
+ทดสอบแล้วจริง: รัน `createBackup()` + `sendMail()` จริง (ไม่รอ cron ตี 2) — `sendMail()` คืนค่า `true` (ก่อนหน้านี้คืน `false` เพราะไม่มี SMTP), log ยืนยัน "ส่งอีเมลถึง dmtcmart@gmail.com สำเร็จ" — คือ Gmail SMTP server รับอีเมลไว้ส่งจริงแล้ว (ยืนยันฝั่ง infra ครบ เหลือแค่เช็ค inbox จริงว่าอีเมลไปถึง)
 
-ที่เหลือให้ใช้งานได้จริง: ตั้งค่า `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` ใน `.env` (local) และ Render (production) — เช่น Gmail app password หรือ SendGrid/Mailgun แล้วรันซ้ำเพื่อยืนยันว่าอีเมลไปถึงจริง อย่าลืมตั้ง `ADMIN_EMAIL`/`ENABLE_BACKUP_EMAIL` ใน Render ด้วย (ตอนนี้ตั้งแค่ local .env)
+ที่เหลือ: ตั้งค่า `SMTP_*` ทั้ง 5 ตัวเดียวกันนี้ใน **Render** ด้วย (ตอนนี้ตั้งแค่ local `.env`) — ดูค่าที่ท้ายไฟล์นี้ได้เลย
 
 ### 4. ลบ script ตายใน backend/package.json — ✅ เสร็จแล้ว (2026-07-26, Phase 1)
 เดิม `"test:api": "node test-suite.js"` ไฟล์ `test-suite.js` ไม่มีอยู่จริง ลบ script นี้ออกจาก `backend/package.json` แล้ว
