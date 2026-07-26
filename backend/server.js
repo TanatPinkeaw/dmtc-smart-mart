@@ -1050,6 +1050,24 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง" });
 
+    // ⭐️ NEW — บอก frontend ว่าคนนี้ "กำลังเข้างานอยู่" หรือเปล่า เพื่อตั้งโหมดใช้งานให้อัตโนมัติตอนล็อกอิน
+    //   (CASHIER = มีกะที่ยังเปิดค้างอยู่ / ADMIN = ลงชื่อเข้างานวันนี้แล้วยังไม่ได้ลงชื่อออก)
+    //   เช็คทั้งสองแบบกับ staff ทุกคน ไม่ผูกกับ role เพราะ ADMIN ก็เปิดกะขายเองได้เหมือนกัน
+    //   ถ้าไม่ได้เข้างาน = เข้ามาซื้อของ frontend จะให้เป็นโหมดสมาชิกตามเดิม
+    //   เงื่อนไข attendance ยกมาจาก GET /api/attendance/today ให้ตรงกัน (รองรับ row เก่าที่เก็บเป็น UTC)
+    let hasActiveWorkSession = false;
+    if (user.role === 'ADMIN' || user.role === 'CASHIER') {
+      const [workRows] = await pool.query(
+        `SELECT
+           EXISTS(SELECT 1 FROM shifts WHERE cashier_id = ? AND status = 'OPEN') AS has_open_shift,
+           EXISTS(SELECT 1 FROM attendance WHERE user_id = ?
+                    AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
+                    AND check_out IS NULL) AS has_open_attendance`,
+        [user.id, user.id]
+      );
+      hasActiveWorkSession = !!(workRows[0].has_open_shift || workRows[0].has_open_attendance);
+    }
+
     // ⭐️ Sprint 2 — B5: Issue both access token (8h) and refresh token (7d)
     // ⭐️ Security fix — สุ่ม csrf token ที่นี่ ฝังลง access token (เซ็นแล้ว) แล้วคืนค่าเดียวกันทาง
     // response body ให้ frontend เก็บไว้แนบเป็น header (ไม่ใช่ cookie — อ่านข้าม origin ไม่ได้)
@@ -1065,6 +1083,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       message: "ล็อกอินสำเร็จ",
       user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password, profile_image_url: user.profile_image_url || null },
       csrfToken,
+      has_active_work_session: hasActiveWorkSession, // ⭐️ frontend ใช้ตั้ง session_mode (work/shop) อัตโนมัติ
     });
   } catch (error) {
     console.error('[500]', error.message);

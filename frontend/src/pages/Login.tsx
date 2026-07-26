@@ -58,8 +58,12 @@ export default function Login() {
       // ⭐️ F4 — Notify Socket context that token has changed (for same-tab reconnection)
       window.dispatchEvent(new Event('tokenChanged'));
 
-      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ — session_mode เลือกใหม่ตอนกดการ์ดโมดูลใน Home.tsx
-      localStorage.removeItem('session_mode');
+      // ⭐️ NEW — ตั้งโหมดใช้งานอัตโนมัติจากสถานะเข้างานจริง (backend ส่ง has_active_work_session มาให้)
+      //   staff ที่ยังเข้างานค้างอยู่ (เปิดกะ/ลงชื่อเข้างานแล้วยังไม่ออก) = เข้าโหมดทำงานต่อได้เลย
+      //   ใครที่ไม่ได้เข้างาน (รวม MEMBER ทุกคน) = โหมดซื้อของตามเดิม
+      //   ยังเปลี่ยนเองได้ทีหลังจากการ์ดโมดูลในหน้า Home (goTo ตั้ง session_mode ทับ)
+      localStorage.setItem('session_mode', response.data.has_active_work_session ? 'work' : 'shop');
+      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ
       navigate('/home');
     } catch (err: any) {
       if (err.response?.status !== 429) {
