@@ -94,6 +94,8 @@ export default function Shift() {
       await api.put('/attendance/check-out', { check_out_photo: uploadRes.data.photo_url });
       Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
       // ⭐️ ลงชื่อออกงานเสร็จแล้วไม่ต้องเตะออกจากระบบ (ตามคำขอผู้ใช้) — กลับหน้า Home ให้เลือกทำอย่างอื่นต่อได้
+      //   แต่ต้องสลับเป็นโหมดซื้อของด้วย ให้ตรงกับกติกาเดียวกับตอนล็อกอิน (ไม่ได้เข้างาน = สมาชิก)
+      localStorage.setItem('session_mode', 'shop');
       setTimeout(() => navigate('/home'), 1500);
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckOutLoading(false); }
@@ -250,7 +252,11 @@ export default function Shift() {
       shiftSummary={shiftSummary}
       onSubmit={handleCloseShift}
       onClose={() => navigate('/home')}
-      onDone={() => navigate('/home')}
+      onDone={() => {
+        // ⭐️ ปิดกะแล้ว = ไม่ได้เข้างานอยู่ กลับเป็นโหมดซื้อของ (กติกาเดียวกับตอนล็อกอิน)
+        localStorage.setItem('session_mode', 'shop');
+        navigate('/home');
+      }}
     />
   );
 
