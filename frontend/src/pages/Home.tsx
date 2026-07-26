@@ -124,7 +124,7 @@ export default function Home() {
 
       {/* Stat card (staff only) — ลอยคาบเส้นขอบล่างของ header ตามดีไซน์อ้างอิง สีต่างกันตามประเภทข้อมูล */}
       {isStaff && summary && (
-        <div className="px-5 -mt-12 relative z-10">
+        <div className="px-5 -mt-16 relative z-10">
           <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 grid grid-cols-3 divide-x divide-brand-border">
             <div className="text-center px-1">
               <p className="text-base font-extrabold text-brand">฿{Number(summary.total_sales).toLocaleString()}</p>
@@ -160,7 +160,7 @@ export default function Home() {
 
       {/* ⭐️ Design-ref — แบนเนอร์โปรโมชั่นวันนี้ (สมาชิกเท่านั้น) ดึงจาก /promotions/active ตัวแรก */}
       {!isStaff && activePromo && (
-        <div className="px-5 -mt-6 relative z-10 max-w-lg mx-auto">
+        <div className="px-5 -mt-16 relative z-10 max-w-lg mx-auto">
           <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 flex items-center gap-3">
             <div className="w-11 h-11 bg-brand-bg rounded-xl flex items-center justify-center shrink-0">
               <Tag size={20} className="text-brand" />
@@ -174,7 +174,7 @@ export default function Home() {
       )}
 
       {/* Module list */}
-      <div className={`px-5 ${isStaff ? 'mt-5' : (activePromo ? 'mt-5' : '-mt-6 relative z-10')} pb-10 max-w-lg mx-auto`}>
+      <div className={`px-5 ${isStaff ? 'mt-5' : (activePromo ? 'mt-5' : '-mt-16 relative z-10')} pb-10 max-w-lg mx-auto`}>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">เมนูสำหรับคุณ</p>
         <div className="space-y-3">
           {modules.map(m => {
