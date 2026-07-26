@@ -1,0 +1,72 @@
+name: CI
+
+# Phase 3 (foundational safety net) — catches two classes of bug this session hit by hand:
+# 1. Build-breaking TypeScript errors that `tsc --noEmit` alone misses (recharts Tooltip formatter
+#    type mismatch happened twice — only the real `tsc -b && vite build` build command caught it).
+# 2. Regressions in the core cashier flow (shift-gate, no-open-shift-checkout block) that used to be
+#    verified only by hand in a browser.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  backend-smoke-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_test_password
+          MYSQL_DATABASE: pos_coop_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot -pci_test_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      NODE_ENV: development
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: ci_test_password
+      DB_NAME: pos_coop_ci
+      DB_PORT: 3306
+      JWT_SECRET: ci_test_jwt_secret_not_for_production
+      PORT: 3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # Load the documented canonical schema directly — faster and doesn't rely on the app's own
+      # defensive ALTER-patch startup path, so this also acts as a check that schema.sql stays in
+      # sync with what db.js actually produces (see backend/schema.sql header for why both exist).
+      - name: Load schema.sql into test database
+        run: mysql -h127.0.0.1 -uroot -pci_test_password pos_coop_ci < schema.sql
+      - run: node -c server.js
+      - run: node smoke-test.js
