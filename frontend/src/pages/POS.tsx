@@ -34,7 +34,7 @@ export default function POS() {
   const [amountReceived, setAmountReceived] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('CASH');
-  const PROMPTPAY_ID = "0803610120";
+  const PROMPTPAY_ID = "004666002113797";
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false); // ⭐️ มือถือ: ยุบ/ขยายแผงชำระเงิน (กันจอสั้นล้น)
   // ⭐️ FIX: ปุ่ม/โมดัลปิดกะเดิมอยู่ในนี้ด้วย ซ้ำกับ Dashboard.tsx ที่มีฟีเจอร์ปิดกะสมบูรณ์อยู่แล้ว

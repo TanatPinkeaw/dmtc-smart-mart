@@ -61,7 +61,7 @@ export default function PreOrder() {
   const [phoneVerified, setPhoneVerified] = useState<any>(null); // ผลตรวจเบอร์ (แสดงชื่อ+แต้มยืนยัน)
   const [verifying, setVerifying] = useState(false);
 
-  const PROMPTPAY_ID = "0803610120"; // 👈 เบอร์พร้อมเพย์ร้าน
+  const PROMPTPAY_ID = "004666002113797"; // 👈 เบอร์พร้อมเพย์ร้าน
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
   const [showMyOrders, setShowMyOrders] = useState(false);
