@@ -4747,9 +4747,11 @@ app.post('/api/admin/backups/create', requireRole('ADMIN'), async (req, res) => 
 
     res.json({ success: true, backup: result });
   } catch (err) {
-    console.error('[500]', err.message);
+    // ⭐️ ADMIN เท่านั้น — โชว์ error จริงได้ปลอดภัย เหมือน pattern ที่ใช้ใน backups/:id/restore
+    console.error('[backups/create] ERROR:', err.code || '', err.sqlMessage || err.message);
+    console.error(err.stack);
 
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    res.status(500).json({ error: err.sqlMessage || err.message });
   }
 });
 
