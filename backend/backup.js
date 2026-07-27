@@ -10,7 +10,7 @@ const zlib = require('zlib');
 
 const TZ_BANGKOK = 'Asia/Bangkok';
 
-// Get today's date in Bangkok timezone (for filename)
+// Get today's date in Bangkok timezone — ยังใช้กับคอลัมน์ backup_date และเช็ค "วันนี้ backup ไปหรือยัง"
 function getBackupDateBangkok() {
   const now = new Date();
   const bangkokDate = new Date(now.toLocaleString('en-US', { timeZone: TZ_BANGKOK }));
@@ -18,6 +18,28 @@ function getBackupDateBangkok() {
   const month = String(bangkokDate.getMonth() + 1).padStart(2, '0');
   const day = String(bangkokDate.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// 🐛 FIX — ชื่อไฟล์ต้องมีเวลาด้วย ไม่ใช่แค่วันที่
+// เดิมชื่อไฟล์เป็น `coop-backup-<วันที่>.sql.gz` ล้วนๆ แต่คอลัมน์ backups.filename เป็น UNIQUE
+// พอวันเดียวกันมีการสร้าง backup รอบสอง (เช่น cron ตี 2 ล้มเหลวคาสถานะ FAILED ไว้ แล้ว admin
+// กดปุ่ม "สร้าง backup" เอง) INSERT รอบใหม่จะชนชื่อไฟล์เดิม → ER_DUP_ENTRY (1062) → endpoint
+// ตอบ 500 (ตรงกับที่เจอจริงบน production: POST /api/admin/backups/create 500)
+// หมายเหตุ: การ์ด "วันนี้มี backup สถานะ SUCCESS แล้วให้ข้าม" ด้านล่างกันได้เฉพาะเคส SUCCESS
+// เท่านั้น แถวที่ค้างสถานะ PENDING/FAILED ไม่ถูกกัน จึงหลุดมาชนกันตรง INSERT
+// ⭐️ ละเอียดถึงระดับมิลลิวินาที ไม่ใช่แค่วินาที — ยืนยันด้วยเทสต์แล้วว่าจำเป็น: ถ้าใช้แค่ HHmmss
+// การสร้าง backup สองครั้งภายในวินาทีเดียวกัน (เช่น admin กดปุ่มรัวสองที หรือ request ซ้อนกัน)
+// ยังได้ชื่อไฟล์เดิมเป๊ะ → ชน UNIQUE key → 500 เหมือนเดิม
+// หมายเหตุ: toLocaleString ไม่มีมิลลิวินาที จึงต้องอ่าน getMilliseconds() จาก now ตัวเดิม
+// (ค่ามิลลิวินาทีในวินาทีนั้นเท่ากันทุก timezone อยู่แล้ว)
+function getBackupTimestampBangkok() {
+  const now = new Date();
+  const bangkok = new Date(now.toLocaleString('en-US', { timeZone: TZ_BANGKOK }));
+  const p = (n) => String(n).padStart(2, '0');
+  const date = `${bangkok.getFullYear()}-${p(bangkok.getMonth() + 1)}-${p(bangkok.getDate())}`;
+  const time = `${p(bangkok.getHours())}${p(bangkok.getMinutes())}${p(bangkok.getSeconds())}`;
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+  return `${date}_${time}_${ms}`;
 }
 
 // ⭐️ Dump ทุกตารางในฐานข้อมูลปัจจุบันเป็น SQL text เดียว (DROP + CREATE + INSERT ต่อตาราง)
@@ -104,13 +126,18 @@ async function restoreDatabaseFromSql(pool, sql) {
 
 // สร้าง backup ใหม่ (ข้ามถ้าวันนี้ backup สำเร็จไปแล้ว) — บันทึกสถานะลงตาราง backups เสมอ
 async function createBackup(db, backupDir = './backups') {
+  // ⭐️ คิดชื่อไฟล์/วันที่ครั้งเดียวไว้นอก try เพื่อให้ catch ใช้ค่าเดียวกันได้ และให้แถว PENDING
+  // กับไฟล์จริงใช้ timestamp เดียวกันเสมอ
+  const backupDate = getBackupDateBangkok();
+  const filename = `coop-backup-${getBackupTimestampBangkok()}.sql`;
+  // ⭐️ ต้องรู้ใน catch ว่าแถว PENDING ถูก INSERT ไปแล้วหรือยัง จะได้เลือกว่า UPDATE หรือ INSERT
+  let backupId = null;
+
   try {
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
 
-    const backupDate = getBackupDateBangkok();
-    const filename = `coop-backup-${backupDate}.sql`;
     const filepath = path.join(backupDir, filename);
     const gzipPath = `${filepath}.gz`;
 
@@ -127,7 +154,7 @@ async function createBackup(db, backupDir = './backups') {
       'INSERT INTO backups (filename, backup_date, status) VALUES (?, ?, ?)',
       [`${filename}.gz`, backupDate, 'PENDING']
     );
-    const backupId = insertResult.insertId;
+    backupId = insertResult.insertId;
 
     const sql = await dumpDatabaseToSql(db);
     const gzipped = zlib.gzipSync(Buffer.from(sql, 'utf8'));
@@ -147,12 +174,25 @@ async function createBackup(db, backupDir = './backups') {
   } catch (err) {
     console.error('❌ Backup failed:', err);
 
-    const backupDate = getBackupDateBangkok();
+    // 🐛 FIX — เดิม catch ยิง INSERT แถว FAILED ใหม่เสมอ ด้วยชื่อไฟล์แบบวันที่ล้วน ซึ่งชนกับแถวเดิม
+    // ของวันนั้นได้อีกดอก (เจอจริง: "บันทึกสถานะ backup ที่ล้มเหลวไม่สำเร็จ: Duplicate entry")
+    // = ตัว error handler เองก็พัง เลยไม่มีร่องรอยความล้มเหลวเหลือไว้ใน DB เลย
+    // ถ้าแถว PENDING ถูกสร้างไปแล้ว ให้อัปเดตแถวนั้นเป็น FAILED แทนการสร้างแถวใหม่ — ได้ทั้งไม่ชนชื่อ
+    // และไม่ทิ้งแถว PENDING ค้างไว้ (แถว PENDING ค้างจะหลอกให้ครั้งถัดไปเข้าใจผิดตอนไล่ดูสถานะ)
     try {
-      await db.query(
-        'INSERT INTO backups (filename, backup_date, status, notes) VALUES (?, ?, ?, ?)',
-        [`coop-backup-${backupDate}.sql.gz`, backupDate, 'FAILED', err.message]
-      );
+      if (backupId) {
+        await db.query(
+          'UPDATE backups SET status = ?, notes = ? WHERE id = ?',
+          ['FAILED', err.message, backupId]
+        );
+      } else {
+        // พังก่อนจะได้สร้างแถว (เช่น mkdir ไม่ผ่าน / SELECT ล้ม) — บันทึกไว้เป็นแถวใหม่
+        // ชื่อไฟล์มี timestamp แล้วจึงไม่ชนกับ backup อื่นของวันเดียวกัน
+        await db.query(
+          'INSERT INTO backups (filename, backup_date, status, notes) VALUES (?, ?, ?, ?)',
+          [`${filename}.gz`, backupDate, 'FAILED', err.message]
+        );
+      }
     } catch (logErr) {
       console.error('⚠️ บันทึกสถานะ backup ที่ล้มเหลวไม่สำเร็จ:', logErr.message);
     }
