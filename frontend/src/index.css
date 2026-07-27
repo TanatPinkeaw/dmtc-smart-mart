@@ -1,97 +1,14 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme {
-  --color-brand: #F12B6B;
-  --color-brand-dark: #FF467E;
-  --color-brand-mid: #FD94B4;
-  --color-brand-border: #F6C7C7;
-  --color-brand-bg: #FFF5F7;
+/* ⭐️ Brand/neutral colors now live in tailwind.config.js (theme.extend.colors), not in a v4
+   `@theme` block here. Utility names are unchanged: bg-brand, text-brand-mid, bg-brand-bg,
+   border-brand-border, bg-neutral-bg, border-neutral-border, …
 
-  /* ⭐️ Neutral surface tokens — for screens that should read clean/white rather than brand-tinted
-     (Login). Declared as plain sRGB hex on purpose, same as the brand tokens above: Tailwind v4's
-     built-in palette (slate-50, slate-200, …) is defined in oklch, which we avoid here so colors
-     resolve identically on every browser and stay greppable as literal hex. */
-  --color-neutral-bg: #F8FAFC;
-  --color-neutral-border: #E2E8F0;
-}
-
-/* ⭐️ iOS 15 / Safari 15 gradient fallback — fixes INVISIBLE BUTTONS on older iPhones.
-   (iPhone 7 and earlier cap out at iOS 15.8; Tailwind v4 officially targets Safari 16.4+.)
-
-   Tailwind v4 compiles every `bg-gradient-to-*` down to
-       background-image: linear-gradient(var(--tw-gradient-stops))
-   where --tw-gradient-stops expands to roughly
-       <position> in oklab, <from> var(--tw-gradient-from-position), <to> var(--tw-gradient-to-position)
-
-   Three separate pieces of that need Safari 16.2–16.4+:
-     1. `in oklab` gradient colour-space interpolation          (Safari 16.2+)
-     2. --tw-gradient-*-position, whose values come only from
-        an @property `initial-value` declaration                (Safari 16.4+)
-     3. --tw-gradient-from/to defaults, same @property story    (Safari 16.4+)
-
-   On Safari 15 all three fail at once, so the whole linear-gradient() is invalid and
-   background-image computes to `none`. Every gradient button then renders fully
-   transparent — and since they all use `text-white` on a white card, the button becomes
-   literally invisible (not just mis-coloured). Same for the primary variant in
-   components/ui/Button.tsx, so this hit most primary actions across the app.
-
-   Below: supply those values explicitly, in plain sRGB, only for browsers that can't do
-   oklab interpolation. Unlayered rules like these outrank Tailwind's @layer utilities, so
-   they win where they apply — and the @supports guard means modern browsers ignore the
-   whole block and keep the nicer oklab interpolation. */
-@supports not (background-image: linear-gradient(in oklab, red, blue)) {
-  *, ::before, ::after {
-    --tw-gradient-from: #0000;
-    --tw-gradient-via: #0000;
-    --tw-gradient-to: #0000;
-    --tw-gradient-from-position: 0%;
-    --tw-gradient-via-position: 50%;
-    --tw-gradient-to-position: 100%;
-  }
-  .bg-gradient-to-t  { --tw-gradient-position: to top; }
-  .bg-gradient-to-tr { --tw-gradient-position: to top right; }
-  .bg-gradient-to-r  { --tw-gradient-position: to right; }
-  .bg-gradient-to-br { --tw-gradient-position: to bottom right; }
-  .bg-gradient-to-b  { --tw-gradient-position: to bottom; }
-  .bg-gradient-to-bl { --tw-gradient-position: to bottom left; }
-  .bg-gradient-to-l  { --tw-gradient-position: to left; }
-  .bg-gradient-to-tl { --tw-gradient-position: to top left; }
-}
-
-/* ⭐️ iOS 15 / Safari 15 translucency fallback — same story as the gradient block above.
-   Tailwind v4 compiles every opacity modifier (bg-black/50, bg-white/20, …) to
-       color-mix(in oklab, <color> 50%, transparent)
-   which needs Safari 16.2+. Below that the declaration is invalid and simply drops, so
-   modal backdrops render fully transparent (no dimming) and translucent overlay panels
-   lose their tint entirely.
-
-   Every opacity modifier this app uses sits on pure white or pure black, so a plain
-   rgba() — understood by every browser — reproduces them exactly. Kept to the set actually
-   in use rather than every possible step; add new ones here if new modifiers appear. */
-@supports not (color: color-mix(in oklab, red 50%, transparent)) {
-  .bg-white\/15 { background-color: rgba(255, 255, 255, 0.15); }
-  .bg-white\/20 { background-color: rgba(255, 255, 255, 0.20); }
-  .bg-white\/25 { background-color: rgba(255, 255, 255, 0.25); }
-  .bg-white\/30 { background-color: rgba(255, 255, 255, 0.30); }
-  .bg-white\/50 { background-color: rgba(255, 255, 255, 0.50); }
-
-  .bg-black\/0  { background-color: rgba(0, 0, 0, 0); }
-  .bg-black\/10 { background-color: rgba(0, 0, 0, 0.10); }
-  .bg-black\/30 { background-color: rgba(0, 0, 0, 0.30); }
-  .bg-black\/40 { background-color: rgba(0, 0, 0, 0.40); }
-  .bg-black\/50 { background-color: rgba(0, 0, 0, 0.50); }
-  .bg-black\/60 { background-color: rgba(0, 0, 0, 0.60); }
-
-  .text-white\/70 { color: rgba(255, 255, 255, 0.70); }
-  .text-white\/80 { color: rgba(255, 255, 255, 0.80); }
-  .text-white\/90 { color: rgba(255, 255, 255, 0.90); }
-
-  .border-white\/20 { border-color: rgba(255, 255, 255, 0.20); }
-  .border-white\/40 { border-color: rgba(255, 255, 255, 0.40); }
-
-  .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.60); }
-  .ring-black\/10 { --tw-ring-color: rgba(0, 0, 0, 0.10); }
-}
+   The hand-written @supports fallbacks for oklab gradients and color-mix() that used to sit
+   here are gone too — Tailwind v3 emits plain rgb()/rgba() and has no @property dependency,
+   so gradients and opacity modifiers work on Safari 15 / older Android without them. */
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
