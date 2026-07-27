@@ -42,6 +42,22 @@ function getBackupTimestampBangkok() {
   return `${date}_${time}_${ms}`;
 }
 
+// 🐛 FIX — pool.escape() ใช้กับค่าที่ mysql2 คืนมาจากคอลัมน์ JSON ตรงๆ ไม่ได้
+// mysql2 parse คอลัมน์ JSON (เช่น shifts.opening_cash_breakdown / closing_cash_breakdown)
+// ให้เป็น JS object/array แล้ว พอส่งเข้า pool.escape() ต่อ จะได้ผลผิดสองแบบ:
+//   object  ->  '[object Object]'   (coerce เป็น string ทิ้งข้อมูลจริงหมด) ตอน restore MySQL
+//               ปฏิเสธเพราะไม่ใช่ JSON ที่ถูกต้อง = ER_INVALID_JSON_TEXT (errno 3140)
+//   array   ->  1, 2, 3             (แตกเป็นหลายค่าคั่นด้วยจุลภาค) ทำให้จำนวนคอลัมน์ใน INSERT
+//               เพี้ยนทั้ง statement — พังเงียบกว่าเคสแรกอีก
+// แก้โดย stringify เองก่อนแล้วค่อย escape "ในฐานะ string" ซึ่ง escape quote/backslash ให้ถูกต้อง
+// (ปลอดภัยกว่าไล่แทน ' เอง) — Date กับ Buffer ต้องปล่อยให้ pool.escape จัดการตามเดิม
+function escapeSqlValue(pool, val) {
+  if (val === null || val === undefined) return 'NULL';
+  if (val instanceof Date || Buffer.isBuffer(val)) return pool.escape(val);
+  if (typeof val === 'object') return pool.escape(JSON.stringify(val));
+  return pool.escape(val);
+}
+
 // ⭐️ Dump ทุกตารางในฐานข้อมูลปัจจุบันเป็น SQL text เดียว (DROP + CREATE + INSERT ต่อตาราง)
 // ใช้ connection เดียวตลอดการ dump (ไม่ใช่ pool.query แยกครั้ง) เพื่อให้ REPEATABLE READ snapshot
 // สอดคล้องกันทุกตาราง แม้มีการเขียนข้อมูลระหว่าง dump อยู่ก็ตาม
@@ -75,7 +91,7 @@ async function dumpDatabaseToSql(pool) {
         for (let i = 0; i < rows.length; i += CHUNK) {
           const chunk = rows.slice(i, i + CHUNK);
           const values = chunk
-            .map(row => '(' + columns.map(c => pool.escape(row[c])).join(', ') + ')')
+            .map(row => '(' + columns.map(c => escapeSqlValue(pool, row[c])).join(', ') + ')')
             .join(',\n  ');
           sql += `INSERT INTO \`${table}\` (${colList}) VALUES\n  ${values};\n`;
         }
@@ -109,7 +125,15 @@ async function restoreDatabaseFromSql(pool, sql) {
     .filter(line => !line.trimStart().startsWith('--'))
     .join('\n');
 
-  const statements = sqlWithoutComments
+  // 🐛 FIX — กู้ไฟล์ backup เก่าที่ถูกสร้างตอนยังมีบั๊ก escape คอลัมน์ JSON (ดู escapeSqlValue)
+  // ไฟล์พวกนั้นเก็บค่าไว้เป็น '[object Object]' ซึ่งไม่ใช่ JSON ที่ถูกต้อง พอ restore เข้าคอลัมน์
+  // JSON จริง MySQL จะปฏิเสธทั้ง statement ด้วย ER_INVALID_JSON_TEXT (3140) แล้ว restore ล้มทั้งงาน
+  // แทนค่าเสียเหล่านั้นด้วย '{}' (JSON ว่าง ที่ valid) เพื่อให้ restore เดินต่อจนจบได้
+  // ข้อมูลใน field นั้นกู้กลับไม่ได้อยู่แล้ว (บั๊กเดิมทำลายตั้งแต่ตอน dump) แต่แถวที่เหลือรอด
+  // ไฟล์ backup ที่สร้างหลังแก้บั๊กจะไม่มีสตริงนี้ บรรทัดนี้จึงไม่แตะอะไรเลย
+  const sqlSanitized = sqlWithoutComments.split("'[object Object]'").join("'{}'");
+
+  const statements = sqlSanitized
     .split(';\n')
     .map(s => s.trim())
     .filter(s => s.length > 0);
