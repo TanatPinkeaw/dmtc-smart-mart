@@ -409,16 +409,36 @@ const io = new Server(server, {
 // ⭐️ Task 1A — ปฏิเสธ socket ที่ไม่มี/ไม่ผ่าน JWT ก่อนให้เชื่อมต่อ (เดิม: รับทุก connection โดยไม่เช็คเลย)
 // ⭐️ Security remediation — token อยู่ใน httpOnly cookie แล้ว ไม่ใช่ handshake.auth (client แนบ
 // cookie มาเองอัตโนมัติถ้าเปิด withCredentials); เก็บ auth.token/header ไว้เป็น fallback เฉยๆ
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
     const cookies = parseCookies({ headers: socket.handshake.headers });
     // ⭐️ SECURITY FIX (#5) — เดิม log JSON.stringify(handshake.auth) = พ่น JWT ลง log ตรงๆ เอาออก
+    // ลำดับการหา token:
+    //   1. cookie access_token — ใช้ได้ตอน same-site (dev, หรือเบราว์เซอร์ที่ไม่บล็อก third-party cookie)
+    //   2. handshake.auth.token — token จาก /api/auth/socket-token ที่ frontend แนบมาเอง
+    //      (ทางหลักบน production ข้ามโดเมน ที่ ITP บล็อก cookie)
+    //   3. Authorization header — เผื่อ client ที่ไม่ใช่เบราว์เซอร์
     const token = cookies.access_token || socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
     if (!token) {
       return next(new Error('Missing JWT token'));
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // ⭐️ รับได้เฉพาะ access token ปกติ (ไม่มี type) หรือ socket token เท่านั้น
+    // refresh token ห้ามเอามาเปิด socket
+    if (decoded.type && decoded.type !== 'socket') {
+      console.log(`[SOCKET AUTH] rejected token type='${decoded.type}'`);
+      return next(new Error('Invalid or expired token'));
+    }
+
+    // ⭐️ เดิม socket ไม่เช็ค revocation เลย — logout/เปลี่ยนรหัสผ่านแล้ว socket เดิมยังฟัง event ต่อ
+    // ได้เรื่อยๆ ตอนนี้ socket token อ่านได้จาก JS ด้วย การเช็คตรงนี้เลยสำคัญขึ้นกว่าเดิม
+    if (await isTokenRevoked(decoded)) {
+      console.log(`[SOCKET AUTH] revoked token, user_id=${decoded.id}`);
+      return next(new Error('Invalid or expired token'));
+    }
+
     socket.user = decoded; // { id, role, full_name }
     console.log(`[DEBUG SOCKET AUTH] Token verified - user_id=${decoded.id}, role=${decoded.role}`);
     next();
@@ -559,6 +579,15 @@ function authenticateToken(req, res, next) {
         return res.status(401).json({ error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
       }
       console.error(`[AUTH] Token verification failed for ${req.method} ${req.path}: ${err.message}`);
+      return res.status(403).json({ error: 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
+    }
+    // ⭐️ Security — access token ปกติ (generateAccessToken) ไม่มี claim `type` เลย
+    // token ที่มี type คือ token เฉพาะทาง ห้ามเอามาใช้แทน access token กับ REST:
+    //   type='refresh' — ใช้ได้แค่ที่ /api/auth/refresh
+    //   type='socket'  — ใช้ได้แค่ตอน handshake ของ Socket.io (JS อ่านได้ ดู /api/auth/socket-token)
+    // ถ้าไม่กันตรงนี้ socket token ที่หลุดจาก XSS จะยิง REST API แทน user ได้ทันที
+    if (payload.type) {
+      console.warn(`[AUTH] Rejected '${payload.type}' token used as access token for ${req.method} ${req.path}`);
       return res.status(403).json({ error: 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
     }
     try {
@@ -1130,6 +1159,28 @@ app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
 // login/refresh ใหม่ทั้งกระบวนการ — เป็น GET จึงไม่โดน requireCsrf บล็อกตัวเอง (chicken-and-egg)
 app.get('/api/auth/csrf-token', (req, res) => {
   res.json({ csrfToken: req.user?.csrf || null });
+});
+
+// ⭐️ Socket.io auth — token อายุสั้นสำหรับ handshake โดยเฉพาะ
+//
+// ทำไมต้องมี: REST วิ่งผ่าน Vercel rewrite แล้ว (/api/* proxy ไป Render) cookie จึงเป็น first-party
+// ส่งได้ปกติ แต่ Vercel rewrite ไม่รองรับ WebSocket upgrade — Socket.io จึงยังต้องต่อตรงไป Render
+// = ยัง cross-site อยู่ Safari/iOS (ITP) บล็อก third-party cookie ทิ้ง handshake เลยไม่มี
+// access_token ติดไป ได้ error 'Missing JWT token' ทั้งที่ผู้ใช้ล็อกอินอยู่
+//
+// endpoint นี้เรียกผ่าน proxy (cookie ใช้ได้) แล้วคืน token ที่ JS ถือไปแนบใน handshake ได้
+//
+// ⚠️ token นี้ JS อ่านได้ (ไม่ใช่ httpOnly) จึงตั้งใจจำกัดความเสียหายไว้:
+//   - อายุ 5 นาที พอสำหรับต่อ socket ทันทีหลังขอ (frontend ขอใหม่ทุกครั้งที่ reconnect)
+//   - ติด claim type='socket' ซึ่ง authenticateToken ปฏิเสธ = เอาไปยิง REST API ไม่ได้
+//   - ไม่ใส่ csrf claim จึงใช้ทำ mutating request แทนผู้ใช้ไม่ได้อยู่แล้ว
+app.get('/api/auth/socket-token', (req, res) => {
+  const socketToken = jwt.sign(
+    { id: req.user.id, role: req.user.role, full_name: req.user.full_name, type: 'socket' },
+    JWT_SECRET,
+    { expiresIn: '5m' }
+  );
+  res.json({ socketToken });
 });
 
 // ⭐️ Sprint 2 — B5: Token Logout Endpoint
