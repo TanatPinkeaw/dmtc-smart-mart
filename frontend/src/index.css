@@ -6,6 +6,13 @@
   --color-brand-mid: #FD94B4;
   --color-brand-border: #F6C7C7;
   --color-brand-bg: #FFF5F7;
+
+  /* ⭐️ Neutral surface tokens — for screens that should read clean/white rather than brand-tinted
+     (Login). Declared as plain sRGB hex on purpose, same as the brand tokens above: Tailwind v4's
+     built-in palette (slate-50, slate-200, …) is defined in oklch, which we avoid here so colors
+     resolve identically on every browser and stay greppable as literal hex. */
+  --color-neutral-bg: #F8FAFC;
+  --color-neutral-border: #E2E8F0;
 }
 
 @keyframes fadeIn {

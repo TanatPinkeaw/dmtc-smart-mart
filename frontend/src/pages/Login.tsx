@@ -82,7 +82,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-dvh bg-brand-bg flex flex-col items-center justify-center px-5 py-10">
+    <div className="min-h-dvh bg-neutral-bg flex flex-col items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
 
         {/* Brand — ⭐️ FIX: ใช้โลโก้จริงของร้านแทนกล่องไอคอน ShoppingBag เดิม */}
@@ -95,7 +95,7 @@ export default function Login() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-6">
+        <div className="bg-white border border-neutral-border rounded-3xl shadow-sm p-6">
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl">
               {error}
@@ -117,7 +117,7 @@ export default function Login() {
               <input
                 type="text" required value={username} onChange={e => setUsername(e.target.value)}
                 placeholder="Username / รหัสนักศึกษา" disabled={isRateLimited}
-                className="w-full px-4 py-3 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 rounded-full border border-neutral-border bg-neutral-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -127,7 +127,7 @@ export default function Login() {
                 <input
                   type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" disabled={isRateLimited}
-                  className="w-full px-4 py-3 pr-12 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-3 pr-12 rounded-full border border-neutral-border bg-neutral-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)} disabled={isRateLimited} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand transition-colors duration-150 p-1 disabled:opacity-50">
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -138,7 +138,7 @@ export default function Login() {
             <button
               type="submit" disabled={loading || isRateLimited}
               className="w-full py-3.5 mt-1 rounded-full text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-                enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
+                enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-gray-300
                 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
             >
               {isRateLimited ? (
@@ -153,7 +153,7 @@ export default function Login() {
           </form>
 
           {/* ⭐️ F1 — ลืมรหัสผ่าน */}
-          <div className="mt-5 pt-5 border-t border-brand-border text-center">
+          <div className="mt-5 pt-5 border-t border-neutral-border text-center">
             <Link to="/forgot-password" className="text-sm text-brand font-semibold hover:underline">
               ลืมรหัสผ่าน?
             </Link>
