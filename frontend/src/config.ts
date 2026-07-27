@@ -10,4 +10,12 @@ if (import.meta.env.PROD && !API_ORIGIN.startsWith('https://')) {
   throw new Error(`[config] VITE_API_URL ต้องใช้ https:// บน production build, ได้รับ: ${API_ORIGIN}`);
 }
 
-export const API_BASE_URL = `${API_ORIGIN}/api`;
+// ⭐️ Production ยิง REST API แบบ relative path ('/api/...') ผ่าน Vercel rewrite (ดู vercel.json)
+// ไม่ได้ยิงตรงไปที่ Render — เพื่อให้ cookie ที่ backend ตั้งกลายเป็น first-party ของโดเมน Vercel
+// (Safari/iOS ITP บล็อก third-party cookie ทิ้ง ทำให้ล็อกอินผ่านแต่ request ถัดไปไม่มี cookie → 401
+// วนกลับหน้า login) dev ยังยิงตรงไป localhost:3000 เหมือนเดิม เพราะไม่มี Vercel proxy อยู่ตรงกลาง
+export const API_BASE_URL = import.meta.env.PROD ? '/api' : `${API_ORIGIN}/api`;
+
+// ⭐️ หมายเหตุสำคัญ: Socket.io ยัง "ต้อง" ต่อตรงไปที่ API_ORIGIN (Render) เท่านั้น ห้ามเปลี่ยนไปใช้
+// path relative ผ่าน proxy — Vercel rewrite ไม่รองรับการ upgrade เป็น WebSocket ถ้าเปลี่ยน realtime
+// จะพังทั้งระบบ (ดู SocketContext.tsx ที่ import API_ORIGIN ไปใช้) VITE_API_URL จึงยังจำเป็นอยู่
