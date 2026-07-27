@@ -17,9 +17,29 @@ let refreshPromise: Promise<any> | null = null;
 // แสดง Swal ให้ผู้ใช้กดยืนยันครั้งเดียว แล้วค่อย navigate จริงตอนนั้น (คลิกจริงของผู้ใช้ = execution
 // context ใหม่ ไม่โดนแย่งจาก request อื่นที่ยัง 401 ค้างอยู่)
 let sessionExpiredHandled = false;
+
+// 🐛 FIX — เมื่อ session ตายแล้ว ต้อง "ปิดประตู" ไม่ให้ request ใหม่ออกไปอีก
+// ระหว่างที่ Swal ยังรอผู้ใช้กดปุ่มอยู่ หน้าเว็บยัง mount อยู่และ polling/refetch ยังเดินต่อ
+// (Home ยิง 4 endpoint พร้อมกัน, OrderManagement poll ทุก 5 วิ, Dashboard ทุก 30 วิ ฯลฯ)
+// ทุกอันเด้ง 401 รัวๆ ใส่ backend โดยเปล่าประโยชน์ ดู request interceptor ด้านล่างที่อ่าน flag นี้
+let sessionExpired = false;
+export function isSessionExpired() { return sessionExpired; }
+
+// endpoint ที่ยังต้องเรียกได้เสมอ แม้ session ตายแล้ว (ไม่งั้นล็อกอินใหม่ไม่ได้เลย)
+const ALWAYS_ALLOWED_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/csrf-token', '/health', '/version'];
+
 function forceLogout() {
   if (sessionExpiredHandled) return;
   sessionExpiredHandled = true;
+
+  // 🐛 FIX — เคลียร์ auth state "ทันที" ก่อนเปิด Swal (เดิมเคลียร์ใน .then() หลังผู้ใช้กดปุ่ม)
+  // ถ้าผู้ใช้ไม่กด/ไม่เห็น Swal (สลับแท็บไปแล้ว) ของเดิมจะค้างสถานะ "ยัง login อยู่" ไว้ไม่มีกำหนด
+  // แล้ว component ต่างๆ ที่เช็ค localStorage.user ก็ยิง API ต่อไปเรื่อยๆ
+  sessionExpired = true;
+  csrfToken = null;
+  localStorage.removeItem('user');
+  localStorage.removeItem('session_mode');
+
   Swal.fire({
     icon: 'warning',
     title: 'เซสชันหมดอายุ',
@@ -27,8 +47,6 @@ function forceLogout() {
     confirmButtonText: 'เข้าสู่ระบบ',
     allowOutsideClick: false,
   }).then(() => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('session_mode');
     window.location.href = '/login';
   });
 }
@@ -72,9 +90,35 @@ const api = axios.create({
   }
 });
 
+// 🐛 FIX (deadlock ที่ทำให้ไม่เคยเด้งไปหน้า login เลย) — instance เปล่าสำหรับเรียก /auth/refresh
+// โดยเฉพาะ ไม่ผูก interceptor ใดๆ
+//
+// ของเดิมเรียก refresh ด้วย `api.post('/auth/refresh')` คือ instance ตัวเดียวกับที่มี response
+// interceptor นี้แขวนอยู่ พอ refresh เองตอบ 401 (refresh token หมดอายุ/ถูก revoke) มันจะวิ่งกลับ
+// เข้า interceptor ตัวเดิมอีกรอบ เจอว่า refreshPromise ไม่ใช่ null (ก็คือ promise ของตัวเองที่ยัง
+// pending อยู่) แล้วไป `await refreshPromise` = รอ promise ที่จะ settle ก็ต่อเมื่อ handler ตัวนี้
+// return → วนรอตัวเอง ไม่มีวัน settle
+//
+// ผลคือ catch block ไม่เคยทำงาน → forceLogout() ไม่เคยถูกเรียก → ไม่เคยเด้งไป /login และ
+// refreshPromise ค้างเป็น non-null ตลอดกาล ทำให้ 401 ครั้งต่อๆ ไป "แขวน" หมดเช่นกัน
+// (ยืนยันด้วย repro จริงแล้ว: request ไม่ settle ใน 5 วิ, forceLogout ไม่ถูกเรียก)
+const refreshClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
+});
+
 // 2. ใช้ Interceptor ดักจับทุก Request ก่อนวิ่งออกไปที่ Backend
 api.interceptors.request.use(
   async (config) => {
+    // 🐛 FIX — session ตายแล้ว: ตัดจบตั้งแต่ก่อนออกจากเบราว์เซอร์ ไม่ต้องไปรบกวน backend
+    // ครอบทุก call site ในแอปทีเดียว (Home/Dashboard/PreOrder/POS/Shift/OrderManagement ฯลฯ)
+    // ดีกว่าไล่แก้ทีละหน้า เพราะโค้ดที่เขียนเพิ่มทีหลังจะได้ถูกกันให้อัตโนมัติด้วย
+    const path = config.url || '';
+    if (sessionExpired && !ALWAYS_ALLOWED_PATHS.some(p => path.startsWith(p))) {
+      return Promise.reject(new axios.Cancel('session expired — request blocked'));
+    }
+
     // ⭐️ Security remediation — แนบ CSRF token เฉพาะ request ที่เปลี่ยนแปลงข้อมูล (backend ก็เช็คแค่เท่านี้)
     const method = config.method?.toUpperCase() || '';
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
@@ -145,6 +189,24 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // 🐛 FIX — ถ้าตัวที่พังคือ /auth/refresh เอง แปลว่า refresh token หมดอายุ/ถูก revoke แล้ว
+    // ไม่มีทางกู้ session ได้อีก อย่าไปพยายาม refresh ซ้ำ (นั่นคือต้นตอของ deadlock เดิม)
+    // ตัดจบทันที: เคลียร์ auth state + เด้งไปหน้า login
+    if (error.response?.status === 401 && (originalRequest?.url || '').startsWith('/auth/refresh')) {
+      refreshPromise = null;
+      forceLogout();
+      return Promise.reject(error);
+    }
+
+    // 🐛 FIX — 401 จาก endpoint กลุ่มนี้แปลว่า "รหัสผ่าน/ข้อมูลที่กรอกไม่ถูกต้อง" ไม่ใช่ "เซสชันหมดอายุ"
+    // ของเดิมปล่อยให้ตกไปเข้า auto-refresh ด้านล่าง: กรอกรหัสผ่านผิดที่หน้า login → 401 → ไปลอง
+    // refresh → 401 อีก → เด้ง Swal "เซสชันหมดอายุ" ใส่หน้า login ทั้งที่ผู้ใช้แค่พิมพ์รหัสผิด
+    // (แถมยัง set sessionExpired ทิ้งไว้ด้วย) ปล่อยให้หน้าที่เรียกไป handle error เองดีกว่า
+    const NO_REFRESH_PATHS = ['/auth/login', '/users/register', '/auth/forgot-password', '/auth/reset-password'];
+    if (error.response?.status === 401 && NO_REFRESH_PATHS.some(p => (originalRequest?.url || '').startsWith(p))) {
+      return Promise.reject(error);
+    }
+
     // ⭐️ Sprint 2 — B5: Auto-refresh on 401
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -153,8 +215,10 @@ api.interceptors.response.use(
         // Prevent multiple simultaneous refresh calls
         // ⭐️ Security remediation — refresh_token อยู่ใน httpOnly cookie (path-scoped ไปที่ endpoint
         // นี้โดยเฉพาะ) browser แนบให้เองผ่าน withCredentials ไม่ต้องส่งใน body แล้ว
+        // 🐛 FIX — ใช้ refreshClient (instance เปล่า ไม่มี interceptor) แทน api เพื่อไม่ให้ 401 ของ
+        // ตัว refresh เองวิ่งกลับเข้ามาที่ handler นี้ซ้ำจนวนรอตัวเอง (ดูคำอธิบายที่ refreshClient)
         if (!refreshPromise) {
-          refreshPromise = api.post('/auth/refresh');
+          refreshPromise = refreshClient.post('/auth/refresh');
         }
 
         const { data } = await refreshPromise;
