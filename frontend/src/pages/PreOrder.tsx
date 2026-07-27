@@ -70,28 +70,51 @@ export default function PreOrder() {
   // ⭐️ ออเดอร์ที่กำลังจะส่งสลิปใหม่ (เปิดจากการ์ดประวัติออเดอร์ตรงๆ)
   const [slipOrder, setSlipOrder] = useState<any>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
+  // ⭐️ Deep link จากหน้า Home — 'slip' = ดันออเดอร์ที่สลิปไม่ผ่านขึ้นบนสุดของประวัติ (ไม่ได้กรองออก
+  //   รายการอื่นทิ้ง แค่จัดลำดับใหม่ ยังเห็นออเดอร์อื่นได้เหมือนเดิม)
+  const [orderFilter, setOrderFilter] = useState<'slip' | null>(null);
+  // ⭐️ Deep link จากหน้า Home — 'promo' = โชว์เฉพาะสินค้าที่มีโปรกำลัง active (product.promo_active
+  //   จาก /api/products คำนวณมาให้แล้วฝั่ง backend) มี chip ให้กดล้างกลับไปดูสินค้าทั้งหมดได้
+  const [promoOnlyFilter, setPromoOnlyFilter] = useState(false);
 
   // ⭐️ Deep link จากหน้า Home — หน้านี้เป็นเจ้าของทั้งตะกร้าและโมดัลประวัติออเดอร์ Home จึงส่ง
   //   เจตนามาทาง query param แทนที่จะยกสถานะขึ้นไปไว้ระดับบน
-  //     ?view=orders  = เปิดโมดัลประวัติการสั่งจองทันที
-  //     ?add=<id>     = หยิบสินค้าชิ้นนั้นลงตะกร้าให้เลย (ปุ่ม "เพิ่มลงตะกร้า" บนการ์ดสินค้าขายดี)
+  //     ?view=orders        = เปิดโมดัลประวัติการสั่งจองทันที
+  //     ?view=orders&filter=slip = เปิดโมดัลประวัติ + ดันออเดอร์สลิปไม่ผ่านขึ้นบนสุด
+  //     ?filter=promo       = กรองสินค้าเหลือเฉพาะที่มีโปรกำลัง active
+  //     ?add=<id>           = หยิบสินค้าชิ้นนั้นลงตะกร้าให้เลย (ปุ่ม "เพิ่มลงตะกร้า" บนการ์ดสินค้าขายดี)
   //   ล้าง param ทิ้งหลังทำงานเสร็จ กันการรีเฟรช/กดย้อนกลับแล้วสั่งซ้ำ
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const view = searchParams.get('view');
+    const filter = searchParams.get('filter');
     const addId = searchParams.get('add');
-    if (!view && !addId) return;
+    if (!view && !filter && !addId) return;
 
-    if (view === 'orders') { setShowMyOrders(true); fetchMyOrders(); }
+    // ⭐️ ?add=<id> ต้องรอ products โหลดเสร็จก่อนถึงจะรู้ว่าหยิบชิ้นไหน — ค้าง effect ไว้ (ไม่ล้าง
+    // query) จนกว่าจะมีสินค้าอย่างน้อย 1 ชิ้นให้ค้นหา ส่วน view/filter อย่างอื่นไม่ต้องรอ
+    if (addId && products.length === 0) return;
+
+    if (view === 'orders') {
+      setShowMyOrders(true);
+      fetchMyOrders();
+      if (filter === 'slip') setOrderFilter('slip');
+    }
+    if (filter === 'promo') setPromoOnlyFilter(true);
     if (addId) {
       const target = products.find(p => String(p.id) === addId);
-      // products ยังโหลดไม่เสร็จ = ยังไม่ต้องล้าง param รอรอบหน้าให้เจอสินค้าก่อน
-      if (!target) return;
-      addToCart(target);
-      setIsCartOpen(true);
+      if (target) { addToCart(target); setIsCartOpen(true); }
     }
     setSearchParams({}, { replace: true });
   }, [searchParams, products]);
+
+  // ⭐️ ดันออเดอร์สลิปไม่ผ่านขึ้นก่อน ไม่ตัดรายการอื่นทิ้ง (sort เสถียร คงลำดับเดิมของกลุ่มที่เท่ากัน)
+  const displayedOrders = orderFilter === 'slip'
+    ? [...myOrders].sort((a, b) => (a.status === 'SLIP_REJECTED' ? 0 : 1) - (b.status === 'SLIP_REJECTED' ? 0 : 1))
+    : myOrders;
+
+  // ⭐️ (product as any).promo_active มาจาก backend (/api/products คำนวณ WHERE ช่วงวันที่ promo ให้แล้ว)
+  const visibleProducts = promoOnlyFilter ? products.filter(p => (p as any).promo_active) : products;
 
   useEffect(() => {
     fetchProducts();
@@ -419,6 +442,16 @@ export default function PreOrder() {
               className="w-full pl-9 pr-4 py-2.5 bg-brand-bg border border-brand-border rounded-full text-sm font-medium outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150" />
           </div>
 
+          {/* ⭐️ Deep link ?filter=promo — chip บอกว่ากำลังกรองอยู่ + ปุ่มล้างกลับไปดูสินค้าทั้งหมด */}
+          {promoOnlyFilter && (
+            <button
+              onClick={() => setPromoOnlyFilter(false)}
+              className="mb-3 inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-all duration-150"
+            >
+              🏷️ กำลังแสดงเฉพาะสินค้าโปรโมชั่น <span className="text-amber-500">✕</span>
+            </button>
+          )}
+
           <PromoPopularRow
             selectedCategory={selectedCategory}
             productSearch={productSearch}
@@ -431,7 +464,7 @@ export default function PreOrder() {
             categories={categories}
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}
-            products={products}
+            products={visibleProducts}
             productSearch={productSearch}
             onAddToCart={addToCart}
           />
@@ -481,9 +514,9 @@ export default function PreOrder() {
       {/* ⭐️ Modal ประวัติออเดอร์ของลูกค้า */}
       {showMyOrders && (
         <MyOrdersModal
-          myOrders={myOrders}
-          onClose={() => setShowMyOrders(false)}
-          onSelectOrder={(order) => { setSelectedOrder(order); setRefundReason(''); setShowMyOrders(false); }}
+          myOrders={displayedOrders}
+          onClose={() => { setShowMyOrders(false); setOrderFilter(null); }}
+          onSelectOrder={(order) => { setSelectedOrder(order); setRefundReason(''); setShowMyOrders(false); setOrderFilter(null); }}
           onResubmitSlip={(order) => setSlipOrder(order)}
         />
       )}

@@ -292,10 +292,25 @@ export default function Home() {
         <div className={`px-5 max-w-lg mx-auto ${(loadingOrder || openOrder) ? 'mt-4' : '-mt-16 relative z-10'}`}>
           <div className="bg-white border border-brand-border rounded-2xl shadow-md p-3 grid grid-cols-4 gap-1">
             {[
-              { icon: ShoppingBag, label: 'สั่งซื้อสินค้า', onClick: () => goTo('shop', '/pre-order') },
-              { icon: Receipt, label: 'ประวัติการสั่ง', onClick: () => goTo('shop', '/pre-order?view=orders') },
-              { icon: FileCheck, label: 'สถานะสลิป', onClick: () => goTo('shop', '/pre-order?view=orders') },
-              { icon: Percent, label: 'โปรโมชัน', onClick: () => document.getElementById('home-promos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+              // ⭐️ FIX — ใช้ navigate() ตรงแทน goTo() สำหรับ 4 ปุ่มนี้ goTo() เดิมก็ navigate(path)
+              // เหมือนกัน (query string ไม่ได้หายระหว่างทาง) แต่ยังเซ็ต session_mode='shop' ทิ้งไว้ด้วย
+              // ซึ่งซ้ำซ้อนอยู่แล้วเพราะกริดนี้โชว์เฉพาะตอน !isStaff (แปลว่า session_mode เป็น 'shop'
+              // อยู่ก่อนแล้วสำหรับ CASHIER, ไม่เกี่ยวกับ MEMBER เลย) เปลี่ยนมาเรียก navigate() ตรงๆ
+              // ให้ชัดเจนว่าปุ่มพวกนี้แค่พาไปหน้าอื่น ไม่ได้มีผลต่อ session_mode
+              { icon: ShoppingBag, label: 'สั่งซื้อสินค้า', onClick: () => navigate('/pre-order') },
+              { icon: Receipt, label: 'ประวัติการสั่ง', onClick: () => navigate('/pre-order?view=orders') },
+              { icon: FileCheck, label: 'สถานะสลิป', onClick: () => navigate('/pre-order?view=orders&filter=slip') },
+              {
+                icon: Percent, label: 'โปรโมชัน',
+                onClick: () => {
+                  const el = document.getElementById('home-promos');
+                  // ไม่มีโปรตอนนี้ = section นี้ไม่ render เลย (ดูเงื่อนไข loadingPromos || promos.length > 0
+                  // ด้านล่าง) scrollIntoView บน null จะเงียบๆ ไม่ทำอะไร ผู้ใช้กดแล้วไม่เห็นอะไรเกิดขึ้นเลย
+                  // จึง fallback ไปหน้าสั่งซื้อพร้อม filter=promo แทน ให้เห็นสินค้าที่มีโปรจริงๆ
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  else navigate('/pre-order?filter=promo');
+                },
+              },
             ].map(a => {
               const Icon = a.icon;
               return (
@@ -317,7 +332,7 @@ export default function Home() {
 
       {/* 3. สไลด์โปรโมชั่น — เลื่อนแนวนอน */}
       {!isStaff && (loadingPromos || promos.length > 0) && (
-        <div id="home-promos" className="mt-6 max-w-lg mx-auto scroll-mt-4">
+        <div id="home-promos" className="mt-6 max-w-lg mx-auto scroll-mt-6">
           <p className="px-5 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">โปรโมชันที่ใช้ได้ตอนนี้</p>
           {/* ⭐️ overflow-x-auto + snap ให้เลื่อนลื่นบนมือถือ; ไม่ใช้ scroll-behavior แบบ JS
               เพื่อให้ WebKit เก่ารองรับได้ตามปกติ */}
