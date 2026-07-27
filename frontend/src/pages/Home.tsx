@@ -4,16 +4,61 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock } from 'lucide-react';
+import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock, ShoppingBag, Receipt, FileCheck, Percent } from 'lucide-react';
 import api from '../api';
 import { performLogout } from '../utils/logout';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { BRAND } from '../theme';
+import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
 
 interface DashboardSummary { total_sales: number; total_bills: number; }
 interface MyHours { total_hours: number; hourly_rate: number; calculated_pay: number; }
 interface ActivePromo { id: number; name: string; label: string; end_date: string | null; }
+interface HighlightProduct {
+  id: number; name: string; price: string | number; image_url: string | null;
+  category_name: string | null; promo_percent: number | null;
+  promo_start?: string | null; promo_end?: string | null;
+  promo_active?: number | boolean;
+}
+
+// ⭐️ สถานะออเดอร์ที่ยัง "ค้างอยู่" — ใช้ตัดสินว่าจะโชว์การ์ดสถานะด่วนบนสุดหรือไม่
+// COMPLETED/CANCELLED = จบแล้ว ไม่ต้องเตือน
+const OPEN_ORDER_STATUS: Record<string, { label: string; tone: 'warn' | 'info' }> = {
+  SLIP_REJECTED:    { label: 'สลิปไม่ผ่าน — ต้องส่งใหม่', tone: 'warn' },
+  PENDING_VERIFY:   { label: 'กำลังตรวจสอบสลิป',        tone: 'info' },
+  WAITING_CASH:     { label: 'รอชำระเงินสดที่ร้าน',      tone: 'warn' },
+  PREPARING:        { label: 'กำลังเตรียมสินค้า',        tone: 'info' },
+  READY:            { label: 'พร้อมรับสินค้าแล้ว',        tone: 'info' },
+  REFUND_REQUESTED: { label: 'กำลังดำเนินการคืนเงิน',    tone: 'info' },
+};
+
+// ⭐️ ราคาหลังลด — โปรระดับสินค้า (promo_percent ในช่วง promo_start..promo_end)
+// หมายเหตุ: /products/highlights ส่งฟิลด์ promo_active มาให้เฉพาะลิสต์ "promo" เท่านั้น ลิสต์
+// "popular" (ที่หน้านี้ใช้) ไม่มีให้ — แต่มี promo_percent/promo_start/promo_end ครบ จึงคำนวณเองที่นี่
+// และเชื่อ promo_active จาก backend ก่อนถ้ามีมา
+// ราคานี้ใช้ "แสดงผล" เท่านั้น ราคาจริงตอนคิดเงิน backend คำนวณใหม่เองที่ /sales/checkout อยู่แล้ว
+function priceAfterPromo(p: HighlightProduct) {
+  const base = Number(p.price);
+  const pct = Number(p.promo_percent) || 0;
+  const noPromo = { final: base, original: null as number | null, pct: 0 };
+  if (pct <= 0) return noPromo;
+
+  let active: boolean;
+  if (p.promo_active !== undefined) {
+    active = !!p.promo_active;
+  } else if (p.promo_start && p.promo_end) {
+    // เทียบแบบ "วันที่ตามเวลาเครื่อง" (sv-SE ให้รูปแบบ YYYY-MM-DD พอดี) — ช่วงโปรเป็น DATE ไม่มีเวลา
+    const day = (d: string | Date) => new Date(d).toLocaleDateString('sv-SE');
+    const today = day(new Date());
+    active = today >= day(p.promo_start) && today <= day(p.promo_end);
+  } else {
+    active = false;
+  }
+  if (!active) return noPromo;
+
+  return { final: base - Math.round(base * pct / 100), original: base, pct };
+}
 
 export default function Home() {
   const user = getCurrentUserOrRedirect();
@@ -24,7 +69,15 @@ export default function Home() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [myHours, setMyHours] = useState<MyHours | null>(null); // ⭐️ Home page feature — ชม.ทำงาน/ค่าจ้างเดือนนี้
-  const [activePromo, setActivePromo] = useState<ActivePromo | null>(null); // ⭐️ Design-ref — แบนเนอร์โปรฯ สำหรับสมาชิก
+  // ⭐️ Member home — โปรทั้งหมด (สไลด์แนวนอน), สินค้าขายดี, ออเดอร์ที่ยังค้าง
+  const [promos, setPromos] = useState<ActivePromo[]>([]);
+  const [bestSellers, setBestSellers] = useState<HighlightProduct[]>([]);
+  const [openOrder, setOpenOrder] = useState<any>(null);
+  const [slipOrder, setSlipOrder] = useState<any>(null);
+  // แยก loading ต่อ section เพื่อให้ skeleton หายทีละส่วนตามที่โหลดเสร็จ ไม่ต้องรอพร้อมกันทั้งหน้า
+  const [loadingPromos, setLoadingPromos] = useState(!isStaff);
+  const [loadingBest, setLoadingBest] = useState(!isStaff);
+  const [loadingOrder, setLoadingOrder] = useState(!isStaff);
   // ⭐️ CASHIER ที่ยังไม่เปิดกะ ใช้งานได้เท่าสมาชิก — ล็อกการ์ดฝั่งทำงานไว้จนกว่าจะเปิดกะ
   //   (ADMIN ไม่ต้องเช็ค เข้าได้ตลอด) null = ยังโหลดไม่เสร็จ ระหว่างนี้ยังไม่ล็อกเพื่อกันจอกระพริบ
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
@@ -38,7 +91,26 @@ export default function Home() {
       api.get('/inventory/low-stock').then(res => setLowStockCount(res.data.length)).catch(() => {});
       api.get('/reports/my-hours').then(res => setMyHours(res.data)).catch(() => {});
     } else {
-      api.get('/promotions/active').then(res => setActivePromo((res.data || [])[0] || null)).catch(() => {});
+      // ⭐️ ทั้ง 3 อย่างนี้เป็นของ "สมาชิก" เท่านั้น และไม่ critical — ถ้าอันใดอันหนึ่งพัง
+      // ต้องไม่ทำให้ส่วนอื่นของหน้าหายไปด้วย จึงแยก catch ของใครของมัน
+      api.get('/promotions/active')
+        .then(res => setPromos(res.data || []))
+        .catch(() => {})
+        .finally(() => setLoadingPromos(false));
+
+      api.get('/products/highlights')
+        .then(res => setBestSellers((res.data?.popular || []).slice(0, 8)))
+        .catch(() => {})
+        .finally(() => setLoadingBest(false));
+
+      api.get('/orders')
+        .then(res => {
+          // ออเดอร์ที่ยังค้าง เอาอันล่าสุดมาโชว์ใบเดียว (backend ส่ง created_at DESC มาแล้ว)
+          const open = (res.data || []).find((o: any) => OPEN_ORDER_STATUS[o.status]);
+          setOpenOrder(open || null);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingOrder(false));
     }
     if (isCashier) {
       api.get(`/shifts/current?cashier_id=${user.id}`)
@@ -170,23 +242,164 @@ export default function Home() {
         </div>
       )}
 
-      {/* ⭐️ Design-ref — แบนเนอร์โปรโมชั่นวันนี้ (สมาชิกเท่านั้น) ดึงจาก /promotions/active ตัวแรก */}
-      {!isStaff && activePromo && (
+      {/* ══ MEMBER HOME ═════════════════════════════════════════════════════════
+          หน้าเดิมของสมาชิกมีแค่แบนเนอร์โปรใบเดียว + การ์ดเมนูใบเดียว = เหลือที่ว่างเยอะมาก
+          เพิ่ม: สถานะออเดอร์ที่ค้าง → ปุ่มลัด 4 ช่อง → สไลด์โปรโมชั่น → สินค้าขายดี */}
+
+      {/* 1. การ์ดสถานะออเดอร์ที่ยังค้าง — ลอยคาบขอบล่าง header */}
+      {!isStaff && (loadingOrder || openOrder) && (
         <div className="px-5 -mt-16 relative z-10 max-w-lg mx-auto">
-          <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 flex items-center gap-3">
-            <div className="w-11 h-11 bg-brand-bg rounded-xl flex items-center justify-center shrink-0">
-              <Tag size={20} className="text-brand" />
+          {loadingOrder ? (
+            <div className="bg-white border border-brand-border rounded-2xl shadow-md p-4 animate-pulse">
+              <div className="h-3.5 bg-brand-border/40 rounded-lg w-1/3 mb-2.5" />
+              <div className="h-3 bg-brand-border/40 rounded-lg w-2/3" />
             </div>
-            <div className="min-w-0">
-              <p className="font-bold text-gray-900 text-sm truncate">{activePromo.name}</p>
-              <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">{activePromo.label}</p>
+          ) : openOrder && (
+            <div className="bg-white border border-brand-border rounded-2xl shadow-md p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-extrabold text-gray-900 text-sm">ออเดอร์ #{openOrder.id}</p>
+                  <p className={`text-xs font-semibold mt-1 ${OPEN_ORDER_STATUS[openOrder.status].tone === 'warn' ? 'text-red-600' : 'text-brand'}`}>
+                    {OPEN_ORDER_STATUS[openOrder.status].label}
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm font-extrabold text-gray-900">
+                  ฿{Number(openOrder.total_amount).toLocaleString()}
+                </span>
+              </div>
+              {openOrder.status === 'SLIP_REJECTED' ? (
+                <button
+                  onClick={() => setSlipOrder(openOrder)}
+                  className="mt-3 w-full py-2.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-sm font-bold transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+                >
+                  ส่งสลิปด่วน
+                </button>
+              ) : (
+                <button
+                  onClick={() => goTo('shop', '/pre-order?view=orders')}
+                  className="mt-3 w-full py-2.5 rounded-full bg-brand-bg text-brand text-sm font-bold transition-all duration-150 active:scale-[0.98] hover:bg-brand-border/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  ดูรายละเอียด
+                </button>
+              )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. ปุ่มลัด 4 ช่อง */}
+      {!isStaff && (
+        <div className={`px-5 max-w-lg mx-auto ${(loadingOrder || openOrder) ? 'mt-4' : '-mt-16 relative z-10'}`}>
+          <div className="bg-white border border-brand-border rounded-2xl shadow-md p-3 grid grid-cols-4 gap-1">
+            {[
+              { icon: ShoppingBag, label: 'สั่งซื้อสินค้า', onClick: () => goTo('shop', '/pre-order') },
+              { icon: Receipt, label: 'ประวัติการสั่ง', onClick: () => goTo('shop', '/pre-order?view=orders') },
+              { icon: FileCheck, label: 'สถานะสลิป', onClick: () => goTo('shop', '/pre-order?view=orders') },
+              { icon: Percent, label: 'โปรโมชัน', onClick: () => document.getElementById('home-promos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+            ].map(a => {
+              const Icon = a.icon;
+              return (
+                <button
+                  key={a.label}
+                  onClick={a.onClick}
+                  className="flex flex-col items-center gap-1.5 py-2 px-1 rounded-xl transition-colors duration-150 hover:bg-brand-bg active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  <span className="w-11 h-11 bg-brand-bg rounded-xl flex items-center justify-center">
+                    <Icon size={20} className="text-brand" />
+                  </span>
+                  <span className="text-[10px] font-bold text-gray-600 text-center leading-tight">{a.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3. สไลด์โปรโมชั่น — เลื่อนแนวนอน */}
+      {!isStaff && (loadingPromos || promos.length > 0) && (
+        <div id="home-promos" className="mt-6 max-w-lg mx-auto scroll-mt-4">
+          <p className="px-5 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">โปรโมชันที่ใช้ได้ตอนนี้</p>
+          {/* ⭐️ overflow-x-auto + snap ให้เลื่อนลื่นบนมือถือ; ไม่ใช้ scroll-behavior แบบ JS
+              เพื่อให้ WebKit เก่ารองรับได้ตามปกติ */}
+          <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide">
+            {loadingPromos
+              ? [1, 2].map(i => (
+                  <div key={i} className="shrink-0 w-64 h-24 bg-white border border-brand-border rounded-2xl shadow-sm animate-pulse" />
+                ))
+              : promos.map(p => (
+                  <div key={p.id} className="snap-start shrink-0 w-64 bg-gradient-to-br from-brand to-brand-dark rounded-2xl shadow-md p-4 text-white">
+                    <span className="inline-flex items-center gap-1 bg-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      <Tag size={10} /> โปรโมชัน
+                    </span>
+                    <p className="font-extrabold text-sm mt-2 truncate">{p.name}</p>
+                    <p className="text-xs text-white/80 mt-0.5 line-clamp-2">{p.label}</p>
+                  </div>
+                ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. สินค้าขายดี — เลื่อนแนวนอน */}
+      {!isStaff && (loadingBest || bestSellers.length > 0) && (
+        <div className="mt-5 max-w-lg mx-auto">
+          <div className="px-5 flex items-center justify-between mb-2">
+            <p className="text-sm font-extrabold text-gray-900">🔥 สินค้าขายดีประจำสัปดาห์</p>
+            <button onClick={() => goTo('shop', '/pre-order')} className="text-xs font-bold text-brand hover:underline shrink-0">
+              ดูทั้งหมด
+            </button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x scrollbar-hide">
+            {loadingBest
+              ? [1, 2, 3].map(i => (
+                  <div key={i} className="shrink-0 w-36 bg-white border border-brand-border rounded-2xl shadow-sm p-2.5 animate-pulse">
+                    <div className="w-full h-24 bg-brand-border/40 rounded-xl mb-2" />
+                    <div className="h-3 bg-brand-border/40 rounded w-3/4 mb-1.5" />
+                    <div className="h-3 bg-brand-border/40 rounded w-1/2" />
+                  </div>
+                ))
+              : bestSellers.map(p => {
+                  const { final, original, pct } = priceAfterPromo(p);
+                  return (
+                    <div key={p.id} className="snap-start shrink-0 w-36 bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                      <div className="relative h-24 bg-brand-bg shrink-0">
+                        {p.image_url
+                          ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                          : <div className="w-full h-full flex items-center justify-center"><ShoppingBag size={22} className="text-brand-mid" /></div>}
+                        {pct > 0 && (
+                          <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                            -{pct}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-2.5 flex flex-col flex-1">
+                        {p.category_name && (
+                          <span className="self-start text-[9px] font-bold text-brand bg-brand-bg px-1.5 py-0.5 rounded-full mb-1 truncate max-w-full">
+                            {p.category_name}
+                          </span>
+                        )}
+                        <p className="text-xs font-bold text-gray-800 leading-snug line-clamp-2 flex-1">{p.name}</p>
+                        <div className="flex items-baseline gap-1.5 mt-1.5">
+                          <span className="text-sm font-extrabold text-brand">฿{final.toLocaleString()}</span>
+                          {original !== null && (
+                            <span className="text-[10px] text-gray-400 line-through">฿{original.toLocaleString()}</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => goTo('shop', `/pre-order?add=${p.id}`)}
+                          className="mt-2 w-full py-1.5 rounded-full bg-gradient-to-br from-brand to-brand-dark text-white text-[11px] font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        >
+                          + เพิ่มลงตะกร้า
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
           </div>
         </div>
       )}
 
       {/* Module list */}
-      <div className={`px-5 ${isStaff ? 'mt-5' : (activePromo ? 'mt-5' : '-mt-16 relative z-10')} pb-10 max-w-lg mx-auto`}>
+      <div className={`px-5 ${isStaff ? 'mt-5' : 'mt-6'} pb-10 max-w-lg mx-auto`}>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">เมนูสำหรับคุณ</p>
         <div className="space-y-3">
           {modules.map(m => {
@@ -225,6 +438,22 @@ export default function Home() {
           })}
         </div>
       </div>
+
+      {/* ⭐️ ส่งสลิปด่วนจากการ์ดสถานะออเดอร์ ไม่ต้องเด้งออกไปหน้าอื่น */}
+      {slipOrder && (
+        <UploadSlipModal
+          orderId={slipOrder.id}
+          rejectReason={slipOrder.reject_reason}
+          onClose={() => setSlipOrder(null)}
+          onUploaded={async () => {
+            const res = await api.get('/orders').catch(() => null);
+            if (res) setOpenOrder((res.data || []).find((o: any) => OPEN_ORDER_STATUS[o.status]) || null);
+          }}
+        />
+      )}
+
+      {/* ⭐️ หน้า Home ไม่ได้อยู่ใต้ Layout จึงไม่ได้ style scrollbar-hide ที่ประกาศไว้ที่นั่น */}
+      <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}`}</style>
     </div>
   );
 }

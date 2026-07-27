@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ShoppingCart, ShoppingBag, Search } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
@@ -69,6 +70,28 @@ export default function PreOrder() {
   // ⭐️ ออเดอร์ที่กำลังจะส่งสลิปใหม่ (เปิดจากการ์ดประวัติออเดอร์ตรงๆ)
   const [slipOrder, setSlipOrder] = useState<any>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
+
+  // ⭐️ Deep link จากหน้า Home — หน้านี้เป็นเจ้าของทั้งตะกร้าและโมดัลประวัติออเดอร์ Home จึงส่ง
+  //   เจตนามาทาง query param แทนที่จะยกสถานะขึ้นไปไว้ระดับบน
+  //     ?view=orders  = เปิดโมดัลประวัติการสั่งจองทันที
+  //     ?add=<id>     = หยิบสินค้าชิ้นนั้นลงตะกร้าให้เลย (ปุ่ม "เพิ่มลงตะกร้า" บนการ์ดสินค้าขายดี)
+  //   ล้าง param ทิ้งหลังทำงานเสร็จ กันการรีเฟรช/กดย้อนกลับแล้วสั่งซ้ำ
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const view = searchParams.get('view');
+    const addId = searchParams.get('add');
+    if (!view && !addId) return;
+
+    if (view === 'orders') { setShowMyOrders(true); fetchMyOrders(); }
+    if (addId) {
+      const target = products.find(p => String(p.id) === addId);
+      // products ยังโหลดไม่เสร็จ = ยังไม่ต้องล้าง param รอรอบหน้าให้เจอสินค้าก่อน
+      if (!target) return;
+      addToCart(target);
+      setIsCartOpen(true);
+    }
+    setSearchParams({}, { replace: true });
+  }, [searchParams, products]);
 
   useEffect(() => {
     fetchProducts();
