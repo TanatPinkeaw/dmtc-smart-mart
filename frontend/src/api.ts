@@ -3,6 +3,11 @@ import Swal from './swal';
 import { saveRequestToQueue, getQueue, removeFromQueue, incrementRetries } from './utils/requestQueue';
 import { API_BASE_URL } from './config'; // ⭐️ DEPLOY FIX — URL จาก env แทนฮาร์ดโค้ด
 
+// ⭐️ auth ทั้งระบบใช้ httpOnly cookie ข้าม origin (Vercel → Render) ทุก request จึงต้องส่ง cookie ไปด้วย
+// instance `api` กับ refreshClient ด้านล่างตั้ง withCredentials เองอยู่แล้ว บรรทัดนี้เป็น safety net
+// เผื่อโค้ดที่เขียนเพิ่มทีหลังเผลอเรียก axios ตรงๆ แทนที่จะใช้ instance ในไฟล์นี้
+axios.defaults.withCredentials = true;
+
 // ⭐️ F4 — เก็บไว้กันโชว์ Swal ซ้ำถ้ามีหลาย request โดน 429 พร้อมกัน
 let rateLimitSwalOpen = false;
 

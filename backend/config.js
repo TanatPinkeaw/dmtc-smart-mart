@@ -38,6 +38,14 @@ if (IS_PRODUCTION && process.env.DB_SSL !== 'true') {
 const IS_RENDER = !!process.env.RENDER;
 if (IS_RENDER && !IS_PRODUCTION) {
   console.error('⚠️⚠️⚠️ [BOOT WARNING] รันบน Render แต่ NODE_ENV != production — trust proxy ไม่ถูกเปิด! rate limiter (login/forgot-password) จะเห็น IP ผิดทั้งหมด ตั้ง NODE_ENV=production ใน Render dashboard ด่วน ⚠️⚠️⚠️');
+  // ⭐️ อาการที่ผู้ใช้เจอจริงจากกรณีนี้คือ "ล็อกอินแล้วเด้งกลับหน้า login วนไม่จบ" — อธิบายไว้ตรงนี้
+  // เลยเพราะ debug จากอาการอย่างเดียวหาต้นตอยาก (ดูเหมือนบั๊ก auth แต่จริงๆ คือ env ตั้งไม่ครบ):
+  //   NODE_ENV != production  →  COOKIE_SECURE=false, COOKIE_SAMESITE='lax' (server.js)
+  //   SameSite=Lax = browser "ไม่ส่ง" cookie ไปกับ XHR ข้ามเว็บ (Vercel → Render)
+  //   ⇒ login สำเร็จ (200) แต่ทุก request หลังจากนั้นไม่มี cookie ติดไป → 401 → refresh 401
+  //   ⇒ เด้งกลับ /login → ผู้ใช้ล็อกอินใหม่ → วนซ้ำ
+  // cross-site cookie ต้องเป็น SameSite=None + Secure=true เท่านั้น ซึ่งผูกกับ NODE_ENV=production
+  console.error('⚠️⚠️⚠️ [BOOT WARNING] ผลข้างเคียงที่สำคัญกว่า: cookie จะถูกตั้งเป็น SameSite=Lax + Secure=false ซึ่ง browser จะไม่ส่ง cookie ข้ามโดเมน (Vercel→Render) ⇒ ล็อกอินผ่านแต่ทุก request หลังจากนั้น 401 แล้วเด้งกลับหน้า login วนไม่จบ — ต้องตั้ง NODE_ENV=production เท่านั้นถึงจะหาย ⚠️⚠️⚠️');
 }
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
