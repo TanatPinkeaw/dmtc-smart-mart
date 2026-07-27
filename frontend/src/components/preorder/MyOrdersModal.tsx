@@ -26,9 +26,11 @@ interface MyOrdersModalProps {
   myOrders: any[];
   onClose: () => void;
   onSelectOrder: (order: any) => void;
+  /** ⭐️ ทางลัดส่งสลิปใหม่จากการ์ดเลย ไม่ต้องเข้าไปในหน้ารายละเอียดออเดอร์ก่อน */
+  onResubmitSlip: (order: any) => void;
 }
 
-export function MyOrdersModal({ myOrders, onClose, onSelectOrder }: MyOrdersModalProps) {
+export function MyOrdersModal({ myOrders, onClose, onSelectOrder, onResubmitSlip }: MyOrdersModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
       {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
@@ -71,6 +73,17 @@ export function MyOrdersModal({ myOrders, onClose, onSelectOrder }: MyOrdersModa
                   <span className="font-bold text-brand text-base">฿{Number(order.total_amount).toFixed(2)}</span>
                   <span className="text-xs text-gray-500">แตะเพื่อดูละเอียด →</span>
                 </div>
+
+                {/* ⭐️ สลิปไม่ผ่าน = งานที่ผู้ใช้ต้องทำต่อ ดันปุ่มขึ้นมาที่การ์ดเลย
+                    stopPropagation กัน onClick ของการ์ด (เปิดหน้ารายละเอียด) ทำงานทับ */}
+                {order.status === 'SLIP_REJECTED' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onResubmitSlip(order); }}
+                    className="mt-3 w-full py-2.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-sm font-bold transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+                  >
+                    ส่งสลิปใหม่
+                  </button>
+                )}
               </div>
             ))
           )}

@@ -5,14 +5,17 @@ import { useState, useEffect } from 'react';
 import { Bell, Search, Clock, CheckCircle2 } from 'lucide-react';
 import api from '../api';
 import { useSocket } from '../SocketContext';
+import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [rejectedOrders, setRejectedOrders] = useState<any[]>([]);
+  const [slipOrder, setSlipOrder] = useState<any>(null);
   const socket = useSocket();
 
-  useEffect(() => { fetchNotifications(); }, []);
+  useEffect(() => { fetchNotifications(); fetchRejectedOrders(); }, []);
 
   // ⭐️ F8 — ฟัง Socket event แบบ real-time
   // หมายเหตุ: event ชื่อ order_verified / order_slip_rejected ตามที่ระบุใน spec ไม่มีจริงใน backend
@@ -57,14 +60,51 @@ export default function Notifications() {
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  // ⭐️ F8 — mark as read เมื่อคลิก
-  // หมายเหตุ: backend มีแค่ PUT /api/notifications/read-all (อ่านทั้งหมด) ไม่มี endpoint อ่านทีละรายการ
-  // เลยทำ optimistic update เฉพาะรายการที่คลิก (UI ตอบสนองทันที) + เรียก read-all เบื้องหลังเพื่อ persist จริง
+  // ⭐️ ตาราง notifications เก็บแค่ (id, user_id, message, is_read, created_at) — ไม่มีคอลัมน์ชี้ว่า
+  // แจ้งเตือนนี้เป็นเรื่องออเดอร์ไหน จึงต้องดึงเลขออเดอร์จากตัวข้อความที่ backend สร้าง
+  // (server.js: `สลิปโอนเงินของออเดอร์ #<id> ไม่ถูกต้อง: ...`)
+  // เพื่อไม่ให้เปราะเกินไป ไม่ได้เชื่อข้อความอย่างเดียว แต่เอาเลขที่ดึงได้ไปเทียบกับ "ออเดอร์จริงของ
+  // ผู้ใช้ที่สถานะเป็น SLIP_REJECTED อยู่ตอนนี้" อีกชั้น — ถ้า parse พลาด หรือส่งสลิปใหม่ไปแล้ว
+  // ปุ่มจะไม่ขึ้นเอง (self-correcting) ถ้าวันหลังเพิ่มคอลัมน์ order_id ในตาราง ให้เลิกใช้ตรงนี้ได้เลย
+  const fetchRejectedOrders = async () => {
+    try {
+      const res = await api.get(`/orders?t=${Date.now()}`);
+      setRejectedOrders((res.data || []).filter((o: any) => o.status === 'SLIP_REJECTED'));
+    } catch (e) { console.error(e); }
+  };
+
+  const getRejectedOrderFor = (message: string) => {
+    const m = message.match(/#(\d+)/);
+    if (!m) return null;
+    return rejectedOrders.find(o => String(o.id) === m[1]) || null;
+  };
+
+  // 🐛 FIX — เดิมคลิกรายการเดียวแต่ยิง read-all = มาร์คว่าอ่านทั้งกล่องบน server (UI อัปเดตแค่ตัวที่
+  // คลิก เลยดูเหมือนถูก แต่พอ refresh ทีเดียวรายการที่ยังไม่ได้อ่านหายหมด) ตอนนี้มี endpoint
+  // PUT /notifications/:id/read แล้ว มาร์คเฉพาะรายการที่คลิกจริงๆ
+  // รายการที่มาจาก socket ยังไม่มี id จริงใน DB (ใช้ id ลบชั่วคราว) — มาร์คฝั่ง UI อย่างเดียว ไม่ต้องยิง API
   const handleMarkAsRead = async (id: number) => {
     setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: true } : n)));
+    if (id < 0) return;
+    try {
+      await api.put(`/notifications/${id}/read`);
+    } catch (e) {
+      console.error(e);
+      // ย้อน UI กลับถ้า persist ไม่สำเร็จ ไม่งั้นผู้ใช้เห็นว่าอ่านแล้วแต่ refresh มาก็ยังไม่อ่าน
+      setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: false } : n)));
+    }
+  };
+
+  // ⭐️ อ่านทั้งหมด — ทางเดียวที่จะมาร์คทั้งกล่องได้ ต้องเป็นการกดปุ่มของผู้ใช้เอง
+  const handleMarkAllAsRead = async () => {
+    const snapshot = notifications;
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     try {
       await api.put('/notifications/read-all');
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setNotifications(snapshot);
+    }
   };
 
   // ⭐️ F8 — เรียงใหม่สุดก่อน (backend ส่ง ORDER BY created_at DESC มาแล้ว, ของที่มาจาก socket ก็ prepend ไว้บนสุด — sort ซ้ำกันเหนียวกันกรณี clock ไม่ตรง)
@@ -89,9 +129,17 @@ export default function Notifications() {
           <h1 className="text-lg font-semibold text-white truncate">การแจ้งเตือน</h1>
         </div>
         {unread > 0 && (
-          <span className="shrink-0 text-xs font-bold text-white bg-white/15 border border-white/20 px-3 py-1.5 rounded-full">
-            {unread} ยังไม่อ่าน
-          </span>
+          <div className="shrink-0 flex items-center gap-2">
+            <span className="text-xs font-bold text-white bg-white/15 border border-white/20 px-3 py-1.5 rounded-full">
+              {unread} ยังไม่อ่าน
+            </span>
+            <button
+              onClick={handleMarkAllAsRead}
+              className="text-xs font-bold text-brand bg-white px-3 py-1.5 rounded-full hover:bg-brand-bg active:scale-95 transition-all duration-150"
+            >
+              อ่านทั้งหมด
+            </button>
+          </div>
         )}
       </div>
 
@@ -138,6 +186,20 @@ export default function Notifications() {
                     <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
                       <Clock size={10} /> {new Date(noti.created_at).toLocaleString('th-TH')}
                     </p>
+                    {/* ⭐️ สลิปไม่ผ่าน = แก้ได้จากตรงนี้เลย ไม่ต้องออกไปหน้าสั่งจองแล้วเปิดประวัติออเดอร์
+                        stopPropagation กันไม่ให้ไปทริกเกอร์ mark-as-read ของ <li> */}
+                    {(() => {
+                      const order = getRejectedOrderFor(noti.message);
+                      if (!order) return null;
+                      return (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSlipOrder(order); }}
+                          className="mt-2.5 px-4 py-2 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-xs font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+                        >
+                          ส่งสลิปใหม่
+                        </button>
+                      );
+                    })()}
                   </div>
                   {!noti.is_read && <div className="w-2 h-2 bg-brand rounded-full mt-2 shrink-0" />}
                 </li>
@@ -146,6 +208,15 @@ export default function Notifications() {
           )}
         </div>
       </div>
+
+      {slipOrder && (
+        <UploadSlipModal
+          orderId={slipOrder.id}
+          rejectReason={slipOrder.reject_reason}
+          onClose={() => setSlipOrder(null)}
+          onUploaded={fetchRejectedOrders}
+        />
+      )}
     </div>
   );
 }

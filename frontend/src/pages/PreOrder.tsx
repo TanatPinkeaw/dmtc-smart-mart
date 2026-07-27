@@ -12,6 +12,7 @@ import { ProductGrid } from '../components/preorder/ProductGrid';
 import { CartPanel } from '../components/preorder/CartPanel';
 import { MyOrdersModal } from '../components/preorder/MyOrdersModal';
 import { OrderDetailModal } from '../components/preorder/OrderDetailModal';
+import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
 
 interface Category { id: number; name: string; }
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
@@ -65,6 +66,8 @@ export default function PreOrder() {
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null); // ✅ CHANGED: modal order detail
+  // ⭐️ ออเดอร์ที่กำลังจะส่งสลิปใหม่ (เปิดจากการ์ดประวัติออเดอร์ตรงๆ)
+  const [slipOrder, setSlipOrder] = useState<any>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
 
   useEffect(() => {
@@ -458,6 +461,17 @@ export default function PreOrder() {
           myOrders={myOrders}
           onClose={() => setShowMyOrders(false)}
           onSelectOrder={(order) => { setSelectedOrder(order); setRefundReason(''); setShowMyOrders(false); }}
+          onResubmitSlip={(order) => setSlipOrder(order)}
+        />
+      )}
+
+      {/* ⭐️ ส่งสลิปใหม่จากการ์ดประวัติออเดอร์โดยตรง ไม่ต้องเข้าหน้ารายละเอียดก่อน */}
+      {slipOrder && (
+        <UploadSlipModal
+          orderId={slipOrder.id}
+          rejectReason={slipOrder.reject_reason}
+          onClose={() => setSlipOrder(null)}
+          onUploaded={fetchMyOrders}
         />
       )}
 

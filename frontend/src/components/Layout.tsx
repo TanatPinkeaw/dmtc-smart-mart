@@ -13,6 +13,7 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import { Sidebar } from './layout/Sidebar';
 import { MobileBottomNav } from './layout/MobileBottomNav';
 import { MobileMenuDrawer } from './layout/MobileMenuDrawer';
+import { UploadSlipModal } from './preorder/UploadSlipModal';
 
 // ─── LayoutInner ─────────────────────────────────────────────────────────────
 function LayoutInner() {
@@ -22,6 +23,9 @@ function LayoutInner() {
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
+  // ⭐️ ออเดอร์ที่สลิปไม่ผ่าน (ฝั่งลูกค้า) — ใช้โชว์แถบเตือนด้านบน + เปิดโมดัลส่งสลิปใหม่
+  const [rejectedOrders, setRejectedOrders] = useState<any[]>([]);
+  const [slipOrder, setSlipOrder] = useState<any>(null);
   // ⭐️ Security remediation — บังคับเปลี่ยนรหัสผ่านชั่วคราวก่อนใช้งานหน้าอื่น (ปิด modal เองไม่ได้ ดู ChangePasswordModal forceChange)
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(!!user.must_change_password);
   // ⭐️ FIX: bottom nav มือถือเดิมมีแค่ POS/ออเดอร์/(ตั้งค่าเฉพาะ ADMIN) — ขาดหน้า Dashboard, Schedules,
@@ -54,11 +58,26 @@ function LayoutInner() {
     } catch (e) { console.error(e); }
   };
 
+  // ⭐️ ออเดอร์ที่สลิปไม่ผ่าน — ต้องเด้งให้เห็นทุกหน้า ไม่ใช่ซ่อนอยู่ในโมดัลประวัติออเดอร์
+  // ดึงเฉพาะฝั่งลูกค้า (isStaff = false) เพราะ staff ไม่ได้เป็นคนส่งสลิป
+  const fetchRejectedOrders = async () => {
+    if (isStaff) { setRejectedOrders([]); return; }
+    try {
+      const res = await api.get(`/orders?t=${Date.now()}`);
+      setRejectedOrders((res.data || []).filter((o: any) => o.status === 'SLIP_REJECTED'));
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
     if (!user.id || !socket) return;
     fetchNotificationsAndBadge();
+    fetchRejectedOrders();
+    // ⭐️ สถานะออเดอร์เปลี่ยน (รวมตอนโดน reject สลิป / ตอนส่งสลิปใหม่แล้วกลับเป็น PENDING_VERIFY)
+    // ให้แถบเตือนด้านบนอัปเดตตามทันที ไม่ต้องรีเฟรชหน้า
+    socket.on(`order_update_user_${user.id}`, fetchRejectedOrders);
     socket.on(`notification_user_${user.id}`, (data) => {
       fetchNotificationsAndBadge();
+      fetchRejectedOrders();
       if (data?.message) Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: data.message, showConfirmButton: false, timer: 3500, timerProgressBar: true });
     });
     socket.on('new_order_received', () => { if (isStaff) fetchNotificationsAndBadge(); });
@@ -69,6 +88,7 @@ function LayoutInner() {
       if (data?.message) Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: data.message, showConfirmButton: false, timer: 3500, timerProgressBar: true });
     });
     return () => {
+      socket.off(`order_update_user_${user.id}`, fetchRejectedOrders);
       socket.off(`notification_user_${user.id}`);
       socket.off('new_order_received');
       socket.off('order_status_changed');
@@ -95,12 +115,10 @@ function LayoutInner() {
       });
   };
 
-  const handleOpenNotifications = async () => {
-    if (unreadCount > 0) {
-      try { await api.put('/notifications/read-all'); setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 }))); }
-      catch (e) { console.error(e); }
-    }
-  };
+  // 🐛 FIX — เดิมมี handleOpenNotifications ที่ยิง PUT /notifications/read-all ทันทีที่ "กดกระดิ่ง"
+  // = แค่เปิดเข้าไปดูก็ถูกมาร์คว่าอ่านหมดทั้งกล่อง ทั้งที่ผู้ใช้ยังไม่ได้อ่านอะไรเลย badge หายทันที
+  // ตอนนี้การมาร์คว่าอ่านเกิดขึ้นเฉพาะตอนผู้ใช้คลิกรายการนั้นๆ หรือกดปุ่ม "อ่านทั้งหมด"
+  // ในหน้า Notifications เท่านั้น (ดู pages/Notifications.tsx)
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
@@ -110,7 +128,6 @@ function LayoutInner() {
         isCashier={isCashier}
         unreadCount={unreadCount}
         pendingOrders={pendingOrders}
-        onOpenNotifications={handleOpenNotifications}
         fullName={user.full_name}
         role={user.role}
         profileImageUrl={profileImageUrl}
@@ -120,6 +137,22 @@ function LayoutInner() {
 
       {/* ── Main ─────────────────────────────────────────────────────────────── */}
       <main className="flex-1 h-screen overflow-y-auto pb-28 md:pb-0">
+        {/* ⭐️ แถบเตือนสลิปไม่ผ่าน — ค้างอยู่ทุกหน้าจนกว่าจะส่งสลิปใหม่สำเร็จ
+            ไม่ใช่ modal ที่บังหน้าจอ ผู้ใช้ยังกดใช้งานส่วนอื่นได้ตามปกติ */}
+        {rejectedOrders.map(order => (
+          <div key={order.id} className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-red-700">
+              ⚠️ ออเดอร์ #{order.id} สลิปไม่ผ่าน
+              {order.reject_reason && <span className="font-normal text-red-600"> — {order.reject_reason}</span>}
+            </p>
+            <button
+              onClick={() => setSlipOrder(order)}
+              className="shrink-0 px-4 py-1.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-xs font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
+            >
+              ส่งสลิปใหม่
+            </button>
+          </div>
+        ))}
         <Outlet />
       </main>
 
@@ -128,7 +161,6 @@ function LayoutInner() {
         isCashier={isCashier}
         unreadCount={unreadCount}
         pendingOrders={pendingOrders}
-        onOpenNotifications={handleOpenNotifications}
         onOpenMobileMenu={() => setShowMobileMenu(true)}
         onOpenProfile={() => navigate('/profile')}
       />
@@ -140,6 +172,15 @@ function LayoutInner() {
           pendingOrders={pendingOrders}
           onClose={() => setShowMobileMenu(false)}
           onLogoutClick={handleLogoutClick}
+        />
+      )}
+
+      {slipOrder && (
+        <UploadSlipModal
+          orderId={slipOrder.id}
+          rejectReason={slipOrder.reject_reason}
+          onClose={() => setSlipOrder(null)}
+          onUploaded={fetchRejectedOrders}
         />
       )}
 

@@ -7,7 +7,6 @@ interface MobileBottomNavProps {
   isCashier: boolean; // ⭐️ ช่อง POS เป็นของ CASHIER เท่านั้น — ADMIN ให้เป็นช่องสั่งจองแทน
   unreadCount: number;
   pendingOrders: number;
-  onOpenNotifications: () => void;
   onOpenMobileMenu: () => void;
   onOpenProfile: () => void;
 }
@@ -18,7 +17,7 @@ interface MobileBottomNavProps {
 // หน้าหลักเป็นจุดศูนย์กลางเด่นสุดของแถบ) ส่วน "เมนู" (รวมออเดอร์/ฝากขาย/ออกจากระบบ/เมนูผู้จัดการ
 // ผ่าน MobileMenuDrawer) ย้ายไปอยู่ช่องซ้ายแทนที่หน้าหลักเดิม — badge ออเดอร์ค้างย้ายตามไปด้วย
 export function MobileBottomNav({
-  isStaff, isCashier, unreadCount, pendingOrders, onOpenNotifications,
+  isStaff, isCashier, unreadCount, pendingOrders,
   onOpenMobileMenu, onOpenProfile,
 }: MobileBottomNavProps) {
   const moreBadge = isStaff ? pendingOrders : 0;
@@ -38,7 +37,8 @@ export function MobileBottomNav({
             </span>
             <span className="text-[10px] font-medium">เมนู</span>
           </button>
-          <MobNavItem to="/notifications" icon={<Bell size={20} />} label="แจ้งเตือน" badge={unreadCount} onClick={onOpenNotifications} />
+          {/* ⭐️ ไม่มาร์คว่าอ่านตอนกดเข้าไปดูอีกแล้ว — ดูรายละเอียดที่ Sidebar.tsx */}
+          <MobNavItem to="/notifications" icon={<Bell size={20} />} label="แจ้งเตือน" badge={unreadCount} />
         </div>
 
         {/* ⭐️ ที่ว่างตรงกลางให้ปุ่ม FAB ลอยทับ */}

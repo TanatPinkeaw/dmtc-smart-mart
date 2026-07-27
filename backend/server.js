@@ -4265,7 +4265,31 @@ app.get('/api/notifications', async (req, res) => {
   }
 });
 
-// ⭐️ ทำเครื่องหมายอ่านแจ้งเตือนทั้งหมดแล้ว (เรียกตอนกดกระดิ่ง) — ครอบคลุมทั้งของตัวเองและของระบบที่ role นี้เห็นได้
+// ⭐️ ทำเครื่องหมายอ่าน "ทีละรายการ" — เดิมมีแต่ read-all ทำให้ frontend ที่อยากมาร์คแค่รายการเดียว
+// ต้องเรียก read-all แทน (= อ่านหมดทั้งกล่องทั้งที่ผู้ใช้คลิกอันเดียว) แจ้งเตือนที่ยังไม่ได้อ่านจริง
+// เลยหายเกลี้ยงหลัง refresh
+// scope ตาม visibility เดียวกับ GET /api/notifications: staff เห็นของระบบ (user_id IS NULL) ด้วย
+// ส่วน MEMBER แตะได้เฉพาะของตัวเอง — กันมาร์คแจ้งเตือนของคนอื่น
+app.put('/api/notifications/:id/read', async (req, res) => {
+  try {
+    const isStaff = ['ADMIN', 'CASHIER'].includes(req.user.role);
+    const query = isStaff
+      ? 'UPDATE notifications SET is_read = 1 WHERE id = ? AND (user_id IS NULL OR user_id = ?)'
+      : 'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?';
+    const [result] = await pool.query(query, [req.params.id, req.user.id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'ไม่พบการแจ้งเตือนนี้' });
+    }
+    res.json({ message: 'อ่านแจ้งเตือนแล้ว' });
+  } catch (error) {
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ ทำเครื่องหมายอ่านแจ้งเตือนทั้งหมดแล้ว — ตอนนี้เรียกจากปุ่ม "อ่านทั้งหมด" เท่านั้น
+// (เดิมยิงอัตโนมัติตอนกดกระดิ่งเปิดหน้าแจ้งเตือน ทำให้ทุกอย่างถูกมาร์คว่าอ่านโดยที่ผู้ใช้ยังไม่ได้อ่าน)
 app.put('/api/notifications/read-all', async (req, res) => {
   try {
     const isStaff = ['ADMIN', 'CASHIER'].includes(req.user.role);

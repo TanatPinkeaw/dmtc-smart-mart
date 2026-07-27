@@ -8,7 +8,6 @@ interface SidebarProps {
   isCashier: boolean; // ⭐️ POS เป็นเมนูของ CASHIER เท่านั้น (ADMIN ขายหน้าร้านไม่ได้)
   unreadCount: number;
   pendingOrders: number;
-  onOpenNotifications: () => void;
   fullName: string;
   role: string;
   profileImageUrl?: string | null; // ⭐️ Home page feature — รูปโปรไฟล์ (fallback: Default profile.png)
@@ -17,7 +16,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  isStaff, isAdmin, isCashier, unreadCount, pendingOrders, onOpenNotifications,
+  isStaff, isAdmin, isCashier, unreadCount, pendingOrders,
   fullName, role, profileImageUrl, onOpenProfile, onLogoutClick,
 }: SidebarProps) {
   return (
@@ -36,7 +35,9 @@ export function Sidebar({
         {/* ⭐️ ทางกลับหน้า Home กลาง — ไม่งั้นเข้าโมดูลนึงแล้วจะสลับ work/shop หรือไปโมดูลอื่นไม่ได้เลย
             นอกจากพิมพ์ URL เอง (ผู้ใช้สับสนว่าตัวเลือก "เข้างาน/ซื้อของ" หายไปไหน — จริงๆ ย้ายไปอยู่ที่นี่) */}
         <NavItem to="/home" icon={<Home size={18} />} label="หน้าหลัก" />
-        <NavItem to="/notifications" icon={<Bell size={18} />} label="แจ้งเตือน" badge={unreadCount} onClick={onOpenNotifications} />
+        {/* ⭐️ ไม่มี onClick มาร์คว่าอ่านแล้วที่นี่อีก — แค่เปิดหน้าแจ้งเตือนไม่ถือว่าอ่าน
+            ผู้ใช้ต้องคลิกรายการนั้นๆ หรือกดปุ่ม "อ่านทั้งหมด" ในหน้านั้นเอง */}
+        <NavItem to="/notifications" icon={<Bell size={18} />} label="แจ้งเตือน" badge={unreadCount} />
 
         {!isStaff && MEMBER_ITEMS.map(item => (
           <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
