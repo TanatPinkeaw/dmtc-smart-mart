@@ -1,10 +1,11 @@
 import { X, LogOut, ClipboardList } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { STAFF_ITEMS, ADMIN_ITEMS_DRAWER, MEMBER_ITEMS } from './navConfig';
+import { STAFF_ITEMS, STORE_ITEMS_DRAWER, SYSTEM_ITEMS, MEMBER_ITEMS } from './navConfig';
 
 interface MobileMenuDrawerProps {
   isStaff: boolean;
   isAdmin: boolean;
+  isStoreAdmin: boolean; // ⭐️ ADMIN หรือ MANAGER
   pendingOrders?: number;
   onClose: () => void;
   onLogoutClick?: () => void;
@@ -12,7 +13,7 @@ interface MobileMenuDrawerProps {
 
 const drawerLinkClass = 'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-brand-bg hover:text-brand transition-colors duration-150';
 
-export function MobileMenuDrawer({ isStaff, isAdmin, pendingOrders = 0, onClose, onLogoutClick }: MobileMenuDrawerProps) {
+export function MobileMenuDrawer({ isStaff, isAdmin, isStoreAdmin, pendingOrders = 0, onClose, onLogoutClick }: MobileMenuDrawerProps) {
   return (
     <div className="md:hidden fixed inset-0 z-[90] flex items-end justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -41,7 +42,12 @@ export function MobileMenuDrawer({ isStaff, isAdmin, pendingOrders = 0, onClose,
                   <item.icon size={18} /> {item.label}
                 </NavLink>
               ))}
-              {isAdmin && ADMIN_ITEMS_DRAWER.map(item => (
+              {isStoreAdmin && STORE_ITEMS_DRAWER.map(item => (
+                <NavLink key={item.to} to={item.to} onClick={onClose} className={drawerLinkClass}>
+                  <item.icon size={18} /> {item.label}
+                </NavLink>
+              ))}
+              {isAdmin && SYSTEM_ITEMS.map(item => (
                 <NavLink key={item.to} to={item.to} onClick={onClose} className={drawerLinkClass}>
                   <item.icon size={18} /> {item.label}
                 </NavLink>

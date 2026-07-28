@@ -40,9 +40,12 @@ function LayoutInner() {
   // ⭐️ ADMIN ไม่ถูกกรองด้วยสถานะเข้างาน — งานหลังบ้าน (ตั้งค่า/รายงาน/จัดการพนักงาน) ไม่ใช่กะขายของ
   //   จะบังคับให้ลงชื่อเข้างานก่อนถึงจะเข้าเมนูผู้จัดการได้ไม่สมเหตุสมผล
   //   ส่วน CASHIER ยังกรองตามโหมด (ไม่ได้เปิดกะ = ใช้งานได้เท่าสมาชิก) ตามที่ตกลงไว้
-  const isStaff = user.role === 'ADMIN' || (user.role === 'CASHIER' && sessionMode !== 'shop');
+  // ⭐️ MANAGER = staff เต็มตัว (ไม่ผูกกับกะ เหมือน ADMIN) — CASHIER ยังกรองตามโหมด shop/work
+  const isStaff = user.role === 'ADMIN' || user.role === 'MANAGER' || (user.role === 'CASHIER' && sessionMode !== 'shop');
   const isAdmin = user.role === 'ADMIN';
-  // ⭐️ POS เปิดให้เฉพาะ CASHIER — ADMIN ขายหน้าร้านไม่ได้ (เปิดกะไม่ได้ = เงินสดไม่มีกะรองรับ)
+  // ⭐️ เมนูจัดการร้าน (ตั้งค่า/รายงาน/สินค้า/กลุ่มสมาชิก) เปิดให้ทั้ง ADMIN และ MANAGER
+  const isStoreAdmin = user.role === 'ADMIN' || user.role === 'MANAGER';
+  // ⭐️ POS เปิดให้เฉพาะ CASHIER — ADMIN/MANAGER ขายหน้าร้านไม่ได้ (เปิดกะไม่ได้ = เงินสดไม่มีกะรองรับ)
   const isCashier = user.role === 'CASHIER';
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -125,6 +128,7 @@ function LayoutInner() {
       <Sidebar
         isStaff={isStaff}
         isAdmin={isAdmin}
+        isStoreAdmin={isStoreAdmin}
         isCashier={isCashier}
         unreadCount={unreadCount}
         pendingOrders={pendingOrders}
@@ -169,6 +173,7 @@ function LayoutInner() {
         <MobileMenuDrawer
           isStaff={isStaff}
           isAdmin={isAdmin}
+          isStoreAdmin={isStoreAdmin}
           pendingOrders={pendingOrders}
           onClose={() => setShowMobileMenu(false)}
           onLogoutClick={handleLogoutClick}

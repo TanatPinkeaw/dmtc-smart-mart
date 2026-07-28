@@ -4,7 +4,7 @@ import QRCode from 'react-qr-code';
 import { EmptyState } from '../ui/EmptyState';
 
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
-interface CartItem extends Product { quantity: number; }
+interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
 
 interface CartPanelProps {
   isCartOpen: boolean;
@@ -42,6 +42,7 @@ interface CartPanelProps {
   onCheckout: () => void;
   loading: boolean;
   checkoutDisabled: boolean;
+  onOpenRewardModal?: () => void; // ⭐️ เปิดโมดัลแลกของรางวัล (มีเมื่อมีสมาชิก)
 }
 
 export function CartPanel({
@@ -51,7 +52,7 @@ export function CartPanel({
   maxRedeemable, redeemPoints, onRedeemPointsChange,
   grandTotal, pointsDiscount, finalTotal,
   paymentMethod, onSetPaymentMethod, amountReceived, onAmountReceivedChange, promptpayId,
-  onCheckout, loading, checkoutDisabled,
+  onCheckout, loading, checkoutDisabled, onOpenRewardModal,
 }: CartPanelProps) {
   return (
     <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex' : 'hidden'} md:flex md:relative md:w-2/5 flex-col bg-white border-l border-brand-border`}>
@@ -82,8 +83,10 @@ export function CartPanel({
               : 'bg-brand-bg border-brand-border border-l-brand'
           }`}>
             <div className="flex-1 min-w-0 pr-2">
-              <p className="text-xs font-semibold text-gray-900 truncate">{item.name}</p>
-              <p className="text-xs text-brand font-bold">฿{Number(item.price).toFixed(2)}</p>
+              <p className="text-xs font-semibold text-gray-900 truncate">{item.redeem_reward ? `🎁 ${item.name}` : item.name}</p>
+              {item.redeem_reward
+                ? <p className="text-xs text-amber-600 font-bold">แลกด้วย {(Number(item.points_required) || 0).toLocaleString()} แต้ม</p>
+                : <p className="text-xs text-brand font-bold">฿{Number(item.price).toFixed(2)}</p>}
               {/* ⭐️ Sprint 2 — B7: Show stock warning */}
               {isStockExceeded && (
                 <p className="text-xs text-yellow-700 font-semibold mt-1">
@@ -96,7 +99,7 @@ export function CartPanel({
               <span className="text-xs font-bold text-gray-900 w-5 text-center">{item.quantity}</span>
               <button onClick={() => onUpdateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-brand-bg rounded text-gray-600 hover:text-emerald-500 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"><Plus size={11} /></button>
             </div>
-            <p className="text-xs font-bold text-gray-900 w-14 text-right shrink-0">฿{(Number(item.price) * item.quantity).toFixed(2)}</p>
+            <p className="text-xs font-bold text-gray-900 w-14 text-right shrink-0">{item.redeem_reward ? 'ฟรี' : `฿${(Number(item.price) * item.quantity).toFixed(2)}`}</p>
           </div>
         );
         })}
@@ -131,15 +134,29 @@ export function CartPanel({
               <button type="submit" disabled={memberLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">{memberLoading ? '...' : 'ค้นหา'}</button>
             </form>
           ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">{currentMember.student_id}</p>
-                <p className="text-sm font-semibold text-gray-900">{currentMember.full_name}</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] text-gray-400">{currentMember.student_id}</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{currentMember.full_name}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">{currentMember.points} 🌟</span>
+                  <button onClick={onClearMember} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150" aria-label="ปิด"><X size={14} /></button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">{currentMember.points} 🌟</span>
-                <button onClick={onClearMember} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150" aria-label="ปิด"><X size={14} /></button>
-              </div>
+              {/* ⭐️ Part 5 — badge สิทธิ์ลดของกลุ่มสมาชิก (โชว์เมื่อกลุ่มมีส่วนลด default) */}
+              {currentMember.group_name && Number(currentMember.group_default_discount) > 0 && (
+                <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-[11px] font-bold px-2.5 py-1 rounded-full">
+                  🏷️ {currentMember.group_name} — สิทธิ์ลด {Number(currentMember.group_default_discount)}%
+                </div>
+              )}
+              {/* ⭐️ Part 5/6 — ปุ่มแลกของรางวัลด้วยแต้ม */}
+              {onOpenRewardModal && (
+                <button onClick={onOpenRewardModal} className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-500 text-white text-xs font-bold py-2 rounded-lg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+                  <Gift size={14} /> แลกของรางวัล
+                </button>
+              )}
             </div>
           )}
         </div>

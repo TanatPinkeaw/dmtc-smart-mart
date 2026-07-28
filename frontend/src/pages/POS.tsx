@@ -18,10 +18,12 @@ import { ProductGrid } from '../components/pos/ProductGrid';
 import { CartPanel } from '../components/pos/CartPanel';
 import { RegisterMemberModal } from '../components/pos/RegisterMemberModal';
 import { ReceiptModal } from '../components/pos/ReceiptModal';
+import { RewardModal } from '../components/pos/RewardModal';
 
 interface Category { id: number; name: string; }
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
-interface CartItem extends Product { quantity: number; }
+// ⭐️ redeem_reward: บรรทัดของรางวัล (ราคา 0, จ่ายด้วยแต้ม) points_required เก็บไว้โชว์
+interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
 
 export default function POS() {
   const socket = useSocket();
@@ -54,6 +56,9 @@ export default function POS() {
   const [receiptData, setReceiptData] = useState<any>(null);
   const [storeInfo, setStoreInfo] = useState<any>(null);
   const [priceOverride, setPriceOverride] = useState<{[key: number]: number}>({});  // ⭐️ Sprint 2 — Expiry Discount
+  // ⭐️ Part 2 — อัตราแลกแต้มเป็นส่วนลด (1 แต้ม = redeemRate บาท) ดึงจาก settings ตอน mount
+  const [redeemRate, setRedeemRate] = useState(1);
+  const [showRewardModal, setShowRewardModal] = useState(false);
 
   const navigate = useNavigate();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
@@ -74,10 +79,12 @@ export default function POS() {
     // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
     // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
     if (localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
-    fetchCategories(); fetchProducts(); fetchPromotions(); fetchStoreInfo();
+    fetchCategories(); fetchProducts(); fetchPromotions(); fetchStoreInfo(); fetchLoyaltyRate();
   }, [navigate]);
 
   const fetchStoreInfo = async () => { try { const res = await api.get('/settings/store'); setStoreInfo(res.data); } catch (e) {} };
+  // ⭐️ อัตราแลกแต้ม — ให้ preview ฝั่ง client ตรงกับที่ backend คำนวณ (server ยังเป็น authority)
+  const fetchLoyaltyRate = async () => { try { const res = await api.get('/settings/loyalty'); setRedeemRate(Number(res.data?.points_redeem_value_per_point) || 1); } catch (e) {} };
   const fetchPromotions = async () => {
     try { const res = await api.get('/promotions'); setPromotions(res.data); } catch (e) {}
     try { const r = await api.get('/promotions/active'); setStorePromos(r.data || []); } catch (e) {}
@@ -153,14 +160,27 @@ export default function POS() {
   };
   const updateQuantity = (id: number, delta: number) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: i.quantity + delta } : i).filter(i => i.quantity > 0));
 
+  // ⭐️ Part 5 — เพิ่มของรางวัลลงตะกร้า (ราคา 0, ธง redeem_reward) กันเพิ่มซ้ำเกิน 1
+  const addRewardToCart = (r: { id: number; name: string; image_url: string | null; points_required: number }) => {
+    setCart(prev => {
+      if (prev.find(i => i.id === r.id && i.redeem_reward)) return prev; // มีอยู่แล้ว
+      return [...prev, { id: r.id, name: r.name, image_url: r.image_url || '', price: 0, barcode: '', category_id: null, quantity: 1, redeem_reward: true, points_required: r.points_required }];
+    });
+  };
+
   // ⭐️ Sprint 1 — B3: คำนวณยอดเงินทั้งหมดในหน่วยสตางค์ (integer) กัน float drift สะสมข้ามหลายรายการ
-  // ในตะกร้า (เดิม: Number(i.price) * i.quantity บวกสะสมด้วย float ตรงๆ — คลาสสิก 0.1+0.2 bug)
+  //   ของรางวัลราคา 0 จึงไม่กระทบ grandTotal
   const grandTotalSatang = cart.reduce((t, i) => t + lineTotalSatang(i.price, i.quantity), 0);
   const grandTotal = fromSatang(grandTotalSatang);
   const netTotalSatang = Math.max(0, grandTotalSatang - toSatang(appliedPromo?.discount_amount || 0));
   const netTotal = fromSatang(netTotalSatang);
-  const maxRedeemable = currentMember ? Math.min(currentMember.points, Math.floor(netTotal)) : 0;
-  const pointsDiscount = currentMember && redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
+  // ⭐️ แต้มที่ต้องใช้แลกของรางวัลในบิลนี้ (หักจากแต้มที่ใช้แลกส่วนลดเงินสดได้)
+  const rewardPointsUsed = cart.reduce((t, i) => t + (i.redeem_reward ? (Number(i.points_required) || 0) * i.quantity : 0), 0);
+  const availableForCash = currentMember ? Math.max(0, currentMember.points - rewardPointsUsed) : 0;
+  // ⭐️ แลกส่วนลดเงินสด: 1 แต้ม = redeemRate บาท → จำนวนแต้มสูงสุด = floor(ยอด / redeemRate)
+  const maxRedeemable = currentMember ? Math.min(availableForCash, Math.floor(netTotal / redeemRate)) : 0;
+  const redeemPointsUsed = currentMember && redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
+  const pointsDiscount = fromSatang(toSatang(redeemPointsUsed * redeemRate)); // มูลค่าส่วนลด (บาท)
   const finalTotal = fromSatang(Math.max(0, netTotalSatang - toSatang(pointsDiscount)));
 
   useEffect(() => { if (cart.length === 0 && appliedPromo) setAppliedPromo(null); if (cart.length === 0 && redeemPoints) setRedeemPoints(''); }, [cart.length]);
@@ -194,7 +214,7 @@ export default function POS() {
   // ⭐️ F5 — payload ตัวเดียวกันทั้งใช้ validate ก่อนส่งจริง และใช้เช็คแบบ real-time ปิดปุ่ม
   const buildCheckoutPayload = (): CheckoutPayload => ({
     cashier_id: user.id, member_id: currentMember?.id || null,
-    promotion_id: appliedPromo?.id || null, redeem_points: pointsDiscount > 0 ? pointsDiscount : 0,
+    promotion_id: appliedPromo?.id || null, redeem_points: redeemPointsUsed > 0 ? redeemPointsUsed : 0,
     payment_method: paymentMethod, amount_received: paymentMethod === 'CASH' ? Number(amountReceived) || 0 : finalTotal,
     items: cart.map(i => ({ product_id: i.id, quantity: i.quantity })),
   });
@@ -213,9 +233,10 @@ export default function POS() {
 
       const response = await api.post('/sales/checkout', {
         cashier_id: user.id, member_id: currentMember?.id || null,
-        promotion_id: appliedPromo?.id || null, redeem_points: pointsDiscount > 0 ? pointsDiscount : 0,
+        promotion_id: appliedPromo?.id || null, redeem_points: redeemPointsUsed > 0 ? redeemPointsUsed : 0,
         payment_method: paymentMethod, amount_received: paymentMethod === 'CASH' ? Number(amountReceived) : finalTotal,
-        items: cart.map(i => ({ product_id: i.id, quantity: i.quantity }))
+        // ⭐️ ของรางวัลติดธง redeem_reward ให้ backend หักแต้ม+ตั้งราคา 0
+        items: cart.map(i => ({ product_id: i.id, quantity: i.quantity, ...(i.redeem_reward ? { redeem_reward: true } : {}) }))
       }, { signal: controller.signal });
 
       clearTimeout(timeoutId);
@@ -364,6 +385,7 @@ export default function POS() {
         onCheckout={handleCheckout}
         loading={loading}
         checkoutDisabled={cart.length === 0 || loading || !!checkoutValidationError || (paymentMethod === 'CASH' && (!amountReceived || Number(amountReceived) < finalTotal))}
+        onOpenRewardModal={() => setShowRewardModal(true)}
       />
 
       {showRegisterModal && (
@@ -381,6 +403,14 @@ export default function POS() {
           receiptData={receiptData}
           storeInfo={storeInfo}
           onClose={() => setReceiptData(null)}
+        />
+      )}
+
+      {showRewardModal && currentMember && (
+        <RewardModal
+          memberPoints={currentMember.points || 0}
+          onClose={() => setShowRewardModal(false)}
+          onRedeem={addRewardToCart}
         />
       )}
 

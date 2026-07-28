@@ -33,10 +33,20 @@ import BackupManagement from './pages/BackupManagement'; // ⭐️ หน้า�
 // กัน MEMBER ไม่ให้โหลดหน้า staff-only ได้ตั้งแต่แรก แทนที่จะปล่อยให้โหลดแล้วค่อยพังตอนยิง API
 function RequireStaff({ children }: { children: ReactNode }) {
   // ⭐️ Sprint 0 — B2: เปลี่ยนจาก JSON.parse ตรงๆ เป็น getCurrentUser() (มี try/catch, กัน localStorage
-  // เสียแล้วพังทั้งแอป)
+  // เสียแล้วพังทั้งแอป) — MANAGER นับเป็น staff ด้วย
   const user = getCurrentUser();
-  if (!user || (user.role !== 'ADMIN' && user.role !== 'CASHIER')) {
+  if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER' && user.role !== 'CASHIER')) {
     return <Navigate to="/pre-order" replace />;
+  }
+  return <>{children}</>;
+}
+
+// ⭐️ Require ADMIN or MANAGER (หน้าจัดการร้าน: ตั้งค่า/รายงาน/สินค้า/กลุ่มสมาชิก) — กันไม่ให้ CASHIER
+//   เข้าถึงด้วยการพิมพ์ URL (เดิม /settings, /attendance-management ใช้แค่ RequireStaff = CASHIER หลุดเข้าได้)
+function RequireManager({ children }: { children: ReactNode }) {
+  const user = getCurrentUser();
+  if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }
@@ -146,9 +156,13 @@ function App() {
           <Route path="/inventory" element={<RequireStaff><Inventory /></RequireStaff>} />
           <Route path="/orders" element={<RequireStaff><OrderManagement /></RequireStaff>} />
           <Route path="/schedules" element={<RequireStaff><Schedules /></RequireStaff>} />
-          <Route path="/attendance-management" element={<RequireStaff><AttendanceManagement /></RequireStaff>} />
-          <Route path="/settings" element={<RequireStaff><Settings /></RequireStaff>} />
-          <Route path="/summary" element={<RequireAdmin><Summary /></RequireAdmin>} />
+          {/* ⭐️ ปิดช่องโหว่: /settings + /attendance-management เดิมเป็น RequireStaff (CASHIER พิมพ์ URL เข้าได้)
+              เปลี่ยนเป็น RequireManager = ADMIN/MANAGER เท่านั้น */}
+          <Route path="/attendance-management" element={<RequireManager><AttendanceManagement /></RequireManager>} />
+          <Route path="/settings" element={<RequireManager><Settings /></RequireManager>} />
+          {/* ⭐️ /summary เปิดให้ MANAGER ด้วย แต่ตารางเงินเดือน (payroll) ยังซ่อนเฉพาะ ADMIN ในหน้า Summary เอง */}
+          <Route path="/summary" element={<RequireManager><Summary /></RequireManager>} />
+          {/* ⭐️ /backup ยังคง ADMIN-only (งานระบบ) */}
           <Route path="/backup" element={<RequireAdmin><BackupManagement /></RequireAdmin>} />
 
           <Route path="/pre-order" element={<Preorder />} />

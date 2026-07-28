@@ -11,7 +11,7 @@ export interface User {
   student_id: string;
   full_name: string;
   phone_number: string;
-  role: 'ADMIN' | 'CASHIER' | 'MEMBER';
+  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'MEMBER';
   [key: string]: any;
 }
 

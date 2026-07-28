@@ -1,11 +1,12 @@
 import { Bell, Store, ClipboardList, LogOut, Home } from 'lucide-react';
 import { NavItem } from './NavItem';
-import { MEMBER_ITEMS, STAFF_ITEMS, ADMIN_ITEMS_SIDEBAR } from './navConfig';
+import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS } from './navConfig';
 
 interface SidebarProps {
   isStaff: boolean;
   isAdmin: boolean;
-  isCashier: boolean; // ⭐️ POS เป็นเมนูของ CASHIER เท่านั้น (ADMIN ขายหน้าร้านไม่ได้)
+  isStoreAdmin: boolean; // ⭐️ ADMIN หรือ MANAGER — เห็นเมนูจัดการร้าน
+  isCashier: boolean; // ⭐️ POS เป็นเมนูของ CASHIER เท่านั้น (ADMIN/MANAGER ขายหน้าร้านไม่ได้)
   unreadCount: number;
   pendingOrders: number;
   fullName: string;
@@ -16,7 +17,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  isStaff, isAdmin, isCashier, unreadCount, pendingOrders,
+  isStaff, isAdmin, isStoreAdmin, isCashier, unreadCount, pendingOrders,
   fullName, role, profileImageUrl, onOpenProfile, onLogoutClick,
 }: SidebarProps) {
   return (
@@ -54,10 +55,14 @@ export function Sidebar({
           </>
         )}
 
-        {isAdmin && (
+        {isStoreAdmin && (
           <>
             <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ผู้จัดการ</p></div>
-            {ADMIN_ITEMS_SIDEBAR.map(item => (
+            {STORE_ITEMS_SIDEBAR.map(item => (
+              <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
+            ))}
+            {/* ⭐️ งานระบบ (สำรอง/กู้คืน) เฉพาะ ADMIN */}
+            {isAdmin && SYSTEM_ITEMS.map(item => (
               <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
             ))}
           </>

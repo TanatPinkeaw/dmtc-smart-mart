@@ -820,7 +820,7 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-app.post('/api/categories', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "กรุณาระบุชื่อหมวดหมู่" });
 
@@ -834,7 +834,7 @@ app.post('/api/categories', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.delete('/api/categories/:id', requireRole('ADMIN'), async (req, res) => {
+app.delete('/api/categories/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
     res.json({ message: "ลบหมวดหมู่สำเร็จ" });
@@ -986,12 +986,12 @@ app.get('/api/products/highlights', async (req, res) => {
   }
 });
 
-app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator), async (req, res) => {
-  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end } = req.body;
+app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(productValidator), async (req, res) => {
+  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required } = req.body;
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null]
+      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null, is_reward_item ? 1 : 0, points_required || 0]
     );
     // ⭐️ Task 5 — audit log
     await pool.query(
@@ -1009,8 +1009,8 @@ app.post('/api/products', requireRole('ADMIN'), validateRequest(productValidator
   }
 });
 
-app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
-  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, promo_percent, promo_start, promo_end } = req.body;
+app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, promo_percent, promo_start, promo_end, is_reward_item, points_required } = req.body;
   try {
     // ⭐️ Sprint 2: Validate expiry_date if provided
     if (expiry_date && new Date(expiry_date) < new Date()) {
@@ -1018,12 +1018,15 @@ app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
     }
 
     // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log (รวม cost เผื่อ client ไม่ส่ง cost มา จะได้ไม่ทับเป็น 0)
-    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent FROM products WHERE id = ?', [req.params.id]);
+    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, is_reward_item, points_required FROM products WHERE id = ?', [req.params.id]);
     const finalCost = (cost === undefined || cost === null || cost === '') ? (oldRows[0]?.cost ?? 0) : cost;
+    // ⭐️ reward fields: ถ้า client ไม่ส่งมา คงค่าเดิมไว้ (กันฟอร์มที่ยังไม่อัปเดตทับเป็น 0)
+    const finalIsReward = (is_reward_item === undefined) ? (oldRows[0]?.is_reward_item ?? 0) : (is_reward_item ? 1 : 0);
+    const finalPointsRequired = (points_required === undefined || points_required === null || points_required === '') ? (oldRows[0]?.points_required ?? 0) : points_required;
 
     await pool.query(
-      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=?, promo_percent=?, promo_start=?, promo_end=? WHERE id=?',
-      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, req.params.id]
+      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=?, promo_percent=?, promo_start=?, promo_end=?, is_reward_item=?, points_required=? WHERE id=?',
+      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, finalIsReward, finalPointsRequired, req.params.id]
     );
 
     await pool.query(
@@ -1039,7 +1042,7 @@ app.put('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', requireRole('ADMIN'), async (req, res) => {
+app.delete('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     await pool.query('DELETE FROM products WHERE id=?', [req.params.id]);
     res.json({ message: "ลบสินค้าสำเร็จ" });
@@ -1213,19 +1216,32 @@ app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (r
   }
 });
 
-app.get('/api/users/search', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/users/search', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   const { q } = req.query;
   if (!q) return res.status(400).json({ error: "กรุณาระบุคำค้นหา" });
 
   try {
-    // ค้นหาทั้งจาก student_id และ phone_number
+    // ค้นหาทั้งจาก student_id และ phone_number + แนบข้อมูลกลุ่มสมาชิก (ให้ POS โชว์ badge สิทธิ์ลด)
     const [rows] = await pool.query(
-      'SELECT id, student_id, full_name, phone_number, points, role FROM users WHERE student_id = ? OR phone_number = ?',
+      `SELECT u.id, u.student_id, u.full_name, u.phone_number, u.points, u.role, u.group_id,
+              mg.name AS group_name, mg.code AS group_code, mg.default_discount_percent AS group_default_discount
+       FROM users u LEFT JOIN member_groups mg ON u.group_id = mg.id
+       WHERE u.student_id = ? OR u.phone_number = ?`,
       [q, q]
     );
     if (rows.length === 0) return res.status(404).json({ error: "ไม่พบข้อมูลสมาชิก" });
 
-    res.json(rows[0]);
+    const member = rows[0];
+    // rule รายหมวดหมู่ของกลุ่มนี้ (ให้ POS คำนวณ preview ต่อชิ้นได้ตรงกับ backend)
+    let group_rules = [];
+    if (member.group_id) {
+      const [ruleRows] = await pool.query(
+        'SELECT category_id, discount_percent FROM group_discount_rules WHERE group_id = ?',
+        [member.group_id]
+      );
+      group_rules = ruleRows;
+    }
+    res.json({ ...member, group_rules });
   } catch (error) {
     console.error('[500]', error.message);
 
@@ -1948,7 +1964,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
   }
 });
 
-app.put('/api/shifts/:id/approve', requireRole('ADMIN'), async (req, res) => {
+app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { approval_notes, password } = req.body;
   const shiftId = req.params.id;
   const approverId = req.user.id;
@@ -2023,7 +2039,7 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.put('/api/shifts/:id/reject', requireRole('ADMIN'), async (req, res) => {
+app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { reason } = req.body;
   const shiftId = req.params.id;
   const rejectorId = req.user.id;
@@ -2087,7 +2103,7 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/shifts/pending', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/shifts/pending', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
@@ -2113,7 +2129,7 @@ app.get('/api/shifts/pending', requireRole('ADMIN'), async (req, res) => {
 // 2.1 SCHEDULES / ATTENDANCE (หมวด 7 — ตารางเวลา + เช็คมาสาย)
 // =========================================
 
-app.post('/api/schedules', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/schedules', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { cashier_id, work_date, expected_start, expected_end } = req.body;
   if (!cashier_id || !work_date || !expected_start || !expected_end) {
     return res.status(400).json({ error: "กรุณาระบุ cashier_id, work_date, expected_start, expected_end ให้ครบ" });
@@ -2137,7 +2153,7 @@ app.post('/api/schedules', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.delete('/api/schedules/:id', requireRole('ADMIN'), async (req, res) => {
+app.delete('/api/schedules/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [result] = await pool.query('DELETE FROM schedules WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบตารางเวลานี้' });
@@ -2257,7 +2273,7 @@ app.get('/api/attendance/today', async (req, res) => {
   }
 });
 
-app.get('/api/attendance', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/attendance', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const { user_id, month } = req.query;
 
@@ -2293,7 +2309,7 @@ app.get('/api/attendance', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.put('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
+app.put('/api/attendance/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { check_in, check_out, note, source } = req.body;
   try {
     if (source === 'SHIFT') {
@@ -2316,7 +2332,7 @@ app.put('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.delete('/api/attendance/:id', requireRole('ADMIN'), async (req, res) => {
+app.delete('/api/attendance/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { source } = req.query;
   try {
     if (source === 'SHIFT') {
@@ -2368,7 +2384,7 @@ async function runAutoCheckoutStale(io) {
   return { attendance_closed: staleAttendance.length, shifts_closed: staleShifts.length };
 }
 
-app.post('/api/attendance/auto-checkout-stale', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/attendance/auto-checkout-stale', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const result = await runAutoCheckoutStale(req.io);
     res.json({ message: "ตรวจสอบและตัดออกอัตโนมัติเรียบร้อย", ...result });
@@ -2379,7 +2395,7 @@ app.post('/api/attendance/auto-checkout-stale', requireRole('ADMIN'), async (req
   }
 });
 
-app.post('/api/holidays', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/holidays', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { holiday_date, note } = req.body;
   if (!holiday_date) return res.status(400).json({ error: "กรุณาระบุวันที่" });
   try {
@@ -2404,7 +2420,7 @@ app.get('/api/holidays', async (req, res) => {
   }
 });
 
-app.get('/api/reports/attendance', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/attendance', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const { month } = req.query; // 'YYYY-MM'
     const monthClause = month ? `AND DATE_FORMAT(work_date, '%Y-%m') = ?` : '';
@@ -2486,6 +2502,43 @@ app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => 
   }
 });
 
+// ⭐️ อ่านอัตราแต้มสะสมจากตาราง settings (ปรับได้จากหน้า Pricing & Loyalty โดยไม่ต้อง restart)
+//   คืนค่า default = พฤติกรรมเดิม (20 บาท/แต้ม, 1 แต้ม = ฿1) ถ้าค่าในตารางหาย/ผิดปกติ
+async function getLoyaltyRates(conn) {
+  const [[row]] = await conn.query('SELECT points_earn_amount_per_point AS earnPer, points_redeem_value_per_point AS redeemRate FROM settings WHERE id = 1');
+  const earnPer = Number(row?.earnPer) > 0 ? Number(row.earnPer) : 20;
+  const redeemRate = Number(row?.redeemRate) > 0 ? Number(row.redeemRate) : 1;
+  return { earnPer, redeemRate };
+}
+
+// ⭐️ โหลดสิทธิ์ส่วนลดกลุ่มของสมาชิก: ส่วนลด default ของกลุ่ม + rule รายหมวดหมู่
+//   คืน { defaultPct, ruleByCategory: Map<category_id, percent> } — ถ้าไม่มีสมาชิก/ไม่มีกลุ่ม จะได้ 0/ว่าง
+async function getMemberGroupDiscount(conn, memberId) {
+  const result = { defaultPct: 0, ruleByCategory: new Map() };
+  if (!memberId) return result;
+  const [grpRows] = await conn.query(
+    `SELECT mg.default_discount_percent AS pct FROM users u JOIN member_groups mg ON u.group_id = mg.id WHERE u.id = ?`,
+    [memberId]
+  );
+  if (grpRows.length === 0) return result; // สมาชิกไม่ได้อยู่กลุ่มไหน
+  result.defaultPct = Number(grpRows[0].pct) || 0;
+  const [ruleRows] = await conn.query(
+    `SELECT r.category_id AS cid, r.discount_percent AS pct FROM group_discount_rules r JOIN users u ON u.group_id = r.group_id WHERE u.id = ?`,
+    [memberId]
+  );
+  for (const r of ruleRows) result.ruleByCategory.set(r.cid, Number(r.pct) || 0);
+  return result;
+}
+
+// ⭐️ เขียน 1 แถวลง point_transactions (ledger) ต้องเรียกในทรานแซกชันเดียวกับที่แต้มถูกแก้เสมอ
+//   points เป็นค่ามีเครื่องหมาย: + สำหรับ EARN, - สำหรับ REDEEM/REWARD
+async function writePointTxn(conn, userId, type, points, refSaleId, refOrderId, performedBy, note) {
+  await conn.query(
+    'INSERT INTO point_transactions (user_id, type, points, ref_sale_id, ref_order_id, performed_by, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [userId, type, points, refSaleId || null, refOrderId || null, performedBy || null, note || null]
+  );
+}
+
 // ⭐️ ขายหน้าร้านเป็นงานของ CASHIER เท่านั้น — ตัด ADMIN ออกตามนโยบายที่ตกลงกับผู้ใช้
 //   เหตุผล: เงินสดต้องผูกกับกะเสมอเพื่อให้ปิดกะแล้วยอดตรง แต่ ADMIN เปิดกะผ่าน UI ไม่ได้
 //   (หน้า /shift ส่ง ADMIN ไปลงชื่อเข้า-ออกงาน) ถ้าปล่อยให้ขายได้ บิลจะผูก shift_id = NULL
@@ -2502,13 +2555,19 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     // ⭐️ Sprint 1 — B3: totalAmount สะสมในหน่วยสตางค์ (integer) แทน float บาท กัน drift สะสมข้ามหลาย
     // รายการในตะกร้า (เดิม: product.price * item.quantity เป็น float คูณ+บวกสะสมทีละรายการ)
     let totalAmountSatang = 0;
+    let groupDiscountSatang = 0;   // ⭐️ ยอดส่วนลดกลุ่มสมาชิกที่เกิดในบิลนี้ (แยกรายงาน)
+    let rewardPointsNeeded = 0;    // ⭐️ แต้มที่ต้องหักจากการแลกของรางวัลในบิลนี้
     const processedItems = [];
     const stockIssues = []; // ⭐️ Sprint 2 — B7: Collect stock validation errors
+
+    // ⭐️ โหลดอัตราแต้ม + สิทธิ์ส่วนลดกลุ่มของสมาชิกครั้งเดียวก่อนวนรายการ
+    const { earnPer, redeemRate } = await getLoyaltyRates(conn);
+    const groupDiscount = await getMemberGroupDiscount(conn, member_id || null);
 
     // 1. เช็คราคาสินค้าและสต๊อก + ⭐️ Sprint 2: เช็ค expiry status
     for (let item of items) {
       const [productRows] = await conn.query(`
-        SELECT id, name, price, stock, expiry_date, discount_percent, promo_percent, promo_start, promo_end,
+        SELECT id, name, price, stock, category_id, is_reward_item, points_required, expiry_date, discount_percent, promo_percent, promo_start, promo_end,
                GREATEST(
                  CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
                         AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
@@ -2538,19 +2597,41 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
         throw new Error(`ไม่สามารถขายสินค้าที่หมดอายุแล้ว: ${product.name}`);
       }
 
+      // ⭐️ Part 5 — สินค้าแลกของรางวัล: ราคาเงินสด = 0, จ่ายด้วยแต้ม, ไม่คิดส่วนลด/ไม่ได้แต้มสะสม
+      if (item.redeem_reward) {
+        if (!member_id) throw new Error('ต้องเลือกสมาชิกก่อนแลกของรางวัล');
+        if (!product.is_reward_item) throw new Error(`สินค้านี้ไม่ใช่ของรางวัล: ${product.name}`);
+        const need = (Number(product.points_required) || 0) * item.quantity;
+        rewardPointsNeeded += need;
+        processedItems.push({ product_id: item.product_id, quantity: item.quantity, unit_price: 0, subtotal: 0, stock_before: product.stock, redeemed_with_points: true, reward_points: need });
+        continue;
+      }
+
       let itemPrice = Number(product.price);
-      // ⭐️ Phase 1: ส่วนลดระดับสินค้า (โปรช่วงวันที่ / ใกล้หมดอายุ) — คำนวณใน SQL เวลาไทย ให้ตรงกับที่การ์ดโชว์
+      // ⭐️ ลำดับความสำคัญของส่วนลดต่อชิ้น เลือกอย่างใดอย่างหนึ่ง:
+      //   1) โปร/ใกล้หมดอายุระดับสินค้า (best_discount_percent จาก SQL) — ชนะทุกอย่าง ไม่นับเป็นส่วนลดกลุ่ม
+      //   2) rule รายหมวดหมู่ของกลุ่มสมาชิก  3) ส่วนลด default ของกลุ่ม
       const bestDiscPct = Number(product.best_discount_percent) || 0;
       if (bestDiscPct > 0) {
         itemPrice -= Math.round(itemPrice * bestDiscPct / 100);
-        console.log(`[CHECKOUT] -${bestDiscPct}% applied to ${product.name}`);
+        console.log(`[CHECKOUT] -${bestDiscPct}% (product promo) applied to ${product.name}`);
+      } else if (member_id) {
+        const rulePct = groupDiscount.ruleByCategory.has(product.category_id)
+          ? groupDiscount.ruleByCategory.get(product.category_id)
+          : groupDiscount.defaultPct;
+        if (rulePct > 0) {
+          const perUnitDisc = Math.round(itemPrice * rulePct / 100);
+          itemPrice -= perUnitDisc;
+          groupDiscountSatang += toSatang(perUnitDisc) * item.quantity;
+          console.log(`[CHECKOUT] -${rulePct}% (group) applied to ${product.name}`);
+        }
       }
 
       const subtotalSatang = toSatang(itemPrice) * item.quantity;
       const subtotal = fromSatang(subtotalSatang);
       totalAmountSatang += subtotalSatang;
 
-      processedItems.push({ product_id: item.product_id, quantity: item.quantity, unit_price: itemPrice, subtotal: subtotal, stock_before: product.stock });
+      processedItems.push({ product_id: item.product_id, quantity: item.quantity, unit_price: itemPrice, subtotal: subtotal, stock_before: product.stock, redeemed_with_points: false });
     }
 
     // ⭐️ Sprint 2 — B7: If any stock issues, return 400 with details
@@ -2583,19 +2664,33 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     let netTotalSatang = totalAmountSatang - toSatang(discountAmount);
     let netTotal = fromSatang(netTotalSatang);
 
-    // ⭐️ 1.6 แลกแต้มเป็นส่วนลด (1 แต้ม = ฿1) — คำนวณ/ตรวจสอบใหม่ฝั่ง backend ทั้งหมด ห้ามเชื่อ client
-    let pointsRedeemed = 0;
-    let pointsDiscount = 0;
-    if (member_id && redeem_points > 0) {
+    // ⭐️ 1.6 แลกแต้ม — ทั้งของรางวัล (rewardPointsNeeded) และแลกเป็นส่วนลดเงินสด (redeem_points)
+    //   ดึงยอดแต้มครั้งเดียวแบบ FOR UPDATE กันแลกซ้อนเกินยอด: หักของรางวัลก่อน เหลือเท่าไรค่อยแลกเป็นส่วนลด
+    //   อัตราแลก = points_redeem_value_per_point (ปรับได้) — 1 แต้ม = redeemRate บาท
+    let pointsRedeemed = 0;   // แต้มที่แลกเป็นส่วนลดเงินสด
+    let pointsDiscount = 0;   // มูลค่าส่วนลด (บาท)
+    let rewardPoints = 0;     // แต้มที่ใช้แลกของรางวัล (ยืนยันหลังเช็คยอดแล้ว)
+    if (member_id && (redeem_points > 0 || rewardPointsNeeded > 0)) {
       const [memberRows] = await conn.query('SELECT points FROM users WHERE id = ? FOR UPDATE', [member_id]);
       if (memberRows.length === 0) throw new Error('ไม่พบข้อมูลสมาชิก');
-      const availablePoints = memberRows[0].points;
+      let availablePoints = memberRows[0].points;
 
-      pointsRedeemed = Math.min(Number(redeem_points), availablePoints, Math.floor(netTotal));
-      if (pointsRedeemed < 0) pointsRedeemed = 0;
-      pointsDiscount = pointsRedeemed; // อัตรา 1 แต้ม = ฿1 (จำนวนเต็มอยู่แล้ว ไม่มีเศษสตางค์)
-      netTotalSatang -= toSatang(pointsDiscount);
-      netTotal = fromSatang(netTotalSatang);
+      // ของรางวัลก่อน — ต้องมีแต้มครบเต็มจำนวน ไม่งั้นยกเลิกทั้งบิล
+      if (rewardPointsNeeded > 0) {
+        if (availablePoints < rewardPointsNeeded) throw new Error('แต้มสะสมไม่พอสำหรับแลกของรางวัล');
+        rewardPoints = rewardPointsNeeded;
+        availablePoints -= rewardPoints;
+      }
+
+      // แลกเป็นส่วนลดเงินสดจากแต้มที่เหลือ — cap ด้วย (แต้มเหลือ) และ (ยอดบิล/อัตราแลก)
+      if (redeem_points > 0) {
+        const maxByBill = Math.floor(netTotal / redeemRate);
+        pointsRedeemed = Math.min(Number(redeem_points), availablePoints, maxByBill);
+        if (pointsRedeemed < 0) pointsRedeemed = 0;
+        pointsDiscount = fromSatang(toSatang(pointsRedeemed * redeemRate)); // ปัดเป็นสตางค์
+        netTotalSatang -= toSatang(pointsDiscount);
+        netTotal = fromSatang(netTotalSatang);
+      }
     }
 
     // 2. ตรวจสอบเงินทอน (เทียบกับยอดสุทธิหลังหักส่วนลด+แต้ม) — ⭐️ B3: เทียบ/คำนวณในหน่วยสตางค์
@@ -2622,9 +2717,10 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     // 3. สร้างหัวบิลใบเสร็จ (ผูก member_id, promotion_id, discount_amount, points_redeemed, shift_id ลงไป)
     // ⭐️ Sprint 2 — B6: Store idempotency_key for offline handling
     const idempotencyKey = req.headers['idempotency-key'];
+    const groupDiscountAmount = fromSatang(groupDiscountSatang);
     const [saleResult] = await conn.query(
-      'INSERT INTO sales (cashier_id, member_id, promotion_id, total_amount, discount_amount, points_redeemed, points_discount, payment_method, amount_received, change_amount, shift_id, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [cashier_id, member_id || null, promotion_id || null, netTotal, discountAmount, pointsRedeemed, pointsDiscount, payment_method, amount_received, changeAmount, shiftId, idempotencyKey || null]
+      'INSERT INTO sales (cashier_id, member_id, promotion_id, total_amount, discount_amount, group_discount_amount, points_redeemed, points_discount, payment_method, amount_received, change_amount, shift_id, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [cashier_id, member_id || null, promotion_id || null, netTotal, discountAmount, groupDiscountAmount, pointsRedeemed, pointsDiscount, payment_method, amount_received, changeAmount, shiftId, idempotencyKey || null]
     );
     const saleId = saleResult.insertId;
 
@@ -2655,16 +2751,21 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
       });
     }
 
-    // ⭐️ 5. หักแต้มที่แลกใช้ไป + คำนวณแต้มสะสมใหม่ (ทุก 20 บาท = 1 แต้ม, คิดจากยอดสุทธิหลังหักทุกส่วนลด)
+    // ⭐️ 5. หักแต้ม (แลกส่วนลด + แลกของรางวัล) แล้วบวกแต้มสะสมใหม่ (ทุก earnPer บาท = 1 แต้ม
+    //   คิดจากยอดสุทธิหลังหักทุกส่วนลด ของรางวัลราคา 0 จึงไม่ทำให้ได้แต้มเพิ่ม) + เขียน ledger ทุกการเคลื่อนไหว
     let earnedPoints = 0;
     if (member_id) {
-      if (pointsRedeemed > 0) {
-        await conn.query('UPDATE users SET points = points - ? WHERE id = ?', [pointsRedeemed, member_id]);
+      const totalDeduct = pointsRedeemed + rewardPoints;
+      if (totalDeduct > 0) {
+        await conn.query('UPDATE users SET points = points - ? WHERE id = ?', [totalDeduct, member_id]);
       }
-      earnedPoints = Math.floor(netTotal / 20);
+      earnedPoints = Math.floor(netTotal / earnPer);
       if (earnedPoints > 0) {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [earnedPoints, member_id]);
       }
+      if (pointsRedeemed > 0) await writePointTxn(conn, member_id, 'REDEEM', -pointsRedeemed, saleId, null, req.user.id, 'แลกแต้มเป็นส่วนลด');
+      if (rewardPoints > 0) await writePointTxn(conn, member_id, 'REWARD', -rewardPoints, saleId, null, req.user.id, 'แลกของรางวัล');
+      if (earnedPoints > 0) await writePointTxn(conn, member_id, 'EARN', earnedPoints, saleId, null, req.user.id, 'แต้มสะสมจากการซื้อ');
     }
 
     // ⭐️ 5.5 นับสิทธิ์การใช้โปรโมชั่น (usage_count รวม + per-user ถ้ามีจำกัด)
@@ -2692,8 +2793,10 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
         sale_id: saleId,
         subtotal: totalAmount,
         discount_amount: discountAmount,
+        group_discount_amount: groupDiscountAmount,
         points_redeemed: pointsRedeemed,
         points_discount: pointsDiscount,
+        reward_points_used: rewardPoints,
         total_amount: netTotal,
         amount_received: amount_received,
         change_amount: changeAmount,
@@ -2782,7 +2885,7 @@ app.get('/api/sales/history/:id', requireRole('CASHIER', 'ADMIN'), async (req, r
   }
 });
 
-app.post('/api/sales/:id/void', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const saleId = req.params.id;
 
   const conn = await pool.getConnection();
@@ -2812,10 +2915,16 @@ app.post('/api/sales/:id/void', requireRole('ADMIN'), async (req, res) => {
       await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
     }
 
-    // คืนแต้ม (หารด้วย 20 ให้ตรงกับตอนได้แต้มใน checkout)
+    // คืนแต้ม (หารด้วยอัตราที่ตั้งไว้ ให้ตรงกับตอนได้แต้มใน checkout) + เขียน ledger
+    // หมายเหตุ: จุดนี้ claw-back เฉพาะแต้ม "ที่ได้จากการซื้อ" เท่านั้น (พฤติกรรมเดิม) ยังไม่คืนแต้ม
+    //   ที่ลูกค้าแลกเป็นส่วนลด/แลกของรางวัลไปในบิลนั้น — เป็นช่องว่างเดิมก่อนหน้า ไม่ได้ขยายในงานนี้
     if (sale.member_id) {
-      const points = Math.floor(sale.total_amount / 20);
-      await conn.query('UPDATE users SET points = GREATEST(0, points - ?) WHERE id = ?', [points, sale.member_id]);
+      const { earnPer } = await getLoyaltyRates(conn);
+      const points = Math.floor(sale.total_amount / earnPer);
+      if (points > 0) {
+        await conn.query('UPDATE users SET points = GREATEST(0, points - ?) WHERE id = ?', [points, sale.member_id]);
+        await writePointTxn(conn, sale.member_id, 'ADJUST', -points, saleId, null, req.user.id, 'คืนแต้มจากการยกเลิกบิล (void)');
+      }
     }
 
     // ⭐️ บันทึกแจ้งเตือนระบบ: บิลถูกยกเลิก (VOID)
@@ -3121,7 +3230,7 @@ app.get('/api/reports/vendor-sales/detail', async (req, res) => {
 // REPORTS เพิ่มเติม (หมวด 5 — Dashboard ADMIN) — ทุก endpoint requireRole('ADMIN')
 // =========================================
 
-app.get('/api/reports/void-summary', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/void-summary', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT COUNT(id) as void_count, COALESCE(SUM(total_amount), 0) as void_amount
@@ -3136,7 +3245,7 @@ app.get('/api/reports/void-summary', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/reports/shift-anomalies', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/shift-anomalies', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // tolerance ±20 บาท ถือว่าปกติ เกินกว่านี้ = ผิดปกติ
     const [rows] = await pool.query(`
@@ -3154,7 +3263,7 @@ app.get('/api/reports/shift-anomalies', requireRole('ADMIN'), async (req, res) =
   }
 });
 
-app.get('/api/reports/sales-comparison', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/sales-comparison', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ยอดต่อวัน = sales (created_at) + orders COMPLETED (completed_at)
     const dayTotal = async (dateExpr) => {
@@ -3188,7 +3297,7 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN'), async (req, res) 
 
 // ⭐️ Design-ref — กราฟยอดขายรายสัปดาห์ (AdminDashboardScreen) รวมบิลหน้าร้าน + บิลจองที่ปิดแล้ว
 // ต่อวัน ย้อนหลัง 7 วัน (รวมวันนี้) เติมวันที่ไม่มียอดขายให้เป็น 0 ให้กราฟต่อเนื่อง
-app.get('/api/reports/weekly-sales', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/weekly-sales', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT d, COALESCE(SUM(total), 0) as total FROM (
@@ -3217,7 +3326,7 @@ app.get('/api/reports/weekly-sales', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/reports/hourly-sales', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/hourly-sales', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT HOUR(created_at) as hour, COALESCE(SUM(total_amount),0) as total
@@ -3238,7 +3347,7 @@ app.get('/api/reports/hourly-sales', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/reports/sales-by-cashier', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/sales-by-cashier', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ⭐️ หมวด 6: JOIN sales.shift_id = shifts.id แม่นกว่าเทียบช่วงเวลา (รองรับเปิดกะซ้อนเวลากันหลายคน)
     // บิลเก่าก่อนมีคอลัมน์ shift_id จะไม่ถูกนับในรายงานนี้ (shift_id เป็น NULL)
@@ -3262,7 +3371,7 @@ app.get('/api/reports/sales-by-cashier', requireRole('ADMIN'), async (req, res) 
   }
 });
 
-app.get('/api/reports/open-shifts', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/open-shifts', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT sh.id, sh.opening_cash, sh.opened_at, u.full_name as cashier_name
@@ -3279,7 +3388,7 @@ app.get('/api/reports/open-shifts', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/shifts/pending-approval', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/shifts/pending-approval', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT sh.id, sh.cashier_id, u.full_name as cashier_name, sh.opening_cash, sh.expected_cash,
@@ -3297,7 +3406,7 @@ app.get('/api/shifts/pending-approval', requireRole('ADMIN'), async (req, res) =
   }
 });
 
-app.get('/api/reports/pending-orders', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/pending-orders', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT status, COUNT(id) as count, COALESCE(SUM(total_amount),0) as total
@@ -3313,7 +3422,7 @@ app.get('/api/reports/pending-orders', requireRole('ADMIN'), async (req, res) =>
   }
 });
 
-app.get('/api/reports/sales-channel', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/sales-channel', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [walkin] = await pool.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE status='COMPLETED' AND DATE(created_at)=CURDATE()`);
     const [preorder] = await pool.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status='COMPLETED' AND DATE(completed_at)=CURDATE()`);
@@ -3325,7 +3434,7 @@ app.get('/api/reports/sales-channel', requireRole('ADMIN'), async (req, res) => 
   }
 });
 
-app.get('/api/reports/gross-profit', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/gross-profit', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // กำไรขั้นต้น = subtotal - (cost * qty) - GP ที่ต้องคืน vendor (เฉพาะสินค้าฝากขาย)
     // GP สหกรณ์ = subtotal * gp_rate/100 คือส่วนที่สหกรณ์ได้ ส่วน vendor_earnings คืน vendor
@@ -3352,7 +3461,7 @@ app.get('/api/reports/gross-profit', requireRole('ADMIN'), async (req, res) => {
 
 // ⭐️ สรุปรายได้/กำไร แยกกำไรจาก GP (สินค้าฝากขาย) ออกจากกำไรสินค้าสหกรณ์เอง
 // รวมทั้งขายหน้าร้าน (sales) + พรีออเดอร์ที่ COMPLETED (orders) — คืนทั้งรายเดือน + ภาพรวมทั้งหมด
-app.get('/api/reports/profit-summary', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/profit-summary', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // นิยาม (ต่อรายการสินค้า):
     //   รายได้ (revenue)      = subtotal ที่ขายได้
@@ -3411,7 +3520,7 @@ app.get('/api/reports/profit-summary', requireRole('ADMIN'), async (req, res) =>
   }
 });
 
-app.get('/api/reports/dead-stock', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/dead-stock', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT p.id, p.name, p.stock
@@ -3434,7 +3543,7 @@ app.get('/api/reports/dead-stock', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/reports/vendor-summary', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/vendor-summary', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
@@ -3611,7 +3720,7 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
   }
 });
 
-app.get('/api/reports/monthly-overview', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/monthly-overview', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const month = req.query.month || new Date().toISOString().slice(0, 7);
 
@@ -3686,7 +3795,7 @@ app.get('/api/settings/store', async (req, res) => {
   }
 });
 
-app.put('/api/settings/store', requireRole('ADMIN'), async (req, res) => {
+app.put('/api/settings/store', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { store_name, tax_id, address, receipt_footer } = req.body;
   try {
     await pool.query(
@@ -3708,6 +3817,158 @@ app.get('/api/settings/receipt', async (req, res) => {
   } catch (error) {
     console.error('[500]', error.message);
 
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// =========================================
+// ⭐️ LOYALTY & DISCOUNT SETTINGS (Part 2) — อัตราแต้ม + ส่วนลด default ของกลุ่ม (ADMIN+MANAGER)
+// =========================================
+// ⭐️ อ่านอัตราแต้มสะสม (POS/PreOrder ใช้ตอน mount เพื่อคำนวณ preview ให้ตรงกับ backend)
+//   เปิดให้ทุก role ที่ล็อกอิน เพราะ CASHIER ก็ต้องรู้อัตราตอนคิดเงิน
+app.get('/api/settings/loyalty', async (req, res) => {
+  try {
+    const [[s]] = await pool.query('SELECT points_earn_amount_per_point, points_redeem_value_per_point FROM settings WHERE id = 1');
+    const [groups] = await pool.query('SELECT id, name, code, default_discount_percent FROM member_groups ORDER BY id');
+    res.json({
+      points_earn_amount_per_point: Number(s?.points_earn_amount_per_point) || 20,
+      points_redeem_value_per_point: Number(s?.points_redeem_value_per_point) || 1,
+      groups,
+    });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.put('/api/settings/loyalty', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { points_earn_amount_per_point, points_redeem_value_per_point } = req.body;
+  const earn = Number(points_earn_amount_per_point);
+  const redeem = Number(points_redeem_value_per_point);
+  if (!Number.isFinite(earn) || earn <= 0) return res.status(400).json({ error: 'จำนวนบาทต่อ 1 แต้ม ต้องเป็นตัวเลขมากกว่า 0' });
+  if (!Number.isFinite(redeem) || redeem <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้ม ต้องเป็นตัวเลขมากกว่า 0' });
+  try {
+    await pool.query(
+      'UPDATE settings SET points_earn_amount_per_point = ?, points_redeem_value_per_point = ? WHERE id = 1',
+      [Math.round(earn), redeem]
+    );
+    res.json({ message: 'อัปเดตอัตราแต้มสะสมสำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// =========================================
+// ⭐️ MEMBER GROUPS (Part 3) — กลุ่มสมาชิก + rule ส่วนลดรายหมวดหมู่ (ADMIN+MANAGER)
+// =========================================
+app.get('/api/member-groups', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [groups] = await pool.query('SELECT * FROM member_groups ORDER BY id');
+    const [rules] = await pool.query(
+      `SELECT r.id, r.group_id, r.category_id, r.discount_percent, c.name AS category_name
+       FROM group_discount_rules r LEFT JOIN categories c ON r.category_id = c.id ORDER BY r.group_id, c.name`
+    );
+    const byGroup = new Map(groups.map(g => [g.id, { ...g, rules: [] }]));
+    for (const r of rules) byGroup.get(r.group_id)?.rules.push(r);
+    res.json([...byGroup.values()]);
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.post('/api/member-groups', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { name, code, default_discount_percent, description } = req.body;
+  if (!name || !code) return res.status(400).json({ error: 'ต้องระบุชื่อและรหัสกลุ่ม' });
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO member_groups (name, code, default_discount_percent, description) VALUES (?, ?, ?, ?)',
+      [name, String(code).toUpperCase().trim(), Number(default_discount_percent) || 0, description || null]
+    );
+    res.status(201).json({ id: result.insertId, message: 'เพิ่มกลุ่มสมาชิกสำเร็จ' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'รหัสกลุ่มนี้ซ้ำกับที่มีอยู่แล้ว' });
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.put('/api/member-groups/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { name, default_discount_percent, description } = req.body;
+  try {
+    await pool.query(
+      'UPDATE member_groups SET name = ?, default_discount_percent = ?, description = ? WHERE id = ?',
+      [name, Number(default_discount_percent) || 0, description || null, req.params.id]
+    );
+    res.json({ message: 'อัปเดตกลุ่มสมาชิกสำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.delete('/api/member-groups/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    // users.group_id ON DELETE SET NULL, rules ON DELETE CASCADE — ลบได้ปลอดภัย
+    await pool.query('DELETE FROM member_groups WHERE id = ?', [req.params.id]);
+    res.json({ message: 'ลบกลุ่มสมาชิกสำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ เพิ่ม/อัปเดต rule รายหมวดหมู่ (upsert ด้วย UNIQUE (group_id, category_id))
+app.post('/api/member-groups/:id/rules', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { category_id, discount_percent } = req.body;
+  if (!category_id) return res.status(400).json({ error: 'ต้องเลือกหมวดหมู่' });
+  try {
+    await pool.query(
+      `INSERT INTO group_discount_rules (group_id, category_id, discount_percent) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE discount_percent = VALUES(discount_percent)`,
+      [req.params.id, category_id, Number(discount_percent) || 0]
+    );
+    res.status(201).json({ message: 'บันทึกส่วนลดรายหมวดหมู่สำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.delete('/api/member-groups/:id/rules/:ruleId', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM group_discount_rules WHERE id = ? AND group_id = ?', [req.params.ruleId, req.params.id]);
+    res.json({ message: 'ลบส่วนลดรายหมวดหมู่สำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ ผูกสมาชิกเข้ากลุ่ม — endpoint แยกต่างหาก (ADMIN+MANAGER) ไม่ปน role-editing ที่เป็น ADMIN-only
+app.put('/api/users/:id/group', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { group_id } = req.body;
+  try {
+    await pool.query('UPDATE users SET group_id = ? WHERE id = ?', [group_id || null, req.params.id]);
+    res.json({ message: 'กำหนดกลุ่มสมาชิกสำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// =========================================
+// ⭐️ REWARD PRODUCTS (Part 4/5) — สินค้าที่แลกด้วยแต้มได้ (ให้ POS โชว์ในโมดัลแลกของรางวัล)
+// =========================================
+app.get('/api/products/rewards', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, name, price, image_url, points_required, stock FROM products WHERE is_reward_item = 1 AND is_active = 1 AND stock > 0 ORDER BY points_required ASC'
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('[500]', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
@@ -3801,7 +4062,7 @@ app.get('/api/promotions/active', async (req, res) => {
   }
 });
 
-app.post('/api/promotions', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/promotions', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const {
     name, discount_type, discount_value, start_date, end_date,
     buy_product_id, buy_qty, free_product_id, free_qty,
@@ -3876,7 +4137,7 @@ app.get('/api/suppliers', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   }
 });
 
-app.post('/api/suppliers', requireRole('ADMIN'), async (req, res) => {
+app.post('/api/suppliers', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { name, contact_info } = req.body;
   try {
     const [result] = await pool.query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact_info]);
@@ -3888,7 +4149,7 @@ app.post('/api/suppliers', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.delete('/api/suppliers/:id', requireRole('ADMIN'), async (req, res) => {
+app.delete('/api/suppliers/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ลบข้อมูลซัพพลายเออร์ตาม ID
     await pool.query('DELETE FROM suppliers WHERE id = ?', [req.params.id]);
@@ -3992,10 +4253,14 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
     let totalAmountSatang = 0;
     const processedItems = [];
 
+    // ⭐️ อัตราแต้ม + สิทธิ์ส่วนลดกลุ่มของผู้สั่ง (pre-order สั่งด้วยตัวเอง user_id = สมาชิก)
+    const { earnPer, redeemRate } = await getLoyaltyRates(conn);
+    const groupDiscount = await getMemberGroupDiscount(conn, user_id);
+
     // คำนวณราคา + เช็คสต๊อกพอจริง (ล็อกแถวสินค้ากันขายเกินตอนมีหลายคนจองพร้อมกัน)
     for (const item of items) {
       const [rows] = await conn.query(`
-        SELECT id, name, price, stock,
+        SELECT id, name, price, stock, category_id,
                GREATEST(
                  CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
                         AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
@@ -4009,10 +4274,17 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
       if (rows[0].stock < item.quantity) {
         throw new Error(`สต๊อกไม่พอสำหรับ "${rows[0].name}" (เหลือ ${rows[0].stock}, ต้องการ ${item.quantity})`);
       }
-      // ⭐️ Phase 1: pre-order ได้ส่วนลดระดับสินค้าเหมือน POS (คำนวณใน SQL เวลาไทย ให้ตรงกับที่การ์ดโชว์)
+      // ⭐️ ส่วนลดต่อชิ้น ลำดับเดียวกับ POS: โปรสินค้า > rule หมวดหมู่ของกลุ่ม > ส่วนลด default ของกลุ่ม
       let unitPrice = Number(rows[0].price);
       const discPct = Number(rows[0].best_discount_percent) || 0;
-      if (discPct > 0) unitPrice -= Math.round(unitPrice * discPct / 100);
+      if (discPct > 0) {
+        unitPrice -= Math.round(unitPrice * discPct / 100);
+      } else {
+        const rulePct = groupDiscount.ruleByCategory.has(rows[0].category_id)
+          ? groupDiscount.ruleByCategory.get(rows[0].category_id)
+          : groupDiscount.defaultPct;
+        if (rulePct > 0) unitPrice -= Math.round(unitPrice * rulePct / 100);
+      }
       const subtotalSatang = toSatang(unitPrice) * item.quantity;
       const subtotal = fromSatang(subtotalSatang);
       totalAmountSatang += subtotalSatang;
@@ -4029,15 +4301,16 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
       if (userRows.length === 0) throw new Error('ไม่พบข้อมูลผู้ใช้');
       const availablePoints = userRows[0].points;
 
-      pointsRedeemed = Math.min(Number(redeem_points), availablePoints, Math.floor(totalAmount));
+      const maxByBill = Math.floor(totalAmount / redeemRate);
+      pointsRedeemed = Math.min(Number(redeem_points), availablePoints, maxByBill);
       if (pointsRedeemed < 0) pointsRedeemed = 0;
-      pointsDiscount = pointsRedeemed; // อัตรา 1 แต้ม = ฿1
+      pointsDiscount = fromSatang(toSatang(pointsRedeemed * redeemRate)); // อัตราแลก = redeemRate บาท/แต้ม
     }
     const netTotal = fromSatang(totalAmountSatang - toSatang(pointsDiscount));
 
     // คำนวณแต้มสะสมใหม่ที่จะได้รับ ถ้าลูกค้ากรอกเบอร์มา หรือติ๊กว่าจะสะสมแต้ม
-    // (ทุก 20 บาท = 1 แต้ม, คิดจากยอดสุทธิ "หลังหักแต้มที่แลกไปแล้ว" เหมือน pattern ใน /sales/checkout)
-    const earnPoints = use_phone_for_points ? Math.floor(netTotal / 20) : 0;
+    // (ทุก earnPer บาท = 1 แต้ม, คิดจากยอดสุทธิ "หลังหักแต้มที่แลกไปแล้ว") — เครดิตจริงตอนออเดอร์ COMPLETED
+    const earnPoints = use_phone_for_points ? Math.floor(netTotal / earnPer) : 0;
     
     // สถานะ: ถ้าจ่ายสแกน = รอตรวจสอบสลิป, ถ้าเงินสด = รอจ่ายหน้าร้าน
     const status = payment_method === 'QR' ? 'PENDING_VERIFY' : 'WAITING_CASH';
@@ -4068,6 +4341,7 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
     // ถ้าออเดอร์นี้ถูกยกเลิกภายหลัง ระบบจะคืนแต้มให้ที่ PUT /orders/:id/status (CANCELLED) และ /orders/:id/cancel-by-user
     if (pointsRedeemed > 0) {
       await conn.query('UPDATE users SET points = points - ? WHERE id = ?', [pointsRedeemed, user_id]);
+      await writePointTxn(conn, user_id, 'REDEEM', -pointsRedeemed, null, orderId, user_id, 'แลกแต้มเป็นส่วนลด (พรีออเดอร์)');
     }
 
     // ⭐️ บันทึกแจ้งเตือนระบบ: มีออเดอร์จองใหม่เข้ามา (ให้พนักงานเห็นในหน้าแจ้งเตือนด้วย ไม่ใช่แค่ badge)
@@ -4213,6 +4487,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
       // ⭐️ คืนแต้มที่เคยแลกไปตอนสั่งจอง (ถ้ามี) เพราะบิลนี้ไม่สำเร็จแล้ว
       if (order.points_redeemed > 0) {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.points_redeemed, order.user_id]);
+        await writePointTxn(conn, order.user_id, 'ADJUST', order.points_redeemed, null, orderId, req.user.id, 'คืนแต้มจากการยกเลิกออเดอร์');
       }
     }
 
@@ -4239,6 +4514,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
     if (status === 'REFUND_REQUESTED') {
       if (order.points_redeemed > 0) {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.points_redeemed, order.user_id]);
+        await writePointTxn(conn, order.user_id, 'ADJUST', order.points_redeemed, null, orderId, req.user.id, 'คืนแต้มจากการขอคืนเงิน');
       }
     }
 
@@ -4247,6 +4523,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
       await conn.query('UPDATE orders SET completed_at = NOW() WHERE id = ?', [orderId]);
       if (order.earn_points > 0) {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.earn_points, order.user_id]);
+        await writePointTxn(conn, order.user_id, 'EARN', order.earn_points, null, orderId, req.user.id, 'แต้มสะสมจากพรีออเดอร์');
       }
     }
 
@@ -4399,6 +4676,7 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
     // ⭐️ คืนแต้มที่เคยแลกไปตอนสั่งจอง (ถ้ามี) เพราะบิลนี้ไม่สำเร็จแล้ว
     if (order.points_redeemed > 0) {
       await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.points_redeemed, order.user_id]);
+      await writePointTxn(conn, order.user_id, 'ADJUST', order.points_redeemed, null, orderId, req.user.id, 'คืนแต้มจากการยกเลิกออเดอร์ (ลูกค้ายกเลิกเอง)');
     }
 
     await conn.commit();
@@ -5061,7 +5339,7 @@ app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => 
 // ⭐️ EXPORT รายงานยอดขาย/รายได้เป็น CSV (เปิดใน Google Sheets/Excel คำนวณต่อได้)
 // level=item  (รายชิ้น — ละเอียดสุด, ทำ pivot ได้), bill (รายบิล), daily (สรุปรายวัน)
 // ครอบทั้งบิลหน้าร้าน (POS) และพรีออเดอร์ที่ COMPLETED แล้ว; ไม่รวมบิลที่ถูก void
-app.get('/api/reports/export/sales-csv', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { start_date, end_date, level = 'item' } = req.query;
 
   // แปลง array-of-rows -> CSV string (ใส่ " ครอบทุกช่อง กัน , ในข้อมูล)
@@ -5217,7 +5495,7 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN'), async (req, res) 
 
 // ⭐️ Phase 4 Part 2 — Executive Summary export (Excel with KPI/top-products/category/inventory
 // sheet + full transaction detail sheet, or a CSV fallback of just the transaction detail).
-app.get('/api/reports/executive-export', requireRole('ADMIN'), async (req, res) => {
+app.get('/api/reports/executive-export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { startDate, endDate, format = 'excel' } = req.query;
   if (format !== 'excel' && format !== 'csv') {
     return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });

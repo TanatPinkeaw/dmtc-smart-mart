@@ -30,7 +30,7 @@ interface Overview {
 interface PayrollRow {
   user_id: number;
   full_name: string;
-  role: 'CASHIER' | 'ADMIN';
+  role: 'CASHIER' | 'MANAGER' | 'ADMIN';
   hourly_rate: number;
   total_hours: number;
   late_minutes: number;
@@ -65,6 +65,8 @@ function getCurrentMonth(): string {
 export default function Summary() {
   const user = getCurrentUserOrRedirect();
   const navigate = useNavigate();
+  // ⭐️ MANAGER เห็นสรุปยอด/สต๊อก/สมาชิกได้ แต่ตารางเงินเดือน (payroll) ยังซ่อนเฉพาะ ADMIN
+  const isAdmin = user.role === 'ADMIN';
 
   const [month, setMonth] = useState(getCurrentMonth());
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -79,7 +81,8 @@ export default function Summary() {
   const [savingRate, setSavingRate] = useState(false);
 
   useEffect(() => {
-    if (user.role !== 'ADMIN') { navigate('/'); return; }
+    // ⭐️ RequireManager กันที่ route แล้ว — ที่นี่แค่กัน role อื่นที่หลุดมา (MEMBER/CASHIER)
+    if (user.role !== 'ADMIN' && user.role !== 'MANAGER') { navigate('/'); return; }
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
@@ -87,10 +90,11 @@ export default function Summary() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ovRes, prRes, pfRes] = await Promise.all([
+      // ⭐️ payroll ดึงเฉพาะ ADMIN — MANAGER เรียก /reports/payroll จะโดน 403 (backend ยัง ADMIN-only)
+      const [ovRes, pfRes, prRes] = await Promise.all([
         api.get(`/reports/monthly-overview?month=${month}`),
-        api.get(`/reports/payroll?month=${month}`),
         api.get('/reports/profit-summary'),
+        isAdmin ? api.get(`/reports/payroll?month=${month}`) : Promise.resolve({ data: { staff: [] } }),
       ]);
       setOverview(ovRes.data);
       setPayroll(prRes.data.staff || []);
@@ -144,7 +148,8 @@ export default function Summary() {
     { icon: <PackageX size={18} />, label: 'สต๊อกใกล้หมด', value: `${overview.low_stock_count} รายการ`, color: 'text-orange-600', border: 'border-orange-200' },
     { icon: <ClipboardList size={18} />, label: 'ออเดอร์จองค้างอยู่', value: `${overview.pending_orders_count} ออเดอร์`, color: 'text-cyan-600', border: 'border-cyan-200' },
     { icon: <XCircle size={18} />, label: 'บิลยกเลิกเดือนนี้', value: `${overview.void_count} บิล (฿${Number(overview.void_amount).toLocaleString()})`, color: 'text-red-600', border: 'border-red-200' },
-    { icon: <Wallet size={18} />, label: 'ค่าจ้างรวมเดือนนี้ (ประมาณการ)', value: `฿${totalPayroll.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: 'text-brand', border: 'border-brand-border' },
+    // ⭐️ การ์ดค่าจ้างรวม = ข้อมูลเงินเดือน เฉพาะ ADMIN
+    ...(isAdmin ? [{ icon: <Wallet size={18} />, label: 'ค่าจ้างรวมเดือนนี้ (ประมาณการ)', value: `฿${totalPayroll.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: 'text-brand', border: 'border-brand-border' }] : []),
   ] : [];
 
   return (
@@ -274,7 +279,8 @@ export default function Summary() {
             </p>
           </div>
 
-          {/* Payroll table */}
+          {/* ⭐️ Payroll table — เฉพาะ ADMIN (MANAGER เห็นสรุปยอด/สต๊อกด้านบนได้ แต่ไม่เห็นค่าจ้าง) */}
+          {isAdmin && (<>
           <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden">
             <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between flex-wrap gap-2">
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
@@ -299,7 +305,7 @@ export default function Summary() {
                     <div>
                       <p className="font-semibold text-gray-800">{row.full_name}</p>
                       <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${row.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {row.role === 'ADMIN' ? 'ผู้จัดการ' : 'แคชเชียร์'}
+                        {row.role === 'ADMIN' ? 'ผู้ดูแลระบบ' : row.role === 'MANAGER' ? 'ผู้จัดการร้าน' : 'แคชเชียร์'}
                       </span>
                     </div>
                     <span className="font-bold text-brand text-lg">฿{Number(row.calculated_pay).toFixed(2)}</span>
@@ -356,7 +362,7 @@ export default function Summary() {
                       <td className="p-3 font-semibold text-gray-800">{row.full_name}</td>
                       <td className="p-3">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {row.role === 'ADMIN' ? 'ผู้จัดการ' : 'แคชเชียร์'}
+                          {row.role === 'ADMIN' ? 'ผู้ดูแลระบบ' : row.role === 'MANAGER' ? 'ผู้จัดการร้าน' : 'แคชเชียร์'}
                         </span>
                       </td>
                       <td className="p-3 text-right font-semibold">{Number(row.total_hours).toFixed(2)}</td>
@@ -423,6 +429,7 @@ export default function Summary() {
             * ชั่วโมงทำงานคำนวณจากกะที่ปิดสมบูรณ์แล้ว (แคชเชียร์) และบันทึกเข้า-ออกงาน (ผู้จัดการ) เฉพาะเดือนที่เลือก
             ส่วนค่าจ้างเป็นตัวเลขประมาณการ (ชั่วโมงทำงาน × อัตราค่าจ้าง) ไม่รวมภาษี/ประกันสังคม
           </p>
+          </>)}
         </>
       )}
     </div>

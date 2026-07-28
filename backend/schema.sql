@@ -30,7 +30,7 @@ CREATE TABLE `users` (
   `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `full_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `phone_number` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `role` enum('MEMBER','CASHIER','ADMIN') COLLATE utf8mb4_unicode_ci DEFAULT 'MEMBER',
+  `role` enum('MEMBER','CASHIER','MANAGER','ADMIN') COLLATE utf8mb4_unicode_ci DEFAULT 'MEMBER',
   `points` int DEFAULT '0',
   `is_active` tinyint(1) DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -38,9 +38,12 @@ CREATE TABLE `users` (
   `must_change_password` tinyint(1) DEFAULT '0',
   `token_valid_after` datetime DEFAULT NULL,
   `profile_image_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `group_id` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `student_id` (`student_id`),
-  UNIQUE KEY `phone_number` (`phone_number`)
+  UNIQUE KEY `phone_number` (`phone_number`),
+  KEY `fk_users_group` (`group_id`)
+  -- FK fk_users_group added at the end of this file, after member_groups is defined (load order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `categories` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -77,6 +80,8 @@ CREATE TABLE `settings` (
   `tax_id` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `address` text COLLATE utf8mb4_unicode_ci,
   `receipt_footer` text COLLATE utf8mb4_unicode_ci,
+  `points_earn_amount_per_point` int DEFAULT '20',
+  `points_redeem_value_per_point` decimal(10,2) DEFAULT '1.00',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `products` (
@@ -96,6 +101,8 @@ CREATE TABLE `products` (
   `promo_percent` int DEFAULT '0',
   `promo_start` date DEFAULT NULL,
   `promo_end` date DEFAULT NULL,
+  `is_reward_item` tinyint(1) DEFAULT '0',
+  `points_required` int DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `barcode` (`barcode`),
   KEY `category_id` (`category_id`),
@@ -150,6 +157,7 @@ CREATE TABLE `sales` (
   `points_discount` decimal(10,2) DEFAULT '0.00',
   `shift_id` int DEFAULT NULL,
   `idempotency_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `group_discount_amount` decimal(10,2) DEFAULT '0.00',
   PRIMARY KEY (`id`),
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   KEY `cashier_id` (`cashier_id`),
@@ -347,3 +355,44 @@ CREATE TABLE `revoked_tokens` (
   KEY `idx_expires` (`expires_at`),
   CONSTRAINT `revoked_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `member_groups` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `default_discount_percent` decimal(5,2) DEFAULT '0.00',
+  `description` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `group_discount_rules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `group_id` int NOT NULL,
+  `category_id` int NOT NULL,
+  `discount_percent` decimal(5,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_group_category` (`group_id`,`category_id`),
+  KEY `category_id` (`category_id`),
+  CONSTRAINT `group_discount_rules_ibfk_1` FOREIGN KEY (`group_id`) REFERENCES `member_groups` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `group_discount_rules_ibfk_2` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `point_transactions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `type` enum('EARN','REDEEM','REWARD','ADJUST') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `points` int NOT NULL,
+  `ref_sale_id` int DEFAULT NULL,
+  `ref_order_id` int DEFAULT NULL,
+  `performed_by` int DEFAULT NULL,
+  `note` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_created` (`user_id`,`created_at`),
+  CONSTRAINT `point_transactions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- FK for users.group_id (declared here, after member_groups exists, to keep top-to-bottom load order valid)
+ALTER TABLE `users` ADD CONSTRAINT `fk_users_group` FOREIGN KEY (`group_id`) REFERENCES `member_groups` (`id`) ON DELETE SET NULL;
+-- Seed default member groups (mirrors db.js initDB)
+INSERT IGNORE INTO `member_groups` (`name`, `code`, `default_discount_percent`, `description`) VALUES
+  ('นักเรียน/นักศึกษา', 'STUDENT', 0.00, 'สมาชิกทั่วไป — นักเรียนและนักศึกษา'),
+  ('อาจารย์', 'TEACHER', 5.00, 'อาจารย์ผู้สอน'),
+  ('เจ้าหน้าที่/บุคลากร', 'STAFF', 5.00, 'เจ้าหน้าที่และบุคลากรของสถาบัน');

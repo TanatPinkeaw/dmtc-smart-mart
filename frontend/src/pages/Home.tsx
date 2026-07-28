@@ -63,7 +63,7 @@ function priceAfterPromo(p: HighlightProduct) {
 export default function Home() {
   const user = getCurrentUserOrRedirect();
   const navigate = useNavigate();
-  const isStaff = user.role === 'ADMIN' || user.role === 'CASHIER';
+  const isStaff = user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'CASHIER';
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [lowStockCount, setLowStockCount] = useState(0);

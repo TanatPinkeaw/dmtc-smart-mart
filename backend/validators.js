@@ -19,6 +19,8 @@ module.exports = {
         Joi.object({
           product_id: Joi.number().integer().positive().required(),
           quantity: Joi.number().integer().min(1).max(1000).required(),
+          // ⭐️ Part 5 — สินค้าแลกของรางวัลด้วยแต้ม (stripUnknown ตัดทิ้งถ้าไม่ประกาศตรงนี้)
+          redeem_reward: Joi.boolean().optional(),
         })
       )
       .min(1)
@@ -40,6 +42,9 @@ module.exports = {
     promo_percent: Joi.number().integer().min(0).max(100).allow(null).optional(),
     promo_start: Joi.string().allow(null, '').optional(),
     promo_end: Joi.string().allow(null, '').optional(),
+    // ⭐️ Part 4 — สินค้าแลกของรางวัล
+    is_reward_item: Joi.boolean().optional(),
+    points_required: Joi.number().integer().min(0).allow(null).optional(),
   }),
 
   // POST /api/orders (pre-order) — body: items[], payment_method, slip_image,

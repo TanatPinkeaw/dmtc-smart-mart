@@ -701,6 +701,119 @@ const initDB = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+    // ==========================================
+    // ⭐️ Loyalty / RBAC / Member Groups / Rewards (feature: MANAGER role + group discounts + configurable loyalty)
+    // ==========================================
+
+    // ⭐️ เพิ่ม role 'MANAGER' (ผู้จัดการร้าน/อาจารย์ผู้ดูแล) คั่นระหว่าง CASHIER กับ ADMIN
+    // MODIFY COLUMN ไม่มี error idempotency ให้ swallow (รันซ้ำได้ปลอดภัยอยู่แล้ว) log-on-failure เฉยๆ
+    // ตามแบบ shifts.status enum-widen ด้านบน
+    try {
+      await connection.query(`ALTER TABLE users MODIFY COLUMN role ENUM('MEMBER','CASHIER','MANAGER','ADMIN') DEFAULT 'MEMBER'`);
+      console.log("🔧 ขยาย enum users.role ให้มี MANAGER แล้ว");
+    } catch (alterErr) {
+      console.error("⚠️ ALTER TABLE users (role enum widen) ล้มเหลว:", alterErr.message);
+    }
+
+    // ⭐️ Part 2 — อัตราแต้มสะสมปรับได้ (เดิม hardcode /20 และ 1:1 ในโค้ด) ค่า default = พฤติกรรมเดิมเป๊ะ
+    for (const [col, ddl] of [
+      ['points_earn_amount_per_point', 'ADD COLUMN points_earn_amount_per_point INT DEFAULT 20'],
+      ['points_redeem_value_per_point', 'ADD COLUMN points_redeem_value_per_point DECIMAL(10,2) DEFAULT 1.00'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE settings ${ddl}`);
+        console.log(`🔧 เพิ่มคอลัมน์ settings.${col} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE settings (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
+    // ⭐️ Part 4 — สินค้าแลกของรางวัลด้วยแต้ม
+    for (const [col, ddl] of [
+      ['is_reward_item', 'ADD COLUMN is_reward_item TINYINT(1) DEFAULT 0'],
+      ['points_required', 'ADD COLUMN points_required INT DEFAULT 0'],
+    ]) {
+      try {
+        await connection.query(`ALTER TABLE products ${ddl}`);
+        console.log(`🔧 เพิ่มคอลัมน์ products.${col} ที่ขาดไปให้แล้ว`);
+      } catch (alterErr) {
+        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error(`⚠️ ALTER TABLE products (${col}) ล้มเหลว:`, alterErr.message);
+      }
+    }
+
+    // ⭐️ Part 3 — กลุ่มสมาชิก (นักเรียน/อาจารย์/เจ้าหน้าที่) + ส่วนลดอัตโนมัติ
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS member_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        default_discount_percent DECIMAL(5,2) DEFAULT 0.00,
+        description TEXT
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS group_discount_rules (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        group_id INT NOT NULL,
+        category_id INT NOT NULL,
+        discount_percent DECIMAL(5,2) NOT NULL,
+        UNIQUE KEY uniq_group_category (group_id, category_id),
+        FOREIGN KEY (group_id) REFERENCES member_groups(id) ON DELETE CASCADE,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // ⭐️ ผูกสมาชิกเข้ากลุ่ม (FK แยกเป็น ALTER เพราะ member_groups เพิ่งถูกสร้าง)
+    try {
+      await connection.query(`ALTER TABLE users ADD COLUMN group_id INT NULL`);
+      console.log("🔧 เพิ่มคอลัมน์ users.group_id ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE users (group_id) ล้มเหลว:", alterErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE users ADD CONSTRAINT fk_users_group FOREIGN KEY (group_id) REFERENCES member_groups(id) ON DELETE SET NULL`);
+      console.log("🔧 เพิ่ม FK users.group_id ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      // ER_FK_DUP_NAME / ER_DUP_KEY / already exists = ปล่อยผ่าน
+      if (!/Duplicate|already exists|errno: 121|1826/i.test(alterErr.message)) {
+        console.error("⚠️ ALTER TABLE users (fk group_id) ล้มเหลว:", alterErr.message);
+      }
+    }
+
+    // ⭐️ ยอดส่วนลดกลุ่มที่เกิดในบิลนี้ (ไว้ทำรายงาน แยกจาก discount_amount ของโปรระดับบิล)
+    try {
+      await connection.query(`ALTER TABLE sales ADD COLUMN group_discount_amount DECIMAL(10,2) DEFAULT 0`);
+      console.log("🔧 เพิ่มคอลัมน์ sales.group_discount_amount ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE sales (group_discount_amount) ล้มเหลว:", alterErr.message);
+    }
+
+    // ⭐️ seed 3 กลุ่มเริ่มต้น — INSERT IGNORE บน code (UNIQUE) รันซ้ำได้ปลอดภัย
+    await connection.query(`
+      INSERT IGNORE INTO member_groups (name, code, default_discount_percent, description) VALUES
+        ('นักเรียน/นักศึกษา', 'STUDENT', 0.00, 'สมาชิกทั่วไป — นักเรียนและนักศึกษา'),
+        ('อาจารย์', 'TEACHER', 5.00, 'อาจารย์ผู้สอน'),
+        ('เจ้าหน้าที่/บุคลากร', 'STAFF', 5.00, 'เจ้าหน้าที่และบุคลากรของสถาบัน')
+    `);
+
+    // ⭐️ Part 5 — บัญชีแยกประเภทแต้มสะสม (ledger) ตรวจสอบย้อนหลังได้ทุกการเคลื่อนไหว
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS point_transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        type ENUM('EARN','REDEEM','REWARD','ADJUST') NOT NULL,
+        points INT NOT NULL,                 -- + earn, - redeem/reward
+        ref_sale_id INT NULL,
+        ref_order_id INT NULL,
+        performed_by INT NULL,               -- แคชเชียร์/แอดมินที่ทำรายการ
+        note VARCHAR(255) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        INDEX idx_user_created (user_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
     console.log("✅ Ultimate Master Database Schema is Ready!");
     connection.release();
   } catch (err) {

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet } from 'lucide-react';
+import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 import { useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { LoyaltySettingsPanel } from '../components/settings/LoyaltySettingsPanel';
+import { MemberGroupsPanel } from '../components/settings/MemberGroupsPanel';
 
 const getLocalDate = () => {
   const tzoffset = (new Date()).getTimezoneOffset() * 60000;
@@ -16,7 +18,7 @@ export default function Settings() {
 
   // ⭐️ 1. เพิ่ม 'PROMOTIONS' ใน Tabs
   // ⭐️ FIX — เพิ่มแท็บ 'PASSWORD_RESETS' คิวคำขอรีเซ็ตรหัสผ่านที่ ADMIN ต้องอนุมัติ/ส่งลิงก์เอง
-  const [activeTab, setActiveTab] = useState<'STORE' | 'HISTORY' | 'USERS' | 'CATEGORIES' | 'SUPPLIERS' | 'PRODUCTS' | 'PROMOTIONS' | 'PASSWORD_RESETS'>('STORE');
+  const [activeTab, setActiveTab] = useState<'STORE' | 'HISTORY' | 'USERS' | 'CATEGORIES' | 'SUPPLIERS' | 'PRODUCTS' | 'PROMOTIONS' | 'LOYALTY' | 'GROUPS' | 'PASSWORD_RESETS'>('STORE');
 
   // ⭐️ 2. เพิ่ม 'EDIT_USER' และ 'ADD_PROMOTION' ใน Modals
   const [activeModal, setActiveModal] = useState<'ADD_PRODUCT' | 'EDIT_PRODUCT' | 'ADD_CATEGORY' | 'ADD_SUPPLIER' | 'ADD_USER' | 'EDIT_USER' | 'ADD_PROMOTION' | null>(null);
@@ -40,11 +42,12 @@ export default function Settings() {
 
   const [newUser, setNewUser] = useState({ username: '', password: '', full_name: '', role: 'CASHIER' });
   const [editingUser, setEditingUser] = useState<any>(null); // สำหรับแก้ไขสิทธิ์พนักงาน
+  const [memberGroups, setMemberGroups] = useState<any[]>([]); // ⭐️ Part 3 — กลุ่มสมาชิก (ใช้กำหนดกลุ่มให้ผู้ใช้)
 
   const [newCategory, setNewCategory] = useState('');
   const [newSupplier, setNewSupplier] = useState({ name: '', contact_info: '' });
   
-  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40 });
+  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40, is_reward_item: false, points_required: '' });
   const [editingProduct, setEditingProduct] = useState<any>(null);
 
   const [newPromotion, setNewPromotion] = useState({
@@ -67,7 +70,7 @@ export default function Settings() {
   useEffect(() => {
     fetchStoreSettings();
     if (activeTab === 'HISTORY') fetchSalesHistory();
-    if (activeTab === 'USERS') fetchUsers();
+    if (activeTab === 'USERS') { fetchUsers(); api.get('/member-groups').then(r => setMemberGroups(r.data || [])).catch(() => {}); }
     if (activeTab === 'CATEGORIES') fetchCategories();
     if (activeTab === 'SUPPLIERS') fetchSuppliers();
     if (activeTab === 'PRODUCTS') { fetchProducts(); fetchCategories(); }
@@ -211,6 +214,8 @@ export default function Settings() {
     e.preventDefault();
     try {
       await api.put(`/users/${editingUser.id}`, { full_name: editingUser.full_name, role: editingUser.role, is_active: editingUser.is_active });
+      // ⭐️ Part 3 — บันทึกกลุ่มสมาชิกด้วย (endpoint แยก ADMIN+MANAGER)
+      await api.put(`/users/${editingUser.id}/group`, { group_id: editingUser.group_id || null });
       fetchUsers(); setActiveModal(null); setEditingUser(null);
       Swal.fire({ icon: 'success', title: 'อัปเดตสิทธิ์สำเร็จ', showConfirmButton: false, timer: 1500 });
     } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
@@ -241,8 +246,8 @@ export default function Settings() {
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), cost: Number(newProduct.cost) || 0, stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, promo_percent: Number(newProduct.promo_percent) || 0, promo_start: newProduct.promo_start || null, promo_end: newProduct.promo_end || null, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40 });
-      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40 });
+      await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), cost: Number(newProduct.cost) || 0, stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, promo_percent: Number(newProduct.promo_percent) || 0, promo_start: newProduct.promo_start || null, promo_end: newProduct.promo_end || null, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40, is_reward_item: !!newProduct.is_reward_item, points_required: Number(newProduct.points_required) || 0 });
+      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40, is_reward_item: false, points_required: '' });
       fetchProducts(); setActiveModal(null); setVendorSearch('');
       Swal.fire({ icon: 'success', title: 'เพิ่มสินค้าสำเร็จ', showConfirmButton: false, timer: 1500 });
     }
@@ -252,7 +257,7 @@ export default function Settings() {
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), cost: Number(editingProduct.cost) || 0, vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, promo_percent: Number(editingProduct.promo_percent) || 0, promo_start: editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : null, promo_end: editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : null, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40 });
+      await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), cost: Number(editingProduct.cost) || 0, vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, promo_percent: Number(editingProduct.promo_percent) || 0, promo_start: editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : null, promo_end: editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : null, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40, is_reward_item: !!editingProduct.is_reward_item, points_required: Number(editingProduct.points_required) || 0 });
       fetchProducts(); setActiveModal(null); setEditingProduct(null); setVendorSearch('');
       Swal.fire({ icon: 'success', title: 'แก้ไขสินค้าสำเร็จ!', showConfirmButton: false, timer: 1500 });
     } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
@@ -346,6 +351,8 @@ export default function Settings() {
           <TabButton icon={<Truck size={18} />} label="ซัพพลายเออร์" isActive={activeTab === 'SUPPLIERS'} onClick={() => setActiveTab('SUPPLIERS')} />
           <TabButton icon={<Users size={18} />} label="พนักงาน/สิทธิ์" isActive={activeTab === 'USERS'} onClick={() => setActiveTab('USERS')} />
           <TabButton icon={<Gift size={18} />} label="โปรโมชั่น" isActive={activeTab === 'PROMOTIONS'} onClick={() => setActiveTab('PROMOTIONS')} />
+          <TabButton icon={<Coins size={18} />} label="ราคา & แต้มสะสม" isActive={activeTab === 'LOYALTY'} onClick={() => setActiveTab('LOYALTY')} />
+          <TabButton icon={<UsersRound size={18} />} label="กลุ่มสมาชิก" isActive={activeTab === 'GROUPS'} onClick={() => setActiveTab('GROUPS')} />
           <TabButton icon={<KeyRound size={18} />} label="รีเซ็ตรหัสผ่าน" isActive={activeTab === 'PASSWORD_RESETS'} onClick={() => setActiveTab('PASSWORD_RESETS')} badge={passwordResets.length || undefined} />
         </div>
 
@@ -665,6 +672,12 @@ export default function Settings() {
             </div>
           )}
 
+          {/* ⭐️ TAB: ราคา & แต้มสะสม (Part 2) */}
+          {activeTab === 'LOYALTY' && <LoyaltySettingsPanel />}
+
+          {/* ⭐️ TAB: กลุ่มสมาชิก (Part 3) */}
+          {activeTab === 'GROUPS' && <MemberGroupsPanel />}
+
           {/* TAB 8: คิวคำขอรีเซ็ตรหัสผ่าน — ⭐️ FIX: ระบบยังไม่ต่อ SMS/อีเมลจริง ADMIN ต้องคัดลอกลิงก์ไปส่งให้นักเรียนเอง */}
           {activeTab === 'PASSWORD_RESETS' && (
             <div className="animate-fade-in">
@@ -783,6 +796,17 @@ export default function Settings() {
               />
             </div>
 
+            {/* ⭐️ Part 4 — สินค้าแลกของรางวัลด้วยแต้ม */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
+              <label className="flex items-center gap-2 text-xs font-bold text-amber-800 cursor-pointer">
+                <input type="checkbox" checked={!!editingProduct.is_reward_item} onChange={e => setEditingProduct({ ...editingProduct, is_reward_item: e.target.checked })} className="w-4 h-4 accent-brand" />
+                🎁 ตั้งเป็นสินค้าแลกของรางวัล
+              </label>
+              {editingProduct.is_reward_item && (
+                <Input label="ใช้กี่แต้มในการแลก" type="number" min="0" value={editingProduct.points_required || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, points_required: v })} />
+              )}
+            </div>
+
             <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกการแก้ไข</button>
           </form>
         </CustomModal>
@@ -858,6 +882,17 @@ export default function Settings() {
               />
             </div>
 
+            {/* ⭐️ Part 4 — สินค้าแลกของรางวัลด้วยแต้ม */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
+              <label className="flex items-center gap-2 text-xs font-bold text-amber-800 cursor-pointer">
+                <input type="checkbox" checked={!!newProduct.is_reward_item} onChange={e => setNewProduct({ ...newProduct, is_reward_item: e.target.checked })} className="w-4 h-4 accent-brand" />
+                🎁 ตั้งเป็นสินค้าแลกของรางวัล
+              </label>
+              {newProduct.is_reward_item && (
+                <Input label="ใช้กี่แต้มในการแลก" type="number" min="0" value={newProduct.points_required || ''} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, points_required: v })} />
+              )}
+            </div>
+
             <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสินค้าใหม่</button>
           </form>
         </CustomModal>
@@ -880,7 +915,8 @@ export default function Settings() {
               <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
                 <option value="MEMBER">นักศึกษาทั่วไป (MEMBER)</option>
                 <option value="CASHIER">แคชเชียร์ (CASHIER)</option>
-                <option value="ADMIN">ผู้จัดการ (ADMIN)</option>
+                <option value="MANAGER">ผู้จัดการร้าน (MANAGER)</option>
+                <option value="ADMIN">ผู้ดูแลระบบ (ADMIN)</option>
               </select>
             </div>
             <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">ยืนยัน</button>
@@ -899,7 +935,16 @@ export default function Settings() {
               <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}>
                 <option value="MEMBER">ลดขั้นเป็นนักศึกษาทั่วไป (MEMBER)</option>
                 <option value="CASHIER">แคชเชียร์ (CASHIER)</option>
-                <option value="ADMIN">ผู้จัดการ (ADMIN)</option>
+                <option value="MANAGER">ผู้จัดการร้าน (MANAGER)</option>
+                <option value="ADMIN">ผู้ดูแลระบบ (ADMIN)</option>
+              </select>
+            </div>
+            {/* ⭐️ Part 3 — กำหนดกลุ่มสมาชิก (ส่วนลดอัตโนมัติ) */}
+            <div>
+              <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">กลุ่มสมาชิก (ส่วนลดอัตโนมัติ)</label>
+              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.group_id || ''} onChange={e => setEditingUser({ ...editingUser, group_id: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">— ไม่กำหนดกลุ่ม —</option>
+                {memberGroups.map((g: any) => <option key={g.id} value={g.id}>{g.name} (ลด {Number(g.default_discount_percent)}%)</option>)}
               </select>
             </div>
             <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสิทธิ์</button>
