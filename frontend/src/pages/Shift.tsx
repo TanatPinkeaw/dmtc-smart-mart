@@ -3,7 +3,7 @@
 //   CASHIER "ปิดกะการขาย" → CloseShiftModal), scattered across two pages. Now /shift alone shows
 //   whichever of the 4 states applies (check-in / check-out / open shift / close shift) based on
 //   today's attendance/shift status, reusing CloseShiftModal as-is for the close-shift step.
-// 🔒 UNCHANGED: handleAdminCheckIn, handleOpenShift, checkAttendance/checkCurrentShift logic, denom counting
+// 🔒 UNCHANGED: handleManagerCheckIn, handleOpenShift, checkAttendance/checkCurrentShift logic, denom counting
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +23,10 @@ export default function Shift() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
+  // ⭐️ Clock-in/out (ลงชื่อเข้า-ออกงาน) เปิดให้เฉพาะ CASHIER และ MANAGER เท่านั้น
+  //   MANAGER ใช้ flow ถ่ายรูป+ลงชื่อแบบเดิมที่ ADMIN เคยใช้ (ย้ายสิทธิ์มาให้ MANAGER แทน)
+  //   ส่วน ADMIN ไม่มีสิทธิ์ลงชื่อเข้า-ออกงานอีกต่อไป — เด้งออกจากหน้านี้ทันที (ดู useEffect ด้านล่าง)
+  const isManager = user.role === 'MANAGER';
   const isAdmin = user.role === 'ADMIN';
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -32,7 +36,7 @@ export default function Shift() {
   const [checkInPhotoPreview, setCheckInPhotoPreview] = useState<string | null>(null);
   const [lastClosedCash, setLastClosedCash] = useState<number | null>(null);
 
-  // ⭐️ NEW — ADMIN check-out (ย้ายมาจาก Dashboard.tsx)
+  // ⭐️ NEW — MANAGER check-out (เดิมย้ายมาจาก Dashboard.tsx ตอนยังเป็นสิทธิ์ ADMIN)
   const [checkOutLoading, setCheckOutLoading] = useState(false);
   const [checkOutPhoto, setCheckOutPhoto] = useState<File | null>(null);
   const [checkOutPhotoPreview, setCheckOutPhotoPreview] = useState<string | null>(null);
@@ -49,8 +53,14 @@ export default function Shift() {
   const openingCash = DENOMINATIONS.reduce((sum, d) => sum + d * (Number(denomCounts[d]) || 0), 0);
   const actualCash = openingCash; // เลขเดียวกัน ใช้ทั้งนับเงินเปิดกะและปิดกะ (denomCounts คนละรอบ)
 
+  // ⭐️ ADMIN ไม่มีสิทธิ์ลงชื่อเข้า-ออกงานอีกต่อไป — เด้งออกทันทีถ้าหลุดมาที่หน้านี้ (เช่นพิมพ์ URL ตรง)
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin) navigate('/dashboard', { replace: true });
+  }, [isAdmin, navigate]);
+
+  useEffect(() => {
+    if (isAdmin) return; // เด้งออกอยู่แล้วด้านบน ไม่ต้องยิง API ให้เสียเที่ยว
+    if (isManager) {
       const checkAttendance = async () => {
         try { const res = await api.get('/attendance/today'); setNeedsCheckIn(!res.data); }
         catch { setNeedsCheckIn(true); } finally { setPageLoading(false); }
@@ -71,7 +81,7 @@ export default function Shift() {
     checkCurrentShift();
   }, [user.id, user.role]);
 
-  const handleAdminCheckIn = async () => {
+  const handleManagerCheckIn = async () => {
     if (!checkInPhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อน' });
     setCheckInLoading(true);
     try {
@@ -89,7 +99,7 @@ export default function Shift() {
 
   // ⭐️ NEW — ย้ายมาจาก Dashboard.tsx handleCheckOutPhotoSelected (ตัด confirm dialog ออกเพราะ
   // หน้านี้เป็นจุดหมายที่ตั้งใจมาแล้ว ไม่ต้องถามซ้ำ)
-  const handleAdminCheckOut = async () => {
+  const handleManagerCheckOut = async () => {
     if (!checkOutPhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อน' });
     setCheckOutLoading(true);
     try {
@@ -186,8 +196,8 @@ export default function Shift() {
     </div>
   );
 
-  // ── ADMIN check-in ────────────────────────────────────────────────────────────
-  if (isAdmin && needsCheckIn) return (
+  // ── MANAGER check-in ──────────────────────────────────────────────────────────
+  if (isManager && needsCheckIn) return (
     <Card>
       <div className="text-center mb-5">
         <h2 className="text-lg font-bold text-gray-900">ลงชื่อเข้างาน</h2>
@@ -206,7 +216,7 @@ export default function Shift() {
         }
       </label>
 
-      <button onClick={handleAdminCheckIn} disabled={checkInLoading}
+      <button onClick={handleManagerCheckIn} disabled={checkInLoading}
         className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
           enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
@@ -214,8 +224,8 @@ export default function Shift() {
     </Card>
   );
 
-  // ── ADMIN check-out (⭐️ NEW — เดิมอยู่ปุ่ม "ลงชื่อออกงาน" ในหน้า Dashboard) ─────────────────
-  if (isAdmin) return (
+  // ── MANAGER check-out (⭐️ เดิมเป็นสิทธิ์ ADMIN ย้ายมาให้ MANAGER ตามนโยบายใหม่) ─────────────
+  if (isManager) return (
     <Card>
       <div className="text-center mb-5">
         <h2 className="text-lg font-bold text-gray-900">ลงชื่อออกงาน</h2>
@@ -234,7 +244,7 @@ export default function Shift() {
         }
       </label>
 
-      <button onClick={handleAdminCheckOut} disabled={checkOutLoading}
+      <button onClick={handleManagerCheckOut} disabled={checkOutLoading}
         className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
           enabled:bg-gradient-to-br enabled:from-red-500 enabled:to-red-600 disabled:bg-brand-border disabled:opacity-70">
         {checkOutLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อออกงาน'}

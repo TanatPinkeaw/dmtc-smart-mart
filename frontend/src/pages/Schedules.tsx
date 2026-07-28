@@ -13,7 +13,8 @@ const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.',
 
 export default function Schedules() {
   const user = getCurrentUserOrRedirect();
-  const isAdmin = user.role === 'ADMIN'; // ⭐️ CASHIER เห็นตารางกะได้ (ดูอย่างเดียว) มีแค่ ADMIN ที่แก้ไข/ลบได้
+  // ⭐️ CASHIER เห็นตารางกะได้ (ดูอย่างเดียว) — ADMIN และ MANAGER แก้ไข/ลบ/กำหนดกะได้ทั้งคู่
+  const canManage = user.role === 'ADMIN' || user.role === 'MANAGER';
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [staff, setStaff] = useState<any[]>([]);
@@ -38,7 +39,8 @@ export default function Schedules() {
 
   const fetchAll = async () => {
     try {
-      // ⭐️ /api/staff-list (ไม่ใช่ /api/users) — CASHIER เรียกได้ด้วย ไม่มี student_id/เบอร์โทรติดมา
+      // ⭐️ /api/staff-list (ไม่ใช่ /api/users) — คืนเฉพาะ CASHIER/MANAGER (พนักงานที่กำหนดกะได้จริง)
+      //   ไม่มี ADMIN ปนมา และไม่มี student_id/เบอร์โทรติดมา
       const [staffRes, schRes, holRes] = await Promise.all([api.get('/staff-list'), api.get('/schedules'), api.get('/holidays')]);
       setStaff(staffRes.data);
       setSchedules(schRes.data); setHolidays(holRes.data);
@@ -59,7 +61,7 @@ export default function Schedules() {
   const staffColor = (id: number) => COLORS[staff.findIndex(s => s.id === id) % COLORS.length] || COLORS[0];
 
   const openPopover = (day: number, e: React.MouseEvent) => {
-    if (!isAdmin) return; // ⭐️ CASHIER ดูปฏิทินได้อย่างเดียว แตะแล้วไม่เด้ง popover แก้ไข
+    if (!canManage) return; // ⭐️ CASHIER ดูปฏิทินได้อย่างเดียว แตะแล้วไม่เด้ง popover แก้ไข
     const dateStr = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setEditingScheduleId(null);
@@ -71,7 +73,7 @@ export default function Schedules() {
   // เพื่อแก้ไขได้ตรงๆ (เดิมเปิดมาแล้ว reset เป็น 09:00–17:00 เสมอ ทำให้ดูเหมือนทุกคนต้องเข้า-ออกงานเวลาเดียวกัน)
   const openEditSchedule = (s: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isAdmin) return;
+    if (!canManage) return;
     const rect = (e.currentTarget as HTMLElement).closest('[data-day-cell]')?.getBoundingClientRect()
       || (e.currentTarget as HTMLElement).getBoundingClientRect();
     setEditingScheduleId(s.id);
@@ -119,9 +121,9 @@ export default function Schedules() {
           <h1 className="text-xl font-semibold text-white">ตารางเวลาทำงาน</h1>
         </div>
 
-        <p className="text-xs text-gray-400 mb-3 px-1">{isAdmin ? 'คลิกวันในปฏิทินเพื่อกำหนดกะ หรือคลิกชื่อพนักงานเพื่อแก้ไข' : 'ดูตารางเวลาทำงานของทีม (ผู้จัดการเป็นคนกำหนด)'}</p>
+        <p className="text-xs text-gray-400 mb-3 px-1">{canManage ? 'คลิกวันในปฏิทินเพื่อกำหนดกะ หรือคลิกชื่อพนักงานเพื่อแก้ไข' : 'ดูตารางเวลาทำงานของทีม (ผู้จัดการเป็นคนกำหนด)'}</p>
 
-        {isAdmin && (
+        {canManage && (
           <div className="mb-5">
             <button onClick={() => setShowHolidayPanel(!showHolidayPanel)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-brand border border-brand-border px-4 py-2.5 rounded-full text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
               <CalendarOff size={15} /> วันหยุดพิเศษ
@@ -130,7 +132,7 @@ export default function Schedules() {
         )}
 
         {/* Holiday panel */}
-        {isAdmin && showHolidayPanel && (
+        {canManage && showHolidayPanel && (
           <div className="bg-white border border-orange-200 rounded-3xl shadow-md p-4 mb-5">
             <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><CalendarOff size={15} className="text-orange-500" /> จัดการวันหยุดพิเศษ</h2>
             <form onSubmit={handleAddHoliday} className="flex flex-wrap gap-2 mb-4">
@@ -164,14 +166,14 @@ export default function Schedules() {
               const dayScheds = schedulesByDate[dateStr] || [];
               return (
                 <div key={`day-${i}`} data-day-cell onClick={e => !isHoliday && openPopover(day, e)}
-                  className={`min-h-[72px] p-1.5 flex flex-col transition-colors duration-150 ${isHoliday ? 'bg-orange-50 cursor-default' : isAdmin ? 'bg-white hover:bg-brand-bg cursor-pointer' : 'bg-white cursor-default'}`}>
+                  className={`min-h-[72px] p-1.5 flex flex-col transition-colors duration-150 ${isHoliday ? 'bg-orange-50 cursor-default' : canManage ? 'bg-white hover:bg-brand-bg cursor-pointer' : 'bg-white cursor-default'}`}>
                   <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-brand text-white' : isHoliday ? 'text-orange-500' : 'text-gray-700'}`}>{day}</span>
                   {isHoliday && <span className="text-[9px] text-orange-500 font-medium leading-tight">หยุด</span>}
                   <div className="space-y-0.5 overflow-hidden">
                     {dayScheds.slice(0, 3).map((s: any, idx: number) => (
                       <span key={idx} onClick={e => openEditSchedule(s, e)}
-                        className={`text-[9px] font-medium px-1 py-0.5 rounded block truncate ${staffColor(s.cashier_id)} ${isAdmin ? 'hover:ring-1 hover:ring-black/10 cursor-pointer' : ''}`}
-                        title={isAdmin ? 'คลิกเพื่อแก้ไขเวลาของคนนี้' : undefined}>
+                        className={`text-[9px] font-medium px-1 py-0.5 rounded block truncate ${staffColor(s.cashier_id)} ${canManage ? 'hover:ring-1 hover:ring-black/10 cursor-pointer' : ''}`}
+                        title={canManage ? 'คลิกเพื่อแก้ไขเวลาของคนนี้' : undefined}>
                         {staffName(s.cashier_id)} {s.expected_start?.slice(0,5)}–{s.expected_end?.slice(0,5)}
                       </span>
                     ))}

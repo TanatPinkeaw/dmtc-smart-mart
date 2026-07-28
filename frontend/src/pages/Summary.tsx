@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3, ArrowLeft, TrendingUp, Receipt, Users, UserPlus, PackageX,
   ClipboardList, XCircle, Clock, AlertTriangle, Pencil, Check, X as XIcon, Wallet,
-  Printer, Percent, Coins, PiggyBank,
+  Percent, Coins, PiggyBank,
 } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
@@ -140,6 +140,23 @@ export default function Summary() {
     }
   };
 
+  // ⭐️ KPI รายได้/กำไรของ "เดือนที่เลือก" โดยเฉพาะ (ต่างจากด้านล่างที่เป็นภาพรวมทั้งหมด/ตารางย้อนหลัง)
+  //   หา row ของเดือนนั้นจาก profit.monthly (backend คืนมาให้ทุกเดือนที่มีข้อมูลขายอยู่แล้ว ไม่ต้องยิง endpoint แยก)
+  const selectedMonthProfit = profit?.monthly.find(m => m.period === month) || null;
+  // กำไรขั้นต้น (Gross Profit) = รายได้ − ต้นทุนรวม (คงที่ตามข้อมูลขาย ไม่ผูกกับ role)
+  const monthlyCogs = selectedMonthProfit ? selectedMonthProfit.cogs_own + selectedMonthProfit.vendor_payout : 0;
+  const monthlyGrossProfit = selectedMonthProfit ? selectedMonthProfit.profit_total : 0;
+  // กำไรสุทธิ (Net Profit) = กำไรขั้นต้น − ค่าจ้างพนักงานเดือนนั้น (ข้อมูลค่าจ้างมีแค่ ADMIN เห็น
+  //   MANAGER จะเห็นกำไรสุทธิ = กำไรขั้นต้น ไปก่อน เพราะไม่มีสิทธิ์ดูข้อมูลเงินเดือน)
+  const monthlyNetProfit = selectedMonthProfit ? monthlyGrossProfit - (isAdmin ? totalPayroll : 0) : 0;
+
+  const monthlyFinanceCards = selectedMonthProfit ? [
+    { icon: <TrendingUp size={18} />, label: 'รายได้รวม', value: baht(selectedMonthProfit.revenue), color: 'text-emerald-600', border: 'border-emerald-200' },
+    { icon: <Receipt size={18} />, label: 'ต้นทุน (COGS)', value: baht(monthlyCogs), color: 'text-orange-600', border: 'border-orange-200' },
+    { icon: <Coins size={18} />, label: 'กำไรขั้นต้น (Gross Profit)', value: baht(monthlyGrossProfit), color: 'text-blue-600', border: 'border-blue-200' },
+    { icon: <Wallet size={18} />, label: 'กำไรสุทธิ (Net Profit)', value: baht(monthlyNetProfit), color: 'text-brand', border: 'border-brand-border' },
+  ] : [];
+
   const overviewCards = overview ? [
     { icon: <TrendingUp size={18} />, label: 'ยอดขายรวมเดือนนี้', value: `฿${Number(overview.total_sales).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: 'text-emerald-600', border: 'border-emerald-200' },
     { icon: <Receipt size={18} />, label: 'จำนวนบิล', value: `${overview.total_bills} บิล`, color: 'text-blue-600', border: 'border-blue-200' },
@@ -154,7 +171,7 @@ export default function Summary() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ตัวเลือกเดือน/ปุ่มปรินต์ย้ายออกมานอกการ์ด */}
+      {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ตัวเลือกเดือนย้ายออกมานอกการ์ด */}
       <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4 print:bg-none print:shadow-none print:p-0">
         <button onClick={() => navigate(-1)} className="print:hidden p-2 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
           <ArrowLeft size={20} />
@@ -172,10 +189,6 @@ export default function Summary() {
           onChange={(e) => setMonth(e.target.value)}
           className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand"
         />
-        {/* ⭐️ ปุ่มปรินต์/บันทึก PDF สำหรับนำไปเสนออาจารย์ */}
-        <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-full px-3 py-2 text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-          <Printer size={16} /> ปรินต์
-        </button>
       </div>
 
       {loading ? (
@@ -187,6 +200,31 @@ export default function Summary() {
         </div>
       ) : (
         <>
+          {/* ⭐️ KPI รายได้/กำไรของเดือนที่เลือก — ตัวเลขหลักที่สุดของหน้านี้ วางไว้บนสุด */}
+          <div className="mb-8">
+            <h2 className="text-sm font-bold text-gray-700 mb-3 px-1">สรุปรายได้ &amp; กำไรของเดือนที่เลือก</h2>
+            {!selectedMonthProfit ? (
+              <div className="bg-white border border-brand-border rounded-3xl p-6 text-center text-sm text-gray-400 shadow-sm">
+                ยังไม่มีข้อมูลการขายในเดือนนี้
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {monthlyFinanceCards.map((c, i) => (
+                  <div key={i} className={`bg-white border ${c.border} rounded-3xl p-4 shadow-md hover:shadow-lg transition-all duration-150`}>
+                    <div className={`flex items-center gap-1.5 mb-2 ${c.color}`}>
+                      {c.icon}
+                      <span className="text-xs font-semibold">{c.label}</span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-800">{c.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!isAdmin && selectedMonthProfit && (
+              <p className="text-[11px] text-gray-400 mt-2 px-1">* กำไรสุทธิยังไม่หักค่าจ้างพนักงาน (ดูข้อมูลเงินเดือนได้เฉพาะ ADMIN)</p>
+            )}
+          </div>
+
           {/* Overview cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {overviewCards.map((c, i) => (

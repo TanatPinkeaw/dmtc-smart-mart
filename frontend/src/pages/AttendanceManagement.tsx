@@ -7,7 +7,8 @@ import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
-import { openAuthImage } from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — เปิดรูปเข้า-ออกงานผ่าน JWT
+import AuthImage from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — เปิดรูปเข้า-ออกงานผ่าน JWT
+import PhotoLightbox from '../components/PhotoLightbox'; // ⭐️ mobile — แตะรูปดูแบบ modal ในหน้า แทนเปิดแท็บใหม่ (window.open blob ที่มือถือหลายรุ่นบล็อก)
 
 export default function AttendanceManagement() {
   const [records, setRecords] = useState<any[]>([]);
@@ -17,6 +18,7 @@ export default function AttendanceManagement() {
   const [editForm, setEditForm] = useState({ check_in: '', check_out: '', note: '' });
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [filterUser, setFilterUser] = useState('');
+  const [lightbox, setLightbox] = useState<{ path: string; title: string } | null>(null);
 
   useEffect(() => { fetchRecords(); }, [filterDate]);
 
@@ -142,9 +144,9 @@ export default function AttendanceManagement() {
                   <td className="px-4 py-3 text-sm">{r.check_out ? <span className="text-gray-600">{new Date(r.check_out).toLocaleString('th-TH')}</span> : <span className="text-red-500 font-semibold">ยังไม่ออก</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      {/* ⭐️ SECURITY FIX #1 — รูปเข้า-ออกงานถูกล็อกให้ต้องมี JWT แล้ว เปิดผ่าน openAuthImage (โหลด blob แนบ token) แทน <a href> ที่จะโดน 401 */}
-                      {r.check_in_photo && <button onClick={() => openAuthImage(r.check_in_photo)} title="รูปตอนเข้า" className="p-1 bg-emerald-50 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors duration-150"><Camera size={14} /></button>}
-                      {r.check_out_photo && <button onClick={() => openAuthImage(r.check_out_photo)} title="รูปตอนออก" className="p-1 bg-red-50 rounded-lg text-red-500 hover:bg-red-100 transition-colors duration-150"><Camera size={14} /></button>}
+                      {/* ⭐️ SECURITY FIX #1 — รูปเข้า-ออกงานถูกล็อกให้ต้องมี JWT แล้ว เปิดผ่าน PhotoLightbox (โหลด blob แนบ token) แทน <a href> ที่จะโดน 401 */}
+                      {r.check_in_photo && <button onClick={() => setLightbox({ path: r.check_in_photo, title: `รูปตอนเข้างาน — ${r.full_name}` })} title="รูปตอนเข้า" className="p-1 bg-emerald-50 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors duration-150"><Camera size={14} /></button>}
+                      {r.check_out_photo && <button onClick={() => setLightbox({ path: r.check_out_photo, title: `รูปตอนออกงาน — ${r.full_name}` })} title="รูปตอนออก" className="p-1 bg-red-50 rounded-lg text-red-500 hover:bg-red-100 transition-colors duration-150"><Camera size={14} /></button>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400 max-w-[150px] truncate">{r.note || '-'}</td>
@@ -179,6 +181,32 @@ export default function AttendanceManagement() {
                 </div>
                 <p className="text-xs text-gray-500">เข้า: {r.check_in ? new Date(r.check_in).toLocaleString('th-TH') : '-'}</p>
                 <p className="text-xs">{r.check_out ? <span className="text-gray-500">ออก: {new Date(r.check_out).toLocaleString('th-TH')}</span> : <span className="text-red-500 font-semibold">ยังไม่ออกงาน</span>}</p>
+
+                {/* ⭐️ รูปยืนยันสถานที่ — แตะที่ thumbnail เพื่อดูแบบเต็มจอ (มือถือ) */}
+                {(r.check_in_photo || r.check_out_photo) && (
+                  <div className="flex gap-2 mt-2.5">
+                    {r.check_in_photo && (
+                      <button
+                        onClick={() => setLightbox({ path: r.check_in_photo, title: `รูปตอนเข้างาน — ${r.full_name}` })}
+                        className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-emerald-200 active:scale-95 transition-transform duration-150 shrink-0"
+                        aria-label="ดูรูปตอนเข้างาน"
+                      >
+                        <AuthImage path={r.check_in_photo} alt="รูปตอนเข้างาน" className="w-full h-full object-cover" fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center"><Camera size={16} className="text-gray-300" /></div>} />
+                        <span className="absolute bottom-0 inset-x-0 bg-emerald-600/80 text-white text-[9px] font-bold text-center py-0.5">เข้า</span>
+                      </button>
+                    )}
+                    {r.check_out_photo && (
+                      <button
+                        onClick={() => setLightbox({ path: r.check_out_photo, title: `รูปตอนออกงาน — ${r.full_name}` })}
+                        className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-red-200 active:scale-95 transition-transform duration-150 shrink-0"
+                        aria-label="ดูรูปตอนออกงาน"
+                      >
+                        <AuthImage path={r.check_out_photo} alt="รูปตอนออกงาน" className="w-full h-full object-cover" fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center"><Camera size={16} className="text-gray-300" /></div>} />
+                        <span className="absolute bottom-0 inset-x-0 bg-red-500/80 text-white text-[9px] font-bold text-center py-0.5">ออก</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -202,6 +230,11 @@ export default function AttendanceManagement() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ⭐️ Lightbox รูปยืนยันสถานที่ — responsive ทั้งมือถือ/เดสก์ท็อป */}
+      {lightbox && (
+        <PhotoLightbox path={lightbox.path} title={lightbox.title} onClose={() => setLightbox(null)} />
       )}
     </div>
   );

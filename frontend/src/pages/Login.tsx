@@ -71,8 +71,8 @@ export default function Login() {
       if (response.data.user.role === 'ADMIN') localStorage.setItem('session_mode', 'work');
       else if (workFlag === undefined) localStorage.removeItem('session_mode');
       else localStorage.setItem('session_mode', workFlag ? 'work' : 'shop');
-      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ
-      navigate('/home');
+      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ ยกเว้น ADMIN — เด้งตรงไปหน้าสั่งจอง/ซื้อสินค้าเลย
+      navigate(response.data.user.role === 'ADMIN' ? '/pre-order' : '/home');
     } catch (err: any) {
       if (err.response?.status !== 429) {
         setError(err.response?.data?.error || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');

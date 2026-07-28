@@ -82,9 +82,12 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 
 // ⭐️ Sprint 0 — A1 (แก้ต่อ): หน้าแรก ("/") เดิม hardcode ไป /shift หรือ /pre-order ตาม role — ตอนนี้
 // ทุก role (รวม MEMBER) ผ่านหน้า Home กลางก่อนเสมอ ให้เลือกเองว่าจะเข้าโมดูลไหน ไม่ login เลยไป /login
+// ⭐️ Update — ADMIN เป็นข้อยกเว้น: ไม่ต้องผ่านหน้า Home กลาง เด้งตรงไปหน้าสั่งจอง/ซื้อสินค้าเลย
 function DefaultRoute() {
   const user = getCurrentUser();
-  return <Navigate to={user ? '/home' : '/login'} replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === 'ADMIN') return <Navigate to="/pre-order" replace />;
+  return <Navigate to="/home" replace />;
 }
 
 // ⭐️ Sprint 0 — A4: ตรวจ backend restart ระหว่างที่ user เปิดแอปค้างไว้

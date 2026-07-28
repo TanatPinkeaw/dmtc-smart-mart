@@ -82,6 +82,7 @@ export default function Home() {
   //   (ADMIN ไม่ต้องเช็ค เข้าได้ตลอด) null = ยังโหลดไม่เสร็จ ระหว่างนี้ยังไม่ล็อกเพื่อกันจอกระพริบ
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
   const isCashier = user.role === 'CASHIER';
+  const isManager = user.role === 'MANAGER';
   // ล็อกเฉพาะตอนรู้ผลแล้วว่าไม่มีกะเปิดจริงๆ
   const workLocked = isCashier && hasOpenShift === false;
 
@@ -172,7 +173,8 @@ export default function Home() {
       onClick: () => goTo('work', '/inventory'),
     },
     {
-      key: 'shift', show: isStaff, icon: Clock,
+      // ⭐️ ลงชื่อเข้า-ออกงาน (clock-in/out) เปิดให้เฉพาะ CASHIER และ MANAGER — ADMIN ไม่ต้องลงชื่อเข้า-ออกงานอีกต่อไป
+      key: 'shift', show: isCashier || isManager, icon: Clock,
       title: 'จัดการกะการขาย', subtitle: 'ลงชื่อเข้า-ออกงาน/นับเงิน',
       badge: null,
       onClick: () => goTo('work', '/shift'),

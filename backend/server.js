@@ -1547,10 +1547,12 @@ app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.get('/api/staff-list', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+// ⭐️ Update — ใช้เลือก "พนักงานที่กำหนดกะได้" ในหน้าตารางเวลา (Schedules.tsx) เท่านั้น
+//   คืนเฉพาะ CASHIER/MANAGER (คนที่ลงชื่อเข้า-ออกงาน/เปิดปิดกะจริง) ตัด ADMIN ออกทั้งหมด
+app.get('/api/staff-list', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, full_name, role FROM users WHERE role IN ('CASHIER', 'ADMIN') AND is_active = TRUE ORDER BY full_name`
+      `SELECT id, full_name, role FROM users WHERE role IN ('CASHIER', 'MANAGER') AND is_active = TRUE ORDER BY full_name`
     );
     res.json(rows);
   } catch (error) {
@@ -2135,6 +2137,14 @@ app.post('/api/schedules', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
     return res.status(400).json({ error: "กรุณาระบุ cashier_id, work_date, expected_start, expected_end ให้ครบ" });
   }
   try {
+    // ⭐️ กันหลังบ้าน — เผื่อมีคนยิง API ตรงๆ ด้วย cashier_id ที่ไม่ใช่ CASHIER/MANAGER (เช่น ADMIN/MEMBER)
+    //   ข้าม dropdown /staff-list ที่กรองไว้แล้วฝั่ง UI ต้องเช็คซ้ำที่นี่ด้วย
+    const [[target]] = await pool.query('SELECT role FROM users WHERE id = ?', [cashier_id]);
+    if (!target) return res.status(404).json({ error: 'ไม่พบพนักงานคนนี้' });
+    if (!['CASHIER', 'MANAGER'].includes(target.role)) {
+      return res.status(400).json({ error: 'กำหนดตารางเวลาได้เฉพาะพนักงาน CASHIER หรือ MANAGER เท่านั้น' });
+    }
+
     // ⭐️ upsert แบบ manual (ไม่มี unique key): มีอยู่แล้ว = update, ยังไม่มี = insert
     const [existing] = await pool.query('SELECT id FROM schedules WHERE cashier_id = ? AND work_date = ?', [cashier_id, work_date]);
     if (existing.length > 0) {
@@ -2165,7 +2175,7 @@ app.delete('/api/schedules/:id', requireRole('ADMIN', 'MANAGER'), async (req, re
   }
 });
 
-app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+app.get('/api/schedules', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
     const { cashier_id, date } = req.query;
     let query = `SELECT s.id, s.cashier_id, DATE_FORMAT(s.work_date, '%Y-%m-%d') as work_date, s.expected_start, s.expected_end, u.full_name FROM schedules s JOIN users u ON s.cashier_id = u.id WHERE 1=1`;
@@ -2184,7 +2194,7 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
 
 // ⭐️ Security remediation — เดิมมีแค่ authenticateToken (global) ไม่มี requireRole เลย ทำให้ MEMBER
 // เรียกตรงได้ทั้งที่หน้า Shift (ที่ใช้ endpoint นี้) จำกัดเฉพาะ ADMIN/CASHIER ฝั่ง frontend เท่านั้น
-app.post('/api/attendance/upload-photo', requireRole('ADMIN', 'CASHIER'), uploadLimiter, shiftPhotoUpload.single('photo'), async (req, res) => {
+app.post('/api/attendance/upload-photo', requireRole('CASHIER', 'MANAGER'), uploadLimiter, shiftPhotoUpload.single('photo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
   try {
     // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
@@ -2207,7 +2217,8 @@ app.post('/api/attendance/upload-photo', requireRole('ADMIN', 'CASHIER'), upload
 
 // ⭐️ Sprint 0 — A3: เดิม requireRole('ADMIN') เท่านั้น ทั้งที่ query ข้างในใช้ req.user.id (self-scoped)
 // และ Shift.tsx (clock-in flow) เรียกใช้จากทั้ง CASHIER และ ADMIN — ทำให้ CASHIER check-in ไม่ได้เลย
-app.post('/api/attendance/check-in', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+// ⭐️ Update — clock-in/out เปลี่ยนสิทธิ์เป็น CASHIER + MANAGER เท่านั้น (ADMIN ไม่ต้องลงชื่อเข้า-ออกงานอีกต่อไป)
+app.post('/api/attendance/check-in', requireRole('CASHIER', 'MANAGER'), async (req, res) => {
   const { check_in_photo } = req.body;
   if (!check_in_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อเข้างาน" });
   try {
@@ -2231,7 +2242,7 @@ app.post('/api/attendance/check-in', requireRole('ADMIN', 'CASHIER'), async (req
 });
 
 // ⭐️ Sprint 0 — A3: เหตุผลเดียวกับ check-in ด้านบน
-app.put('/api/attendance/check-out', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+app.put('/api/attendance/check-out', requireRole('CASHIER', 'MANAGER'), async (req, res) => {
   const { check_out_photo } = req.body;
   if (!check_out_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อออกงาน" });
   try {
@@ -2439,7 +2450,7 @@ app.get('/api/reports/attendance', requireRole('ADMIN', 'MANAGER'), async (req, 
         UNION ALL
         SELECT s.cashier_id as user_id, u.full_name, s.work_date, s.expected_start, att.check_in as actual_time
         FROM schedules s
-        JOIN users u ON s.cashier_id = u.id AND u.role = 'ADMIN'
+        JOIN users u ON s.cashier_id = u.id AND u.role IN ('ADMIN', 'MANAGER')
         LEFT JOIN attendance att ON att.user_id = s.cashier_id AND DATE(att.check_in) = s.work_date
       ) combined
       WHERE work_date NOT IN (SELECT holiday_date FROM holidays)
@@ -2818,7 +2829,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
 // 5.1 SALES HISTORY, HOLD & VOID (ประวัติ, พักบิล และ ยกเลิกบิล)
 // =========================================
 
-app.get('/api/sales/history', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/sales/history', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
@@ -2858,7 +2869,7 @@ app.get('/api/sales/history', requireRole('CASHIER', 'ADMIN'), async (req, res) 
   }
 });
 
-app.get('/api/sales/history/:id', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/sales/history/:id', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { source } = req.query; // 'PREORDER' = ดูจาก order_items, อื่นๆ = sale_items (บิลหน้าร้าน)
     let rows;
@@ -3576,12 +3587,14 @@ app.get('/api/reports/payroll', requireRole('ADMIN'), async (req, res) => {
   try {
     const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
 
-    // พนักงานทั้งหมด (CASHIER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
+    // พนักงานทั้งหมด (CASHIER + MANAGER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
+    // ⭐️ Update — เพิ่ม MANAGER (ผู้ใช้ attendance clock-in/out ตัวจริงตอนนี้แทน ADMIN) คง ADMIN ไว้
+    //   เผื่อมีข้อมูลชั่วโมงเก่าก่อนเปลี่ยนสิทธิ์ (ไม่งั้นประวัติค่าจ้างเดือนที่ผ่านมาของ ADMIN จะหายจากตาราง)
     const [staff] = await pool.query(
-      `SELECT id, full_name, role, hourly_rate FROM users WHERE role IN ('CASHIER','ADMIN') AND is_active = TRUE ORDER BY full_name`
+      `SELECT id, full_name, role, hourly_rate FROM users WHERE role IN ('CASHIER','MANAGER','ADMIN') AND is_active = TRUE ORDER BY full_name`
     );
 
-    // ชั่วโมงทำงาน: CASHIER นับจาก shifts ที่ปิดสมบูรณ์แล้ว (status='CLOSED'), ADMIN นับจาก attendance
+    // ชั่วโมงทำงาน: CASHIER นับจาก shifts ที่ปิดสมบูรณ์แล้ว (status='CLOSED'), MANAGER/ADMIN นับจาก attendance
     const [shiftMinutes] = await pool.query(
       `SELECT cashier_id as user_id, SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
        FROM shifts
@@ -3611,7 +3624,7 @@ app.get('/api/reports/payroll', requireRole('ADMIN'), async (req, res) => {
          UNION ALL
          SELECT s.cashier_id as user_id, s.work_date, s.expected_start, att.check_in as actual_time
          FROM schedules s
-         JOIN users u ON s.cashier_id = u.id AND u.role = 'ADMIN'
+         JOIN users u ON s.cashier_id = u.id AND u.role IN ('ADMIN', 'MANAGER')
          LEFT JOIN attendance att ON att.user_id = s.cashier_id AND DATE(att.check_in) = s.work_date
        ) combined
        WHERE work_date NOT IN (SELECT holiday_date FROM holidays)
@@ -3659,8 +3672,8 @@ app.get('/api/reports/payroll', requireRole('ADMIN'), async (req, res) => {
 
 // ⭐️ Home page feature — เวอร์ชัน self-service ของ /api/reports/payroll ด้านบน (ADMIN ดูได้ทุกคน)
 // ตัวนี้ดูได้แค่ของตัวเอง (req.user.id) ให้ CASHIER เรียกดูชั่วโมง/ค่าจ้างตัวเองได้โดยไม่ต้องเป็น ADMIN
-// ตรรกะคำนวณชั่วโมงเหมือนกันทุกจุด: CASHIER นับจาก shifts, ADMIN นับจาก attendance
-app.get('/api/reports/my-hours', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+// ตรรกะคำนวณชั่วโมงเหมือนกันทุกจุด: CASHIER นับจาก shifts, MANAGER/ADMIN นับจาก attendance
+app.get('/api/reports/my-hours', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
     const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const userId = req.user.id;
@@ -3710,7 +3723,7 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
     return res.status(400).json({ error: 'กรุณาระบุอัตราค่าจ้างต่อชั่วโมงที่ถูกต้อง (ตัวเลข ≥ 0)' });
   }
   try {
-    const [result] = await pool.query('UPDATE users SET hourly_rate = ? WHERE id = ? AND role IN (\'CASHIER\',\'ADMIN\')', [rate, id]);
+    const [result] = await pool.query('UPDATE users SET hourly_rate = ? WHERE id = ? AND role IN (\'CASHIER\',\'MANAGER\',\'ADMIN\')', [rate, id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบพนักงานนี้' });
     res.json({ message: 'อัปเดตอัตราค่าจ้างสำเร็จ', hourly_rate: rate });
   } catch (error) {
@@ -4126,7 +4139,7 @@ app.post('/api/promotions/verify', requireRole('CASHIER', 'ADMIN'), async (req, 
 
 // ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — `SELECT *` เผยชื่อ+ข้อมูลติดต่อซัพพลายเออร์
 // (ข้อมูลธุรกิจภายใน) ให้ MEMBER เห็นได้ด้วย ไม่ใช่ข้อมูลสำหรับลูกค้า
-app.get('/api/suppliers', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/suppliers', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM suppliers');
     res.json(rows);

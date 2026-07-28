@@ -66,16 +66,24 @@ export default function Settings() {
   const [vendors, setVendors] = useState<any[]>([]);
 
   const currentUser = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
+  // ⭐️ MANAGER เห็นแท็บได้แค่ที่เกี่ยวกับหน้าร้าน — พนักงาน/สิทธิ์, กลุ่มสมาชิก(กฎรายหมวดหมู่), รีเซ็ตรหัสผ่าน สงวนไว้ ADMIN เท่านั้น
+  const isAdmin = currentUser.role === 'ADMIN';
+  const ADMIN_ONLY_TABS = ['USERS', 'GROUPS', 'PASSWORD_RESETS'] as const;
+
+  // ⭐️ กันเผื่อ activeTab หลุดไปเป็นแท็บ ADMIN-only ได้ (เช่น state ค้างจากรีเฟรช) — เด้งกลับ STORE ให้ MANAGER
+  useEffect(() => {
+    if (!isAdmin && (ADMIN_ONLY_TABS as readonly string[]).includes(activeTab)) setActiveTab('STORE');
+  }, [isAdmin, activeTab]);
 
   useEffect(() => {
     fetchStoreSettings();
     if (activeTab === 'HISTORY') fetchSalesHistory();
-    if (activeTab === 'USERS') { fetchUsers(); api.get('/member-groups').then(r => setMemberGroups(r.data || [])).catch(() => {}); }
+    if (activeTab === 'USERS' && isAdmin) { fetchUsers(); api.get('/member-groups').then(r => setMemberGroups(r.data || [])).catch(() => {}); }
     if (activeTab === 'CATEGORIES') fetchCategories();
     if (activeTab === 'SUPPLIERS') fetchSuppliers();
     if (activeTab === 'PRODUCTS') { fetchProducts(); fetchCategories(); }
     if (activeTab === 'PROMOTIONS') { fetchPromotions(); fetchProducts(); }
-    if (activeTab === 'PASSWORD_RESETS') fetchPasswordResets();
+    if (activeTab === 'PASSWORD_RESETS' && isAdmin) fetchPasswordResets();
     fetchVendors();
 
     if (!socket) return;
@@ -349,11 +357,12 @@ export default function Settings() {
           <TabButton icon={<Package size={18} />} label="สินค้า" isActive={activeTab === 'PRODUCTS'} onClick={() => setActiveTab('PRODUCTS')} />
           <TabButton icon={<Tags size={18} />} label="หมวดหมู่" isActive={activeTab === 'CATEGORIES'} onClick={() => setActiveTab('CATEGORIES')} />
           <TabButton icon={<Truck size={18} />} label="ซัพพลายเออร์" isActive={activeTab === 'SUPPLIERS'} onClick={() => setActiveTab('SUPPLIERS')} />
-          <TabButton icon={<Users size={18} />} label="พนักงาน/สิทธิ์" isActive={activeTab === 'USERS'} onClick={() => setActiveTab('USERS')} />
           <TabButton icon={<Gift size={18} />} label="โปรโมชั่น" isActive={activeTab === 'PROMOTIONS'} onClick={() => setActiveTab('PROMOTIONS')} />
           <TabButton icon={<Coins size={18} />} label="ราคา & แต้มสะสม" isActive={activeTab === 'LOYALTY'} onClick={() => setActiveTab('LOYALTY')} />
-          <TabButton icon={<UsersRound size={18} />} label="กลุ่มสมาชิก" isActive={activeTab === 'GROUPS'} onClick={() => setActiveTab('GROUPS')} />
-          <TabButton icon={<KeyRound size={18} />} label="รีเซ็ตรหัสผ่าน" isActive={activeTab === 'PASSWORD_RESETS'} onClick={() => setActiveTab('PASSWORD_RESETS')} badge={passwordResets.length || undefined} />
+          {/* ⭐️ แท็บด้านล่างนี้สงวนไว้เฉพาะ ADMIN — MANAGER ไม่เห็น */}
+          {isAdmin && <TabButton icon={<Users size={18} />} label="พนักงาน/สิทธิ์" isActive={activeTab === 'USERS'} onClick={() => setActiveTab('USERS')} />}
+          {isAdmin && <TabButton icon={<UsersRound size={18} />} label="กลุ่มสมาชิก" isActive={activeTab === 'GROUPS'} onClick={() => setActiveTab('GROUPS')} />}
+          {isAdmin && <TabButton icon={<KeyRound size={18} />} label="รีเซ็ตรหัสผ่าน" isActive={activeTab === 'PASSWORD_RESETS'} onClick={() => setActiveTab('PASSWORD_RESETS')} badge={passwordResets.length || undefined} />}
         </div>
 
         {/* Content Area */}
@@ -580,7 +589,7 @@ export default function Settings() {
           )}
 
           {/* TAB 6: พนักงานและสิทธิ์ */}
-          {activeTab === 'USERS' && (
+          {activeTab === 'USERS' && isAdmin && (
             <div className="animate-fade-in">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Users className="text-brand" /> พนักงานในระบบ</h2>
@@ -676,10 +685,10 @@ export default function Settings() {
           {activeTab === 'LOYALTY' && <LoyaltySettingsPanel />}
 
           {/* ⭐️ TAB: กลุ่มสมาชิก (Part 3) */}
-          {activeTab === 'GROUPS' && <MemberGroupsPanel />}
+          {activeTab === 'GROUPS' && isAdmin && <MemberGroupsPanel />}
 
           {/* TAB 8: คิวคำขอรีเซ็ตรหัสผ่าน — ⭐️ FIX: ระบบยังไม่ต่อ SMS/อีเมลจริง ADMIN ต้องคัดลอกลิงก์ไปส่งให้นักเรียนเอง */}
-          {activeTab === 'PASSWORD_RESETS' && (
+          {activeTab === 'PASSWORD_RESETS' && isAdmin && (
             <div className="animate-fade-in">
               <div className="mb-6">
                 <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><KeyRound className="text-brand" /> คำขอรีเซ็ตรหัสผ่าน</h2>
