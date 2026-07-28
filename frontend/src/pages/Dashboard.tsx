@@ -43,6 +43,10 @@ export default function Dashboard() {
   const [pendingApprovalShifts, setPendingApprovalShifts] = useState<any[]>([]); // ⭐️ F2
   const [comparison, setComparison] = useState<any>(null);
   const [hourly, setHourly] = useState<any[]>([]);
+  // ⭐️ Peak Hours Analytics — period toggle (วันนี้/7วัน/30วัน) + ชั่วโมงพีคไฮไลต์ในกราฟ
+  const [hourlyPeriod, setHourlyPeriod] = useState<'today' | '7d' | '30d'>('today');
+  const [peakHour, setPeakHour] = useState<number | null>(null);
+  const [hourlyLoading, setHourlyLoading] = useState(false);
   const [byCashier, setByCashier] = useState<any[]>([]);
   const [openShifts, setOpenShifts] = useState<any[]>([]);
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
@@ -79,6 +83,21 @@ export default function Dashboard() {
   const isManagerOrAdmin = user.role === 'ADMIN' || user.role === 'MANAGER';
   const isCashier = user.role === 'CASHIER';
 
+  // ⭐️ Peak Hours Analytics — แยกจาก generic get() loop เพราะต้อง refetch เดี่ยวๆ ตอนสลับ period
+  const fetchHourlySales = async (period: 'today' | '7d' | '30d') => {
+    setHourlyLoading(true);
+    try {
+      const res = await api.get(`/reports/hourly-sales?period=${period}`);
+      setHourly(res.data.hourly || []);
+      setPeakHour(res.data.peak_hour ?? null);
+    } catch (e) { /* เงียบไว้เหมือน get() generic — ไม่ critical พอจะ block หน้าอื่น */ }
+    finally { setHourlyLoading(false); }
+  };
+  const handleHourlyPeriodChange = (period: 'today' | '7d' | '30d') => {
+    setHourlyPeriod(period);
+    fetchHourlySales(period);
+  };
+
   useEffect(() => {
     // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
     // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
@@ -104,7 +123,7 @@ export default function Dashboard() {
         get('/inventory/low-stock', setLowStock), get('/reports/void-summary', setVoidSummary),
         get('/reports/shift-anomalies', setShiftAnomalies), get('/reports/sales-comparison', setComparison),
         get('/shifts/pending-approval', setPendingApprovalShifts), // ⭐️ F2
-        get('/reports/hourly-sales', setHourly), get('/reports/sales-by-cashier', setByCashier),
+        fetchHourlySales(hourlyPeriod), get('/reports/sales-by-cashier', setByCashier),
         get('/reports/open-shifts', setOpenShifts), get('/reports/pending-orders', setPendingOrders),
         get('/reports/sales-channel', setChannel), get('/reports/gross-profit', setGrossProfit),
         get('/reports/dead-stock', setDeadStock), get('/reports/vendor-summary', setVendorSummary),
@@ -265,7 +284,28 @@ export default function Dashboard() {
 
             <div className="max-w-7xl mx-auto">
               <div className={`${card} p-4`}>
-                <h3 className="text-xs font-semibold text-gray-700 mb-4">ยอดขายรายชั่วโมง (วันนี้)</h3>
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+                  <h3 className="text-xs font-semibold text-gray-700">
+                    Peak Hours — ยอดขายรายชั่วโมง{hourlyPeriod !== 'today' && ' (เฉลี่ยต่อวัน)'}
+                  </h3>
+                  <div className="flex bg-brand-bg border border-brand-border rounded-full p-0.5">
+                    {(['today', '7d', '30d'] as const).map(p => (
+                      <button
+                        key={p}
+                        onClick={() => handleHourlyPeriodChange(p)}
+                        disabled={hourlyLoading}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition disabled:opacity-50 ${hourlyPeriod === p ? 'bg-brand text-white' : 'text-gray-500'}`}
+                      >
+                        {p === 'today' ? 'วันนี้' : p === '7d' ? '7 วัน' : '30 วัน'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {peakHour !== null && hourly.some(h => Number(h.total) > 0) && (
+                  <p className="text-[10px] text-brand font-semibold mb-3">
+                    ⏰ ช่วงพีค: {String(peakHour).padStart(2, '0')}:00–{String(peakHour).padStart(2, '0')}:59
+                  </p>
+                )}
                 {(() => {
                   const max = Math.max(1, ...hourly.map(h => Number(h.total)));
                   const active = hourly.filter(h => Number(h.total) > 0);
@@ -274,10 +314,13 @@ export default function Dashboard() {
                     <div className="flex items-end gap-1 h-32">
                       {hourly.map(h => (
                         <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group">
-                          <div className="w-full bg-brand-mid hover:bg-brand rounded-t transition-all duration-150 relative" style={{ height: `${(Number(h.total) / max) * 100}%` }}>
+                          <div
+                            className={`w-full rounded-t transition-all duration-150 relative ${h.hour === peakHour ? 'bg-amber-500 hover:bg-amber-600' : 'bg-brand-mid hover:bg-brand'}`}
+                            style={{ height: `${(Number(h.total) / max) * 100}%` }}
+                          >
                             <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] text-gray-500 opacity-0 group-hover:opacity-100 whitespace-nowrap bg-white border border-brand-border px-1 rounded">฿{Number(h.total).toLocaleString()}</span>
                           </div>
-                          <span className="text-[8px] text-gray-400 mt-1">{h.hour}</span>
+                          <span className={`text-[8px] mt-1 ${h.hour === peakHour ? 'text-amber-600 font-bold' : 'text-gray-400'}`}>{h.hour}</span>
                         </div>
                       ))}
                     </div>

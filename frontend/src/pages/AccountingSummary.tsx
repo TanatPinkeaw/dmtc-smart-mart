@@ -1,0 +1,207 @@
+// ⭐️ Co-op Accounting Summary — สรุปบัญชีสหกรณ์: หมวดหมู่ (รายได้/ต้นทุน/กำไร) + ยอดต้องจ่ายคืน
+// ผู้ฝากขายแต่ละราย ในช่วงวันที่ที่เลือก + ปุ่ม export Excel (2 ชีต: สรุปบัญชี, ยอดจ่ายคืนผู้ฝากขาย)
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, FileSpreadsheet, TrendingUp, Wallet, Coins, Download, PiggyBank } from 'lucide-react';
+import api from '../api';
+import Swal from '../swal';
+import { getErrorMessage } from '../utils/errorMessage';
+import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
+
+interface CategoryBreakdown { name: string; sales: number; cost: number; profit: number; percentage: number; }
+interface SupplierPayout { vendor_id: number; vendor_name: string; total_items_sold: number; total_sales: number; coop_gp_earnings: number; vendor_payout: number; }
+interface AccountingData {
+  period: { start_date: string | null; end_date: string | null };
+  kpis: { totalRevenue: number; totalCost: number; totalProfit: number; totalOrders: number; aov: number };
+  categoryBreakdown: CategoryBreakdown[];
+  supplierPayouts: SupplierPayout[];
+}
+
+const baht = (n: number | undefined | null) => '฿' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function getDefaultRange() {
+  const now = new Date();
+  const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const firstOfMonth = new Date(bkk.getFullYear(), bkk.getMonth(), 1);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: iso(firstOfMonth), end: iso(bkk) };
+}
+
+export default function AccountingSummary() {
+  const navigate = useNavigate();
+  const defaultRange = getDefaultRange();
+  const [startDate, setStartDate] = useState(defaultRange.start);
+  const [endDate, setEndDate] = useState(defaultRange.end);
+  const [data, setData] = useState<AccountingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => { loadData(); }, [startDate, endDate]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/reports/accounting-summary?start_date=${startDate}&end_date=${endDate}`);
+      setData(res.data);
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get(`/reports/accounting-summary/export?start_date=${startDate}&end_date=${endDate}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `accounting-summary_${startDate}_ถึง_${endDate}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const kpiCards = data ? [
+    { icon: <TrendingUp size={18} />, label: 'รายได้รวม', value: baht(data.kpis.totalRevenue), color: 'text-emerald-600', border: 'border-emerald-200' },
+    { icon: <Coins size={18} />, label: 'ต้นทุนรวม', value: baht(data.kpis.totalCost), color: 'text-orange-600', border: 'border-orange-200' },
+    { icon: <Wallet size={18} />, label: 'กำไรขั้นต้นรวม', value: baht(data.kpis.totalProfit), color: 'text-brand', border: 'border-brand-border' },
+    { icon: <PiggyBank size={18} />, label: 'ยอดเฉลี่ยต่อบิล', value: baht(data.kpis.aov), color: 'text-blue-600', border: 'border-blue-200' },
+  ] : [];
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="text-white" size={24} />
+            <h1 className="text-xl md:text-2xl font-semibold text-white">สรุปบัญชีสหกรณ์</h1>
+          </div>
+        </div>
+
+        {/* Date range + export */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand" />
+          <span className="text-gray-400 text-sm">ถึง</span>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand" />
+          <button
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="ml-auto flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-full px-4 py-2 text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <Download size={16} /> {exporting ? 'กำลัง Export...' : 'Export Excel'}
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => <SkeletonDashboardStat key={i} />)}
+            </div>
+            <SkeletonCard />
+          </div>
+        ) : (
+          <>
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+              {kpiCards.map((c, i) => (
+                <div key={i} className={`bg-white border ${c.border} rounded-3xl p-4 shadow-md hover:shadow-lg transition-all duration-150`}>
+                  <div className={`flex items-center gap-1.5 mb-2 ${c.color}`}>
+                    {c.icon}
+                    <span className="text-xs font-semibold">{c.label}</span>
+                  </div>
+                  <p className="text-lg font-bold text-gray-800">{c.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Category breakdown */}
+            <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden mb-8">
+              <div className="px-5 py-4 border-b border-brand-border">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Coins size={18} className="text-brand" /> สรุปตามหมวดหมู่ (รายได้ / ต้นทุน / กำไร)
+                </h2>
+              </div>
+              {!data || data.categoryBreakdown.length === 0 ? (
+                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลการขายในช่วงวันที่นี้</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left whitespace-nowrap text-sm">
+                    <thead className="bg-gray-50 text-gray-600 text-xs">
+                      <tr>
+                        <th className="p-3 border-b">หมวดหมู่</th>
+                        <th className="p-3 border-b text-right">รายได้</th>
+                        <th className="p-3 border-b text-right">ต้นทุน</th>
+                        <th className="p-3 border-b text-right">กำไร</th>
+                        <th className="p-3 border-b text-right">สัดส่วน</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.categoryBreakdown.map(c => (
+                        <tr key={c.name} className="border-b last:border-0 hover:bg-brand-bg">
+                          <td className="p-3 font-semibold text-gray-800">{c.name}</td>
+                          <td className="p-3 text-right">{baht(c.sales)}</td>
+                          <td className="p-3 text-right text-orange-600">{baht(c.cost)}</td>
+                          <td className="p-3 text-right font-bold text-brand">{baht(c.profit)}</td>
+                          <td className="p-3 text-right text-gray-500">{c.percentage.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Supplier GP payouts */}
+            <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden">
+              <div className="px-5 py-4 border-b border-brand-border">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                  <PiggyBank size={18} className="text-orange-400" /> ยอดต้องจ่ายคืนผู้ฝากขาย (หัก GP แล้ว)
+                </h2>
+              </div>
+              {!data || data.supplierPayouts.length === 0 ? (
+                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีสินค้าฝากขายที่ขายได้ในช่วงวันที่นี้</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left whitespace-nowrap text-sm">
+                    <thead className="bg-gray-50 text-gray-600 text-xs">
+                      <tr>
+                        <th className="p-3 border-b">ผู้ฝากขาย</th>
+                        <th className="p-3 border-b text-right">จำนวนที่ขายได้</th>
+                        <th className="p-3 border-b text-right">ยอดขายรวม</th>
+                        <th className="p-3 border-b text-right">ส่วนแบ่ง GP สหกรณ์</th>
+                        <th className="p-3 border-b text-right">ต้องจ่ายคืน</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.supplierPayouts.map(v => (
+                        <tr key={v.vendor_id} className="border-b last:border-0 hover:bg-brand-bg">
+                          <td className="p-3 font-semibold text-gray-800">{v.vendor_name}</td>
+                          <td className="p-3 text-right">{v.total_items_sold} ชิ้น</td>
+                          <td className="p-3 text-right">{baht(v.total_sales)}</td>
+                          <td className="p-3 text-right text-emerald-600">{baht(v.coop_gp_earnings)}</td>
+                          <td className="p-3 text-right font-bold text-brand">{baht(v.vendor_payout)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -3513,20 +3513,60 @@ app.get('/api/reports/weekly-sales', requireRole('ADMIN', 'MANAGER'), async (req
   }
 });
 
+// ⭐️ Peak Hours Analytics — เดิมมีแค่ "วันนี้" ยอดขายหน้าร้านล้วนๆ (sales table เท่านั้น) ตอนนี้รับ
+// period (today/7d/30d) เพื่อดู pattern ข้ามหลายวันได้ + รวมพรีออเดอร์ที่มารับแล้ว (completed_at)
+// เข้าไปด้วย ให้ตรงกับ pattern มาตรฐานของรายงานอื่นในระบบ (dashboard/monthly-overview ล้วน UNION
+// sales+orders) — ช่วง 7d/30d ใช้ "เฉลี่ยต่อวัน" ไม่ใช่ผลรวมดิบ ไม่งั้นสเกลกราฟจะเทียบกับวันเดียวไม่ได้
+// (30 วันรวมยอดสูงกว่าวันเดียวมาก แต่ pattern ชั่วโมงไหนขายดีเหมือนเดิม) และคืน peak_hour มาด้วยให้
+// frontend ไฮไลต์แท่งที่สูงสุดในกราฟ
 app.get('/api/reports/hourly-sales', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
+    const period = ['today', '7d', '30d'].includes(req.query.period) ? req.query.period : 'today';
+    const days = period === '7d' ? 7 : period === '30d' ? 30 : 1;
+
+    // ⭐️ Bangkok timezone — created_at/completed_at เก็บเป็น UTC ต้องแปลงก่อนดึง HOUR/DATE
+    const dateClauseSales = period === 'today'
+      ? `DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))`
+      : `CONVERT_TZ(created_at,'+00:00','+07:00') >= DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+07:00'), INTERVAL ${days} DAY)`;
+    const dateClauseOrders = period === 'today'
+      ? `DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))`
+      : `CONVERT_TZ(completed_at,'+00:00','+07:00') >= DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+07:00'), INTERVAL ${days} DAY)`;
+
     const [rows] = await pool.query(`
-      SELECT HOUR(created_at) as hour, COALESCE(SUM(total_amount),0) as total
-      FROM sales
-      WHERE status='COMPLETED' AND DATE(created_at) = CURDATE()
-      GROUP BY HOUR(created_at)
-      ORDER BY hour ASC
+      SELECT hour, SUM(total) as total, COUNT(DISTINCT day) as day_count
+      FROM (
+        SELECT HOUR(CONVERT_TZ(created_at,'+00:00','+07:00')) as hour,
+               DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) as day,
+               total_amount as total
+        FROM sales
+        WHERE status='COMPLETED' AND ${dateClauseSales}
+        UNION ALL
+        SELECT HOUR(CONVERT_TZ(completed_at,'+00:00','+07:00')) as hour,
+               DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) as day,
+               total_amount as total
+        FROM orders
+        WHERE status='COMPLETED' AND ${dateClauseOrders}
+      ) combined
+      GROUP BY hour
     `);
-    // เติมชั่วโมงที่ไม่มียอดให้เป็น 0 (0-23) เพื่อกราฟต่อเนื่อง
+
+    // ⭐️ หารด้วยจำนวนวันที่มีข้อมูลจริงทั้งช่วง (ไม่ใช่จำนวนวันที่ชั่วโมงนั้นมียอด) กันเฉลี่ยเพี้ยน
+    // ถ้าช่วงนั้นมีแค่บางวันที่ขายของช่วงเช้า — ใช้จำนวนวันที่ "มีบิลอย่างน้อย 1 ใบทั้งวัน" เป็นตัวหาร
+    const [[{ active_days } = { active_days: 0 }]] = await pool.query(`
+      SELECT COUNT(DISTINCT day) as active_days FROM (
+        SELECT DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) as day FROM sales WHERE status='COMPLETED' AND ${dateClauseSales}
+        UNION
+        SELECT DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) as day FROM orders WHERE status='COMPLETED' AND ${dateClauseOrders}
+      ) d
+    `);
+    const divisor = period === 'today' ? 1 : Math.max(1, Number(active_days));
+
     const map = {};
     rows.forEach(r => { map[r.hour] = Number(r.total); });
-    const result = Array.from({ length: 24 }, (_, h) => ({ hour: h, total: map[h] || 0 }));
-    res.json(result);
+    const result = Array.from({ length: 24 }, (_, h) => ({ hour: h, total: fromSatang(Math.round(toSatang(map[h] || 0) / divisor)) }));
+    const peakHour = result.reduce((peak, cur) => (cur.total > peak.total ? cur : peak), result[0]).hour;
+
+    res.json({ period, hourly: result, peak_hour: peakHour, averaged_over_days: divisor });
   } catch (error) {
     console.error('[500]', error.message);
 
@@ -5745,6 +5785,68 @@ app.get('/api/reports/executive-export', requireRole('ADMIN', 'MANAGER'), async 
     res.end();
   } catch (err) {
     console.error('[executive-export] ERROR:', err.code || '', err.sqlMessage || err.message);
+    res.status(500).json({ error: err.sqlMessage || err.message });
+  }
+});
+
+// ⭐️ Co-op Accounting Summary — สรุปบัญชีสหกรณ์: หมวดหมู่ (รายได้/ต้นทุน/กำไร) + ยอดต้องจ่ายคืน
+// ผู้ฝากขายแต่ละราย ในช่วงวันที่ที่เลือก ใช้ query เดียวกับ executive-export (fetchLineItems) มา
+// aggregate ต่อ ไม่ต้อง round-trip DB ซ้ำ
+app.get('/api/reports/accounting-summary', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { start_date, end_date } = req.query;
+  try {
+    const [rows, supplierPayouts] = await Promise.all([
+      reportsExport.fetchLineItems(pool, start_date, end_date),
+      reportsExport.fetchVendorPayouts(pool, start_date, end_date),
+    ]);
+    const kpis = reportsExport.aggregate(rows);
+    const totalCost = kpis.categorySummary.reduce((sum, c) => sum + c.cost, 0);
+
+    res.json({
+      period: { start_date: start_date || null, end_date: end_date || null },
+      kpis: {
+        totalRevenue: kpis.totalRevenue,
+        totalCost,
+        totalProfit: kpis.totalProfit,
+        totalOrders: kpis.totalOrders,
+        aov: kpis.aov,
+      },
+      categoryBreakdown: kpis.categorySummary,
+      supplierPayouts,
+    });
+  } catch (error) {
+    console.error('[500]', error.message);
+
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.get('/api/reports/accounting-summary/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  const { start_date, end_date } = req.query;
+  try {
+    const [rows, supplierPayouts, storeName] = await Promise.all([
+      reportsExport.fetchLineItems(pool, start_date, end_date),
+      reportsExport.fetchVendorPayouts(pool, start_date, end_date),
+      reportsExport.fetchStoreName(pool),
+    ]);
+    const kpis = reportsExport.aggregate(rows);
+    const totalCost = kpis.categorySummary.reduce((sum, c) => sum + c.cost, 0);
+    const workbook = await reportsExport.buildAccountingWorkbook({
+      storeName,
+      startDate: start_date,
+      endDate: end_date,
+      kpis: { totalRevenue: kpis.totalRevenue, totalCost, totalProfit: kpis.totalProfit, totalOrders: kpis.totalOrders },
+      categoryBreakdown: kpis.categorySummary,
+      supplierPayouts,
+    });
+
+    const range = start_date && end_date ? `_${start_date}_to_${end_date}` : ''; // ⭐️ ASCII เท่านั้นใน HTTP header
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="accounting-summary${range}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[accounting-summary/export] ERROR:', err.code || '', err.sqlMessage || err.message);
     res.status(500).json({ error: err.sqlMessage || err.message });
   }
 });

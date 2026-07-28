@@ -31,7 +31,7 @@ async function fetchLineItems(pool, startDate, endDate) {
       SELECT s.created_at AS sort_at,
              DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
              'POS' AS channel, s.id AS transaction_id,
-             p.barcode, p.name AS product_name, c.name AS category_name,
+             p.barcode, p.name AS product_name, c.name AS category_name, p.vendor_id,
              p.cost, it.price, it.quantity, it.subtotal,
              ${profitExpr} AS profit, s.payment_method
       FROM sale_items it
@@ -43,7 +43,7 @@ async function fetchLineItems(pool, startDate, endDate) {
       SELECT o.completed_at AS sort_at,
              DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
              'พรีออเดอร์' AS channel, o.id AS transaction_id,
-             p.barcode, p.name AS product_name, c.name AS category_name,
+             p.barcode, p.name AS product_name, c.name AS category_name, p.vendor_id,
              p.cost, it.price, it.quantity, it.subtotal,
              ${profitExpr} AS profit, o.payment_method
       FROM order_items it
@@ -101,9 +101,16 @@ function aggregate(rows) {
     product.profit += profit;
     byProduct.set(r.product_name, product);
 
+    // ⭐️ Update — ต้นทุนต่อรายการ: สินค้าฝากขาย (vendor_id ไม่ null) ไม่มี "ต้นทุน" ในความหมายบัญชี
+    // ของสหกรณ์ (ไม่ได้ซื้อมาเก็บสต๊อกเอง) — cost ที่ใช้คือส่วนที่ต้องจ่ายคืนผู้ฝากขาย (subtotal - profit,
+    // เพราะ profit ของแถวนี้คือ GP ที่ coop ได้ ดู profitExpr ด้านบน) ส่วนสินค้าสหกรณ์เองใช้ cost*qty ตรงๆ
+    const itemCost = r.vendor_id != null ? revenue - profit : Number(r.cost) * Number(r.quantity);
+
     const catKey = r.category_name || 'ไม่ระบุหมวดหมู่';
-    const category = byCategory.get(catKey) || { name: catKey, sales: 0 };
+    const category = byCategory.get(catKey) || { name: catKey, sales: 0, cost: 0, profit: 0 };
     category.sales += revenue;
+    category.cost += itemCost;
+    category.profit += profit;
     byCategory.set(catKey, category);
   }
 
@@ -123,6 +130,55 @@ function aggregate(rows) {
     topProducts,
     categorySummary,
   };
+}
+
+// ⭐️ Co-op Accounting Summary — ยอดที่ต้องจ่ายคืนผู้ฝากขายแต่ละราย ในช่วงวันที่เดียวกับรายงาน
+// (ของเดิม /api/reports/vendor-summary ไม่มี date range และไม่รวมพรีออเดอร์ — คนละ query กับนี่
+// ตั้งใจแยก ไม่แก้ของเดิมเพราะมีหน้าอื่นพึ่งพฤติกรรม all-time อยู่)
+async function fetchVendorPayouts(pool, startDate, endDate) {
+  const hasRange = !!(startDate && endDate);
+  const params = [];
+  let wSale = "s.status = 'COMPLETED'";
+  let wOrder = "o.status = 'COMPLETED'";
+  if (hasRange) {
+    wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+    wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+    params.push(startDate, endDate, startDate, endDate);
+  }
+
+  const [rows] = await pool.query(
+    `SELECT vendor_id, vendor_name,
+            SUM(qty) AS total_items_sold,
+            SUM(subtotal) AS total_sales,
+            SUM(subtotal * gp_rate/100) AS coop_gp_earnings,
+            SUM(subtotal - subtotal * gp_rate/100) AS vendor_payout
+     FROM (
+       SELECT p.vendor_id, u.full_name AS vendor_name, it.quantity AS qty, it.subtotal, p.gp_rate
+       FROM sale_items it
+       JOIN sales s ON it.sale_id = s.id
+       JOIN products p ON it.product_id = p.id
+       JOIN users u ON p.vendor_id = u.id
+       WHERE p.vendor_id IS NOT NULL AND ${wSale}
+       UNION ALL
+       SELECT p.vendor_id, u.full_name AS vendor_name, it.quantity AS qty, it.subtotal, p.gp_rate
+       FROM order_items it
+       JOIN orders o ON it.order_id = o.id
+       JOIN products p ON it.product_id = p.id
+       JOIN users u ON p.vendor_id = u.id
+       WHERE p.vendor_id IS NOT NULL AND ${wOrder}
+     ) combined
+     GROUP BY vendor_id, vendor_name
+     ORDER BY vendor_payout DESC`,
+    params
+  );
+  return rows.map(r => ({
+    vendor_id: r.vendor_id,
+    vendor_name: r.vendor_name,
+    total_items_sold: Number(r.total_items_sold),
+    total_sales: Number(r.total_sales),
+    coop_gp_earnings: Number(r.coop_gp_earnings),
+    vendor_payout: Number(r.vendor_payout),
+  }));
 }
 
 // ⭐️ ExcelJS has no true "auto-fit" — approximate it from the longest rendered value per column.
@@ -286,6 +342,90 @@ async function buildWorkbook({ storeName, startDate, endDate, kpis, inventory, r
   return workbook;
 }
 
+// ⭐️ Co-op Accounting Summary — workbook แยกจาก buildWorkbook (executive export) เพราะโครงสร้าง
+// รายงานต่างกัน (นี่เน้นบัญชี: ต้นทุน/กำไรต่อหมวดหมู่ + ยอดต้องจ่ายคืนผู้ฝากขาย ไม่ใช่ top-products)
+async function buildAccountingWorkbook({ storeName, startDate, endDate, kpis, categoryBreakdown, supplierPayouts }) {
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'DMTC Mart';
+  workbook.created = new Date();
+  const rangeLabel = startDate && endDate ? `${startDate} ถึง ${endDate}` : 'ทั้งหมด (ไม่ระบุช่วงวันที่)';
+
+  // ===== Sheet 1: Summary =====
+  const summary = workbook.addWorksheet('สรุปบัญชี');
+  summary.mergeCells('A1:E1');
+  summary.getCell('A1').value = storeName;
+  summary.getCell('A1').font = { bold: true, size: 16 };
+  summary.mergeCells('A2:E2');
+  summary.getCell('A2').value = 'รายงานสรุปบัญชีสหกรณ์ (Co-op Accounting Summary)';
+  summary.getCell('A2').font = { bold: true, size: 13, color: { argb: 'FF2E7D32' } };
+  summary.getCell('A3').value = 'ช่วงวันที่:';
+  summary.getCell('B3').value = rangeLabel;
+  summary.getCell('A4').value = 'วันที่สร้างรายงาน:';
+  summary.getCell('B4').value = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+  let r = 6;
+  summary.getCell(`A${r}`).value = 'ตัวชี้วัดหลัก';
+  summary.getCell(`A${r}`).font = { bold: true, size: 12 };
+  r += 1;
+  const kpiRows = [
+    ['รายได้รวม (Total Revenue)', kpis.totalRevenue],
+    ['ต้นทุนรวม (Total Cost)', kpis.totalCost],
+    ['กำไรขั้นต้นรวม (Total Gross Profit)', kpis.totalProfit],
+    ['จำนวนบิลทั้งหมด', kpis.totalOrders],
+  ];
+  for (const [label, value] of kpiRows) {
+    summary.getCell(`A${r}`).value = label;
+    const cell = summary.getCell(`B${r}`);
+    cell.value = value;
+    if (label !== 'จำนวนบิลทั้งหมด') cell.numFmt = THB_FORMAT;
+    r += 1;
+  }
+
+  r += 1;
+  summary.getCell(`A${r}`).value = 'สรุปตามหมวดหมู่ (Category Breakdown)';
+  summary.getCell(`A${r}`).font = { bold: true, size: 12 };
+  r += 1;
+  const catHeaders = ['หมวดหมู่', 'รายได้', 'ต้นทุน', 'กำไร', 'สัดส่วนรายได้ (%)'];
+  summary.getRow(r).values = catHeaders;
+  styleHeaderRow(summary.getRow(r));
+  r += 1;
+  const catStart = r;
+  categoryBreakdown.forEach((c) => {
+    summary.getRow(r).values = [c.name, c.sales, c.cost, c.profit, c.percentage];
+    summary.getCell(`B${r}`).numFmt = THB_FORMAT;
+    summary.getCell(`C${r}`).numFmt = THB_FORMAT;
+    summary.getCell(`D${r}`).numFmt = THB_FORMAT;
+    summary.getCell(`E${r}`).numFmt = '0.0"%"';
+    r += 1;
+  });
+  if (categoryBreakdown.length > 0) addGridlines(summary, catStart, r - 1, catHeaders.length);
+
+  summary.getColumn(1).width = 40;
+  summary.getColumn(2).width = 20;
+  summary.getColumn(3).width = 20;
+  summary.getColumn(4).width = 20;
+  summary.getColumn(5).width = 18;
+
+  // ===== Sheet 2: Supplier GP Payouts =====
+  const supplierSheet = workbook.addWorksheet('ยอดจ่ายคืนผู้ฝากขาย');
+  const supHeaders = ['ผู้ฝากขาย', 'จำนวนที่ขายได้ (ชิ้น)', 'ยอดขายรวม', 'ส่วนแบ่ง GP ของสหกรณ์', 'ยอดต้องจ่ายคืนผู้ฝากขาย'];
+  supplierSheet.getRow(1).values = supHeaders;
+  styleHeaderRow(supplierSheet.getRow(1));
+  const supRows = supplierPayouts.map((v) => [v.vendor_name, v.total_items_sold, v.total_sales, v.coop_gp_earnings, v.vendor_payout]);
+  supRows.forEach((values, i) => {
+    const rowIdx = i + 2;
+    supplierSheet.getRow(rowIdx).values = values;
+    supplierSheet.getCell(`C${rowIdx}`).numFmt = THB_FORMAT;
+    supplierSheet.getCell(`D${rowIdx}`).numFmt = THB_FORMAT;
+    supplierSheet.getCell(`E${rowIdx}`).numFmt = THB_FORMAT;
+  });
+  if (supRows.length > 0) addGridlines(supplierSheet, 2, supRows.length + 1, supHeaders.length);
+  autoFitColumns(supplierSheet, supHeaders, supRows);
+
+  return workbook;
+}
+
 function buildCsv(rows) {
   const headers = [
     'วันที่-เวลา', 'เลขที่ธุรกรรม', 'บาร์โค้ด/SKU', 'สินค้า', 'หมวดหมู่',
@@ -313,7 +453,9 @@ module.exports = {
   fetchLineItems,
   fetchInventorySummary,
   fetchStoreName,
+  fetchVendorPayouts,
   aggregate,
   buildWorkbook,
+  buildAccountingWorkbook,
   buildCsv,
 };

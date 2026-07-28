@@ -22,6 +22,7 @@ import Layout from './components/Layout';
 import Notifications from './pages/Notifications'; // 👈 นำเข้าหน้าใหม่
 import VendorSales from './pages/VendorSales'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
 import Summary from './pages/Summary'; // ⭐️ หน้าสรุปข้อมูล (ชั่วโมงทำงาน/มาสาย/ค่าจ้าง) — ADMIN เท่านั้น
+import AccountingSummary from './pages/AccountingSummary'; // ⭐️ สรุปบัญชีสหกรณ์ — หมวดหมู่/ยอดจ่ายคืนผู้ฝากขาย/Export Excel
 import BackupManagement from './pages/BackupManagement'; // ⭐️ หน้าสำรอง & กู้คืนข้อมูล — ADMIN เท่านั้น
 
 // 🐛 FIX (MEMBER login bug) — ไม่เคยมี route guard เลยตั้งแต่แรก: MEMBER ที่พิมพ์ URL /pos ตรงๆ
@@ -165,6 +166,7 @@ function App() {
           <Route path="/settings" element={<RequireManager><Settings /></RequireManager>} />
           {/* ⭐️ /summary เปิดให้ MANAGER ด้วย แต่ตารางเงินเดือน (payroll) ยังซ่อนเฉพาะ ADMIN ในหน้า Summary เอง */}
           <Route path="/summary" element={<RequireManager><Summary /></RequireManager>} />
+          <Route path="/accounting-summary" element={<RequireManager><AccountingSummary /></RequireManager>} />
           {/* ⭐️ /backup ยังคง ADMIN-only (งานระบบ) */}
           <Route path="/backup" element={<RequireAdmin><BackupManagement /></RequireAdmin>} />
 

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Boxes, Settings, CalendarClock, BarChart3,
-  ClipboardCheck, ShoppingBag, PiggyBank, Database,
+  ClipboardCheck, ShoppingBag, PiggyBank, Database, FileSpreadsheet,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -27,6 +27,7 @@ export const STAFF_ITEMS: NavItemDef[] = [
 //   หมายเหตุ: หน้าราคา&แต้ม / กลุ่มสมาชิก เป็นแท็บ "ภายใน" /settings ไม่ใช่ route แยก จึงไม่มีในนี้
 export const STORE_ITEMS_SIDEBAR: NavItemDef[] = [
   { to: '/summary', icon: BarChart3, label: 'สรุปข้อมูล' },
+  { to: '/accounting-summary', icon: FileSpreadsheet, label: 'สรุปบัญชี' },
   { to: '/inventory', icon: Boxes, label: 'คลังสินค้า' },
   { to: '/settings', icon: Settings, label: 'ตั้งค่า' },
   { to: '/attendance-management', icon: ClipboardCheck, label: 'เข้า-ออกงาน' },
@@ -40,6 +41,7 @@ export const SYSTEM_ITEMS: NavItemDef[] = [
 // mobile drawer — ลำดับเดิม (ตั้งค่าอยู่ท้ายสุด ต่างจาก sidebar)
 export const STORE_ITEMS_DRAWER: NavItemDef[] = [
   { to: '/summary', icon: BarChart3, label: 'สรุปข้อมูล' },
+  { to: '/accounting-summary', icon: FileSpreadsheet, label: 'สรุปบัญชี' },
   { to: '/inventory', icon: Boxes, label: 'คลังสินค้า' },
   { to: '/attendance-management', icon: ClipboardCheck, label: 'เข้า-ออกงาน' },
   { to: '/settings', icon: Settings, label: 'ตั้งค่า' },
