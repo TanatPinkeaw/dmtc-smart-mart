@@ -611,6 +611,23 @@ const initDB = async () => {
       }
     }
 
+    // ⭐️ Update — Offline POS sales: client-generated dedup key (separate from idempotency_key,
+    // which is per-HTTP-request; this one survives across the whole offline→reconnect→batch-sync
+    // round trip, generated once when the sale is captured offline and stored in IndexedDB) +
+    // a flag marking which sales were captured while offline, for reporting/reconciliation.
+    try {
+      await connection.query(`ALTER TABLE sales ADD COLUMN client_offline_id VARCHAR(64) UNIQUE NULL`);
+      console.log("🔧 เพิ่มคอลัมน์ sales.client_offline_id ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE sales (client_offline_id) ล้มเหลว:", alterErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE sales ADD COLUMN is_offline_sale TINYINT(1) DEFAULT 0`);
+      console.log("🔧 เพิ่มคอลัมน์ sales.is_offline_sale ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE sales (is_offline_sale) ล้มเหลว:", alterErr.message);
+    }
+
     // ⭐️ Sprint 2 — C2: Audit Log Viewer — Add missing columns for audit_logs
     for (const [col, def] of [
       ['description', 'TEXT NULL'],

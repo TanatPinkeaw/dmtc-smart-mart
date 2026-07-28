@@ -27,6 +27,40 @@ module.exports = {
       .required(),
   }),
 
+  // POST /api/sales/sync-offline — batch of sales captured while the POS was offline (IndexedDB),
+  // replayed once the connection is back. Deliberately narrower than checkoutValidator: no
+  // member_id/promotion_id/redeem_points/redeem_reward, since those need live server-side truth
+  // (points balance, promo usage limits, reward stock) that can't be trusted from a stale offline
+  // cache — see POS.tsx's offline checkout path, which blocks those features while offline.
+  syncOfflineValidator: Joi.object({
+    sales: Joi.array()
+      .items(
+        Joi.object({
+          client_offline_id: Joi.string().trim().min(1).max(64).required(),
+          payment_method: Joi.string().valid('CASH', 'QR', 'MIXED').required(),
+          amount_received: Joi.number().precision(2).min(0).required(),
+          total_amount: Joi.number().precision(2).min(0).required(),
+          created_at_offline: Joi.string().isoDate().required(),
+          items: Joi.array()
+            .items(
+              Joi.object({
+                product_id: Joi.number().integer().positive().required(),
+                quantity: Joi.number().integer().min(1).max(1000).required(),
+                // ⭐️ ราคาที่แคชเชียร์คิดเงินลูกค้าจริงตอนออฟไลน์ (จาก product cache ในเครื่อง ณ ตอนนั้น)
+                //   server ใช้ค่านี้บันทึกลง sale_items ตรงๆ ไม่ refetch ราคาปัจจุบันมาคำนวณใหม่ — ราคา
+                //   อาจเปลี่ยนไปแล้วระหว่างออฟไลน์ แต่เงินที่เก็บจากลูกค้าคือยอดตอนนั้น ต้องตรงกับใบเสร็จที่ลูกค้าได้เห็น
+                unit_price: Joi.number().precision(2).min(0).required(),
+              })
+            )
+            .min(1)
+            .required(),
+        })
+      )
+      .min(1)
+      .max(100)
+      .required(),
+  }),
+
   // POST /api/products — body: barcode, name, category_id, price, stock, image_url,
   // vendor_id, gp_rate (server.js:347) — no description/cost/reorder_level in this codebase
   productValidator: Joi.object({

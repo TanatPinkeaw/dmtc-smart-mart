@@ -1,4 +1,4 @@
-import { CheckCircle, X, Printer } from 'lucide-react';
+import { CheckCircle, X, Printer, CloudOff } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -17,6 +17,12 @@ export function ReceiptModal({ receiptData, storeInfo, onClose }: ReceiptModalPr
         <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="ปิด"><X size={16} /></button>
       </div>
       <div id="receipt-print-area" className="p-5 font-mono text-sm text-gray-800">
+        {/* ⭐️ POS ออฟไลน์ — บิลนี้ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์ จะซิงค์อัตโนมัติเมื่อเน็ตกลับมา */}
+        {receiptData.offline && (
+          <div className="flex items-center justify-center gap-1.5 bg-amber-50 text-amber-700 text-xs font-semibold py-1.5 rounded-lg mb-3 print:hidden">
+            <CloudOff size={13} /> บันทึกออฟไลน์ไว้แล้ว — จะซิงค์อัตโนมัติเมื่อเน็ตกลับมา
+          </div>
+        )}
         <div className="text-center mb-3">
           <p className="font-bold text-base">{storeInfo?.store_name || 'สหกรณ์วิทยาลัย'}</p>
           {storeInfo?.address && <p className="text-xs text-gray-500">{storeInfo.address}</p>}

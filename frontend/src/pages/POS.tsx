@@ -14,6 +14,8 @@ import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { toSatang, fromSatang, lineTotalSatang } from '../utils/money'; // ⭐️ Sprint 1 — B3
 import { useOnlineStatus } from '../hooks/useOnlineStatus'; // ⭐️ Sprint 2 — B6
 import OfflineBanner from '../components/OfflineBanner'; // ⭐️ Sprint 2 — B6
+import { saveOfflineSale, getOfflineSalesCount, type OfflineSale } from '../utils/offlineSalesDb'; // ⭐️ POS ออฟไลน์
+import { syncOfflineSales } from '../utils/syncOfflineSales'; // ⭐️ POS ออฟไลน์
 import { ProductGrid } from '../components/pos/ProductGrid';
 import { CartPanel } from '../components/pos/CartPanel';
 import { RegisterMemberModal } from '../components/pos/RegisterMemberModal';
@@ -59,6 +61,8 @@ export default function POS() {
   // ⭐️ Part 2 — อัตราแลกแต้มเป็นส่วนลด (1 แต้ม = redeemRate บาท) ดึงจาก settings ตอน mount
   const [redeemRate, setRedeemRate] = useState(1);
   const [showRewardModal, setShowRewardModal] = useState(false);
+  // ⭐️ POS ออฟไลน์ — จำนวนบิลที่ค้างอยู่ใน IndexedDB รอซิงค์
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
 
   const navigate = useNavigate();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
@@ -80,7 +84,27 @@ export default function POS() {
     // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
     if (localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
     fetchCategories(); fetchProducts(); fetchPromotions(); fetchStoreInfo(); fetchLoyaltyRate();
+    // ⭐️ POS ออฟไลน์ — เช็คคิวค้างตอน mount ด้วย เผื่อรีเฟรชหน้าหลังขายออฟไลน์ไปแล้วแต่ยังไม่ทันซิงค์
+    getOfflineSalesCount().then(setPendingOfflineCount).catch(() => {});
   }, [navigate]);
+
+  // ⭐️ POS ออฟไลน์ — พอเน็ตกลับมา (isOnline true) ซิงค์คิวที่ค้างไว้ทั้งหมดเป็น batch เดียว
+  useEffect(() => {
+    if (!isOnline) return;
+    (async () => {
+      const summary = await syncOfflineSales();
+      if (!summary || summary.attempted === 0) return;
+      setPendingOfflineCount(await getOfflineSalesCount());
+      fetchProducts(); // ⭐️ รีเฟรชสต๊อกให้ตรงกับ server หลัง sync (สต๊อกฝั่ง client ตอนออฟไลน์เป็นแค่ค่าประมาณ)
+      if (summary.synced > 0) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `ซิงค์บิลออฟไลน์สำเร็จ ${summary.synced} บิล`, showConfirmButton: false, timer: 2500 });
+      }
+      if (summary.failed > 0) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: `ซิงค์บิลออฟไลน์ไม่สำเร็จ ${summary.failed} บิล — ลองใหม่รอบหน้า`, showConfirmButton: false, timer: 3500 });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
 
   const fetchStoreInfo = async () => { try { const res = await api.get('/settings/store'); setStoreInfo(res.data); } catch (e) {} };
   // ⭐️ อัตราแลกแต้ม — ให้ preview ฝั่ง client ตรงกับที่ backend คำนวณ (server ยังเป็น authority)
@@ -220,9 +244,76 @@ export default function POS() {
   });
   const checkoutValidationError = validateCheckout(buildCheckoutPayload());
 
+  // ⭐️ POS ออฟไลน์ — บันทึกบิลลง IndexedDB แทนการยิง API (ไม่มีเน็ตยิงไม่ได้อยู่แล้ว) เลียนแบบ flow
+  // ตอนขายสำเร็จออนไลน์ทุกอย่าง (ใบเสร็จ + ล้างตะกร้า) ยกเว้นเลขที่บิลจริงที่ต้องรอ sync ก่อนถึงจะมี
+  const handleOfflineCheckout = async () => {
+    setLoading(true);
+    try {
+      const clientOfflineId = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const amountReceivedNum = paymentMethod === 'CASH' ? Number(amountReceived) : finalTotal;
+      const offlineSale: OfflineSale = {
+        client_offline_id: clientOfflineId,
+        payment_method: paymentMethod,
+        amount_received: amountReceivedNum,
+        total_amount: finalTotal,
+        created_at_offline: nowIso,
+        items: cart.map(i => ({ product_id: i.id, quantity: i.quantity, unit_price: Number(i.price) })),
+      };
+      await saveOfflineSale(offlineSale);
+      setPendingOfflineCount(c => c + 1);
+
+      // ⭐️ ลดสต๊อกฝั่ง client ทันทีแค่กันขายเกินสต๊อกที่เห็นในเครื่องเดียวกันระหว่างที่ยังออฟไลน์อยู่ —
+      //   ค่าจริงยึดตามเซิร์ฟเวอร์เสมอ ตรวจซ้ำ + ตัดจริงตอน sync
+      setProducts(prev => prev.map(p => {
+        const cartItem = cart.find(i => i.id === p.id);
+        return cartItem ? { ...p, stock: Math.max(0, (p.stock ?? 0) - cartItem.quantity) } : p;
+      }));
+
+      setReceiptData({
+        sale_id: `OFFLINE-${clientOfflineId.slice(0, 8)}`,
+        subtotal: grandTotal,
+        discount_amount: 0,
+        points_discount: 0,
+        points_redeemed: 0,
+        total_amount: finalTotal,
+        amount_received: amountReceivedNum,
+        change_amount: Math.max(0, amountReceivedNum - finalTotal),
+        earn_points: 0,
+        payment_method: paymentMethod,
+        items: cart.map(i => ({ name: i.name, price: Number(i.price), quantity: i.quantity })),
+        cashier_name: user.full_name,
+        member_name: null,
+        promo_name: null,
+        created_at: nowIso,
+        offline: true,
+      });
+      setCart([]); setAmountReceived(''); setIsCartOpen(false);
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'บันทึกบิลออฟไลน์ไม่สำเร็จ', text: 'กรุณาลองใหม่อีกครั้ง' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) return Swal.fire({ icon: 'warning', title: 'ตะกร้าว่างเปล่า!' });
     if (paymentMethod === 'CASH' && (!amountReceived || Number(amountReceived) < finalTotal)) return Swal.fire({ icon: 'error', title: 'รับเงินมาไม่พอ!' });
+
+    // ⭐️ POS ออฟไลน์ — รองรับเฉพาะบิลง่ายๆ (ไม่มีสมาชิก/โปรโมชั่น/แต้ม/ของรางวัล) เพราะฟีเจอร์พวกนี้
+    //   ต้องเช็คยอดจริงกับเซิร์ฟเวอร์ (แต้มคงเหลือ/โควตาโปร/สต๊อกของรางวัล) ซึ่งไม่มีเน็ตเช็คไม่ได้ ถ้าปล่อย
+    //   ให้ทำได้จากข้อมูล cache เก่าจะเสี่ยงแลกแต้ม/ใช้โปรเกินสิทธิ์จริงตอน sync ย้อนหลัง
+    if (!isOnline) {
+      if (currentMember || appliedPromo || redeemPointsUsed > 0 || cart.some(i => i.redeem_reward)) {
+        return Swal.fire({
+          icon: 'warning',
+          title: 'ขายออฟไลน์ไม่รองรับสมาชิก/โปรโมชั่น/แต้ม',
+          text: 'กรุณาล้างสมาชิก/โปรโมชั่น/แต้ม/ของรางวัลออกจากบิลก่อน หรือรอเน็ตกลับมาแล้วค่อยขาย',
+        });
+      }
+      return handleOfflineCheckout();
+    }
+
     // ⭐️ F5 — validate ตาม schema เดียวกับ backend ก่อนยิง API จริง กัน payload ผิดรูปแบบหลุดไปถึง server
     if (checkoutValidationError) return Swal.fire({ icon: 'error', title: 'ข้อมูลไม่ถูกต้อง', text: checkoutValidationError });
     setLoading(true);
@@ -307,7 +398,7 @@ export default function POS() {
   return (
     <>
       {/* ⭐️ Sprint 2 — B6: Offline Banner */}
-      <OfflineBanner isOnline={isOnline} />
+      <OfflineBanner isOnline={isOnline} pendingCount={pendingOfflineCount} />
 
       <div className="flex h-full bg-brand-bg relative">
 

@@ -135,7 +135,7 @@ const uploadLimiter = rateLimit({
 
 const {
   checkoutValidator, productValidator, orderValidator,
-  shiftCloseValidator, userRegisterValidator,
+  shiftCloseValidator, userRegisterValidator, syncOfflineValidator,
 } = require('./validators');
 const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
@@ -2823,6 +2823,141 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
   } finally {
     conn.release();
   }
+});
+
+// ⭐️ Update — Offline POS sales batch sync. POS.tsx queues sales in IndexedDB while offline
+// (blocking member/promo/points/reward features there, since those need live server truth that
+// can't be trusted from a stale cache) and replays the whole queue here once reconnected.
+//
+// Deliberate design choices, since "offline" inherently can't be reconciled perfectly:
+//   - Money trust: total_amount/amount_received and each item's unit_price are the client's
+//     (cashier's own cash drawer/receipt) record of what was actually charged and collected —
+//     NOT recomputed from current product prices, which may have changed since the sale happened.
+//   - Timing: created_at uses the real offline capture time (created_at_offline), so date-based
+//     reports (today's sales, etc.) reflect when the sale actually happened, not when it synced.
+//   - Shift attribution: uses whichever shift is OPEN for this cashier at SYNC time, not capture
+//     time — there is no way to reconstruct which shift was open during a disconnected period,
+//     especially if it already closed. If no shift is open at sync time, that sale fails with
+//     NO_OPEN_SHIFT and stays queued client-side for the next retry. is_offline_sale=1 flags every
+//     row synced this way so reports/reconciliation can identify them.
+//   - Stock: still checked and decremented against the LIVE stock at sync time (not offline-time
+//     stock) — if another sale already used up the stock while this cashier was offline, that
+//     specific offline sale fails with STOCK_ISSUE for manual reconciliation, rather than silently
+//     allowing negative stock.
+//   - Dedup: client_offline_id (UNIQUE) is generated once when IndexedDB captures the sale, so
+//     re-submitting the same batch (e.g. the network drops mid-sync) never double-charges/double-
+//     decrements — an already-synced client_offline_id just reports success again with the
+//     existing sale_id.
+//   - Batch semantics: each sale in the batch is its own transaction — one bad item never blocks
+//     the rest of the batch from syncing.
+app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, validateRequest(syncOfflineValidator), async (req, res) => {
+  const { sales } = req.body;
+  const cashierId = req.user.id; // ⭐️ ตัวตนจาก JWT เสมอ ไม่เชื่อ client-sent cashier_id (เหมือน checkout)
+  const results = [];
+
+  for (const offlineSale of sales) {
+    const { client_offline_id, payment_method, amount_received, total_amount, items, created_at_offline } = offlineSale;
+    const conn = await pool.getConnection();
+    let inTransaction = false;
+
+    try {
+      const [existing] = await conn.query('SELECT id FROM sales WHERE client_offline_id = ?', [client_offline_id]);
+      if (existing.length > 0) {
+        results.push({ client_offline_id, success: true, sale_id: existing[0].id, already_synced: true });
+        continue;
+      }
+
+      await conn.beginTransaction();
+      inTransaction = true;
+
+      const [openShiftRows] = await conn.query(
+        `SELECT id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1`,
+        [cashierId]
+      );
+      const shiftId = openShiftRows[0]?.id || null;
+      if (!shiftId) {
+        await conn.rollback();
+        inTransaction = false;
+        results.push({
+          client_offline_id, success: false, code: 'NO_OPEN_SHIFT',
+          error: 'ยังไม่ได้เปิดกะการขาย กรุณาเปิดกะก่อนถึงจะซิงค์ยอดขายออฟไลน์รายการนี้ได้',
+        });
+        continue;
+      }
+
+      const stockIssues = [];
+      const processedItems = [];
+      for (const item of items) {
+        const [productRows] = await conn.query('SELECT id, name, stock FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
+        if (productRows.length === 0) {
+          stockIssues.push({ product_id: item.product_id, product_name: '(ไม่พบสินค้านี้แล้ว)', requested: item.quantity, available: 0 });
+          continue;
+        }
+        const product = productRows[0];
+        if (product.stock < item.quantity) {
+          stockIssues.push({ product_id: item.product_id, product_name: product.name, requested: item.quantity, available: product.stock });
+          continue;
+        }
+        processedItems.push({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: fromSatang(toSatang(item.unit_price) * item.quantity),
+        });
+      }
+
+      if (stockIssues.length > 0) {
+        await conn.rollback();
+        inTransaction = false;
+        results.push({
+          client_offline_id, success: false, code: 'STOCK_ISSUE',
+          error: 'สต๊อกไม่เพียงพอสำหรับบางรายการ ณ เวลาซิงค์ (อาจถูกขายไปแล้วระหว่างที่ยังไม่มีเน็ต)',
+          issues: stockIssues,
+        });
+        continue;
+      }
+
+      const netTotal = Number(total_amount);
+      const amountReceivedNum = Number(amount_received);
+      const changeAmount = Math.max(0, fromSatang(toSatang(amountReceivedNum) - toSatang(netTotal)));
+
+      const [saleResult] = await conn.query(
+        `INSERT INTO sales (cashier_id, total_amount, amount_received, change_amount, payment_method, shift_id, client_offline_id, is_offline_sale, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+        [cashierId, netTotal, amountReceivedNum, changeAmount, payment_method, shiftId, client_offline_id, new Date(created_at_offline)]
+      );
+      const saleId = saleResult.insertId;
+
+      for (const item of processedItems) {
+        await conn.query(
+          'INSERT INTO sale_items (sale_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)',
+          [saleId, item.product_id, item.quantity, item.unit_price, item.subtotal]
+        );
+        await conn.query('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.product_id]);
+      }
+
+      await conn.query(
+        'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+        ['CHECKOUT_OFFLINE_SYNC', req.user.id, 'SALE', saleId, JSON.stringify({ amount: netTotal, items: processedItems.length, payment_method, client_offline_id })]
+      );
+
+      await conn.commit();
+      inTransaction = false;
+
+      req.io.emit('stock_updated', { message: 'มีการตัดสต๊อกสินค้า (ซิงค์บิลออฟไลน์)' });
+      req.io.emit('dashboard_updated', { message: 'มีบิลขายใหม่ (ออฟไลน์)' });
+
+      results.push({ client_offline_id, success: true, sale_id: saleId });
+    } catch (err) {
+      if (inTransaction) { try { await conn.rollback(); } catch (_) { /* connection may already be dead */ } }
+      console.error('[sync-offline] ERROR:', err.message);
+      results.push({ client_offline_id, success: false, error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    } finally {
+      conn.release();
+    }
+  }
+
+  res.json({ results });
 });
 
 // =========================================
