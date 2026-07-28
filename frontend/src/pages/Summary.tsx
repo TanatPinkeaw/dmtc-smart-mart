@@ -52,7 +52,7 @@ interface ProfitSummary {
   monthly: ProfitRow[];
 }
 
-const baht = (n: number) => '฿' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const baht = (n: number | undefined | null) => '฿' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function getCurrentMonth(): string {
   const now = new Date();
@@ -245,7 +245,7 @@ export default function Summary() {
                 <Coins size={18} className="text-brand" /> สรุปรายได้ &amp; กำไร (แยกกำไรจาก GP)
               </h2>
               <div className="flex bg-brand-bg border border-brand-border rounded-full p-0.5 print:hidden">
-                <button onClick={() => setProfitView('overall')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'overall' ? 'bg-brand text-white' : 'text-gray-500'}`}>ภาพรวมทั้งหมด</button>
+                <button onClick={() => setProfitView('overall')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'overall' ? 'bg-brand text-white' : 'text-gray-500'}`}>เดือนที่เลือก</button>
                 <button onClick={() => setProfitView('monthly')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'monthly' ? 'bg-brand text-white' : 'text-gray-500'}`}>รายเดือน</button>
               </div>
             </div>
@@ -253,28 +253,31 @@ export default function Summary() {
             {!profit || profit.monthly.length === 0 ? (
               <p className="p-6 text-center text-gray-400 text-sm">ยังไม่มีข้อมูลการขาย</p>
             ) : profitView === 'overall' ? (
+              // ⭐️ Update — การ์ดนี้ผูกกับ "เดือนที่เลือก" จาก month picker ด้านบนแล้ว (เดิม hardcode
+              //   เป็น profit.overall = ยอดรวมทั้งหมดตลอดกาล ไม่ขยับตาม picker เลย ทำให้ตัวเลขไม่ตรงกับ
+              //   ที่ผู้ใช้เลือกดู) ไม่มีข้อมูลเดือนนั้น = fallback เป็น 0.00 ทุกช่อง (baht() รองรับ undefined อยู่แล้ว)
               <div className="p-5">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5 text-emerald-600 mb-1"><TrendingUp size={16} /><span className="text-xs font-semibold">รายได้รวม (ยอดขาย)</span></div>
-                    <p className="text-lg font-bold text-gray-800">{baht(profit.overall.revenue)}</p>
+                    <p className="text-lg font-bold text-gray-800">{baht(selectedMonthProfit?.revenue)}</p>
                   </div>
                   <div className="bg-brand-bg border border-brand-border rounded-xl p-4">
                     <div className="flex items-center gap-1.5 text-brand mb-1"><Wallet size={16} /><span className="text-xs font-semibold">กำไรรวมของสหกรณ์</span></div>
-                    <p className="text-xl font-bold text-brand">{baht(profit.overall.profit_total)}</p>
+                    <p className="text-xl font-bold text-brand">{baht(selectedMonthProfit?.profit_total)}</p>
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5 text-blue-600 mb-1"><PiggyBank size={16} /><span className="text-xs font-semibold">กำไรสินค้าสหกรณ์เอง</span></div>
-                    <p className="text-lg font-bold text-gray-800">{baht(profit.overall.profit_own)}</p>
+                    <p className="text-lg font-bold text-gray-800">{baht(selectedMonthProfit?.profit_own)}</p>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <div className="flex items-center gap-1.5 text-amber-600 mb-1"><Percent size={16} /><span className="text-xs font-semibold">กำไรจาก GP (ฝากขาย)</span></div>
-                    <p className="text-lg font-bold text-gray-800">{baht(profit.overall.profit_gp)}</p>
+                    <p className="text-lg font-bold text-gray-800">{baht(selectedMonthProfit?.profit_gp)}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 text-xs">
-                  <div className="flex justify-between bg-gray-50 rounded-lg px-3 py-2"><span className="text-gray-500">ต้นทุนสินค้าสหกรณ์เอง</span><span className="font-semibold text-gray-700">{baht(profit.overall.cogs_own)}</span></div>
-                  <div className="flex justify-between bg-gray-50 rounded-lg px-3 py-2"><span className="text-gray-500">ส่วนแบ่งคืนผู้ฝากขาย</span><span className="font-semibold text-gray-700">{baht(profit.overall.vendor_payout)}</span></div>
+                  <div className="flex justify-between bg-gray-50 rounded-lg px-3 py-2"><span className="text-gray-500">ต้นทุนสินค้าสหกรณ์เอง</span><span className="font-semibold text-gray-700">{baht(selectedMonthProfit?.cogs_own)}</span></div>
+                  <div className="flex justify-between bg-gray-50 rounded-lg px-3 py-2"><span className="text-gray-500">ส่วนแบ่งคืนผู้ฝากขาย</span><span className="font-semibold text-gray-700">{baht(selectedMonthProfit?.vendor_payout)}</span></div>
                 </div>
               </div>
             ) : (
