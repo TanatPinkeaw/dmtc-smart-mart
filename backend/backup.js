@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { saveRawFile, fetchRawFile, CLOUDINARY_ENABLED } = require('./cloudinary-config'); // ⭐️ Update — offsite copy so backups survive Render's ephemeral disk
 
 const TZ_BANGKOK = 'Asia/Bangkok';
 
@@ -186,15 +187,29 @@ async function createBackup(db, backupDir = './backups') {
 
     const fileSizeMb = (gzipped.length / (1024 * 1024)).toFixed(2);
 
+    // ⭐️ Update — อัปโหลดสำเนาขึ้น Cloudinary ด้วย (raw) กัน Render ephemeral disk ลบไฟล์ทิ้งตอน
+    // redeploy/restart ก่อนใครจะได้ restore จากมัน (ดู server.js restore endpoint ที่เคยเจอเคสนี้
+    // จริง — backup_path หายแต่แถวในตารางยังบอก SUCCESS อยู่) ถ้าอัปโหลดพลาด ไม่ทำให้ backup ทั้งงาน
+    // ล้ม — ไฟล์บนดิสก์ยังใช้ restore ได้ตามปกติจนกว่าจะถึง redeploy ครั้งถัดไป
+    let cloudPublicId = null, cloudUrl = null;
+    if (CLOUDINARY_ENABLED) {
+      try {
+        const uploaded = await saveRawFile(gzipped, 'backups', filename.replace(/\.sql$/, ''));
+        if (uploaded) { cloudPublicId = uploaded.publicId; cloudUrl = uploaded.url; }
+      } catch (cloudErr) {
+        console.error('⚠️ อัปโหลด backup ขึ้น Cloudinary ไม่สำเร็จ (ไฟล์บนดิสก์ยังใช้ได้ปกติ):', cloudErr.message);
+      }
+    }
+
     await db.query(
-      'UPDATE backups SET status = ?, file_size_mb = ?, backup_path = ? WHERE id = ?',
-      ['SUCCESS', fileSizeMb, gzipPath, backupId]
+      'UPDATE backups SET status = ?, file_size_mb = ?, backup_path = ?, cloud_public_id = ?, cloud_url = ? WHERE id = ?',
+      ['SUCCESS', fileSizeMb, gzipPath, cloudPublicId, cloudUrl, backupId]
     );
 
-    console.log(`✅ Backup created: ${gzipPath} (${fileSizeMb} MB)`);
+    console.log(`✅ Backup created: ${gzipPath} (${fileSizeMb} MB)${cloudPublicId ? ' + Cloudinary offsite copy' : ''}`);
     cleanOldBackups(backupDir, 30);
 
-    return { id: backupId, filename: `${filename}.gz`, size: fileSizeMb, path: gzipPath };
+    return { id: backupId, filename: `${filename}.gz`, size: fileSizeMb, path: gzipPath, cloudBacked: !!cloudPublicId };
   } catch (err) {
     console.error('❌ Backup failed:', err);
 
@@ -272,4 +287,29 @@ async function restoreBackup(db, backupPath) {
   }
 }
 
-module.exports = { createBackup, restoreBackup, getBackupDateBangkok, cleanOldBackups };
+// ⭐️ Update — เวอร์ชัน "ฉลาด" ของ restoreBackup: ใช้ไฟล์บนดิสก์ก่อนถ้ายังอยู่ (เร็วกว่า ไม่ต้องพึ่ง
+// เครือข่าย) ถ้าไฟล์บนดิสก์หายไปแล้ว (Render redeploy/restart ล้าง ephemeral disk) แต่แถวนี้มีสำเนา
+// Cloudinary ผูกไว้ ก็ดึงจากคลาวด์มาแทน แล้วเขียนกลับลงดิสก์ด้วย (self-heal local cache กัน
+// ต้องดึงจากคลาวด์ซ้ำถ้ามีคน restore แถวเดียวกันอีกรอบ) โยน error โค้ด BACKUP_FILE_MISSING ออกไป
+// เฉพาะตอนที่ไม่มีทั้งไฟล์บนดิสก์และสำเนาบนคลาวด์เลยจริงๆ ให้ caller (server.js) แยก 410 ได้เหมือนเดิม
+async function restoreBackupRow(db, backupRow, backupDir = './backups') {
+  if (fs.existsSync(backupRow.backup_path)) {
+    await restoreBackup(db, backupRow.backup_path);
+    return { source: 'local', path: backupRow.backup_path };
+  }
+
+  if (!backupRow.cloud_public_id) {
+    throw Object.assign(new Error(`Backup file not found: ${backupRow.backup_path}`), { code: 'BACKUP_FILE_MISSING' });
+  }
+
+  console.log(`[restore] ไม่พบไฟล์บนดิสก์ (${backupRow.backup_path}) — ดึงจาก Cloudinary แทน (public_id=${backupRow.cloud_public_id})`);
+  const buffer = await fetchRawFile(backupRow.cloud_public_id);
+
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(backupRow.backup_path, buffer); // self-heal local cache สำหรับรอบถัดไป
+
+  await restoreBackup(db, backupRow.backup_path);
+  return { source: 'cloud', path: backupRow.backup_path };
+}
+
+module.exports = { createBackup, restoreBackup, restoreBackupRow, getBackupDateBangkok, cleanOldBackups };

@@ -1,7 +1,7 @@
 // ✅ CHANGED: JSX only — pink theme (match rest of app), Thai labels, mobile card + desktop table
 // 🔒 UNCHANGED: loadBackups, handleCreateBackup, handleRestore, getStatusColor, all state/API calls
 import { useState, useEffect } from 'react';
-import { Database, RefreshCw, RotateCcw } from 'lucide-react';
+import { Database, RefreshCw, RotateCcw, Cloud, CloudOff } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 
@@ -13,6 +13,7 @@ interface Backup {
   status: 'SUCCESS' | 'FAILED' | 'PENDING';
   created_at: string;
   restored_at?: string;
+  cloud_backed?: boolean; // ⭐️ Update — มีสำเนาบน Cloudinary ไหม (กันไฟล์บนดิสก์หายตอน redeploy)
 }
 
 export default function BackupManagement() {
@@ -148,7 +149,14 @@ export default function BackupManagement() {
               {backups.map(backup => (
                 <div key={backup.id} className="bg-white border border-brand-border rounded-3xl p-4 shadow-md">
                   <div className="flex justify-between items-start mb-2 gap-2">
-                    <p className="font-mono text-xs text-gray-700 break-all">{backup.filename}</p>
+                    <p className="font-mono text-xs text-gray-700 break-all flex items-center gap-1.5">
+                      {backup.status === 'SUCCESS' && (
+                        backup.cloud_backed
+                          ? <Cloud size={13} className="text-blue-500 shrink-0" aria-label="มีสำเนาบน Cloudinary" />
+                          : <CloudOff size={13} className="text-gray-300 shrink-0" aria-label="ไม่มีสำเนาบนคลาวด์ — อยู่บนดิสก์เซิร์ฟเวอร์เท่านั้น" />
+                      )}
+                      {backup.filename}
+                    </p>
                     <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusColor(backup.status)}`}>
                       {statusLabel(backup.status)}
                     </span>
@@ -185,7 +193,16 @@ export default function BackupManagement() {
                   <tbody>
                     {backups.map(backup => (
                       <tr key={backup.id} className="border-b last:border-0 hover:bg-brand-bg transition-colors">
-                        <td className="p-3 font-mono text-xs text-gray-700">{backup.filename}</td>
+                        <td className="p-3 font-mono text-xs text-gray-700">
+                          <span className="flex items-center gap-1.5">
+                            {backup.status === 'SUCCESS' && (
+                              backup.cloud_backed
+                                ? <Cloud size={13} className="text-blue-500 shrink-0" aria-label="มีสำเนาบน Cloudinary" />
+                                : <CloudOff size={13} className="text-gray-300 shrink-0" aria-label="ไม่มีสำเนาบนคลาวด์ — อยู่บนดิสก์เซิร์ฟเวอร์เท่านั้น" />
+                            )}
+                            {backup.filename}
+                          </span>
+                        </td>
                         <td className="p-3 text-sm text-gray-600">{backup.backup_date}</td>
                         <td className="p-3 text-sm text-gray-600">{backup.file_size_mb ? `${backup.file_size_mb} MB` : '-'}</td>
                         <td className="p-3">

@@ -48,4 +48,38 @@ async function saveImage(buffer, subfolder, baseName, ext) {
   return `/uploads/${subfolder}/${filename}`;
 }
 
-module.exports = { saveImage, CLOUDINARY_ENABLED };
+// ⭐️ Update — สำรองไฟล์ backup (.sql.gz) ขึ้น Cloudinary เป็นสำเนานอกดิสก์ ให้รอดตอน Render
+// redeploy/restart ล้าง filesystem ทิ้ง (เหตุผลเดียวกับรูป แต่ .sql.gz ไม่ใช่รูป ใช้
+// resource_type: 'raw' แยกจาก saveImage ด้านบนที่ hardcode 'image' ไว้ — ผสมกันไม่ได้ Cloudinary
+// จะปฏิเสธ/ตีความไบนารี gzip ผิดถ้าส่งเป็น 'image')
+function _uploadRawToCloudinary(buffer, folder, publicId) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, public_id: publicId, resource_type: 'raw', overwrite: true },
+      (err, result) => (err ? reject(err) : resolve(result))
+    );
+    stream.end(buffer);
+  });
+}
+
+// อัปโหลดไฟล์ทั่วไป (ไม่ใช่รูป) จาก buffer — คืน null ถ้า Cloudinary ไม่ได้ตั้งค่า (caller ต้อง
+// เช็คเองว่าจะ fallback เป็นดิสก์อย่างเดียวหรือไม่ — ต่างจาก saveImage ที่ fallback ให้อัตโนมัติ
+// เพราะไฟล์ backup มีสำเนาบนดิสก์อยู่แล้วเป็นค่าเริ่มต้น ไม่ต้องมีที่เก็บสำรอง)
+async function saveRawFile(buffer, subfolder, publicId) {
+  if (!CLOUDINARY_ENABLED) return null;
+  const result = await _uploadRawToCloudinary(buffer, `dmtc-mart/${subfolder}`, publicId);
+  return { publicId: result.public_id, url: result.secure_url };
+}
+
+// โหลดไฟล์ raw กลับจาก Cloudinary เป็น Buffer — ใช้ signed URL เสมอ เพราะบัญชี Cloudinary ที่สร้าง
+// ใหม่ (หลัง 2024) ปิด "unsigned delivery ของไฟล์ raw/ไม่ใช่รูป" ไว้เป็นค่าเริ่มต้น (นโยบายความ
+// ปลอดภัยฝั่ง Cloudinary เอง กัน asset ที่ไม่ใช่รูปถูกเดาลิงก์เข้าถึงได้) signed URL ข้ามข้อจำกัดนี้ได้เสมอ
+async function fetchRawFile(publicId) {
+  if (!CLOUDINARY_ENABLED) throw new Error('Cloudinary ไม่ได้ตั้งค่าไว้ — ดึงไฟล์จากคลาวด์ไม่ได้');
+  const signedUrl = cloudinary.url(publicId, { resource_type: 'raw', type: 'upload', sign_url: true, secure: true });
+  const res = await fetch(signedUrl);
+  if (!res.ok) throw new Error(`ดาวน์โหลดไฟล์จาก Cloudinary ไม่สำเร็จ: ${res.status} ${res.statusText}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+module.exports = { saveImage, CLOUDINARY_ENABLED, saveRawFile, fetchRawFile };

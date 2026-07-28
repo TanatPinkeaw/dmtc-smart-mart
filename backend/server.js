@@ -139,7 +139,7 @@ const {
 } = require('./validators');
 const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
-const { createBackup, restoreBackup } = require('./backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
+const { createBackup, restoreBackupRow } = require('./backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
 const { sendMail } = require('./mailer'); // ⭐️ Phase 4 — backup success/failure notifications
 const reportsExport = require('./reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
@@ -5089,7 +5089,8 @@ app.post('/api/reports/daily/send', requireRole('ADMIN'), async (req, res) => {
 app.get('/api/admin/backups', requireRole('ADMIN'), async (req, res) => {
   try {
     const [backups] = await pool.query(`
-      SELECT id, filename, backup_date, file_size_mb, status, created_at, restored_at
+      SELECT id, filename, backup_date, file_size_mb, status, created_at, restored_at,
+             (cloud_public_id IS NOT NULL) AS cloud_backed
       FROM backups
       ORDER BY backup_date DESC
       LIMIT 50
@@ -5141,19 +5142,24 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
 
     const backup = backups[0];
 
-    // ⭐️ backup_path ชี้ไปไฟล์บน local disk (backend/backups/) — บน Render filesystem เป็น ephemeral
-    // (เหมือน uploads/ ก่อนย้ายไป Cloudinary) redeploy/restart ล้างไฟล์ทิ้งได้ แต่ row ใน DB ยังอยู่
-    // เช็คไฟล์จริงก่อน แยก error case นี้ออกจาก error อื่นๆ ให้ admin เห็นสาเหตุจริงทันที ไม่ใช่ 500 เปล่าๆ
-    if (!fs.existsSync(backup.backup_path)) {
-      console.error(`[restore] ไม่พบไฟล์ backup บน disk: ${backup.backup_path} (id=${id}) — อาจถูกลบตอน Render redeploy/restart เพราะ filesystem เป็น ephemeral`);
-      return res.status(410).json({
-        error: `ไม่พบไฟล์ backup บนเซิร์ฟเวอร์ (${backup.backup_path}) — ไฟล์อาจถูกลบไปตอน redeploy/restart เพราะ Render filesystem ไม่ถาวร กู้คืนจากไฟล์นี้ไม่ได้แล้ว ต้องใช้ backup อันใหม่กว่า`,
-        code: 'BACKUP_FILE_MISSING',
-      });
+    // ⭐️ Update — backup_path ชี้ไปไฟล์บน local disk (backend/backups/) ซึ่งบน Render filesystem
+    // เป็น ephemeral (เหมือน uploads/ ก่อนย้ายไป Cloudinary) redeploy/restart ล้างไฟล์ทิ้งได้ แต่ row
+    // ใน DB ยังอยู่ — restoreBackupRow() จัดการ fallback ไปดึงจาก Cloudinary ให้เองถ้ามีสำเนาผูกไว้
+    // (cloud_public_id) เหลือแค่กรณีไม่มีทั้งไฟล์บนดิสก์และสำเนาบนคลาวด์เลยที่ต้องแยก error ให้ admin
+    // เห็นสาเหตุจริงทันที ไม่ใช่ 500 เปล่าๆ
+    let restoreInfo;
+    try {
+      restoreInfo = await restoreBackupRow(pool, backup);
+    } catch (restoreErr) {
+      if (restoreErr.code === 'BACKUP_FILE_MISSING') {
+        console.error(`[restore] ไม่พบไฟล์ backup ทั้งบนดิสก์และ Cloudinary: ${backup.backup_path} (id=${id})`);
+        return res.status(410).json({
+          error: `ไม่พบไฟล์ backup บนเซิร์ฟเวอร์และบน Cloudinary (${backup.backup_path}) — ไฟล์อาจถูกลบไปตอน redeploy/restart และไม่มีสำเนาบนคลาวด์ (สร้างก่อนตั้งค่า Cloudinary) กู้คืนจากไฟล์นี้ไม่ได้แล้ว ต้องใช้ backup อันใหม่กว่า`,
+          code: 'BACKUP_FILE_MISSING',
+        });
+      }
+      throw restoreErr;
     }
-
-    // Perform restore
-    await restoreBackup(pool, backup.backup_path);
 
     // Log restore
     await pool.query(
@@ -5161,7 +5167,10 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
       [req.user.id, id]
     );
 
-    res.json({ success: true, message: `Restored from ${backup.filename}` });
+    res.json({
+      success: true,
+      message: `Restored from ${backup.filename}${restoreInfo.source === 'cloud' ? ' (กู้จาก Cloudinary เพราะไฟล์บนดิสก์หายไปแล้ว)' : ''}`,
+    });
   } catch (err) {
     // ⭐️ endpoint นี้ ADMIN เท่านั้น (requireRole('ADMIN')) — โชว์ error จริงได้ปลอดภัย ไม่ใช่ user ทั่วไป
     // เหมือน pattern ที่ใช้ใน /api/reports/export/sales-csv และ /api/reports/executive-export
@@ -5622,6 +5631,7 @@ server.listen(PORT, '0.0.0.0', () => {
               <h2>สำรองข้อมูลประจำวันสำเร็จ</h2>
               <p>ไฟล์: <b>${result.filename}</b></p>
               <p>ขนาด: <b>${result.size} MB</b></p>
+              <p>สำเนาบนคลาวด์: <b>${result.cloudBacked ? '✅ มี (Cloudinary)' : '⚠️ ไม่มี — อยู่บนดิสก์เซิร์ฟเวอร์เท่านั้น'}</b></p>
               <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันตี 2 — DMTC Mart</p>
             </div>`,
           });

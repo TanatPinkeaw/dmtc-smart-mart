@@ -337,6 +337,8 @@ CREATE TABLE `backups` (
   `restored_at` timestamp NULL DEFAULT NULL,
   `restored_by` int DEFAULT NULL,
   `notes` text COLLATE utf8mb4_unicode_ci,
+  `cloud_public_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cloud_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `filename` (`filename`),
   KEY `backup_date` (`backup_date`),

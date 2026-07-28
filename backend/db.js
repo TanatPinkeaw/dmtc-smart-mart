@@ -662,6 +662,23 @@ const initDB = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+    // ⭐️ Update — offsite copy of each backup on Cloudinary (resource_type: raw), so a backup
+    // survives Render's ephemeral disk being wiped on redeploy/restart, before backup_path
+    // (local-disk-only) ever gets touched. See backup.js/cloudinary-config.js for the upload +
+    // signed-download logic; restore now falls back to these columns when backup_path is gone.
+    try {
+      await connection.query(`ALTER TABLE backups ADD COLUMN cloud_public_id VARCHAR(255) DEFAULT NULL`);
+      console.log("🔧 เพิ่มคอลัมน์ backups.cloud_public_id ที่ขาดไปให้แล้ว");
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE backups (cloud_public_id) ล้มเหลว:", err.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE backups ADD COLUMN cloud_url VARCHAR(500) DEFAULT NULL`);
+      console.log("🔧 เพิ่มคอลัมน์ backups.cloud_url ที่ขาดไปให้แล้ว");
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE backups (cloud_url) ล้มเหลว:", err.message);
+    }
+
     // ⭐️ Summary/Payroll feature — hourly wage per staff member, editable by ADMIN in the new
     // summary page. Defaults to 0 so nothing breaks for existing users until ADMIN sets a rate.
     try {
