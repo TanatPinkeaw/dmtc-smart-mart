@@ -3080,7 +3080,7 @@ app.post('/api/members/import', requireRole('ADMIN'), csvUpload.single('file'), 
 // 7. REPORTS & DASHBOARD (ระบบรายงานสรุป)
 // =========================================
 
-app.get('/api/reports/dashboard', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/reports/dashboard', requireRole('CASHIER', 'ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ⭐️ รวมยอดขายหน้าร้าน (sales) กับบิลจากการจองที่ลูกค้ามารับแล้ว (orders สถานะ COMPLETED)
     // นับ orders เข้าวันที่ "มารับจริง" (completed_at) ไม่ใช่วันที่จอง (created_at)
@@ -3123,7 +3123,7 @@ app.get('/api/reports/dashboard', requireRole('CASHIER', 'ADMIN'), async (req, r
   }
 });
 
-app.get('/api/reports/top-selling', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/reports/top-selling', requireRole('CASHIER', 'ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ⭐️ รวมรายการจาก sale_items (ขายหน้าร้าน) กับ order_items (บิลจองที่ COMPLETED แล้ว)
     const [rows] = await pool.query(`
@@ -4018,7 +4018,7 @@ app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req
 
 // ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — เผยระดับสต๊อกภายใน (สินค้าใกล้หมด) ให้ MEMBER
 // เห็นได้ด้วย ทั้งที่เป็นข้อมูลปฏิบัติการภายในร้าน (ใช้เติมสต๊อก) ไม่ใช่ข้อมูลสำหรับลูกค้า
-app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
+app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ดึงสินค้าที่เหลือน้อยกว่าหรือเท่ากับ 10 ชิ้น
     const [rows] = await pool.query('SELECT id, barcode, name, stock FROM products WHERE stock <= 10 AND is_active = TRUE ORDER BY stock ASC');

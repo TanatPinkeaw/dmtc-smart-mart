@@ -75,7 +75,9 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
-  const isAdmin = user.role === 'ADMIN';
+  // ⭐️ MANAGER เห็น Executive Dashboard เหมือน ADMIN ทุกอย่าง (ไม่ใช่การ์ดสรุปกะแบบ CASHIER)
+  const isManagerOrAdmin = user.role === 'ADMIN' || user.role === 'MANAGER';
+  const isCashier = user.role === 'CASHIER';
 
   useEffect(() => {
     // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
@@ -96,7 +98,7 @@ export default function Dashboard() {
     try {
       const [dashRes, topRes] = await Promise.all([api.get('/reports/dashboard'), api.get('/reports/top-selling')]);
       setSummary(dashRes.data.summary); setTopProducts(topRes.data);
-      if (!isAdmin) { setLoading(false); return; }
+      if (!isManagerOrAdmin) { setLoading(false); return; }
       const get = (url: string, setter: (d: any) => void) => api.get(url).then(r => setter(r.data)).catch(() => {});
       await Promise.all([
         get('/inventory/low-stock', setLowStock), get('/reports/void-summary', setVoidSummary),
@@ -115,8 +117,24 @@ export default function Dashboard() {
   // ⭐️ handleLogout เดิมถูกลบทิ้ง — ไม่มีใครเรียกแล้วหลังย้ายปุ่มลงชื่อออกงาน/ปิดกะไป Shift.tsx
   //   (ออกจากระบบใช้ปุ่มใน Layout sidebar/เมนู ซึ่งเรียก performLogout ให้ถูกต้องอยู่แล้ว)
 
-  // ⭐️ F2 — ADMIN อนุมัติปิดกะที่รออนุมัติ (ส่วนต่างเกิน 100 บาท)
+  // ⭐️ F2 — ADMIN/MANAGER อนุมัติปิดกะที่รออนุมัติ (ส่วนต่างเกิน 100 บาท)
+  // 🐛 FIX — เดิมยิง POST /shifts/:id/approve-close (ไม่มี route นี้จริง) ตัว endpoint จริงคือ
+  //   PUT /shifts/:id/approve (server.js) ซึ่งต้องมีทั้ง approval_notes และ password ยืนยันตัวตน
+  //   (ดู pattern เดียวกันใน PendingShiftClosesWidget.tsx ที่ทำงานถูกต้องอยู่แล้ว) — เดิมไม่เคยขอ
+  //   password เลย เลยต้องเพิ่มขั้นตอนนี้เข้ามาด้วย ไม่งั้นแก้แค่ path/method/key จะเปลี่ยนจาก 404 เป็น 400 แทน
   const handleApproveShift = async (shiftId: number) => {
+    const { value: password } = await Swal.fire({
+      title: 'ยืนยันการอนุมัติ',
+      input: 'password',
+      inputPlaceholder: 'ระบุรหัสผ่านของคุณ',
+      showCancelButton: true,
+      confirmButtonText: 'ถัดไป',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: BRAND,
+      inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
+    });
+    if (!password) return;
+
     const { value: notes } = await Swal.fire({
       title: 'อนุมัติปิดกะ',
       input: 'textarea',
@@ -133,7 +151,7 @@ export default function Dashboard() {
     });
     if (!notes) return;
     try {
-      await api.post(`/shifts/${shiftId}/approve-close`, { admin_approval_notes: notes });
+      await api.put(`/shifts/${shiftId}/approve`, { approval_notes: notes, password });
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'อนุมัติปิดกะสำเร็จ', showConfirmButton: false, timer: 2500 });
       setDetailModal(null);
       fetchDashboardData();
@@ -178,8 +196,8 @@ export default function Dashboard() {
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* ⭐️ ปุ่มกลับหน้า POS โชว์เฉพาะ CASHIER — ADMIN เข้าหน้า POS ไม่ได้แล้ว (route ก็กันไว้) */}
-          {!isAdmin && (
+          {/* ⭐️ ปุ่มกลับหน้า POS โชว์เฉพาะ CASHIER — ADMIN/MANAGER เข้าหน้า POS ไม่ได้ (route ก็กันไว้) */}
+          {isCashier && (
             <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-white hover:bg-white/25 bg-white/15 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <ArrowLeft size={14} /> กลับไปหน้า POS
             </button>
@@ -188,14 +206,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ⭐️ Sprint 2 — D1: Pending Shift Closes Widget (for ADMIN) */}
-      {isAdmin && (
+      {/* ⭐️ Sprint 2 — D1: Pending Shift Closes Widget (ADMIN + MANAGER) */}
+      {isManagerOrAdmin && (
         <div className="max-w-7xl mx-auto mb-5">
           <PendingShiftClosesWidget />
         </div>
       )}
 
-      {isAdmin ? (
+      {isManagerOrAdmin ? (
         <AdminDashboardHero
           summary={summary}
           comparison={comparison}
@@ -209,8 +227,8 @@ export default function Dashboard() {
         <StatCards summary={summary} topProducts={topProducts} />
       )}
 
-      {/* ── Admin sections ────────────────────────────────────────────────── */}
-      {isAdmin && (
+      {/* ── Admin/Manager sections ───────────────────────────────────────────── */}
+      {isManagerOrAdmin && (
         <>
           <AlertCardsGrid
             lowStock={lowStock}
