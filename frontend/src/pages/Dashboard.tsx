@@ -80,7 +80,12 @@ export default function Dashboard() {
   useEffect(() => {
     // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
     // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
-    if (localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
+    // 🐛 FIX — เดิมเช็ค session_mode เฉยๆ ไม่ดู role เลย ทำให้ ADMIN/MANAGER ที่เคยกดการ์ด
+    //   "สั่งจอง/ซื้อสินค้า" จากหน้า Home (ตั้ง session_mode เป็น 'shop') แล้วกดลิงก์ "Dashboard" จาก
+    //   เมนูมือถือ จะโดนเด้งกลับไป /pre-order ทันที ทั้งที่มีสิทธิ์เข้า Dashboard เต็มๆ — กติกา
+    //   session_mode เป็นของ CASHIER เท่านั้น (ตรงกับ isStaff ใน Layout.tsx: ADMIN/MANAGER ไม่ถูก
+    //   กรองด้วยสถานะเข้างาน) จึงต้องเช็ค role ก่อนเด้ง
+    if (user.role === 'CASHIER' && localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
     fetchDashboardData();
     if (!socket) return;
     socket.on('dashboard_updated', () => { fetchDashboardData(); });
