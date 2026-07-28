@@ -141,6 +141,7 @@ const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
 const { createBackup, restoreBackupRow } = require('./backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
 const { sendMail } = require('./mailer'); // ⭐️ Phase 4 — backup success/failure notifications
+const { sendLowStockAlert, sendPreOrderReadyNotification } = require('./lineService'); // ⭐️ Day 3 — LINE Messaging API
 const reportsExport = require('./reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
 // ⭐️ Sprint 0 — A4: evaluated once at module load = ตอนที่ process นี้ boot ขึ้นมาจริงๆ
@@ -703,18 +704,23 @@ app.get('/api/version', (req, res) => {
   res.json(BUILD_INFO);
 });
 
-// ⭐️ ตรวจสอบสต๊อกใกล้หมด (เกณฑ์ <=10 ชิ้น ตาม /api/inventory/low-stock) แล้วสร้างแจ้งเตือนระบบ
+// ⭐️ ตรวจสอบสต๊อกใกล้หมด (เกณฑ์ต่อสินค้า products.min_stock — เดิม hardcode <=10 ทุกตัว) แล้วสร้างแจ้งเตือนระบบ
 // แจ้งเฉพาะตอนสต๊อก "ตกลงมาต่ำกว่าเกณฑ์ครั้งแรก" (ข้าม threshold) กันแจ้งซ้ำทุกบิลที่ตัดสต๊อก
-// ⚠️ บันทึก notification ลง DB ภายใน transaction แต่ "ไม่ emit" ตรงนี้ — คืน message กลับไปให้ผู้เรียก emit หลัง commit
-//    (กัน race: ถ้า emit ก่อน commit client จะรีเฟรชแล้วเจอข้อมูลเก่า)
-const LOW_STOCK_THRESHOLD = 10;
+// ⚠️ บันทึก notification ลง DB ภายใน transaction แต่ "ไม่ emit/ส่ง LINE" ตรงนี้ — คืนข้อมูลกลับไปให้
+//    ผู้เรียก emit/ส่งเองหลัง commit (กัน race: ถ้า emit ก่อน commit client จะรีเฟรชแล้วเจอข้อมูลเก่า
+//    และกันส่ง LINE ทั้งที่ transaction ดันถูก rollback ทีหลัง)
+// ⭐️ Day 3 — คืน { message, product } แทนที่จะคืน message เฉยๆ: message สำหรับ socket/in-app
+//    notification เหมือนเดิม, product สำหรับ caller เก็บสะสมแล้วส่งเป็น LINE alert เดียวรวมทุกรายการ
 async function notifyIfLowStock(conn, io, productId, stockBefore, stockAfter) {
-  if (stockBefore > LOW_STOCK_THRESHOLD && stockAfter <= LOW_STOCK_THRESHOLD) {
-    const [rows] = await conn.query('SELECT name FROM products WHERE id = ?', [productId]);
-    const productName = rows[0]?.name || `#${productId}`;
-    const msg = `สินค้า "${productName}" สต๊อกใกล้หมด เหลือ ${stockAfter} ชิ้น`;
+  const [rows] = await conn.query('SELECT name, min_stock FROM products WHERE id = ?', [productId]);
+  const product = rows[0];
+  if (!product) return null;
+  const minStock = Number(product.min_stock) || 10;
+
+  if (stockBefore > minStock && stockAfter <= minStock) {
+    const msg = `สินค้า "${product.name}" สต๊อกใกล้หมด เหลือ ${stockAfter} ชิ้น`;
     await conn.query('INSERT INTO notifications (user_id, message) VALUES (NULL, ?)', [msg]);
-    return msg; // คืน message ให้ผู้เรียกเก็บไว้ emit หลัง commit
+    return { message: msg, product: { name: product.name, stock: stockAfter, min_stock: minStock } };
   }
   return null;
 }
@@ -987,11 +993,11 @@ app.get('/api/products/highlights', async (req, res) => {
 });
 
 app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(productValidator), async (req, res) => {
-  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required } = req.body;
+  const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required, min_stock } = req.body;
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null, is_reward_item ? 1 : 0, points_required || 0]
+      'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required, min_stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null, is_reward_item ? 1 : 0, points_required || 0, (min_stock === undefined || min_stock === null || min_stock === '') ? 10 : min_stock]
     );
     // ⭐️ Task 5 — audit log
     await pool.query(
@@ -1010,7 +1016,7 @@ app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(produ
 });
 
 app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, promo_percent, promo_start, promo_end, is_reward_item, points_required } = req.body;
+  const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, promo_percent, promo_start, promo_end, is_reward_item, points_required, min_stock } = req.body;
   try {
     // ⭐️ Sprint 2: Validate expiry_date if provided
     if (expiry_date && new Date(expiry_date) < new Date()) {
@@ -1018,15 +1024,17 @@ app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) =
     }
 
     // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log (รวม cost เผื่อ client ไม่ส่ง cost มา จะได้ไม่ทับเป็น 0)
-    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, is_reward_item, points_required FROM products WHERE id = ?', [req.params.id]);
+    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, is_reward_item, points_required, min_stock FROM products WHERE id = ?', [req.params.id]);
     const finalCost = (cost === undefined || cost === null || cost === '') ? (oldRows[0]?.cost ?? 0) : cost;
     // ⭐️ reward fields: ถ้า client ไม่ส่งมา คงค่าเดิมไว้ (กันฟอร์มที่ยังไม่อัปเดตทับเป็น 0)
     const finalIsReward = (is_reward_item === undefined) ? (oldRows[0]?.is_reward_item ?? 0) : (is_reward_item ? 1 : 0);
     const finalPointsRequired = (points_required === undefined || points_required === null || points_required === '') ? (oldRows[0]?.points_required ?? 0) : points_required;
+    // ⭐️ Day 3 — เช่นเดียวกับ points_required: ไม่ส่งมา = คงค่าเดิม (เดิม 10 จาก default ตอนสร้าง)
+    const finalMinStock = (min_stock === undefined || min_stock === null || min_stock === '') ? (oldRows[0]?.min_stock ?? 10) : min_stock;
 
     await pool.query(
-      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=?, promo_percent=?, promo_start=?, promo_end=?, is_reward_item=?, points_required=? WHERE id=?',
-      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, finalIsReward, finalPointsRequired, req.params.id]
+      'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=?, promo_percent=?, promo_start=?, promo_end=?, is_reward_item=?, points_required=?, min_stock=? WHERE id=?',
+      [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, finalIsReward, finalPointsRequired, finalMinStock, req.params.id]
     );
 
     await pool.query(
@@ -1942,6 +1950,18 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
       ['CLOSE_SHIFT_PENDING_CLOSE', req.user.id, 'SHIFT', currentShift.id, JSON.stringify({ discrepancy: difference, expected_cash, actual_cash, variance: Math.abs(difference) })]
     );
 
+    // ⭐️ Day 3 — end-of-shift stock sweep: ปิดกะไม่ได้ตัดสต๊อกเอง (ต่างจาก checkout/sync-offline ที่
+    // แจ้งเฉพาะตอน "ข้าม threshold ครั้งแรก") จึงเช็คสต๊อกปัจจุบันทั้งร้านทีเดียวแทน รวมเป็น LINE alert
+    // เดียวถ้ามีของใกล้หมด — เตือนซ้ำได้ทุกครั้งที่ปิดกะแม้ยังไม่มีใครตัดสต๊อกเพิ่มตั้งแต่ครั้งก่อน
+    // ไม่รอ (await) ก่อนตอบ response — cashier ไม่ควรรอ LINE API เพื่อดูผลปิดกะ
+    pool.query('SELECT name, stock, min_stock FROM products WHERE is_active = TRUE AND stock <= min_stock ORDER BY stock ASC')
+      .then(([lowStockRows]) => {
+        if (lowStockRows.length > 0) {
+          sendLowStockAlert(lowStockRows).catch(err => console.error('[LINE] sendLowStockAlert error:', err.message));
+        }
+      })
+      .catch(err => console.error('[shift close] low-stock sweep query failed:', err.message));
+
     res.json({
       message: "ส่งคำขอปิดกะแล้ว รอการอนุมัติจากผู้จัดการ",
       shift_id: currentShift.id,
@@ -2737,6 +2757,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
 
     // 4. บันทึกรายละเอียดสินค้าและตัดสต๊อก
     const lowStockMsgs = [];
+    const lowStockProducts = []; // ⭐️ Day 3 — เก็บไว้ส่ง LINE alert รวมเป็นข้อความเดียวหลัง commit
     const raceConditionItems = []; // ⭐️ Sprint 2 — B7: Collect race condition errors
     for (let item of processedItems) {
       await conn.query('INSERT INTO sale_items (sale_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)', [saleId, item.product_id, item.quantity, item.unit_price, item.subtotal]);
@@ -2748,8 +2769,8 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
         raceConditionItems.push(item.product_id);
       }
 
-      const msg = await notifyIfLowStock(conn, req.io, item.product_id, item.stock_before, item.stock_before - item.quantity);
-      if (msg) lowStockMsgs.push(msg);
+      const lowStock = await notifyIfLowStock(conn, req.io, item.product_id, item.stock_before, item.stock_before - item.quantity);
+      if (lowStock) { lowStockMsgs.push(lowStock.message); lowStockProducts.push(lowStock.product); }
     }
 
     // ⭐️ Sprint 2 — B7: If any race condition detected, return 409
@@ -2797,6 +2818,11 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     req.io.emit('stock_updated', { message: 'มีการตัดสต๊อกสินค้า ให้โหลดข้อมูลใหม่' });
     req.io.emit('dashboard_updated', { message: 'มีบิลขายใหม่' });
     lowStockMsgs.forEach(msg => req.io.emit('notifications_updated', { message: msg }));
+    // ⭐️ Day 3 — LINE alert หลัง commit เท่านั้น (ไม่ยิงถ้า transaction rollback) best-effort ล้วนๆ
+    //   ไม่รอ (await) ให้ยิงเสร็จก่อนตอบ response — ผู้ใช้ไม่ควรรอ LINE API เพื่อดูใบเสร็จ
+    if (lowStockProducts.length > 0) {
+      sendLowStockAlert(lowStockProducts).catch(err => console.error('[LINE] sendLowStockAlert error:', err.message));
+    }
 
     res.json({
       message: "ทำรายการสำเร็จ",
@@ -2854,6 +2880,9 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, val
   const { sales } = req.body;
   const cashierId = req.user.id; // ⭐️ ตัวตนจาก JWT เสมอ ไม่เชื่อ client-sent cashier_id (เหมือน checkout)
   const results = [];
+  // ⭐️ Day 3 — สะสมสินค้าใกล้หมดจากทั้ง batch แล้วส่ง LINE alert รวมเป็นข้อความเดียวตอนจบ (ไม่ใช่
+  //   แยกส่งทีละบิลออฟไลน์ในนั้น กันสแปมกลุ่ม LINE ถ้า batch หนึ่งมีหลายบิล)
+  const allLowStockProducts = [];
 
   for (const offlineSale of sales) {
     const { client_offline_id, payment_method, amount_received, total_amount, items, created_at_offline } = offlineSale;
@@ -2903,6 +2932,7 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, val
           quantity: item.quantity,
           unit_price: item.unit_price,
           subtotal: fromSatang(toSatang(item.unit_price) * item.quantity),
+          stock_before: product.stock,
         });
       }
 
@@ -2928,12 +2958,16 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, val
       );
       const saleId = saleResult.insertId;
 
+      const saleLowStockMsgs = []; // ⭐️ Day 3 — เก็บไว้ emit "หลัง" commit เท่านั้น (กัน race เดียวกับ checkout)
       for (const item of processedItems) {
         await conn.query(
           'INSERT INTO sale_items (sale_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)',
           [saleId, item.product_id, item.quantity, item.unit_price, item.subtotal]
         );
         await conn.query('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.product_id]);
+
+        const lowStock = await notifyIfLowStock(conn, req.io, item.product_id, item.stock_before, item.stock_before - item.quantity);
+        if (lowStock) { saleLowStockMsgs.push(lowStock.message); allLowStockProducts.push(lowStock.product); }
       }
 
       await conn.query(
@@ -2946,6 +2980,7 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, val
 
       req.io.emit('stock_updated', { message: 'มีการตัดสต๊อกสินค้า (ซิงค์บิลออฟไลน์)' });
       req.io.emit('dashboard_updated', { message: 'มีบิลขายใหม่ (ออฟไลน์)' });
+      saleLowStockMsgs.forEach(msg => req.io.emit('notifications_updated', { message: msg }));
 
       results.push({ client_offline_id, success: true, sale_id: saleId });
     } catch (err) {
@@ -2955,6 +2990,12 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, val
     } finally {
       conn.release();
     }
+  }
+
+  // ⭐️ Day 3 — LINE alert เดียวรวมทุกรายการใกล้หมดจากทั้ง batch หลังประมวลผลครบทุกบิลแล้ว
+  //   ไม่รอ (await) ก่อนตอบ response — cashier ไม่ควรรอ LINE API เพื่อดูผล sync
+  if (allLowStockProducts.length > 0) {
+    sendLowStockAlert(allLowStockProducts).catch(err => console.error('[LINE] sendLowStockAlert error:', err.message));
   }
 
   res.json({ results });
@@ -4155,8 +4196,9 @@ app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req
 // เห็นได้ด้วย ทั้งที่เป็นข้อมูลปฏิบัติการภายในร้าน (ใช้เติมสต๊อก) ไม่ใช่ข้อมูลสำหรับลูกค้า
 app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    // ดึงสินค้าที่เหลือน้อยกว่าหรือเท่ากับ 10 ชิ้น
-    const [rows] = await pool.query('SELECT id, barcode, name, stock FROM products WHERE stock <= 10 AND is_active = TRUE ORDER BY stock ASC');
+    // ⭐️ Day 3 — เกณฑ์ต่อสินค้า (products.min_stock) แทน hardcode <=10 ทุกตัว ให้ตรงกับที่ใช้ตัดสินใจ
+    // ส่งแจ้งเตือน LINE (ดู notifyIfLowStock/sendLowStockAlert)
+    const [rows] = await pool.query('SELECT id, barcode, name, stock, min_stock FROM products WHERE stock <= min_stock AND is_active = TRUE ORDER BY stock ASC');
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -4481,8 +4523,10 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
         [orderId, item.product_id, item.quantity, item.price, item.subtotal]
       );
       await conn.query('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.product_id]);
-      const msg = await notifyIfLowStock(conn, req.io, item.product_id, item.stock_before, item.stock_before - item.quantity);
-      if (msg) lowStockMsgs.push(msg);
+      // ⭐️ Day 3 — พรีออเดอร์ไม่ยิง LINE alert (ตาม scope ที่ระบุไว้: checkout/sync-offline/shift-close
+      // เท่านั้น) แค่ดึง .message ออกมาให้ตรง type เดิมของ lowStockMsgs (in-app notification เหมือนเดิม)
+      const lowStock = await notifyIfLowStock(conn, req.io, item.product_id, item.stock_before, item.stock_before - item.quantity);
+      if (lowStock) lowStockMsgs.push(lowStock.message);
     }
 
     // ⭐️ หักแต้มที่แลกใช้ไปทันที (กันแลกแต้มซ้ำ/เกินยอดจริงถ้าลูกค้ามีออเดอร์ค้างหลายใบพร้อมกัน)
@@ -4573,7 +4617,7 @@ app.get('/api/orders', async (req, res) => {
 });
 
 // 4. API จัดการสถานะออเดอร์ (พนักงานกดยืนยัน / ยกเลิก)
-app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   const orderId = req.params.id;
   // ⭐️ F3 (frontend) — รับ notes เป็น alias ของ reject_reason ด้วย เผื่อ frontend ส่งชื่อ field ต่างกันตามบริบท (ตรวจสลิป vs ยกเลิก)
   const { status, reject_reason: rawRejectReason, notes } = req.body;
@@ -4711,6 +4755,26 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER'), async (req, r
     if (statusMsg) req.io.to(`user_${order.user_id}`).emit(`notification_user_${order.user_id}`, { message: statusMsg });
     req.io.to(`user_${order.user_id}`).emit(`order_update_user_${order.user_id}`, { order_id: orderId, status: status });
     req.io.emit('order_status_changed', { order_id: orderId, status: status });
+
+    // ⭐️ Day 3 — พรีออเดอร์พร้อมรับ: แจ้งลูกค้าตรงผ่าน LINE ด้วย (แยกจากแจ้งเตือนในแอปด้านบน ซึ่งลูกค้า
+    // ต้องเปิดแอปถึงจะเห็น) ไม่รอ (await) ก่อนตอบ response — ไม่ควรให้ LINE API ช้าทำให้ staff รอ
+    if (status === 'READY') {
+      pool.query('SELECT line_user_id FROM users WHERE id = ?', [order.user_id])
+        .then(async ([userRows]) => {
+          const lineUserId = userRows[0]?.line_user_id;
+          if (!lineUserId) return; // notifyIfLowStock-style fail-soft: ไม่มีผูกบัญชี LINE ก็ข้ามเงียบๆ
+          const [itemRows] = await pool.query(
+            'SELECT p.name, oi.quantity FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?',
+            [orderId]
+          );
+          await sendPreOrderReadyNotification({
+            id: orderId,
+            line_user_id: lineUserId,
+            items: itemRows.map(r => ({ name: r.name, quantity: r.quantity })),
+          });
+        })
+        .catch(err => console.error('[LINE] sendPreOrderReadyNotification error:', err.message));
+    }
 
     res.json({ message: "อัปเดตสถานะออเดอร์สำเร็จ" });
   } catch (error) {

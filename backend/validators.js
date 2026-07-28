@@ -79,6 +79,8 @@ module.exports = {
     // ⭐️ Part 4 — สินค้าแลกของรางวัล
     is_reward_item: Joi.boolean().optional(),
     points_required: Joi.number().integer().min(0).allow(null).optional(),
+    // ⭐️ Day 3 — เกณฑ์สต๊อกใกล้หมดต่อสินค้า (ใช้ตัดสินใจแจ้งเตือน LINE — ดู lineService.js)
+    min_stock: Joi.number().integer().min(0).allow(null).optional(),
   }),
 
   // POST /api/orders (pre-order) — body: items[], payment_method, slip_image,

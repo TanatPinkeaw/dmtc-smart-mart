@@ -86,5 +86,13 @@ module.exports = {
   ADMIN_EMAIL: process.env.ADMIN_EMAIL || null,
   ENABLE_BACKUP_EMAIL: process.env.ENABLE_BACKUP_EMAIL === 'true',
 
+  // ⭐️ Day 3 — LINE Messaging API (push only, no webhook receiver in this app yet, so
+  // CHANNEL_SECRET isn't used for anything today — read here anyway per spec, kept available
+  // for a future webhook-signature-verification feature). Optional: null = lineService.js logs
+  // instead of sending, same fail-soft pattern as mailer.js/Cloudinary above.
+  LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN || null,
+  LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET || null,
+  LINE_MANAGER_GROUP_ID: process.env.LINE_MANAGER_GROUP_ID || null,
+
   GIT_HASH: process.env.GIT_HASH || 'dev-local',
 };
