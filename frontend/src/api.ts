@@ -31,7 +31,7 @@ let sessionExpired = false;
 export function isSessionExpired() { return sessionExpired; }
 
 // endpoint ที่ยังต้องเรียกได้เสมอ แม้ session ตายแล้ว (ไม่งั้นล็อกอินใหม่ไม่ได้เลย)
-const ALWAYS_ALLOWED_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/csrf-token', '/health', '/version'];
+const ALWAYS_ALLOWED_PATHS = ['/auth/login', '/auth/line-login', '/auth/refresh', '/auth/logout', '/auth/csrf-token', '/health', '/version'];
 
 function forceLogout() {
   if (sessionExpiredHandled) return;
@@ -206,7 +206,7 @@ api.interceptors.response.use(
     // ของเดิมปล่อยให้ตกไปเข้า auto-refresh ด้านล่าง: กรอกรหัสผ่านผิดที่หน้า login → 401 → ไปลอง
     // refresh → 401 อีก → เด้ง Swal "เซสชันหมดอายุ" ใส่หน้า login ทั้งที่ผู้ใช้แค่พิมพ์รหัสผิด
     // (แถมยัง set sessionExpired ทิ้งไว้ด้วย) ปล่อยให้หน้าที่เรียกไป handle error เองดีกว่า
-    const NO_REFRESH_PATHS = ['/auth/login', '/users/register', '/auth/forgot-password', '/auth/reset-password'];
+    const NO_REFRESH_PATHS = ['/auth/login', '/auth/line-login', '/users/register', '/auth/forgot-password', '/auth/reset-password'];
     if (error.response?.status === 401 && NO_REFRESH_PATHS.some(p => (originalRequest?.url || '').startsWith(p))) {
       return Promise.reject(error);
     }

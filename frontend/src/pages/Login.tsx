@@ -8,6 +8,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
+import { getCurrentUser } from '../utils/getCurrentUser';
+import { loadLiffSdk, LIFF_ID, looksLikeLineInApp } from '../utils/liff';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -16,6 +18,11 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // ⭐️ LINE Auto-Login — ถ้าเปิดจากเบราว์เซอร์ในแอป LINE (Rich Menu) จะพยายามล็อกอินอัตโนมัติก่อน
+  //   ระหว่างนั้นโชว์สปินเนอร์แทนฟอร์ม (autoChecking) เพื่อไม่ให้ผู้ใช้เห็นฟอร์มล็อกอินเลย
+  const [autoChecking, setAutoChecking] = useState(looksLikeLineInApp());
+  const [notLinked, setNotLinked] = useState(false);
 
   // ⭐️ F4 — countdown ตอนโดน rate limit (429)
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
@@ -42,6 +49,38 @@ export default function Login() {
   }, [rateLimitCountdown > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isRateLimited = rateLimitCountdown > 0;
+
+  // ⭐️ LINE Auto-Login (LIFF) — รันครั้งเดียวตอนหน้า Login โหลด ถ้าอยู่ในแอป LINE:
+  //   liff.init → เอา userId (+ id_token) → POST /auth/line-login → เก็บ session → เด้งเข้าหน้าที่ตั้งใจ
+  //   โดยผู้ใช้ไม่ต้องเห็นฟอร์มล็อกอินเลย. ผู้ใช้เว็บปกติ (ไม่ใช่ LINE) ข้ามทั้งหมด ไม่โหลด LIFF ไม่หน่วง
+  useEffect(() => {
+    if (!looksLikeLineInApp()) return;
+    if (getCurrentUser()) { navigate('/home', { replace: true }); return; } // มี session อยู่แล้ว
+    let cancelled = false;
+    (async () => {
+      try {
+        const liff = await loadLiffSdk();
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isInClient()) { if (!cancelled) setAutoChecking(false); return; }
+        if (!liff.isLoggedIn()) { liff.login(); return; } // redirect ออกไปขอ login ของ LINE แล้วกลับมาใหม่
+        const profile = await liff.getProfile();
+        const idToken = typeof liff.getIDToken === 'function' ? liff.getIDToken() : null;
+        const res = await api.post('/auth/line-login', { line_user_id: profile.userId, id_token: idToken });
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        setCsrfToken(res.data.csrfToken);
+        window.dispatchEvent(new Event('tokenChanged')); // ให้ SocketContext ต่อ socket ใหม่
+        if (cancelled) return;
+        const dest = res.data.user.role === 'MEMBER' ? '/pre-order' : '/home';
+        navigate(dest, { replace: true });
+      } catch (err: any) {
+        if (cancelled) return;
+        if (err?.response?.status === 404) setNotLinked(true); // บัญชี LINE ยังไม่ผูกกับสมาชิก
+        setAutoChecking(false); // ล้มเหลว/ไม่ใช่ LINE client → โชว์ฟอร์มล็อกอินปกติ
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +109,21 @@ export default function Login() {
     }
   };
 
+  // ⭐️ ระหว่างลองล็อกอินผ่าน LINE อัตโนมัติ — โชว์สปินเนอร์แทนฟอร์ม (ไม่ให้เห็นฟอร์มล็อกอินเลย)
+  if (autoChecking) {
+    return (
+      <div className="min-h-dvh bg-neutral-bg flex flex-col items-center justify-center gap-5 px-5">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center shadow-lg overflow-hidden">
+          <img src="/logo-192.png" alt="DMTC Mart" className="w-full h-full object-contain p-2" />
+        </div>
+        <div className="flex items-center gap-2 text-gray-600 font-medium text-sm">
+          <span className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+          กำลังเข้าสู่ระบบผ่าน LINE...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-neutral-bg flex flex-col items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
@@ -88,6 +142,13 @@ export default function Login() {
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl">
               {error}
+            </div>
+          )}
+
+          {/* ⭐️ บัญชี LINE ยังไม่ผูกกับสมาชิก (จาก auto-login 404) — ชวนไปสมัคร/ผูกบัญชี */}
+          {notLinked && (
+            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-2xl">
+              บัญชี LINE ของคุณยังไม่ได้ผูกกับสมาชิก — <Link to="/register" className="font-bold underline">สมัคร/ผูกบัญชีที่นี่</Link> หรือเข้าสู่ระบบด้านล่าง
             </div>
           )}
 

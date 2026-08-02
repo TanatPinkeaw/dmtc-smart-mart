@@ -1,0 +1,111 @@
+// ⭐️ LINE Auto-Login — POST /api/auth/line-login
+// ผู้ใช้เปิดเว็บผ่าน LINE Rich Menu (LIFF) แล้วล็อกอินให้อัตโนมัติโดยไม่ต้องกรอกรหัสผ่าน
+//
+// ⚠️ ความปลอดภัย: การรับ "line_user_id" ดิบจาก body แล้วออก token ให้เลย = ใครก็ตามที่รู้ userId ของ
+// คนอื่น (แม้จะเดายาก — U + hex 32 ตัว) ก็ปลอมเป็นคนนั้นได้ทันที ทางที่ปลอดภัยจริงคือให้ frontend ส่ง
+// "LIFF ID Token" (JWT ที่ LINE เซ็นให้) มาด้วย แล้ว backend ยืนยันกับ LINE ก่อน (เอา userId จาก token
+// ที่ยืนยันแล้ว ไม่ใช่จากที่ client อ้าง) — endpoint นี้จึง "เลือกทางที่ปลอดภัยกว่าเสมอถ้าทำได้":
+//   • ถ้าตั้ง env LINE_LIFF_CHANNEL_ID ไว้ และ frontend ส่ง id_token มา → ยืนยัน token กับ LINE เอา
+//     userId จากผลที่ยืนยันแล้วเท่านั้น (ปลอดภัย)
+//   • ถ้าไม่ได้ตั้ง (เช่น dev/ยังไม่ config) → fallback ไปเชื่อ line_user_id ดิบตามสเปก (เปิดใช้เฉพาะ
+//     ตอนที่ยอมรับความเสี่ยงนี้) — แนะนำอย่างยิ่งให้ตั้ง LINE_LIFF_CHANNEL_ID บน production
+const pool = require('../config/db');
+const crypto = require('crypto');
+const config = require('../config/config');
+const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
+
+const LINE_VERIFY_URL = 'https://api.line.me/oauth2/v2.1/verify';
+
+// ยืนยัน LIFF ID token กับ LINE — คืน userId (sub) ที่ยืนยันแล้ว หรือ null ถ้ายืนยันไม่ผ่าน
+async function verifyLiffIdToken(idToken) {
+  if (!idToken || !config.LINE_LIFF_CHANNEL_ID) return null;
+  try {
+    const body = new URLSearchParams({ id_token: idToken, client_id: config.LINE_LIFF_CHANNEL_ID });
+    const res = await fetch(LINE_VERIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.warn('[line-login] ยืนยัน LIFF id_token ไม่ผ่าน:', res.status, errText);
+      return null;
+    }
+    const data = await res.json();
+    return data.sub || null; // sub = LINE userId ที่ยืนยันแล้ว
+  } catch (err) {
+    console.error('[line-login] verifyLiffIdToken error:', err.message);
+    return null;
+  }
+}
+
+async function lineLogin(req, res) {
+  const { line_user_id: bodyLineUserId, id_token } = req.body || {};
+
+  // ⭐️ เลือกแหล่ง userId ตามความปลอดภัย: ถ้ามี config ยืนยัน token ได้ ต้องใช้ค่าที่ยืนยันแล้วเท่านั้น
+  let lineUserId = null;
+  if (config.LINE_LIFF_CHANNEL_ID && id_token) {
+    lineUserId = await verifyLiffIdToken(id_token);
+    if (!lineUserId) {
+      return res.status(401).json({ error: 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาลองใหม่' });
+    }
+  } else {
+    // fallback: เชื่อ line_user_id ดิบ (ดูคำเตือนด้านบน)
+    lineUserId = bodyLineUserId;
+  }
+
+  if (!lineUserId || !String(lineUserId).trim()) {
+    return res.status(400).json({ error: 'ไม่พบข้อมูล LINE user id' });
+  }
+
+  try {
+    const [users] = await pool.query(
+      'SELECT * FROM users WHERE line_user_id = ? AND is_active = TRUE LIMIT 1',
+      [lineUserId]
+    );
+    if (users.length === 0) {
+      // "LINE account not linked" — 404 (ไม่ใช่ 401) เพื่อไม่ให้ interceptor ฝั่ง frontend เข้าใจผิด
+      // ว่าเป็น session หมดอายุแล้วไป auto-refresh/force-logout (ดู api.ts)
+      return res.status(404).json({ error: 'บัญชี LINE นี้ยังไม่ได้ผูกกับสมาชิกในระบบ กรุณาสมัคร/ผูกบัญชีก่อน' });
+    }
+
+    const user = users[0];
+
+    // ⭐️ has_active_work_session — คงไว้ให้ response เหมือน /api/auth/login ทุกประการ (staff เท่านั้นที่มีสิทธิ์
+    // มีค่า true; สมาชิก LINE ปกติเป็น MEMBER ได้ false อยู่แล้ว)
+    let hasActiveWorkSession = false;
+    if (user.role === 'ADMIN' || user.role === 'CASHIER') {
+      const [workRows] = await pool.query(
+        `SELECT
+           EXISTS(SELECT 1 FROM shifts WHERE cashier_id = ? AND status = 'OPEN') AS has_open_shift,
+           EXISTS(SELECT 1 FROM attendance WHERE user_id = ?
+                    AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
+                    AND check_out IS NULL) AS has_open_attendance`,
+        [user.id, user.id]
+      );
+      hasActiveWorkSession = !!(workRows[0].has_open_shift || workRows[0].has_open_attendance);
+    }
+
+    // ⭐️ ออก token ชุดเดียวกับ login ปกติ (csrf ฝังใน access token, token ไปเป็น httpOnly cookie,
+    // คืนแค่ csrfToken ทาง body) — reuse authTokens.js ให้ policy ตรงกับ /api/auth/login เป๊ะ
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const accessToken = generateAccessToken(user, csrfToken);
+    const refreshToken = generateRefreshToken(user);
+    setAuthCookies(res, accessToken, refreshToken);
+
+    res.json({
+      message: 'ล็อกอินสำเร็จ',
+      user: {
+        id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role,
+        must_change_password: !!user.must_change_password, profile_image_url: user.profile_image_url || null,
+      },
+      csrfToken,
+      has_active_work_session: hasActiveWorkSession,
+    });
+  } catch (error) {
+    console.error('[500] lineLogin', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+module.exports = { lineLogin };

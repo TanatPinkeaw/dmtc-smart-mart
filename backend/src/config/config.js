@@ -93,6 +93,10 @@ module.exports = {
   LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN || null,
   LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET || null,
   LINE_MANAGER_GROUP_ID: process.env.LINE_MANAGER_GROUP_ID || null,
+  // ⭐️ LINE Login channel id ของ LIFF app (เลขหน้าขีดใน LIFF ID เช่น "2010928001") — ตั้งไว้เพื่อให้
+  // POST /api/auth/line-login ยืนยัน LIFF id_token กับ LINE ได้ (ปลอดภัยกว่าเชื่อ line_user_id ดิบ)
+  // ไม่ตั้ง = line-login จะ fallback ไปเชื่อ line_user_id ดิบ (ดู authController.js)
+  LINE_LIFF_CHANNEL_ID: process.env.LINE_LIFF_CHANNEL_ID || null,
 
   GIT_HASH: process.env.GIT_HASH || 'dev-local',
 };

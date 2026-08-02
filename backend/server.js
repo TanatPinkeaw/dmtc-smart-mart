@@ -496,6 +496,7 @@ const PUBLIC_PATHS = [
   '/api/auth/reset-token',
   '/api/members/check-line', // ⭐️ LINE LIFF — เช็คสถานะสมัครก่อนเปิดฟอร์ม ยังไม่มี token (memberRoutes.js)
   '/api/members/register-line', // ⭐️ LINE LIFF — สมัคร/ผูกบัญชี ยังไม่มี token ตอนเรียก (memberRoutes.js)
+  '/api/auth/line-login',   // ⭐️ LINE LIFF auto-login — เรียกก่อน login ยังไม่มี JWT (authRoutes.js)
   '/api/line/webhook',      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
@@ -632,6 +633,10 @@ app.use('/api/admin/reset', require('./src/routes/adminRoutes'));
 // ⭐️ LINE webhook — ตอบ Rich Menu / ข้อความ + ลงเวลาทำงานผ่าน LINE (src/controllers/lineWebhookController.js)
 // /api/line/webhook อยู่ใน PUBLIC_PATHS แล้ว จึงข้าม JWT/CSRF (กันปลอมด้วย X-Line-Signature แทน)
 app.use('/api/line', require('./src/routes/lineRoutes'));
+// ⭐️ LINE auto-login (LIFF) — POST /api/auth/line-login (src/controllers/authController.js)
+// /api/auth/line-login อยู่ใน PUBLIC_PATHS แล้ว; endpoint /api/auth/* อื่นๆ ยังนิยามตรงใน server.js
+// (router นี้ match เฉพาะ /line-login จึงไม่ชนกับ /login, /refresh, /logout ฯลฯ ที่ประกาศไว้ด้านล่าง)
+app.use('/api/auth', require('./src/routes/authRoutes'));
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
 // ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่
