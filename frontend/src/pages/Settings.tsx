@@ -190,6 +190,15 @@ export default function Settings() {
   const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchCategory.toLowerCase()));
   const filteredSuppliers = suppliers.filter(s => s.name.toLowerCase().includes(searchSupplier.toLowerCase()) || (s.contact_info && s.contact_info.toLowerCase().includes(searchSupplier.toLowerCase())));
   const filteredUsers = users.filter(u => u.full_name.toLowerCase().includes(searchUser.toLowerCase()) || u.username.includes(searchUser) || u.role.toLowerCase().includes(searchUser.toLowerCase()));
+  // ⭐️ MANAGER กับ MEMBER (สมัครผ่าน LINE LIFF ก็ตกมาที่ตารางนี้ด้วย — GET /api/users ไม่กรอง role
+  // อยู่แล้ว) เดิมสีเทาเหมือนกันแยกไม่ออกจากป้ายข้อความล้วน — ให้แต่ละ role มีสีเฉพาะตัวชัดเจน
+  const ROLE_BADGE: Record<string, { card: string; avatar: string; badge: string }> = {
+    ADMIN: { card: 'border-fuchsia-200 bg-fuchsia-50/30', avatar: 'bg-fuchsia-600', badge: 'bg-fuchsia-100 text-fuchsia-600' },
+    MANAGER: { card: 'border-indigo-200 bg-indigo-50/30', avatar: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-600' },
+    CASHIER: { card: 'border-brand-border', avatar: 'bg-brand', badge: 'bg-brand-bg text-brand' },
+    MEMBER: { card: 'border-sky-200 bg-sky-50/30', avatar: 'bg-sky-500', badge: 'bg-sky-100 text-sky-600' },
+  };
+  const roleStyle = (role: string) => ROLE_BADGE[role] || { card: 'border-brand-border', avatar: 'bg-gray-400', badge: 'bg-gray-100 text-gray-500' };
   const filteredPromotions = promotions.filter(p => p.name.toLowerCase().includes(searchPromotion.toLowerCase()));
   const filteredVendors = vendors.filter(v => v.full_name.toLowerCase().includes(vendorSearch.toLowerCase()) || v.username.includes(vendorSearch));
 
@@ -609,10 +618,12 @@ export default function Settings() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredUsers.map(u => (
-                  <div key={u.id} className={`bg-white p-4 md:p-5 rounded-3xl shadow-sm border flex flex-col group relative ${u.role === 'ADMIN' ? 'border-fuchsia-200 bg-fuchsia-50/30' : 'border-brand-border'}`}>
+                {filteredUsers.map(u => {
+                  const rs = roleStyle(u.role);
+                  return (
+                  <div key={u.id} className={`bg-white p-4 md:p-5 rounded-3xl shadow-sm border flex flex-col group relative ${rs.card}`}>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-white shadow-inner text-lg ${u.role === 'ADMIN' ? 'bg-fuchsia-600' : u.role === 'CASHIER' ? 'bg-brand' : 'bg-gray-400'}`}>
+                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-white shadow-inner text-lg ${rs.avatar}`}>
                         {u.full_name.charAt(0)}
                       </div>
                       <div>
@@ -621,7 +632,7 @@ export default function Settings() {
                       </div>
                     </div>
                     <div className="flex justify-between items-end mt-auto">
-                      <span className={`px-2 py-1 rounded-md text-[10px] md:text-xs font-bold ${u.role === 'ADMIN' ? 'bg-fuchsia-100 text-fuchsia-600' : u.role === 'CASHIER' ? 'bg-brand-bg text-brand' : 'bg-gray-100 text-gray-500'}`}>{u.role}</span>
+                      <span className={`px-2 py-1 rounded-md text-[10px] md:text-xs font-bold ${rs.badge}`}>{u.role}</span>
                     </div>
 
                     {/* ⭐️ ปุ่ม Edit และ Delete คู่กัน */}
@@ -634,7 +645,8 @@ export default function Settings() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

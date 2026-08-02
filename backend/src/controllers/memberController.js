@@ -10,6 +10,7 @@ const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
+const { pushLineMessage } = require('../services/lineService');
 
 // ⭐️ ฟิลด์ผู้ใช้ที่ปลอดภัยจะส่งกลับไปหน้าบ้าน (ไม่มี password/password_hash)
 function toSafeUser(row) {
@@ -137,6 +138,14 @@ async function registerViaLine(req, res) {
     );
 
     await conn.commit();
+
+    // ⭐️ ข้อความยืนยันหลังสมัคร/ผูกบัญชีสำเร็จ — ยิงหลัง commit เสมอ (transaction ปิดไปแล้ว) และ
+    // ไม่ await/ไม่ throw เข้า response หลัก: ส่ง LINE ไม่ออก (เช่น token หมดอายุ/เน็ตล่ม) ต้องไม่ทำให้
+    // การสมัครสมาชิกที่สำเร็จแล้วจริงๆ กลายเป็น error response — pushLineMessage เองก็ fail-soft
+    // อยู่แล้ว (คืน false ไม่ throw) แต่กัน unhandled rejection ไว้อีกชั้นด้วย .catch เผื่ออนาคต
+    pushLineMessage(line_user_id, [
+      { type: 'text', text: '🎉 ลงทะเบียนสมาชิก DMTC Smart Mart เรียบร้อยแล้ว! สามารถเช็กบัตรสมาชิกและแต้มสะสมผ่านเมนูได้เลยครับ' },
+    ]).catch(err => console.error('[LINE] ส่งข้อความยืนยันสมัครสมาชิกไม่สำเร็จ:', err.message));
 
     // ⭐️ Deviation จาก spec เดิม (ที่ขอ field "token" ตรงๆ ใน response body) — ระบบนี้ห้ามส่ง raw JWT
     // ออกทาง response body เด็ดขาด (ป้องกัน XSS ขโมย token) ทุก endpoint ที่ login สำเร็จ ใช้ pattern
