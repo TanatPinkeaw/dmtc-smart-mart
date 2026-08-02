@@ -25,7 +25,14 @@ async function logAdminReset(action, adminId, details) {
 // POST /api/admin/reset/unlink-line — ปลดผูก LINE ของสมาชิก (MEMBER) เท่านั้น เอาไว้เทสต์ flow
 // สมัคร/ผูกบัญชีซ้ำได้เรื่อยๆ — ไม่แตะ line_user_id ของ CASHIER/MANAGER/ADMIN
 async function unlinkAllLine(req, res) {
-  if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
+  // ⭐️ ต้องส่ง field "error" (ไม่ใช่ "message") — getErrorMessage() ฝั่ง frontend (utils/errorMessage.ts)
+  // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
+  // ทั่วไปที่ไม่บอกสาเหตุจริง ทำให้ดูเหมือนปุ่มกดแล้วไม่มีอะไรเกิดขึ้น
+  if (!isResetAllowed()) {
+    return res.status(404).json({
+      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
+    });
+  }
   try {
     const [result] = await pool.query("UPDATE users SET line_user_id = NULL WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_UNLINK_LINE', req.user.id, { affected: result.affectedRows });
@@ -37,14 +44,30 @@ async function unlinkAllLine(req, res) {
 }
 
 // POST /api/admin/reset/members — ลบ user ทุกคนที่ role=MEMBER ถาวร (กู้คืนไม่ได้)
-// ⭐️ ลบ point_transactions ของสมาชิกก่อน (กัน FK constraint บล็อกตอนลบ users) อยู่ใน transaction
-// เดียวกับการลบ users เอง — กันเคสลบ ledger ทิ้งไปแล้วแต่ลบ user ไม่สำเร็จ (โดน FK อื่น เช่น sales/orders บล็อก)
+// ⭐️ audit_logs มี FK ผูกกับ users.id แบบไม่มี ON DELETE — และสมาชิกทุกคนที่สมัครผ่าน LINE จะมีแถว
+// audit_logs (action=MEMBER_REGISTER_LINE) ติดตัวมาด้วยเสมอ (ดู memberController.js registerViaLine)
+// เท่ากับ DELETE users ตรงๆ พังทุกครั้งแน่นอน 100% ไม่ใช่แค่บางเคส — ต้องล้าง audit_logs ก่อนด้วย
+// เช่นเดียวกับ point_transactions/revoked_tokens/notifications/promotion_usages ที่เป็นแค่ log/ประวัติ
+// ภายในของสมาชิก ไม่มีมูลค่าทางธุรกิจอิสระเมื่อตัวสมาชิกถูกลบไปแล้ว จึงลบตามได้อย่างปลอดภัย
+// (ตรงข้ามกับ sales/orders ที่เป็นประวัติการขาย/ออเดอร์จริง — ปล่อยให้ชน FK แล้วแจ้ง 409 แทน ไม่ลบทิ้ง)
+// ทั้งหมดอยู่ใน transaction เดียวกับการลบ users เอง กันเคสลบ log ทิ้งไปแล้วแต่ลบ user ไม่สำเร็จ
 async function resetMembers(req, res) {
-  if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
+  // ⭐️ ต้องส่ง field "error" (ไม่ใช่ "message") — getErrorMessage() ฝั่ง frontend (utils/errorMessage.ts)
+  // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
+  // ทั่วไปที่ไม่บอกสาเหตุจริง ทำให้ดูเหมือนปุ่มกดแล้วไม่มีอะไรเกิดขึ้น
+  if (!isResetAllowed()) {
+    return res.status(404).json({
+      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
+    });
+  }
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     await conn.query("DELETE FROM point_transactions WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("DELETE FROM audit_logs WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("DELETE FROM revoked_tokens WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("DELETE FROM promotion_usages WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     const [result] = await conn.query("DELETE FROM users WHERE role = 'MEMBER'");
     await conn.commit();
     await logAdminReset('ADMIN_RESET_MEMBERS', req.user.id, { affected: result.affectedRows });
@@ -67,7 +90,14 @@ async function resetMembers(req, res) {
 // POST /api/admin/reset/member-points — รีเซ็ตแต้มสะสมของสมาชิก (MEMBER) เป็น 0 เท่านั้น
 // ไม่แตะแต้ม/ยอดของ CASHIER/MANAGER/ADMIN
 async function resetMemberPoints(req, res) {
-  if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
+  // ⭐️ ต้องส่ง field "error" (ไม่ใช่ "message") — getErrorMessage() ฝั่ง frontend (utils/errorMessage.ts)
+  // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
+  // ทั่วไปที่ไม่บอกสาเหตุจริง ทำให้ดูเหมือนปุ่มกดแล้วไม่มีอะไรเกิดขึ้น
+  if (!isResetAllowed()) {
+    return res.status(404).json({
+      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
+    });
+  }
   try {
     const [result] = await pool.query("UPDATE users SET points = 0 WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_MEMBER_POINTS', req.user.id, { affected: result.affectedRows });
