@@ -49,8 +49,11 @@ async function unlinkAllLine(req, res) {
 // เท่ากับ DELETE users ตรงๆ พังทุกครั้งแน่นอน 100% ไม่ใช่แค่บางเคส — ต้องล้าง audit_logs ก่อนด้วย
 // เช่นเดียวกับ point_transactions/revoked_tokens/notifications/promotion_usages ที่เป็นแค่ log/ประวัติ
 // ภายในของสมาชิก ไม่มีมูลค่าทางธุรกิจอิสระเมื่อตัวสมาชิกถูกลบไปแล้ว จึงลบตามได้อย่างปลอดภัย
-// (ตรงข้ามกับ sales/orders ที่เป็นประวัติการขาย/ออเดอร์จริง — ปล่อยให้ชน FK แล้วแจ้ง 409 แทน ไม่ลบทิ้ง)
-// ทั้งหมดอยู่ใน transaction เดียวกับการลบ users เอง กันเคสลบ log ทิ้งไปแล้วแต่ลบ user ไม่สำเร็จ
+// ⭐️ sales.member_id / orders.user_id เป็นประวัติการขาย/ออเดอร์จริง — "ตัดสาย" ด้วยการ SET NULL แทน
+// การลบทิ้ง (เหมือน products.vendor_id ON DELETE SET NULL ที่มีอยู่แล้ว) ยอดขาย/ออเดอร์เดิมยังอยู่ครบ
+// แค่ไม่มีสมาชิกผูกอยู่แล้ว (กลายเป็นเหมือนขายแบบไม่ระบุตัวลูกค้า) — ตัดสินใจร่วมกับผู้ใช้แล้วว่าจะไม่ลบ
+// ยอดขาย/ออเดอร์จริงทิ้งเด็ดขาด เพราะกระทบข้อมูลบัญชี/รายงานย้อนหลัง
+// ทั้งหมดอยู่ใน transaction เดียวกับการลบ users เอง กันเคสลบ/ตัดสายไปแล้วแต่ลบ user ไม่สำเร็จ
 async function resetMembers(req, res) {
   // ⭐️ ต้องส่ง field "error" (ไม่ใช่ "message") — getErrorMessage() ฝั่ง frontend (utils/errorMessage.ts)
   // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
@@ -68,16 +71,19 @@ async function resetMembers(req, res) {
     await conn.query("DELETE FROM revoked_tokens WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     await conn.query("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     await conn.query("DELETE FROM promotion_usages WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("UPDATE sales SET member_id = NULL WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("UPDATE orders SET user_id = NULL WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     const [result] = await conn.query("DELETE FROM users WHERE role = 'MEMBER'");
     await conn.commit();
     await logAdminReset('ADMIN_RESET_MEMBERS', req.user.id, { affected: result.affectedRows });
     res.json({ success: true, message: `ลบสมาชิก MEMBER แล้ว ${result.affectedRows} คน`, affected: result.affectedRows });
   } catch (error) {
     await conn.rollback();
-    // ⭐️ FK constraint อื่นที่เหลือ (sales.member_id, orders ฯลฯ ผูก FK ไว้กับ users) แจ้งชัดเจนแทนที่จะ 500 เฉยๆ
+    // ⭐️ FK constraint อื่นที่เหลือ (เช่น shifts/schedules/attendance ถ้าสมาชิกดันมี role เดิมเป็น staff
+    // มาก่อน) แจ้งชัดเจนแทนที่จะ 500 เฉยๆ
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
       return res.status(409).json({
-        error: 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีประวัติการขาย/ออเดอร์ผูกอยู่ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)',
+        error: 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีข้อมูลอ้างอิงอื่นที่ระบบยังจัดการอัตโนมัติไม่ได้ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)',
       });
     }
     console.error('[500] resetMembers', error.message);
