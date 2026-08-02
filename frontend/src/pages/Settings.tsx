@@ -289,7 +289,10 @@ export default function Settings() {
 
   const handleDeleteCategory = async (id: number) => { const res = await Swal.fire({ title: 'ลบหมวดหมู่นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/categories/${id}`); fetchCategories(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
   const handleDeleteProduct = async (id: number) => { const res = await Swal.fire({ title: 'ลบสินค้านี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/products/${id}`); fetchProducts(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
-  const handleDeleteUser = async (id: number) => { const res = await Swal.fire({ title: 'ลบพนักงานคนนี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/users/${id}`); fetchUsers(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+  // ⭐️ ปุ่มลบราย user เป็น soft-delete (backend UPDATE is_active=FALSE ไม่ได้ลบจริง กันบิลเก่าพัง) —
+  // ตั้งแต่เอา filter is_active ออก การ์ดจะไม่หายไปหลังกด ต้องบอกให้ชัดว่านี่คือ "ระงับการใช้งาน"
+  // (การ์ดจะกลายเป็นสีเทา + badge ระงับแล้ว) ไม่ใช่ลบทิ้งถาวร
+  const handleDeleteUser = async (id: number) => { const res = await Swal.fire({ title: 'ระงับการใช้งานพนักงานคนนี้?', text: 'บัญชีจะถูกปิดการใช้งาน (ไม่ได้ลบถาวร) — ประวัติบิล/ยอดขายเดิมยังอยู่ครบ', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ระงับการใช้งาน', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/users/${id}`); Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ระงับการใช้งานแล้ว', showConfirmButton: false, timer: 2000 }); fetchUsers(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
 
   // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — ยิงไป /api/admin/reset/* (backend บล็อกบน production เอง
   // ในตัว controller อยู่แล้ว ไม่ต้องเช็ค IS_PRODUCTION ฝั่งนี้ซ้ำ) confirm ก่อนทุกครั้งเพราะกู้คืนไม่ได้
@@ -694,10 +697,12 @@ export default function Settings() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredUsers.map(u => {
                   const rs = roleStyle(u.role);
+                  // ⭐️ soft-deleted (is_active=0) — เทาการ์ดทั้งใบ + badge ระงับแล้ว ให้เห็นชัดว่าถูกระงับ ไม่ใช่หาย
+                  const inactive = u.is_active === 0 || u.is_active === false;
                   return (
-                  <div key={u.id} className={`bg-white p-4 md:p-5 rounded-3xl shadow-sm border flex flex-col group relative ${rs.card}`}>
+                  <div key={u.id} className={`bg-white p-4 md:p-5 rounded-3xl shadow-sm border flex flex-col group relative ${rs.card} ${inactive ? 'opacity-60 grayscale' : ''}`}>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-white shadow-inner text-lg relative ${rs.avatar}`}>
+                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-white shadow-inner text-lg relative ${inactive ? 'bg-gray-400' : rs.avatar}`}>
                         {u.full_name.charAt(0)}
                         {u.line_user_id && (
                           <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#06C755] border-2 border-white flex items-center justify-center" title="ผูกบัญชี LINE แล้ว">
@@ -711,7 +716,10 @@ export default function Settings() {
                       </div>
                     </div>
                     <div className="flex justify-between items-end mt-auto">
-                      <span className={`px-2 py-1 rounded-md text-[10px] md:text-xs font-bold ${rs.badge}`}>{u.role}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-1 rounded-md text-[10px] md:text-xs font-bold ${rs.badge}`}>{u.role}</span>
+                        {inactive && <span className="px-2 py-1 rounded-md text-[10px] md:text-xs font-bold bg-gray-200 text-gray-500">ระงับแล้ว</span>}
+                      </div>
                       <span className="text-xs md:text-sm font-bold text-brand">{Number(u.points || 0).toLocaleString()} แต้ม</span>
                     </div>
 
