@@ -145,6 +145,9 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} /> {/* ⭐️ F1 */}
         <Route path="/reset-password" element={<ResetPassword />} /> {/* ⭐️ F1 */}
         <Route path="/register" element={<Register />} /> {/* ⭐️ LINE LIFF endpoint URL — สมัคร/ผูกบัญชี ไม่มี auth guard เพราะเปิดก่อน login เข้าแอปนี้เสมอ */}
+        {/* ⭐️ alias — LINE Rich Menu รุ่นเดิมที่ deploy ไปแล้วชี้มาที่ /preorder (ไม่มีขีด) แต่ route จริงคือ
+            /pre-order ทำให้กดปุ่มจาก LINE แล้วเจอหน้าว่าง redirect ให้อัตโนมัติ กันต้อง re-run richmenu setup */}
+        <Route path="/preorder" element={<Navigate to="/pre-order" replace />} />
 
         {/* ⭐️ Sprint 0 — A1: หน้าแรกแยกตาม role แล้ว (ดู DefaultRoute ด้านบน) */}
         <Route path="/" element={<DefaultRoute />} />

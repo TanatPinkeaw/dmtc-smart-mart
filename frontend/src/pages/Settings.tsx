@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound, RotateCcw, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 import { useSocket } from '../SocketContext';
@@ -293,6 +293,41 @@ export default function Settings() {
   // ตั้งแต่เอา filter is_active ออก การ์ดจะไม่หายไปหลังกด ต้องบอกให้ชัดว่านี่คือ "ระงับการใช้งาน"
   // (การ์ดจะกลายเป็นสีเทา + badge ระงับแล้ว) ไม่ใช่ลบทิ้งถาวร
   const handleDeleteUser = async (id: number) => { const res = await Swal.fire({ title: 'ระงับการใช้งานพนักงานคนนี้?', text: 'บัญชีจะถูกปิดการใช้งาน (ไม่ได้ลบถาวร) — ประวัติบิล/ยอดขายเดิมยังอยู่ครบ', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ระงับการใช้งาน', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/users/${id}`); Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ระงับการใช้งานแล้ว', showConfirmButton: false, timer: 2000 }); fetchUsers(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+
+  // ⭐️ ปลดระงับ (unsuspend) — คืน is_active ให้ user ที่เคยถูกระงับ
+  const handleReactivateUser = async (id: number) => {
+    try {
+      await api.put(`/users/${id}/reactivate`);
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ปลดระงับแล้ว', showConfirmButton: false, timer: 2000 });
+      fetchUsers();
+    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+  };
+
+  // ⭐️ Hard delete ราย user — ลบถาวรจริง ใช้ FK-cleanup เดียวกับ bulk delete ฝั่ง backend ถ้ามีประวัติ
+  // การทำงาน staff จะตอบ needsConfirmation กลับมา ต้องเปิด popup ถามก่อนยิงซ้ำพร้อม deleteWorkHistory
+  const handleHardDeleteUser = async (id: number, name: string) => {
+    const confirm = await Swal.fire({
+      title: 'ลบบัญชีนี้ถาวร?', html: `<b>${name}</b><br/>ลบถาวร กู้คืนไม่ได้ — ประวัติการขาย/ออเดอร์เดิมจะถูกตัดสาย (ไม่ผูกกับบัญชีนี้แล้ว) แต่ยังอยู่ในระบบ`, icon: 'warning',
+      showCancelButton: true, confirmButtonColor: '#dc2626', cancelButtonColor: '#9ca3af',
+      confirmButtonText: 'ลบถาวร', cancelButtonText: 'ยกเลิก',
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      let r = await api.delete(`/users/${id}/permanent`);
+      if (r.data?.needsConfirmation) {
+        const choice = await Swal.fire({
+          title: 'ผู้ใช้นี้มีประวัติการทำงาน',
+          html: 'บัญชีนี้เคยเป็นพนักงานและมีประวัติการทำงาน (เข้า-ออกงาน/กะ/ตารางเวร) ติดอยู่<br/><br/>ต้องการลบประวัติการทำงานทิ้งไปด้วยเพื่อลบบัญชีถาวรหรือไม่?',
+          icon: 'question', showCancelButton: true,
+          confirmButtonText: 'ลบทั้งหมด (รวมประวัติการทำงาน)', confirmButtonColor: '#dc2626', cancelButtonText: 'ยกเลิก',
+        });
+        if (!choice.isConfirmed) return;
+        r = await api.delete(`/users/${id}/permanent`, { data: { deleteWorkHistory: true } });
+      }
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ลบบัญชีถาวรแล้ว', showConfirmButton: false, timer: 2500 });
+      fetchUsers();
+    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) }); }
+  };
 
   // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — ยิงไป /api/admin/reset/* (backend บล็อกบน production เอง
   // ในตัว controller อยู่แล้ว ไม่ต้องเช็ค IS_PRODUCTION ฝั่งนี้ซ้ำ) confirm ก่อนทุกครั้งเพราะกู้คืนไม่ได้
@@ -723,14 +758,25 @@ export default function Settings() {
                       <span className="text-xs md:text-sm font-bold text-brand">{Number(u.points || 0).toLocaleString()} แต้ม</span>
                     </div>
 
-                    {/* ⭐️ ปุ่ม Edit และ Delete คู่กัน */}
+                    {/* ⭐️ ปุ่มจัดการ — active: แก้ไข + ระงับ | inactive: ปลดระงับ + ลบถาวร */}
                     <div className="absolute top-3 right-3 flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition bg-white p-1 rounded-lg shadow-sm border border-brand-border md:border-0 md:shadow-none">
                       <button onClick={() => { setEditingUser(u); setActiveModal('EDIT_USER'); }} className="text-brand-mid hover:text-brand-dark hover:bg-brand-bg p-1.5 rounded-md transition" title="✏️ แก้ไข">
                         <Edit size={16} />
                       </button>
-                      <button onClick={() => handleDeleteUser(u.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition" title="ลบพนักงาน">
-                        <Trash2 size={16} />
-                      </button>
+                      {inactive ? (
+                        <>
+                          <button onClick={() => handleReactivateUser(u.id)} className="text-green-500 hover:text-green-700 hover:bg-green-50 p-1.5 rounded-md transition" title="ปลดระงับ">
+                            <UserCheck size={16} />
+                          </button>
+                          <button onClick={() => handleHardDeleteUser(u.id, u.full_name)} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-md transition" title="ลบบัญชีถาวร">
+                            <UserX size={16} />
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => handleDeleteUser(u.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition" title="ระงับการใช้งาน">
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   );

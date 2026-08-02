@@ -14,6 +14,7 @@ const path = require('path');
 const config = require('../config/config');
 
 const LINE_PUSH_URL = 'https://api.line.me/v2/bot/message/push';
+const LINE_REPLY_URL = 'https://api.line.me/v2/bot/message/reply';
 // ⭐️ Rich Menu — สร้าง/ตั้งค่าเมนูใช้ api.line.me ปกติ แต่ "อัปโหลดรูปกราฟิก" ต้องยิงไปคนละโดเมน
 // (api-data.line.me) ตามที่ LINE Messaging API กำหนดไว้ — พลาดจุดนี้จุดเดียวจะได้ 404 งงๆ
 const LINE_RICHMENU_URL = 'https://api.line.me/v2/bot/richmenu';
@@ -60,6 +61,39 @@ async function pushLineMessage(to, messages) {
     return true;
   } catch (err) {
     console.error('❌ ส่ง LINE message ล้มเหลว (network):', err.message);
+    return false;
+  }
+}
+
+// ⭐️ Reply message — ตอบกลับ event จาก webhook ด้วย replyToken (ต่างจาก push ตรงที่ไม่คิดโควตา
+// message และตอบได้เฉพาะภายใน ~30 วิหลังรับ event) ใช้กับ Rich Menu / ข้อความที่ผู้ใช้พิมพ์เข้ามา
+// fail-soft เหมือน pushLineMessage — ไม่ throw, คืน true/false
+async function replyLineMessage(replyToken, messages) {
+  if (!LINE_ENABLED) {
+    console.log(`💬 [DEV/ไม่มี LINE token] จะตอบกลับ (reply) ด้วย:`, JSON.stringify(messages));
+    return false;
+  }
+  if (!replyToken) {
+    console.warn('⚠️ LINE reply: ไม่มี replyToken — ข้าม');
+    return false;
+  }
+  try {
+    const res = await fetch(LINE_REPLY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.LINE_CHANNEL_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({ replyToken, messages }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.error(`❌ ตอบกลับ LINE (reply) ล้มเหลว: ${res.status} ${res.statusText} — ${errBody}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('❌ ตอบกลับ LINE (reply) ล้มเหลว (network):', err.message);
     return false;
   }
 }
@@ -179,6 +213,6 @@ async function createAndSetDefaultRichMenu(imagePath, richMenuConfig) {
 }
 
 module.exports = {
-  pushLineMessage, sendLowStockAlert, sendPreOrderReadyNotification,
+  pushLineMessage, replyLineMessage, sendLowStockAlert, sendPreOrderReadyNotification,
   createAndSetDefaultRichMenu, LINE_ENABLED,
 };

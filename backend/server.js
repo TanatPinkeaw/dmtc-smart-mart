@@ -449,7 +449,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
-app.use(express.json());
+// ⭐️ verify hook เก็บ raw body ไว้ที่ req.rawBody — จำเป็นสำหรับตรวจ LINE webhook signature
+// (HMAC ต้องคำนวณจาก bytes ดิบก่อน parse เป็น JSON) ไม่กระทบ route อื่นที่ใช้ req.body ปกติ
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 // ⭐️ Security remediation — เติม req.cookies ให้เหมือน cookie-parser (parseCookies ประกาศไว้ข้างบน)
 app.use((req, res, next) => {
@@ -494,6 +496,7 @@ const PUBLIC_PATHS = [
   '/api/auth/reset-token',
   '/api/members/check-line', // ⭐️ LINE LIFF — เช็คสถานะสมัครก่อนเปิดฟอร์ม ยังไม่มี token (memberRoutes.js)
   '/api/members/register-line', // ⭐️ LINE LIFF — สมัคร/ผูกบัญชี ยังไม่มี token ตอนเรียก (memberRoutes.js)
+  '/api/line/webhook',      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
@@ -626,6 +629,9 @@ app.use(requireCsrf);
 app.use('/api/members', require('./src/routes/memberRoutes'));
 // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — บล็อกบน production ในตัว controller เอง (src/controllers/adminController.js)
 app.use('/api/admin/reset', require('./src/routes/adminRoutes'));
+// ⭐️ LINE webhook — ตอบ Rich Menu / ข้อความ + ลงเวลาทำงานผ่าน LINE (src/controllers/lineWebhookController.js)
+// /api/line/webhook อยู่ใน PUBLIC_PATHS แล้ว จึงข้าม JWT/CSRF (กันปลอมด้วย X-Line-Signature แทน)
+app.use('/api/line', require('./src/routes/lineRoutes'));
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
 // ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่
@@ -1703,6 +1709,76 @@ app.delete('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     console.error('[500]', error.message);
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ ปลดระงับ (unsuspend) — คืนสถานะ is_active=TRUE ให้ user ที่เคยถูก soft-delete
+app.put('/api/users/:id/reactivate', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [result] = await pool.query('UPDATE users SET is_active = TRUE WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['REACTIVATE_USER', req.user.id, 'USER', req.params.id, JSON.stringify({ target_user_id: req.params.id })]
+    );
+    res.json({ message: 'ปลดระงับการใช้งานสำเร็จ' });
+  } catch (error) {
+    console.error('[500] reactivate user', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ Hard delete ราย user — ลบถาวรจริง (ไม่ใช่ soft-delete) ใช้ FK-cleanup helper ชุดเดียวกับ
+// bulk resetMembers เป๊ะ (adminController.cleanupUserReferences) ป้องกัน FK constraint พัง
+// เหมือนที่เจอกับ bulk delete: ตัดสาย sales/orders/purchases, ลบ log ภายใน, และ (ถ้ายืนยัน) ลบ
+// ประวัติทำงาน staff. Guard: ห้ามลบตัวเอง และห้ามลบ ADMIN คนสุดท้ายที่ยัง active อยู่
+const { findWorkHistoryBlockers, cleanupUserReferences } = require('./src/controllers/adminController');
+app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'id ไม่ถูกต้อง' });
+  if (targetId === req.user.id) return res.status(400).json({ error: 'ลบบัญชีตัวเองไม่ได้' });
+  const deleteWorkHistory = req.body?.deleteWorkHistory === true;
+
+  const conn = await pool.getConnection();
+  try {
+    const [userRows] = await conn.query('SELECT id, role FROM users WHERE id = ?', [targetId]);
+    if (userRows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+
+    // ⭐️ กันลบ ADMIN คนสุดท้ายทิ้ง = ล็อกตัวเองออกจากระบบถาวร
+    if (userRows[0].role === 'ADMIN') {
+      const [[{ cnt }]] = await conn.query("SELECT COUNT(*) AS cnt FROM users WHERE role = 'ADMIN' AND is_active = TRUE");
+      if (cnt <= 1) return res.status(400).json({ error: 'ลบ ADMIN คนสุดท้ายไม่ได้ — ต้องมีผู้ดูแลระบบเหลืออย่างน้อย 1 คน' });
+    }
+
+    // ⭐️ ประวัติทำงาน staff (attendance/shifts/schedules, NOT NULL) — ถ้ามีและยังไม่ยืนยัน ให้ถามก่อน
+    const blockers = await findWorkHistoryBlockers(conn, [targetId]);
+    if (blockers.length > 0 && !deleteWorkHistory) {
+      return res.json({
+        needsConfirmation: true,
+        blockedMembers: blockers,
+        message: 'ผู้ใช้คนนี้มีประวัติการทำงาน (เข้า-ออกงาน/กะ/ตารางเวร) ติดอยู่ — ยืนยันจะลบประวัติการทำงานทิ้งไปด้วยหรือไม่?',
+      });
+    }
+
+    await conn.beginTransaction();
+    await cleanupUserReferences(conn, [targetId], { deleteWorkHistory });
+    await conn.query('DELETE FROM users WHERE id = ?', [targetId]);
+    await conn.commit();
+
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['HARD_DELETE_USER', req.user.id, 'USER', null, JSON.stringify({ target_user_id: targetId, deleteWorkHistory })]
+    );
+    res.json({ success: true, message: 'ลบบัญชีผู้ใช้ถาวรแล้ว' });
+  } catch (error) {
+    await conn.rollback();
+    console.error('[hardDeleteUser] FK/DB error:', error.code, error.message);
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
+      return res.status(409).json({ error: 'ลบไม่สำเร็จ — ยังมีข้อมูลอ้างอิงที่ระบบจัดการอัตโนมัติไม่ได้', detail: error.message });
+    }
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  } finally {
+    conn.release();
   }
 });
 

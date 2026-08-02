@@ -25,7 +25,7 @@
       "action": {
         "type": "uri",
         "label": "สั่งซื้อล่วงหน้า",
-        "uri": "https://dmtc-smart-mart.vercel.app/preorder"
+        "uri": "https://dmtc-smart-mart.vercel.app/pre-order"
       }
     },
     {

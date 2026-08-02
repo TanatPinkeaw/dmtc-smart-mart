@@ -22,6 +22,51 @@ async function logAdminReset(action, adminId, details) {
   }
 }
 
+// ⭐️ Shared FK-cleanup helpers — ใช้ร่วมกันทั้ง resetMembers (ลบทีละยกทั้ง role=MEMBER) และ hard-delete
+// ราย user (DELETE /api/users/:id/permanent ใน server.js) ให้ลอจิกตัดสาย FK "เหมือนกันเป๊ะ" ตามสเปก
+// ทุกตารางที่ FK ชี้มาที่ users.id แบ่ง 3 กลุ่ม จัดการต่างกัน (ดูรายละเอียดใน resetMembers):
+//   กลุ่ม 1 log/ประวัติภายใน → DELETE, กลุ่ม 2 ขาย/ซื้อจริง (nullable) → SET NULL, กลุ่ม 3 ประวัติทำงาน
+//   staff (NOT NULL) → DELETE เฉพาะเมื่อ deleteWorkHistory=true
+
+// หาสมาชิก/ผู้ใช้ใน userIds ที่ยังมีประวัติการทำงาน staff (attendance/shifts/schedules) ติดอยู่ —
+// ตารางพวกนี้ NOT NULL ตัดสายไม่ได้ ต้องถามก่อนว่าจะลบประวัติทิ้งด้วยไหม คืน [{id, full_name, student_id}]
+async function findWorkHistoryBlockers(conn, userIds) {
+  if (!userIds || userIds.length === 0) return [];
+  const [rows] = await conn.query(
+    `SELECT DISTINCT u.id, u.full_name, u.student_id FROM users u
+     LEFT JOIN attendance a ON a.user_id = u.id
+     LEFT JOIN shifts sh ON sh.cashier_id = u.id
+     LEFT JOIN schedules sc ON sc.cashier_id = u.id
+     WHERE u.id IN (?) AND (a.id IS NOT NULL OR sh.id IS NOT NULL OR sc.id IS NOT NULL)`,
+    [userIds]
+  );
+  return rows;
+}
+
+// ล้าง/ตัดสายทุก FK ที่ชี้มาที่ users.id สำหรับ userIds ที่ให้มา (ไม่รวมการ DELETE FROM users เอง —
+// ให้ผู้เรียกคุมจังหวะลบ user เองหลังเรียกฟังก์ชันนี้) ต้องรันอยู่ใน transaction (conn) ของผู้เรียก
+async function cleanupUserReferences(conn, userIds, { deleteWorkHistory }) {
+  if (!userIds || userIds.length === 0) return;
+  // กลุ่ม 3: ประวัติการทำงาน staff (NOT NULL) — ลบเฉพาะเมื่อผู้ใช้ยืนยันแล้วเท่านั้น
+  if (deleteWorkHistory) {
+    await conn.query('DELETE FROM attendance WHERE user_id IN (?)', [userIds]);
+    await conn.query('DELETE FROM shifts WHERE cashier_id IN (?)', [userIds]);
+    await conn.query('DELETE FROM schedules WHERE cashier_id IN (?)', [userIds]);
+  }
+  // กลุ่ม 1: log/ประวัติภายใน → ลบทิ้งได้เลย
+  await conn.query('DELETE FROM point_transactions WHERE user_id IN (?)', [userIds]);
+  await conn.query('DELETE FROM audit_logs WHERE user_id IN (?)', [userIds]);
+  await conn.query('DELETE FROM revoked_tokens WHERE user_id IN (?)', [userIds]);
+  await conn.query('DELETE FROM notifications WHERE user_id IN (?)', [userIds]);
+  await conn.query('DELETE FROM promotion_usages WHERE member_id IN (?)', [userIds]);
+  await conn.query('DELETE FROM password_resets WHERE user_id IN (?)', [userIds]);
+  // กลุ่ม 2: ประวัติการขาย/ซื้อจริง (nullable) → ตัดสาย SET NULL รักษาเรคคอร์ดไว้
+  await conn.query('UPDATE sales SET member_id = NULL WHERE member_id IN (?)', [userIds]);
+  await conn.query('UPDATE sales SET cashier_id = NULL WHERE cashier_id IN (?)', [userIds]);
+  await conn.query('UPDATE orders SET user_id = NULL WHERE user_id IN (?)', [userIds]);
+  await conn.query('UPDATE purchases SET user_id = NULL WHERE user_id IN (?)', [userIds]);
+}
+
 // POST /api/admin/reset/unlink-line — ปลดผูก LINE ของสมาชิก (MEMBER) เท่านั้น เอาไว้เทสต์ flow
 // สมัคร/ผูกบัญชีซ้ำได้เรื่อยๆ — ไม่แตะ line_user_id ของ CASHIER/MANAGER/ADMIN
 async function unlinkAllLine(req, res) {
@@ -72,15 +117,11 @@ async function resetMembers(req, res) {
   const skipBlocked = req.body?.skipBlocked === true;
   const conn = await pool.getConnection();
   try {
-    // ⭐️ กลุ่ม 3: หาสมาชิกที่มีประวัติทำงาน staff ติดอยู่ (attendance/shifts/schedules) — ตารางพวกนี้
-    // NOT NULL ตัดสายไม่ได้ ต้องถามก่อนว่าจะลบประวัติทิ้งด้วยไหม
-    const [blockedRows] = await conn.query(
-      `SELECT DISTINCT u.id, u.full_name, u.student_id FROM users u
-       LEFT JOIN attendance a ON a.user_id = u.id
-       LEFT JOIN shifts sh ON sh.cashier_id = u.id
-       LEFT JOIN schedules sc ON sc.cashier_id = u.id
-       WHERE u.role = 'MEMBER' AND (a.id IS NOT NULL OR sh.id IS NOT NULL OR sc.id IS NOT NULL)`
-    );
+    // ⭐️ กลุ่ม 3: หาสมาชิกที่มีประวัติทำงาน staff ติดอยู่ (attendance/shifts/schedules) ก่อน — ถ้ามีและ
+    // caller ยังไม่ระบุจะเอาแบบไหน ให้หยุดถามผ่าน popup ก่อน
+    const [memberRows] = await conn.query("SELECT id FROM users WHERE role = 'MEMBER'");
+    const allMemberIds = memberRows.map(r => r.id);
+    const blockedRows = await findWorkHistoryBlockers(conn, allMemberIds);
 
     if (blockedRows.length > 0 && !deleteWorkHistory && !skipBlocked) {
       return res.json({
@@ -92,40 +133,17 @@ async function resetMembers(req, res) {
     }
 
     const blockedIds = blockedRows.map(r => r.id);
-    await conn.beginTransaction();
-
-    let targetSql = "SELECT id FROM users WHERE role = 'MEMBER'";
-    const targetParams = [];
-    if (skipBlocked && blockedIds.length > 0) {
-      targetSql += ' AND id NOT IN (?)';
-      targetParams.push(blockedIds);
-    }
-    const [targetRows] = await conn.query(targetSql, targetParams);
-    const targetIds = targetRows.map(r => r.id);
+    // ถ้าเลือก skip → ตัด blockedIds ออกจากรายชื่อที่จะลบ
+    const targetIds = skipBlocked
+      ? allMemberIds.filter(id => !blockedIds.includes(id))
+      : allMemberIds;
 
     if (targetIds.length === 0) {
-      await conn.commit();
       return res.json({ success: true, message: 'ไม่มีสมาชิกให้ลบ (ทั้งหมดถูกข้ามเพราะมีประวัติการทำงาน)', affected: 0, skipped: blockedIds.length });
     }
 
-    // กลุ่ม 3: ประวัติการทำงาน staff (NOT NULL) — ลบเฉพาะเมื่อผู้ใช้ยืนยันผ่าน popup แล้วเท่านั้น
-    if (deleteWorkHistory) {
-      await conn.query('DELETE FROM attendance WHERE user_id IN (?)', [targetIds]);
-      await conn.query('DELETE FROM shifts WHERE cashier_id IN (?)', [targetIds]);
-      await conn.query('DELETE FROM schedules WHERE cashier_id IN (?)', [targetIds]);
-    }
-    // กลุ่ม 1: log/ประวัติภายใน → ลบทิ้งได้เลย
-    await conn.query('DELETE FROM point_transactions WHERE user_id IN (?)', [targetIds]);
-    await conn.query('DELETE FROM audit_logs WHERE user_id IN (?)', [targetIds]);
-    await conn.query('DELETE FROM revoked_tokens WHERE user_id IN (?)', [targetIds]);
-    await conn.query('DELETE FROM notifications WHERE user_id IN (?)', [targetIds]);
-    await conn.query('DELETE FROM promotion_usages WHERE member_id IN (?)', [targetIds]);
-    await conn.query('DELETE FROM password_resets WHERE user_id IN (?)', [targetIds]);
-    // กลุ่ม 2: ประวัติการขาย/ซื้อจริง (nullable) → ตัดสาย SET NULL รักษาเรคคอร์ดไว้
-    await conn.query('UPDATE sales SET member_id = NULL WHERE member_id IN (?)', [targetIds]);
-    await conn.query('UPDATE sales SET cashier_id = NULL WHERE cashier_id IN (?)', [targetIds]);
-    await conn.query('UPDATE orders SET user_id = NULL WHERE user_id IN (?)', [targetIds]);
-    await conn.query('UPDATE purchases SET user_id = NULL WHERE user_id IN (?)', [targetIds]);
+    await conn.beginTransaction();
+    await cleanupUserReferences(conn, targetIds, { deleteWorkHistory });
     const [result] = await conn.query('DELETE FROM users WHERE id IN (?)', [targetIds]);
     await conn.commit();
 
@@ -177,4 +195,8 @@ async function resetMemberPoints(req, res) {
   }
 }
 
-module.exports = { unlinkAllLine, resetMembers, resetMemberPoints };
+module.exports = {
+  unlinkAllLine, resetMembers, resetMemberPoints,
+  // ⭐️ export helpers ให้ server.js เอาไป reuse ใน DELETE /api/users/:id/permanent (hard-delete ราย user)
+  findWorkHistoryBlockers, cleanupUserReferences,
+};
