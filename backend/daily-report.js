@@ -2,10 +2,10 @@
 // Runs via cron at 6am (server.js, before the shop opens) and mails ADMIN_EMAIL. Also reachable
 // manually via POST /api/reports/daily/send (ADMIN only) for testing without waiting for 6am.
 
-const pool = require('./db');
+const pool = require('./src/config/db');
 const { toSatang, fromSatang } = require('./money');
-const { sendMail } = require('./mailer');
-const { ADMIN_EMAIL } = require('./config');
+const { sendMail } = require('./src/services/mailer');
+const { ADMIN_EMAIL } = require('./src/config/config');
 
 // ⭐️ Sprint 2 — B8: Timezone Constants (Bangkok UTC+7)
 const TZ_BANGKOK = 'Asia/Bangkok';

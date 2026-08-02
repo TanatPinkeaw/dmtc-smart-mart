@@ -9,6 +9,7 @@ import Home from './pages/Home'; // ⭐️ หน้ากลางหลัง 
 import Profile from './pages/Profile'; // ⭐️ บัญชีของฉัน (เดิมเป็น ProfileModal)
 import ForgotPassword from './pages/ForgotPassword'; // ⭐️ F1 — ลืมรหัสผ่าน
 import ResetPassword from './pages/ResetPassword'; // ⭐️ F1 — ตั้งรหัสผ่านใหม่
+import Register from './pages/Register'; // ⭐️ LINE LIFF — หน้าสมัคร/ผูกบัญชีสมาชิกผ่าน LIFF
 import Shift from './pages/Shift';
 import POS from './pages/POS';
 import Dashboard from './pages/Dashboard';
@@ -143,7 +144,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} /> {/* ⭐️ F1 */}
         <Route path="/reset-password" element={<ResetPassword />} /> {/* ⭐️ F1 */}
-        
+        <Route path="/register" element={<Register />} /> {/* ⭐️ LINE LIFF endpoint URL — สมัคร/ผูกบัญชี ไม่มี auth guard เพราะเปิดก่อน login เข้าแอปนี้เสมอ */}
+
         {/* ⭐️ Sprint 0 — A1: หน้าแรกแยกตาม role แล้ว (ดู DefaultRoute ด้านบน) */}
         <Route path="/" element={<DefaultRoute />} />
         {/* ⭐️ หน้ากลางหลัง login — ทุก role (ADMIN/CASHIER/MEMBER) เข้าที่นี่ก่อนเสมอ ไม่มี Sidebar

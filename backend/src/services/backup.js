@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { saveRawFile, fetchRawFile, CLOUDINARY_ENABLED } = require('./cloudinary-config'); // ⭐️ Update — offsite copy so backups survive Render's ephemeral disk
+const { saveRawFile, fetchRawFile, CLOUDINARY_ENABLED } = require('../../cloudinary-config'); // ⭐️ Update — offsite copy so backups survive Render's ephemeral disk (cloudinary-config.js not moved yet)
 
 const TZ_BANGKOK = 'Asia/Bangkok';
 

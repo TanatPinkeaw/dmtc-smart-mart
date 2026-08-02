@@ -1,0 +1,56 @@
+{
+  "size": { "width": 2500, "height": 1686 },
+  "selected": true,
+  "name": "DMTC Smart Mart - Main Menu",
+  "chatBarText": "เมนู",
+  "areas": [
+    {
+      "bounds": { "x": 0, "y": 0, "width": 833, "height": 843 },
+      "action": {
+        "type": "uri",
+        "label": "สมัคร/บัตรสมาชิก",
+        "uri": "https://liff.line.me/2010928001-YxK4Atjv"
+      }
+    },
+    {
+      "bounds": { "x": 833, "y": 0, "width": 833, "height": 843 },
+      "action": {
+        "type": "message",
+        "label": "เช็กยอดปันผล",
+        "text": "เช็กยอดปันผล"
+      }
+    },
+    {
+      "bounds": { "x": 1666, "y": 0, "width": 834, "height": 843 },
+      "action": {
+        "type": "uri",
+        "label": "สั่งซื้อล่วงหน้า",
+        "uri": "https://dmtc-mart.com/preorder"
+      }
+    },
+    {
+      "bounds": { "x": 0, "y": 843, "width": 833, "height": 843 },
+      "action": {
+        "type": "message",
+        "label": "โปรโมชั่น",
+        "text": "ดูโปรโมชั่นวันนี้"
+      }
+    },
+    {
+      "bounds": { "x": 833, "y": 843, "width": 833, "height": 843 },
+      "action": {
+        "type": "message",
+        "label": "ประวัติการซื้อ",
+        "text": "ประวัติการซื้อของฉัน"
+      }
+    },
+    {
+      "bounds": { "x": 1666, "y": 843, "width": 834, "height": 843 },
+      "action": {
+        "type": "message",
+        "label": "ช่วยเหลือ",
+        "text": "ติดต่อเจ้าหน้าที่"
+      }
+    }
+  ]
+}

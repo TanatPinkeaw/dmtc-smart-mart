@@ -126,7 +126,10 @@ export function CartPanel({
             // ลดความรก ยังกดสมัครสมาชิกได้เหมือนเดิม (ระบบมีจุดสมัครจุดเดียว ไม่ได้ตัดฟีเจอร์)
             <form onSubmit={onSearchMember} className="flex gap-2">
               <div className="relative flex-1 min-w-0">
-                <input type="text" placeholder="เบอร์โทร หรือ รหัสนักศึกษา..." value={searchMemberQuery} onChange={e => onSearchMemberQueryChange(e.target.value)} className="w-full pl-3 pr-9 py-2 bg-white border border-brand-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
+                {/* ⭐️ สแกนบัตรสมาชิก (QR/บาร์โค้ด) ได้จากช่องนี้เลย — เครื่องสแกน USB ทำงานเหมือน
+                    คีย์บอร์ด: พิมพ์ค่าที่สแกนได้ตามด้วย Enter ใส่ input ที่ focus อยู่ ฟอร์มจึง submit
+                    ให้อัตโนมัติโดยไม่ต้องกดปุ่มค้นหาเอง — autoFocus ให้พร้อมรับสแกนทันทีที่หน้าโหลด */}
+                <input type="text" autoFocus placeholder="สแกนบัตรสมาชิก หรือพิมพ์เบอร์โทร/รหัสนักศึกษา..." value={searchMemberQuery} onChange={e => onSearchMemberQueryChange(e.target.value)} className="w-full pl-3 pr-9 py-2 bg-white border border-brand-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
                 <button type="button" onClick={onOpenRegisterModal} title="สมัครสมาชิกใหม่" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-emerald-500 hover:bg-emerald-50 active:scale-90 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
                   <UserPlus size={15} />
                 </button>

@@ -11,7 +11,7 @@
 // that happens to trigger a report send.
 
 const nodemailer = require('nodemailer');
-const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = require('./config');
+const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = require('../config/config');
 
 let transporter = null;
 let attemptedInit = false;

@@ -1,8 +1,8 @@
 const express = require('express');
 const helmet = require('helmet'); // ⭐️ SECURITY FIX (#8) — security headers
 const cors = require('cors');
-const config = require('./config'); // ⭐️ Single source of truth for all env config — see config.js
-const pool = require('./db');
+const config = require('./src/config/config'); // ⭐️ Single source of truth for all env config — see config.js
+const pool = require('./src/config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -21,14 +21,9 @@ const { saveImage } = require('./cloudinary-config');  // ⭐️ เก็บร
 // หมายเหตุ: ไม่ได้ปิด rate limit ไปเลยแม้ตอน dev เพราะยังอยากให้ทดสอบพฤติกรรม 429 ได้เหมือนเดิม แค่เพดานสูงขึ้น
 const IS_PRODUCTION = config.IS_PRODUCTION;
 
-// ⭐️ Security remediation — ย้าย JWT จาก localStorage (อ่านได้ด้วย JS ตัวไหนก็ได้บนหน้าเว็บ, XSS ตัวเดียว
-// ขโมย token ได้หมด) ไป httpOnly cookie (JS อ่านไม่ได้เลย ต่อให้มี XSS) frontend (Vercel) กับ backend
-// (Render) คนละ domain กัน — cross-site cookie ต้อง SameSite=None+Secure (บังคับ HTTPS) บน production
-// dev (localhost คนละพอร์ต) นับเป็น same-site อยู่แล้ว ใช้ Lax ธรรมดาได้
-const COOKIE_SECURE = IS_PRODUCTION;
-const COOKIE_SAMESITE = IS_PRODUCTION ? 'none' : 'lax';
-const ACCESS_TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000;   // 8h ตรงกับอายุ access token
-const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7d ตรงกับอายุ refresh token
+// ⭐️ Update — ดึงออกไป src/utils/authTokens.js แล้ว (memberController.js ใหม่ต้องออก token/cookie
+// แบบเดียวกันสำหรับสมัครผ่าน LINE ก็เลยแชร์ logic เดียวกันแทน copy-paste) ดูคำอธิบายเต็มที่ไฟล์นั้น
+const { generateAccessToken, generateRefreshToken, verifyRefreshToken, setAuthCookies, clearAuthCookies } = require('./src/utils/authTokens');
 
 // ⭐️ อ่าน cookie จาก request header เอง (ไม่พึ่ง cookie-parser เพราะไม่ได้ติดตั้งไว้ใน dependencies)
 function parseCookies(req) {
@@ -54,22 +49,6 @@ function parseCookies(req) {
 // แก้โดยเปลี่ยนช่องทางส่ง csrf token: ฝัง "csrf" claim ไว้ใน JWT ที่เซ็นแล้ว (ปลอมไม่ได้) แล้วส่งค่า
 // เดียวกันกลับไปทาง JSON response body แทน (ไม่ใช่ cookie) — body อ่านข้าม origin ได้ปกติผ่าน fetch/axios
 // frontend เก็บไว้ในตัวแปร JS (ไม่ persist) แล้วแนบเป็น header ทุก mutating request
-function setAuthCookies(res, accessToken, refreshToken) {
-  res.cookie('access_token', accessToken, {
-    httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: ACCESS_TOKEN_MAX_AGE_MS, path: '/',
-  });
-  // ⭐️ path ต้องกว้างพอให้ /api/auth/logout อ่านคุกกี้นี้ได้ด้วย (ไปเพิกถอน refresh token ตอน logout)
-  // ไม่ใช่แค่ /api/auth/refresh เฉยๆ — จำกัดไว้แค่ /api/auth/* เท่านั้น ไม่ใช่ทั้งเว็บ
-  res.cookie('refresh_token', refreshToken, {
-    httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: REFRESH_TOKEN_MAX_AGE_MS, path: '/api/auth',
-  });
-}
-
-function clearAuthCookies(res) {
-  res.clearCookie('access_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' });
-  res.clearCookie('refresh_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/api/auth' });
-}
-
 // ⭐️ Task 7 — Login: กัน brute-force รหัสผ่าน
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -139,10 +118,10 @@ const {
 } = require('./validators');
 const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
-const { createBackup, restoreBackupRow } = require('./backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
-const { sendMail } = require('./mailer'); // ⭐️ Phase 4 — backup success/failure notifications
-const { sendLowStockAlert, sendPreOrderReadyNotification } = require('./lineService'); // ⭐️ Day 3 — LINE Messaging API
-const reportsExport = require('./reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
+const { createBackup, restoreBackupRow } = require('./src/services/backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
+const { sendMail } = require('./src/services/mailer'); // ⭐️ Phase 4 — backup success/failure notifications
+const { sendLowStockAlert, sendPreOrderReadyNotification } = require('./src/services/lineService'); // ⭐️ Day 3 — LINE Messaging API
+const reportsExport = require('./src/services/reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
 // ⭐️ Sprint 0 — A4: evaluated once at module load = ตอนที่ process นี้ boot ขึ้นมาจริงๆ
 // ใช้เป็นลายนิ้วมือของ "process ที่กำลังรันอยู่ตอนนี้" — ถ้า frontend เห็นค่านี้เปลี่ยนระหว่าง session
@@ -513,6 +492,8 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', // ⭐️ Task 13 — ยังไม่ login จึงยังไม่มี token
   '/api/auth/reset-password',
   '/api/auth/reset-token',
+  '/api/members/check-line', // ⭐️ LINE LIFF — เช็คสถานะสมัครก่อนเปิดฟอร์ม ยังไม่มี token (memberRoutes.js)
+  '/api/members/register-line', // ⭐️ LINE LIFF — สมัคร/ผูกบัญชี ยังไม่มี token ตอนเรียก (memberRoutes.js)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
@@ -639,17 +620,10 @@ app.use(authenticateToken);
 app.use(requirePasswordChange);
 app.use(requireCsrf);
 
-// ⭐️ Sprint 2 — B5: Token Refresh Helpers
-// ⭐️ Security fix — csrfToken ฝังเป็น claim ในนี้ (เซ็นแล้ว ปลอมไม่ได้) แทนการเก็บใน cookie แยก
-// เรียกด้วย generateAccessToken(user, csrfToken) เสมอ — csrfToken สุ่มไว้ที่ผู้เรียก (login/refresh)
-// แล้วส่งค่าเดียวกันกลับไปทาง JSON response body ให้ frontend เก็บไว้แนบเป็น header ทีหลัง
-function generateAccessToken(user, csrfToken) {
-  return jwt.sign(
-    { id: user.id, role: user.role, full_name: user.full_name, must_change_password: !!user.must_change_password, csrf: csrfToken, jti: crypto.randomUUID() },
-    JWT_SECRET,
-    { expiresIn: '8h' } // ⭐️ Changed from 15m to 8h to reduce token refresh frequency during work hours
-  );
-}
+// ⭐️ ระบบสมัครสมาชิกผ่าน LINE LIFF — router แยกใน src/routes/memberRoutes.js (src/controllers/memberController.js)
+// ทั้ง /check-line และ /register-line อยู่ใน PUBLIC_PATHS ด้านบนแล้ว จึงข้าม authenticateToken/requireCsrf ได้
+// mount ไว้ตรงนี้ (คนละที่กับ /api/members/import ที่ยังนิยามตรงใน server.js อยู่ — path ไม่ชนกัน)
+app.use('/api/members', require('./src/routes/memberRoutes'));
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
 // ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่
@@ -660,23 +634,6 @@ function requirePasswordChange(req, res, next) {
   const exempt = req.path.endsWith('/change-password') || req.path === '/api/auth/logout' || req.path === '/api/auth/csrf-token';
   if (exempt) return next();
   return res.status(403).json({ error: 'ต้องเปลี่ยนรหัสผ่านก่อนใช้งาน', code: 'MUST_CHANGE_PASSWORD' });
-}
-
-function generateRefreshToken(user) {
-  return jwt.sign(
-    { id: user.id, type: 'refresh', jti: crypto.randomUUID() },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-}
-
-function verifyRefreshToken(token) {
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return decoded.type === 'refresh' ? decoded : null;
-  } catch {
-    return null;
-  }
 }
 
 app.get('/api/health', async (req, res) => {

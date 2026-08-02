@@ -123,6 +123,17 @@ module.exports = {
     phone_number: Joi.string().trim().pattern(/^[0-9+\-() ]{6,20}$/).required()
       .messages({ 'string.pattern.base': 'phone_number must be a valid phone number' }),
   }),
+
+  // POST /api/members/register-line — สมัคร/ผูกบัญชีผ่าน LINE LIFF (memberController.js)
+  // เหมือน userRegisterValidator ทุกอย่าง + line_user_id บังคับ (LIFF SDK ให้มาเสมอ ไม่มีทางเป็นค่าว่าง
+  // ถ้า LIFF init สำเร็จ — ถ้าไม่มีแปลว่าเรียกผิดทาง ไม่ใช่ผ่าน LIFF จริง)
+  registerLineValidator: Joi.object({
+    student_id: Joi.string().trim().min(1).max(50).required(),
+    full_name: Joi.string().trim().min(1).max(200).required(),
+    phone_number: Joi.string().trim().pattern(/^[0-9+\-() ]{6,20}$/).required()
+      .messages({ 'string.pattern.base': 'phone_number must be a valid phone number' }),
+    line_user_id: Joi.string().trim().min(1).max(64).required(),
+  }),
 };
 
 /*

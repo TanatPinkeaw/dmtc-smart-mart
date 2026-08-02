@@ -834,12 +834,21 @@ const initDB = async () => {
     }
 
     // ⭐️ Day 3 — ผูกบัญชี LINE ของสมาชิกไว้ส่ง push notification ตรง (เช่น พรีออเดอร์พร้อมรับ)
-    // NULL = ยังไม่ได้ผูกบัญชี LINE (ยังไม่มี flow LINE Login ในระบบนี้ — คอลัมน์นี้แค่เตรียมที่เก็บไว้)
+    // NULL = ยังไม่ได้ผูกบัญชี LINE — ผูกได้ผ่าน POST /api/members/register-line (LIFF, memberController.js)
     try {
       await connection.query(`ALTER TABLE users ADD COLUMN line_user_id VARCHAR(64) DEFAULT NULL`);
       console.log("🔧 เพิ่มคอลัมน์ users.line_user_id ที่ขาดไปให้แล้ว");
     } catch (alterErr) {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE users (line_user_id) ล้มเหลว:", alterErr.message);
+    }
+    // ⭐️ Update — UNIQUE กัน 1 บัญชี LINE ผูกซ้ำกับ user หลายคน (ไม่งั้น GET /check-line/:id จะงงว่า
+    // ควรตอบ user คนไหนถ้ามีมากกว่า 1 แถวตรงกัน) NULL ซ้ำกันได้หลายแถวตามปกติของ MySQL UNIQUE INDEX
+    // (คนที่ยังไม่ผูก LINE ไม่กระทบ) index ชื่อ idx_line_user_id กันชนกับ index อื่นที่อาจตั้งชื่อ users_line_user_id
+    try {
+      await connection.query(`ALTER TABLE users ADD UNIQUE INDEX idx_line_user_id (line_user_id)`);
+      console.log("🔧 เพิ่ม UNIQUE index users.line_user_id ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE users (idx_line_user_id) ล้มเหลว:", alterErr.message);
     }
 
     // ⭐️ seed 3 กลุ่มเริ่มต้น — INSERT IGNORE บน code (UNIQUE) รันซ้ำได้ปลอดภัย

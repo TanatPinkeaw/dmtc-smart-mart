@@ -27,6 +27,10 @@ interface Product { id: number; barcode: string; name: string; price: string | n
 // ⭐️ redeem_reward: บรรทัดของรางวัล (ราคา 0, จ่ายด้วยแต้ม) points_required เก็บไว้โชว์
 interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
 
+// ⭐️ POS ออฟไลน์ — cache รายการสินค้าล่าสุดที่โหลดสำเร็จไว้ใน localStorage กันหน้าจอ product grid
+// ว่างเปล่าตอนไม่มีเน็ต (ไม่ใช่ authoritative — แค่ preview ราคา/สต๊อกล่าสุดที่รู้ ค่าจริงยึดตาม server เสมอ)
+const PRODUCTS_CACHE_KEY = 'dmtc_cached_products';
+
 export default function POS() {
   const socket = useSocket();
   const isOnline = useOnlineStatus(); // ⭐️ Sprint 2 — B6
@@ -164,7 +168,27 @@ export default function POS() {
   }, [socket]);
 
   const fetchCategories = async () => { try { const res = await api.get('/categories'); setCategories(res.data); } catch (e) {} };
-  const fetchProducts = async () => { try { const res = await api.get('/products'); setProducts(res.data); } catch (e) {} };
+  // ⭐️ POS ออฟไลน์ — โหลดสินค้าจาก cache ใน localStorage แทน (เงียบถ้า cache เสีย/parse ไม่ได้ —
+  //   ปล่อย products state เดิมไว้ ดีกว่าล้างเป็นค่าว่างเปล่า)
+  const loadProductsFromCache = () => {
+    try {
+      const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
+      if (cached) setProducts(JSON.parse(cached));
+    } catch (e) { /* cache เสีย/parse ไม่ได้ — ไม่ทำอะไร */ }
+  };
+
+  const fetchProducts = async () => {
+    // ⭐️ ไม่มีเน็ต — ไม่ต้องยิง API เลย (ยิงไปก็พังแน่นอน) อ่านจาก cache ตรงๆ
+    if (!isOnline) { loadProductsFromCache(); return; }
+    try {
+      const res = await api.get('/products');
+      setProducts(res.data);
+      localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(res.data)); // ⭐️ อัปเดต cache ทุกครั้งที่โหลดสำเร็จ
+    } catch (e) {
+      // ⭐️ isOnline=true แต่ยิง API พัง (server ล่ม/timeout) — fallback ไป cache เหมือนกัน
+      loadProductsFromCache();
+    }
+  };
 
   const filteredProducts = (selectedCategory === 'ALL' ? products : products.filter(p => p.category_id === selectedCategory))
     .filter(p => p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) || (p.barcode && p.barcode.includes(productSearchQuery)));
@@ -228,7 +252,10 @@ export default function POS() {
     if (!searchMemberQuery.trim()) return;
     setMemberLoading(true);
     try {
-      const res = await api.get(`/users/search?q=${searchMemberQuery}`);
+      // ⭐️ QR/Scanner — endpoint นี้ค้นได้ทั้ง student_id/phone_number/line_user_id (ต่างจาก
+      // /users/search เดิมที่ค้นได้แค่ 2 อย่างแรก) input ช่องนี้รับได้ทั้งพิมพ์เองและสแกนบัตร QR/บาร์โค้ด
+      // สมาชิก — เครื่องสแกน USB พิมพ์ตัวอักษรตามด้วย Enter ใส่ input ที่ focus อยู่แล้วส่ง form โดยอัตโนมัติ
+      const res = await api.get(`/members/lookup/${encodeURIComponent(searchMemberQuery.trim())}`);
       setCurrentMember(res.data);
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบสมาชิก: ${res.data.full_name}`, showConfirmButton: false, timer: 1500 });
     } catch { setCurrentMember(null); Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: 'ไม่พบข้อมูลสมาชิก', showConfirmButton: false, timer: 1500 }); }
