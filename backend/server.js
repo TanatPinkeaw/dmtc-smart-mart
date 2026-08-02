@@ -1505,9 +1505,10 @@ app.post('/api/users/:id/profile-photo', uploadLimiter, profilePhotoUpload.singl
 app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
   try {
     // ⭐️ ทริค: ใช้ AS username เพื่อหลอกหน้าเว็บ React ให้ยังใช้งานได้โดยไม่ต้องไปแก้โค้ดฝั่งหน้าเว็บอีกรอบ
-    // คืนทุก role รวม MEMBER (สมัครผ่าน LINE) — ไม่มี WHERE role กรองอยู่แล้ว
+    // คืนทุก role รวม MEMBER (สมัครผ่าน LINE) — ไม่มี WHERE role หรือ is_active กรองเลย
+    // ⭐️ ไม่ใช้ SELECT * เพราะ users มี password/password_hash อยู่ในตาราง — ห้ามส่งออกไป frontend เด็ดขาด
     const [rows] = await pool.query(
-      'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users'
+      'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users ORDER BY created_at DESC'
     );
     res.json(rows);
   } catch (error) {

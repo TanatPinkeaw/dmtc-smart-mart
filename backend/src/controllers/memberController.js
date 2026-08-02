@@ -117,14 +117,16 @@ async function registerViaLine(req, res) {
       isNewMember = true;
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(phone_number, salt);
+      // ⭐️ ระบุ is_active = 1 ตรงๆ (ไม่พึ่ง DEFAULT ของคอลัมน์) กันสมาชิกที่สมัครผ่าน LINE โดนซ่อนจาก
+      // หน้า Admin Settings ถ้า schema ใน DB จริงของ deployment ไหนไม่มี DEFAULT ตั้งไว้
       const [result] = await conn.query(
-        'INSERT INTO users (student_id, password, full_name, phone_number, role, points, line_user_id) VALUES (?, ?, ?, ?, ?, 0, ?)',
+        'INSERT INTO users (student_id, password, full_name, phone_number, role, points, line_user_id, is_active) VALUES (?, ?, ?, ?, ?, 0, ?, 1)',
         [student_id, hashedPassword, full_name, phone_number, 'MEMBER', line_user_id]
       );
       user = {
         id: result.insertId,
         student_id, full_name, phone_number,
-        role: 'MEMBER', points: 0, line_user_id,
+        role: 'MEMBER', points: 0, line_user_id, is_active: 1,
       };
     }
 

@@ -177,7 +177,7 @@ export default function Settings() {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
     }
   };
-  const fetchUsers = async () => { const res = await api.get('/users'); setUsers(res.data.filter((u: any) => u.is_active !== 0)); };
+  const fetchUsers = async () => { const res = await api.get('/users'); setUsers(res.data); };
   const fetchCategories = async () => { const res = await api.get('/categories'); setCategories(res.data); };
   const fetchSuppliers = async () => { const res = await api.get('/suppliers'); setSuppliers(res.data); };
   const fetchProducts = async () => { const res = await api.get('/products'); setProducts(res.data); };
