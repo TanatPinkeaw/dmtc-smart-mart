@@ -22,13 +22,14 @@ async function logAdminReset(action, adminId, details) {
   }
 }
 
-// POST /api/admin/reset/unlink-line — ปลดผูก LINE ทั้งระบบ เอาไว้เทสต์ flow สมัคร/ผูกบัญชีซ้ำได้เรื่อยๆ
+// POST /api/admin/reset/unlink-line — ปลดผูก LINE ของสมาชิก (MEMBER) เท่านั้น เอาไว้เทสต์ flow
+// สมัคร/ผูกบัญชีซ้ำได้เรื่อยๆ — ไม่แตะ line_user_id ของ CASHIER/MANAGER/ADMIN
 async function unlinkAllLine(req, res) {
   if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
   try {
-    const [result] = await pool.query('UPDATE users SET line_user_id = NULL');
+    const [result] = await pool.query("UPDATE users SET line_user_id = NULL WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_UNLINK_LINE', req.user.id, { affected: result.affectedRows });
-    res.json({ success: true, message: `ปลดผูกบัญชี LINE แล้ว ${result.affectedRows} รายการ`, affected: result.affectedRows });
+    res.json({ success: true, message: `ปลดผูกบัญชี LINE ของสมาชิกแล้ว ${result.affectedRows} รายการ`, affected: result.affectedRows });
   } catch (error) {
     console.error('[500] unlinkAllLine', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
@@ -36,33 +37,41 @@ async function unlinkAllLine(req, res) {
 }
 
 // POST /api/admin/reset/members — ลบ user ทุกคนที่ role=MEMBER ถาวร (กู้คืนไม่ได้)
+// ⭐️ ลบ point_transactions ของสมาชิกก่อน (กัน FK constraint บล็อกตอนลบ users) อยู่ใน transaction
+// เดียวกับการลบ users เอง — กันเคสลบ ledger ทิ้งไปแล้วแต่ลบ user ไม่สำเร็จ (โดน FK อื่น เช่น sales/orders บล็อก)
 async function resetMembers(req, res) {
   if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
+  const conn = await pool.getConnection();
   try {
-    const [result] = await pool.query("DELETE FROM users WHERE role = 'MEMBER'");
+    await conn.beginTransaction();
+    await conn.query("DELETE FROM point_transactions WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    const [result] = await conn.query("DELETE FROM users WHERE role = 'MEMBER'");
+    await conn.commit();
     await logAdminReset('ADMIN_RESET_MEMBERS', req.user.id, { affected: result.affectedRows });
     res.json({ success: true, message: `ลบสมาชิก MEMBER แล้ว ${result.affectedRows} คน`, affected: result.affectedRows });
   } catch (error) {
-    // ⭐️ FK constraint — สมาชิกที่มีประวัติขาย/ออเดอร์/point_transactions อ้างอิงถึง จะลบไม่ได้ตรงๆ
-    // (sales.member_id, orders, point_transactions ฯลฯ ผูก FK ไว้กับ users) แจ้งชัดเจนแทนที่จะ 500 เฉยๆ
+    await conn.rollback();
+    // ⭐️ FK constraint อื่นที่เหลือ (sales.member_id, orders ฯลฯ ผูก FK ไว้กับ users) แจ้งชัดเจนแทนที่จะ 500 เฉยๆ
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
       return res.status(409).json({
-        error: 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีประวัติการขาย/ออเดอร์/แต้มผูกอยู่ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)',
+        error: 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีประวัติการขาย/ออเดอร์ผูกอยู่ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)',
       });
     }
     console.error('[500] resetMembers', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  } finally {
+    conn.release();
   }
 }
 
-// POST /api/admin/reset/member-points — รีเซ็ตแต้มทุกคนเป็น 0 (รวม CASHIER/ADMIN ที่อาจมีแต้มค้างด้วย
-// ตามที่สเปกระบุ UPDATE users SET points = 0 แบบไม่กรอง role)
+// POST /api/admin/reset/member-points — รีเซ็ตแต้มสะสมของสมาชิก (MEMBER) เป็น 0 เท่านั้น
+// ไม่แตะแต้ม/ยอดของ CASHIER/MANAGER/ADMIN
 async function resetMemberPoints(req, res) {
-  if (config.IS_PRODUCTION) return res.status(404).end();
+  if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
   try {
-    const [result] = await pool.query('UPDATE users SET points = 0');
+    const [result] = await pool.query("UPDATE users SET points = 0 WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_MEMBER_POINTS', req.user.id, { affected: result.affectedRows });
-    res.json({ success: true, message: `รีเซ็ตแต้มสะสมแล้ว ${result.affectedRows} บัญชี`, affected: result.affectedRows });
+    res.json({ success: true, message: `รีเซ็ตแต้มสะสมของสมาชิกแล้ว ${result.affectedRows} บัญชี`, affected: result.affectedRows });
   } catch (error) {
     console.error('[500] resetMemberPoints', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
