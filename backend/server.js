@@ -624,6 +624,8 @@ app.use(requireCsrf);
 // ทั้ง /check-line และ /register-line อยู่ใน PUBLIC_PATHS ด้านบนแล้ว จึงข้าม authenticateToken/requireCsrf ได้
 // mount ไว้ตรงนี้ (คนละที่กับ /api/members/import ที่ยังนิยามตรงใน server.js อยู่ — path ไม่ชนกัน)
 app.use('/api/members', require('./src/routes/memberRoutes'));
+// ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — บล็อกบน production ในตัว controller เอง (src/controllers/adminController.js)
+app.use('/api/admin/reset', require('./src/routes/adminRoutes'));
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
 // ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่

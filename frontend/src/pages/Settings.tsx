@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound } from 'lucide-react';
+import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound, RotateCcw, AlertTriangle } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
 import { useSocket } from '../SocketContext';
@@ -283,6 +283,29 @@ export default function Settings() {
   const handleDeleteCategory = async (id: number) => { const res = await Swal.fire({ title: 'ลบหมวดหมู่นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/categories/${id}`); fetchCategories(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
   const handleDeleteProduct = async (id: number) => { const res = await Swal.fire({ title: 'ลบสินค้านี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/products/${id}`); fetchProducts(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
   const handleDeleteUser = async (id: number) => { const res = await Swal.fire({ title: 'ลบพนักงานคนนี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/users/${id}`); fetchUsers(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+
+  // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — ยิงไป /api/admin/reset/* (backend บล็อกบน production เอง
+  // ในตัว controller อยู่แล้ว ไม่ต้องเช็ค IS_PRODUCTION ฝั่งนี้ซ้ำ) confirm ก่อนทุกครั้งเพราะกู้คืนไม่ได้
+  // (โดยเฉพาะ "ลบสมาชิก" ที่ DELETE ถาวร) รีเฟรชรายชื่อพนักงานหลังทำสำเร็จเพราะข้อมูลเปลี่ยนไปจริง
+  const [resetLoading, setResetLoading] = useState<string | null>(null);
+  const handleAdminReset = async (endpoint: string, confirmTitle: string, confirmText: string, loadingKey: string) => {
+    const res = await Swal.fire({
+      title: confirmTitle, text: confirmText, icon: 'warning',
+      showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af',
+      confirmButtonText: 'ยืนยัน ดำเนินการเลย', cancelButtonText: 'ยกเลิก',
+    });
+    if (!res.isConfirmed) return;
+    setResetLoading(loadingKey);
+    try {
+      const r = await api.post(`/admin/reset/${endpoint}`);
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ดำเนินการสำเร็จ', showConfirmButton: false, timer: 2500 });
+      fetchUsers();
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'ทำรายการไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setResetLoading(null);
+    }
+  };
 
   // ⭐️ ซิงค์รายชื่อพนักงานจากไฟล์ CSV — ใครไม่มีในไฟล์จะถูกปิดการใช้งาน (soft delete)
   const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -647,6 +670,40 @@ export default function Settings() {
                   </div>
                   );
                 })}
+              </div>
+
+              {/* ⭐️ Developer & Testing Tools — โชว์เฉพาะ ADMIN (อยู่ใน block activeTab === 'USERS' && isAdmin
+                  อยู่แล้ว) เครื่องมือล้างข้อมูลทดสอบ กดพลาดกู้คืนไม่ได้บางปุ่ม (โดยเฉพาะลบสมาชิก) จึงเน้นสีแดง/ส้ม
+                  ชัดเจน + confirm ทุกปุ่ม ฝั่ง backend เองก็บล็อกทั้งชุดถ้า NODE_ENV=production */}
+              <div className="mt-8 bg-red-50 border-2 border-red-200 rounded-3xl p-4 md:p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle size={20} className="text-red-500" />
+                  <h3 className="text-base md:text-lg font-bold text-red-700">เครื่องมือสำหรับผู้ดูแลระบบ (Developer & Testing Tools)</h3>
+                </div>
+                <p className="text-xs text-red-500 mb-4">ใช้สำหรับเทสต์ระบบเท่านั้น การกระทำเหล่านี้กู้คืนไม่ได้ — ปิดใช้งานอัตโนมัติบน production</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => handleAdminReset('unlink-line', 'ปลดผูกบัญชี LINE ทั้งหมด?', 'สมาชิกทุกคนจะต้องสแกน/ผูกบัญชี LINE ใหม่ผ่าน LIFF', 'unlink-line')}
+                    disabled={resetLoading === 'unlink-line'}
+                    className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <RotateCcw size={16} className={resetLoading === 'unlink-line' ? 'animate-spin' : ''} /> ปลดผูกบัญชี LINE ทั้งหมด
+                  </button>
+                  <button
+                    onClick={() => handleAdminReset('members', 'ลบสมาชิกที่สมัครผ่าน LINE ทั้งหมด?', 'ลบถาวร กู้คืนไม่ได้ — บัญชี role MEMBER ทั้งหมดจะถูกลบทิ้ง', 'members')}
+                    disabled={resetLoading === 'members'}
+                    className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <Trash2 size={16} className={resetLoading === 'members' ? 'animate-spin' : ''} /> ลบสมาชิก LINE ทั้งหมด
+                  </button>
+                  <button
+                    onClick={() => handleAdminReset('member-points', 'รีเซ็ตแต้มสะสมทั้งหมดเป็น 0?', 'แต้มของทุกบัญชีในระบบจะถูกล้างเป็น 0 ทันที', 'member-points')}
+                    disabled={resetLoading === 'member-points'}
+                    className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <Coins size={16} className={resetLoading === 'member-points' ? 'animate-spin' : ''} /> รีเซ็ตแต้มสะสมทั้งหมด
+                  </button>
+                </div>
               </div>
             </div>
           )}
