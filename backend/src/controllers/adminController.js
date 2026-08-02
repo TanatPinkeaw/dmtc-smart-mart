@@ -71,6 +71,7 @@ async function resetMembers(req, res) {
     await conn.query("DELETE FROM revoked_tokens WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     await conn.query("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     await conn.query("DELETE FROM promotion_usages WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
+    await conn.query("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     await conn.query("UPDATE sales SET member_id = NULL WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     await conn.query("UPDATE orders SET user_id = NULL WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
     const [result] = await conn.query("DELETE FROM users WHERE role = 'MEMBER'");
@@ -80,13 +81,18 @@ async function resetMembers(req, res) {
   } catch (error) {
     await conn.rollback();
     // ⭐️ FK constraint อื่นที่เหลือ (เช่น shifts/schedules/attendance ถ้าสมาชิกดันมี role เดิมเป็น staff
-    // มาก่อน) แจ้งชัดเจนแทนที่จะ 500 เฉยๆ
+    // มาก่อน — สำคัญ: ตารางพวกนี้เป็นประวัติเข้า-ออกงาน/เงินเดือนจริง ไม่ auto-clear ให้เหมือนตารางอื่น
+    // เพราะ endpoint นี้กวาดตาม role='MEMBER' ปัจจุบัน ถ้ามีคนเคยเป็น staff แล้วถูกลดขั้นกลับเป็น MEMBER
+    // (ทำได้จากหน้า Settings) ประวัติเก่าของเขายังอยู่ ไม่ควรถูกลบไปพร้อมสมาชิกทดสอบ)
+    // ⭐️ log error.message เต็มๆ ไว้เสมอ (ไม่ใช่แค่ตอน 500) เพราะ MySQL error message บอกชื่อ
+    // constraint/ตารางที่ชนอยู่แล้ว — ใช้ไล่ดูใน log ได้ทันทีว่าตารางไหนบล็อกจริง โดยไม่ต้องเดา
+    console.error('[resetMembers] FK/DB error:', error.code, error.message);
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
       return res.status(409).json({
         error: 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีข้อมูลอ้างอิงอื่นที่ระบบยังจัดการอัตโนมัติไม่ได้ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)',
+        detail: error.message,
       });
     }
-    console.error('[500] resetMembers', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
