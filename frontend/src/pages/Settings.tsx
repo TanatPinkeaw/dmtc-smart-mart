@@ -230,11 +230,18 @@ export default function Settings() {
   const handleEditUserRole = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.put(`/users/${editingUser.id}`, { full_name: editingUser.full_name, role: editingUser.role, is_active: editingUser.is_active });
+      await api.put(`/users/${editingUser.id}`, {
+        full_name: editingUser.full_name,
+        student_id: editingUser.student_id ?? editingUser.username,
+        phone_number: editingUser.phone_number,
+        role: editingUser.role,
+        points: editingUser.points,
+        is_active: editingUser.is_active,
+      });
       // ⭐️ Part 3 — บันทึกกลุ่มสมาชิกด้วย (endpoint แยก ADMIN+MANAGER)
       await api.put(`/users/${editingUser.id}/group`, { group_id: editingUser.group_id || null });
       fetchUsers(); setActiveModal(null); setEditingUser(null);
-      Swal.fire({ icon: 'success', title: 'อัปเดตสิทธิ์สำเร็จ', showConfirmButton: false, timer: 1500 });
+      Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
     } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
@@ -624,7 +631,7 @@ export default function Settings() {
           {activeTab === 'USERS' && isAdmin && (
             <div className="animate-fade-in">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Users className="text-brand" /> พนักงานในระบบ</h2>
+                <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Users className="text-brand" /> สมาชิกและผู้ใช้งานในระบบทั้งหมด</h2>
                 <div className="flex w-full md:w-auto gap-2">
                   <div className="relative flex-1 md:w-64">
                     <input type="text" placeholder="ค้นหาชื่อ, รหัสนักศึกษา..." value={searchUser} onChange={e => setSearchUser(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
@@ -646,21 +653,27 @@ export default function Settings() {
                   return (
                   <div key={u.id} className={`bg-white p-4 md:p-5 rounded-3xl shadow-sm border flex flex-col group relative ${rs.card}`}>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-white shadow-inner text-lg ${rs.avatar}`}>
+                      <div className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-white shadow-inner text-lg relative ${rs.avatar}`}>
                         {u.full_name.charAt(0)}
+                        {u.line_user_id && (
+                          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#06C755] border-2 border-white flex items-center justify-center" title="ผูกบัญชี LINE แล้ว">
+                            <span className="text-white text-[8px] font-black">L</span>
+                          </span>
+                        )}
                       </div>
                       <div>
                         <p className="font-bold text-gray-800 line-clamp-1 text-sm md:text-base">{u.full_name}</p>
-                        <p className="text-xs text-gray-400">@{u.username}</p>
+                        <p className="text-xs text-gray-400">@{u.username}{u.phone_number ? ` · ${u.phone_number}` : ''}</p>
                       </div>
                     </div>
                     <div className="flex justify-between items-end mt-auto">
                       <span className={`px-2 py-1 rounded-md text-[10px] md:text-xs font-bold ${rs.badge}`}>{u.role}</span>
+                      <span className="text-xs md:text-sm font-bold text-brand">{Number(u.points || 0).toLocaleString()} แต้ม</span>
                     </div>
 
                     {/* ⭐️ ปุ่ม Edit และ Delete คู่กัน */}
                     <div className="absolute top-3 right-3 flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition bg-white p-1 rounded-lg shadow-sm border border-brand-border md:border-0 md:shadow-none">
-                      <button onClick={() => { setEditingUser(u); setActiveModal('EDIT_USER'); }} className="text-brand-mid hover:text-brand-dark hover:bg-brand-bg p-1.5 rounded-md transition" title="เปลี่ยนสิทธิ์">
+                      <button onClick={() => { setEditingUser(u); setActiveModal('EDIT_USER'); }} className="text-brand-mid hover:text-brand-dark hover:bg-brand-bg p-1.5 rounded-md transition" title="✏️ แก้ไข">
                         <Edit size={16} />
                       </button>
                       <button onClick={() => handleDeleteUser(u.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition" title="ลบพนักงาน">
@@ -1004,10 +1017,12 @@ export default function Settings() {
 
       {/* ⭐️ MODAL เปลี่ยนสิทธิ์พนักงานตรงๆ จากหน้าการ์ด */}
       {activeModal === 'EDIT_USER' && editingUser && (
-        <CustomModal title="เปลี่ยนสิทธิ์การเข้าถึง" onClose={() => { setActiveModal(null); setEditingUser(null); }}>
+        <CustomModal title="แก้ไขข้อมูลผู้ใช้งาน" onClose={() => { setActiveModal(null); setEditingUser(null); }}>
           <form onSubmit={handleEditUserRole} className="space-y-4">
-            <Input label="ชื่อพนักงาน" value={editingUser.full_name} disabled={true} onChange={()=>{}} />
-            <Input label="รหัสนักศึกษา" value={editingUser.username} disabled={true} onChange={()=>{}} />
+            <Input label="ชื่อ-นามสกุล" value={editingUser.full_name} onChange={(v: any) => setEditingUser({ ...editingUser, full_name: v })} />
+            <Input label="รหัสนักศึกษา" value={editingUser.student_id ?? editingUser.username} onChange={(v: any) => setEditingUser({ ...editingUser, student_id: v })} />
+            <Input label="เบอร์โทรศัพท์" value={editingUser.phone_number || ''} onChange={(v: any) => setEditingUser({ ...editingUser, phone_number: v })} required={false} />
+            <Input label="แต้มสะสม" type="number" value={editingUser.points ?? 0} onChange={(v: any) => setEditingUser({ ...editingUser, points: v === '' ? 0 : Number(v) })} required={false} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">เลือกบทบาทใหม่ (Role)</label>
               <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}>

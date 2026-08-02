@@ -1505,7 +1505,10 @@ app.post('/api/users/:id/profile-photo', uploadLimiter, profilePhotoUpload.singl
 app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
   try {
     // ⭐️ ทริค: ใช้ AS username เพื่อหลอกหน้าเว็บ React ให้ยังใช้งานได้โดยไม่ต้องไปแก้โค้ดฝั่งหน้าเว็บอีกรอบ
-    const [rows] = await pool.query('SELECT id, student_id AS username, full_name, role, is_active FROM users');
+    // คืนทุก role รวม MEMBER (สมัครผ่าน LINE) — ไม่มี WHERE role กรองอยู่แล้ว
+    const [rows] = await pool.query(
+      'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users'
+    );
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -1566,14 +1569,36 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
 });
 
 app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
-  const { full_name, role, is_active } = req.body;
+  const { full_name, student_id, phone_number, role, points, is_active } = req.body;
+  if (!full_name || !full_name.trim() || !student_id || !student_id.trim() || !role) {
+    return res.status(400).json({ error: 'กรุณาระบุชื่อ, รหัสนักศึกษา และบทบาทให้ครบถ้วน' });
+  }
   try {
+    const [existingRows] = await pool.query('SELECT is_active FROM users WHERE id = ?', [req.params.id]);
+    if (existingRows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+
+    // ⭐️ is_active/points เป็น optional — ไม่ส่งมาก็คงค่าเดิมไว้ (ฟอร์มแก้ไขปัจจุบันไม่ได้มีสวิตช์ is_active)
+    const nextIsActive = is_active !== undefined ? is_active : existingRows[0].is_active;
+
     await pool.query(
-      'UPDATE users SET full_name = ?, role = ?, is_active = ? WHERE id = ?',
-      [full_name, role, is_active, req.params.id]
+      'UPDATE users SET full_name = ?, student_id = ?, phone_number = ?, role = ?, points = COALESCE(?, points), is_active = ? WHERE id = ?',
+      [full_name, student_id, phone_number || null, role, points === undefined || points === null || points === '' ? null : points, nextIsActive, req.params.id]
     );
-    res.json({ message: "อัปเดตข้อมูลพนักงานสำเร็จ" });
+
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['UPDATE_USER', req.user.id, 'USER', req.params.id, JSON.stringify({ full_name, student_id, phone_number, role, points })]
+    );
+
+    const [rows] = await pool.query(
+      'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users WHERE id = ?',
+      [req.params.id]
+    );
+    res.json({ message: "อัปเดตข้อมูลผู้ใช้งานสำเร็จ", user: rows[0] });
   } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'รหัสนักศึกษาหรือเบอร์โทรนี้มีผู้ใช้งานอื่นใช้อยู่แล้ว' });
+    }
     console.error('[500]', error.message);
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
