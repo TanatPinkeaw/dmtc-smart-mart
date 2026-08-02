@@ -315,9 +315,9 @@ export default function Settings() {
   };
 
   // ⭐️ ปุ่ม "ลบสมาชิก LINE ทั้งหมด" แยกจาก handleAdminReset ทั่วไป — backend เช็คก่อนว่ามีสมาชิกคนไหน
-  // ติดประวัติเข้า-ออกงาน (attendance) อยู่บ้าง (เกิดจากคนที่เคยเป็น staff แล้วถูกลด role กลับเป็น
-  // MEMBER) ถ้ามีจะตอบ needsConfirmation กลับมาแทนที่จะลบเลย ต้องเปิด popup ถามอีกชั้นว่าจะ "ลบประวัติ
-  // เข้า-ออกงานไปด้วย" หรือ "ข้ามคนเหล่านั้นไว้ก่อน" แล้วค่อยยิงซ้ำพร้อม flag ที่เลือก
+  // ติดประวัติการทำงาน staff (เข้า-ออกงาน/กะ/ตารางเวร) อยู่บ้าง (เกิดจากคนที่เคยเป็น staff แล้วถูกลด role
+  // กลับเป็น MEMBER) ถ้ามีจะตอบ needsConfirmation กลับมาแทนที่จะลบเลย ต้องเปิด popup ถามอีกชั้นว่าจะ
+  // "ลบประวัติการทำงานไปด้วย" หรือ "ข้ามคนเหล่านั้นไว้ก่อน" แล้วค่อยยิงซ้ำพร้อม flag ที่เลือก
   const handleDeleteMembers = async () => {
     const confirm = await Swal.fire({
       title: 'ลบสมาชิกที่สมัครผ่าน LINE ทั้งหมด?', text: 'ลบถาวร กู้คืนไม่ได้ — บัญชี role MEMBER ทั้งหมดจะถูกลบทิ้ง', icon: 'warning',
@@ -332,16 +332,16 @@ export default function Settings() {
       if (r.data?.needsConfirmation) {
         const names = (r.data.blockedMembers || []).map((m: any) => m.full_name).join(', ');
         const choice = await Swal.fire({
-          title: 'พบสมาชิกที่มีประวัติเข้า-ออกงาน',
-          html: `พบ ${r.data.blockedMembers?.length || 0} คนที่มีประวัติเข้า-ออกงานติดอยู่:<br/><b>${names}</b><br/><br/>ต้องการลบประวัติเข้า-ออกงานของพวกเขาไปด้วย หรือข้ามคนเหล่านี้ไว้ก่อน?`,
+          title: 'พบสมาชิกที่มีประวัติการทำงาน',
+          html: `พบ ${r.data.blockedMembers?.length || 0} คนที่เคยเป็นพนักงานและมีประวัติการทำงาน (เข้า-ออกงาน/กะ/ตารางเวร) ติดอยู่:<br/><b>${names}</b><br/><br/>ต้องการลบประวัติการทำงานของพวกเขาไปด้วย หรือข้ามคนเหล่านี้ไว้ก่อน?`,
           icon: 'question',
           showDenyButton: true, showCancelButton: true,
-          confirmButtonText: 'ลบทั้งหมด (รวมประวัติเข้า-ออกงาน)', confirmButtonColor: '#dc2626',
+          confirmButtonText: 'ลบทั้งหมด (รวมประวัติการทำงาน)', confirmButtonColor: '#dc2626',
           denyButtonText: 'ข้ามคนเหล่านี้ ลบที่เหลือ', denyButtonColor: '#f59e0b',
           cancelButtonText: 'ยกเลิก',
         });
         if (choice.isConfirmed) {
-          r = await api.post('/admin/reset/members', { deleteAttendance: true });
+          r = await api.post('/admin/reset/members', { deleteWorkHistory: true });
         } else if (choice.isDenied) {
           r = await api.post('/admin/reset/members', { skipBlocked: true });
         } else {
