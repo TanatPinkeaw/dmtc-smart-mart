@@ -1,10 +1,15 @@
 // ⭐️ Dev/testing data-reset tools — ADMIN กดล้างข้อมูลทดสอบเองได้ไม่ต้องเข้า DB ตรง
-// ⚠️ ทั้ง 3 endpoint บล็อกบน production เสมอ (คืน 404 เหมือน endpoint bootstrap อื่นๆ เช่น
+// ⚠️ ทั้ง 3 endpoint บล็อกบน production โดยดีฟอลต์ (คืน 404 เหมือน endpoint bootstrap อื่นๆ เช่น
 // /api/seed-data — ดู server.js) ไม่สนแม้ผู้เรียกจะเป็น ADMIN จริงก็ตาม เพราะเป็นปุ่มลบ/ล้างข้อมูล
 // สมาชิกจริงแบบกู้คืนไม่ได้ (โดยเฉพาะ resetMembers ที่ DELETE ทิ้งถาวร) กดพลาดบน prod = ข้อมูล
-// สมาชิกจริงหายทั้งระบบ ความเสี่ยงสูงเกินกว่าจะเปิดไว้แค่ role check ชั้นเดียว
+// สมาชิกจริงหายทั้งระบบ — เปิดใช้บน production ได้เฉพาะเมื่อมีคนตั้งค่า env var
+// ALLOW_DATA_RESET=true บน deployment นั้นๆ อย่างจงใจเท่านั้น (ไม่ใช่ default ที่เปิดเอง)
 const pool = require('../config/db');
 const config = require('../config/config');
+
+function isResetAllowed() {
+  return process.env.ALLOW_DATA_RESET === 'true' || !config.IS_PRODUCTION;
+}
 
 async function logAdminReset(action, adminId, details) {
   try {
@@ -19,7 +24,7 @@ async function logAdminReset(action, adminId, details) {
 
 // POST /api/admin/reset/unlink-line — ปลดผูก LINE ทั้งระบบ เอาไว้เทสต์ flow สมัคร/ผูกบัญชีซ้ำได้เรื่อยๆ
 async function unlinkAllLine(req, res) {
-  if (config.IS_PRODUCTION) return res.status(404).end();
+  if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
   try {
     const [result] = await pool.query('UPDATE users SET line_user_id = NULL');
     await logAdminReset('ADMIN_RESET_UNLINK_LINE', req.user.id, { affected: result.affectedRows });
@@ -32,7 +37,7 @@ async function unlinkAllLine(req, res) {
 
 // POST /api/admin/reset/members — ลบ user ทุกคนที่ role=MEMBER ถาวร (กู้คืนไม่ได้)
 async function resetMembers(req, res) {
-  if (config.IS_PRODUCTION) return res.status(404).end();
+  if (!isResetAllowed()) return res.status(404).json({ success: false, message: 'Data reset features are disabled' });
   try {
     const [result] = await pool.query("DELETE FROM users WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_MEMBERS', req.user.id, { affected: result.affectedRows });
