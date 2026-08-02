@@ -1,11 +1,14 @@
-// ⭐️ LINE Webhook receiver — ตอบกลับปุ่ม Rich Menu / ข้อความที่ผู้ใช้พิมพ์เข้ามาใน LINE OA และรองรับ
-// ระบบลงเวลาทำงาน (clock-in/out) ของพนักงานผ่าน LINE
+// ⭐️ LINE Webhook receiver — ตอบกลับปุ่ม Rich Menu / ข้อความที่ผู้ใช้พิมพ์เข้ามาใน LINE OA
 //
 // ต่างจากส่วน push-only เดิม (lineService.js) ตรงที่ไฟล์นี้ "รับ" event เข้ามา จึงต้อง:
 //   1) ตรวจ signature (X-Line-Signature) ด้วย LINE_CHANNEL_SECRET กัน request ปลอม — ต้องใช้ raw body
 //      (ดู server.js: express.json({ verify }) เก็บ req.rawBody ไว้ให้)
 //   2) ตอบ HTTP 200 กลับ LINE ให้เร็ว ไม่งั้น LINE จะ retry ซ้ำ — จึง res 200 ก่อน แล้วค่อยประมวลผล event
 //   3) ตอบผู้ใช้ด้วย replyToken (replyLineMessage) ไม่ใช่ push (ประหยัดโควตา + ตอบได้ใน ~30 วิ)
+//
+// รองรับ: สถานะการจอง (pre-order), โปรโมชั่น, บัตรสมาชิก/แต้ม, ประวัติการซื้อ (เลือกวันที่ผ่าน
+// DateTimePicker → postback), ลิงก์สั่งจอง, ติดต่อแอดมิน
+// หมายเหตุ: ระบบลงเวลาทำงาน (clock-in/out) ผ่าน LINE ถูกถอดออกแล้ว — จัดการผ่านเว็บแพลตฟอร์มแทน
 const crypto = require('crypto');
 const pool = require('../config/db');
 const config = require('../config/config');
@@ -14,6 +17,18 @@ const { replyLineMessage } = require('../services/lineService');
 // LIFF สมัคร/ผูกบัญชีสมาชิก (ตรงกับ richmenu-config.json ปุ่ม "สมัคร/บัตรสมาชิก")
 const LIFF_REGISTER_URL = 'https://liff.line.me/2010928001-YxK4Atjv';
 const PREORDER_URL = `${config.FRONTEND_URL}/pre-order`;
+
+// ⭐️ ออเดอร์ที่ถือว่า "จบแล้ว" (ไม่นับเป็นการจองที่กำลังดำเนินอยู่) — ที่เหลือถือเป็น active/pending
+const ORDER_TERMINAL_STATUSES = ['COMPLETED', 'CANCELLED', 'REJECTED', 'SLIP_REJECTED'];
+const ORDER_STATUS_LABEL = {
+  PENDING_VERIFY: 'รอตรวจสลิป',
+  WAITING_CASH: 'รอชำระเงินสด',
+  VERIFIED: 'ยืนยันการชำระแล้ว',
+  PREPARING: 'กำลังเตรียมสินค้า',
+  READY: 'พร้อมให้รับสินค้า',
+  PENDING: 'รอดำเนินการ',
+  PENDING_APPROVAL: 'รออนุมัติ',
+};
 
 function text(t) {
   return { type: 'text', text: t };
@@ -39,10 +54,11 @@ async function findUserByLine(lineUserId) {
   return rows[0] || null;
 }
 
-function nowBangkok() {
-  return new Date().toLocaleString('th-TH', {
-    timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-  });
+// แปลง 'YYYY-MM-DD' (จาก DateTimePicker) เป็นวันที่ไทยอ่านง่าย
+function thaiDateLabel(isoDate) {
+  const d = new Date(`${isoDate}T00:00:00+07:00`);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 function notRegisteredReply() {
@@ -63,20 +79,57 @@ function handlePoints(user) {
   return text(`⭐ คุณ ${user.full_name}\nมีแต้มสะสมทั้งหมด ${Number(user.points || 0).toLocaleString()} แต้ม`);
 }
 
-async function handlePurchaseHistory(user) {
+// ⭐️ Feature 2 — เช็คสถานะการจอง (แทนที่ "เช็คยอดปันผล" เดิม) — ดึงออเดอร์ที่ยัง active/pending
+async function handlePreorderStatus(user) {
   if (!user) return notRegisteredReply();
+  const placeholders = ORDER_TERMINAL_STATUSES.map(() => '?').join(',');
   const [rows] = await pool.query(
-    "SELECT id, total_amount, created_at FROM sales WHERE member_id = ? AND status = 'COMPLETED' ORDER BY id DESC LIMIT 5",
-    [user.id]
+    `SELECT id, total_amount, status, created_at FROM orders
+     WHERE user_id = ? AND status NOT IN (${placeholders})
+     ORDER BY id DESC`,
+    [user.id, ...ORDER_TERMINAL_STATUSES]
   );
-  if (rows.length === 0) return text('🧾 ยังไม่มีประวัติการซื้อในระบบ');
-  const lines = rows.map(r => {
-    const d = new Date(r.created_at).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' });
-    return `• #${r.id} — ${Number(r.total_amount).toLocaleString()} บาท (${d})`;
+  if (rows.length === 0) return text('ไม่มีสินค้าที่กำลังจองอยู่ในขณะนี้');
+  const lines = rows.map(o => {
+    const label = ORDER_STATUS_LABEL[o.status] || o.status;
+    return `• ออเดอร์ #${o.id} — ${label} — ${Number(o.total_amount || 0).toLocaleString()} บาท`;
   }).join('\n');
-  return text(`🧾 ประวัติการซื้อ 5 รายการล่าสุด\n\n${lines}`);
+  return text(`📦 สถานะการจองของคุณ (${rows.length} รายการ)\n\n${lines}`);
 }
 
+// ⭐️ Feature 4 — ประวัติการซื้อ: ส่ง DateTimePicker ให้ผู้ใช้เลือกวันที่ก่อน (ไม่ตอบ list ทันที)
+function handlePurchaseHistoryPicker(user) {
+  if (!user) return notRegisteredReply();
+  return {
+    type: 'template',
+    altText: 'โปรดเลือกวันที่ต้องการตรวจสอบประวัติการซื้อ',
+    template: {
+      type: 'buttons',
+      text: 'โปรดเลือกวันที่ต้องการตรวจสอบประวัติการซื้อ',
+      actions: [
+        { type: 'datetimepicker', label: '📅 เลือกวันที่', data: 'action=purchase_history', mode: 'date' },
+      ],
+    },
+  };
+}
+
+// ⭐️ Feature 4 — สรุปประวัติการซื้อของวันที่เลือก (เรียกจาก postback ของ DateTimePicker)
+async function handlePurchaseHistoryForDate(user, isoDate) {
+  if (!user) return notRegisteredReply();
+  const [rows] = await pool.query(
+    `SELECT id, total_amount, created_at FROM sales
+     WHERE member_id = ? AND status = 'COMPLETED' AND DATE(created_at) = ?
+     ORDER BY id DESC`,
+    [user.id, isoDate]
+  );
+  const label = thaiDateLabel(isoDate);
+  if (rows.length === 0) return text(`🧾 วันที่ ${label}\nไม่มีประวัติการซื้อ`);
+  const total = rows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
+  const lines = rows.map(r => `• #${r.id} — ${Number(r.total_amount || 0).toLocaleString()} บาท`).join('\n');
+  return text(`🧾 ประวัติการซื้อ วันที่ ${label}\n\n${lines}\n\nรวม ${total.toLocaleString()} บาท (${rows.length} รายการ)`);
+}
+
+// ⭐️ Feature 3 — โปรโมชั่น: ถ้าไม่มีโปรที่ใช้งานอยู่ ตอบข้อความตายตัว "ไม่มีโปรโมชั่นในตอนนี้"
 async function handlePromotions() {
   const [rows] = await pool.query(
     `SELECT name, discount_type, discount_value FROM promotions
@@ -85,7 +138,7 @@ async function handlePromotions() {
        AND (end_date IS NULL OR end_date >= CURDATE())
      ORDER BY id DESC LIMIT 10`
   );
-  if (rows.length === 0) return text('🎁 วันนี้ยังไม่มีโปรโมชั่นที่กำลังใช้งาน');
+  if (rows.length === 0) return text('ไม่มีโปรโมชั่นในตอนนี้');
   const lines = rows.map(p => {
     const v = p.discount_type === 'PERCENT' ? `ลด ${Number(p.discount_value)}%`
       : p.discount_type === 'FIXED' ? `ลด ${Number(p.discount_value)} บาท`
@@ -95,43 +148,20 @@ async function handlePromotions() {
   return text(`🎁 โปรโมชั่นวันนี้\n\n${lines}`);
 }
 
-// ⭐️ Feature 3 — ลงเวลาเข้า-ออกงานผ่าน LINE (เฉพาะ MANAGER/CASHIER, MEMBER ใช้ไม่ได้)
-async function handleClockInOut(user) {
-  if (!user) {
-    return text('⛔ ระบบลงเวลาทำงานใช้ได้เฉพาะพนักงานที่ผูกบัญชี LINE แล้วเท่านั้น');
-  }
-  if (user.role !== 'MANAGER' && user.role !== 'CASHIER') {
-    return text('⛔ ระบบลงเวลาทำงานใช้ได้เฉพาะพนักงาน (แคชเชียร์/ผู้จัดการ) เท่านั้น');
-  }
-  // มีแถวที่ยังไม่ได้ลงเวลาออก (check_out IS NULL) = กำลังอยู่ในกะ → ครั้งนี้คือ "ออกงาน"
-  const [openRows] = await pool.query(
-    'SELECT id FROM attendance WHERE user_id = ? AND check_out IS NULL ORDER BY id DESC LIMIT 1',
-    [user.id]
-  );
-  if (openRows.length > 0) {
-    await pool.query('UPDATE attendance SET check_out = NOW() WHERE id = ?', [openRows[0].id]);
-    return text(`✅ ลงเวลา "ออกงาน" เรียบร้อย\n👤 ${user.full_name}\n🕒 ${nowBangkok()}`);
-  }
-  await pool.query(
-    "INSERT INTO attendance (user_id, check_in, note) VALUES (?, NOW(), 'ลงเวลาผ่าน LINE')",
-    [user.id]
-  );
-  return text(`✅ ลงเวลา "เข้างาน" เรียบร้อย\n👤 ${user.full_name}\n🕒 ${nowBangkok()}`);
-}
-
+// ⭐️ Feature 5A — ติดต่อขอความช่วยเหลือ (ข้อความตายตัวตามสเปก)
 function handleContact() {
-  return text('📞 ติดต่อเจ้าหน้าที่สหกรณ์\nกรุณาแจ้งเรื่องที่ต้องการ เจ้าหน้าที่จะติดต่อกลับโดยเร็วที่สุดครับ 🙏');
+  return text('ติดต่อขอความช่วยเหลือได้ที่แอดมินโดยตรง\nLINE ID: tanatpinkeaw\nเพิ่มเพื่อน: https://line.me/ti/p/~tanatpinkeaw');
 }
 
-// ⭐️ Feature 4 — map ข้อความ (จาก Rich Menu หรือที่พิมพ์เอง) → handler. ลำดับสำคัญ: เช็คคำเฉพาะก่อน
-// (ลงเวลา/ประวัติ) แล้วค่อยคำกว้าง กันชนกัน (เช่น "ประวัติการซื้อ" ต้องไม่ไปเข้า "สั่งซื้อ")
+// ⭐️ map ข้อความ (จาก Rich Menu หรือที่พิมพ์เอง) → handler. ลำดับสำคัญ: เช็คคำเฉพาะก่อนคำกว้าง
+// (เช่น "สถานะการจอง" มีคำว่า "จอง" ต้องเข้าสถานะการจอง ไม่ใช่ลิงก์สั่งจอง — จึงเช็คสถานะก่อน)
 async function routeIncoming(raw, user) {
   const t = (raw || '').trim();
   if (!t) return null;
-  if (/(ลงเวลา|เข้างาน|ออกงาน|clock)/i.test(t)) return handleClockInOut(user);
-  if (/(ประวัติการซื้อ|ประวัติ)/.test(t)) return handlePurchaseHistory(user);
+  if (/(ประวัติการซื้อ|ประวัติ)/.test(t)) return handlePurchaseHistoryPicker(user);
+  if (/(สถานะการจอง|เช็คสถานะสินค้า|สถานะสินค้า|สถานะการสั่ง|สถานะ|ปันผล)/.test(t)) return handlePreorderStatus(user);
   if (/(บัตรสมาชิก|สมาชิก)/.test(t)) return handleMemberCard(user);
-  if (/(แต้ม|ปันผล|คะแนน)/.test(t)) return handlePoints(user);
+  if (/(แต้ม|คะแนน)/.test(t)) return handlePoints(user);
   if (/(โปรโมชั่น|โปรโมชัน|โปร)/.test(t)) return handlePromotions();
   if (/(จอง|สั่งซื้อล่วงหน้า|สั่งซื้อ|พรีออเดอร์|preorder|pre-order)/i.test(t)) {
     return text(`🛒 สั่งซื้อล่วงหน้า / จองสินค้า\nเปิดลิงก์นี้เพื่อสั่งได้เลยครับ:\n${PREORDER_URL}`);
@@ -143,6 +173,7 @@ async function routeIncoming(raw, user) {
 async function handleEvent(event) {
   const replyToken = event.replyToken;
   const lineUserId = event.source && event.source.userId;
+  const user = await findUserByLine(lineUserId);
 
   if (event.type === 'follow') {
     return replyLineMessage(replyToken, [
@@ -150,18 +181,24 @@ async function handleEvent(event) {
     ]);
   }
 
-  let incoming = null;
-  if (event.type === 'message' && event.message && event.message.type === 'text') {
-    incoming = event.message.text;
-  } else if (event.type === 'postback') {
-    incoming = event.postback && event.postback.data;
+  // ⭐️ Feature 4 — postback: DateTimePicker ส่งวันที่ที่เลือกมาใน event.postback.params.date
+  if (event.type === 'postback') {
+    const data = (event.postback && event.postback.data) || '';
+    const pickedDate = event.postback && event.postback.params && event.postback.params.date;
+    if (data.includes('purchase_history') && pickedDate) {
+      const reply = await handlePurchaseHistoryForDate(user, pickedDate);
+      if (reply) await replyLineMessage(replyToken, [reply]);
+      return;
+    }
+    // postback อื่นๆ — ตีความ data เป็นคำสั่งข้อความปกติ
+    const reply = await routeIncoming(data, user);
+    if (reply) await replyLineMessage(replyToken, Array.isArray(reply) ? reply : [reply]);
+    return;
   }
-  if (!incoming) return; // sticker/image/อื่นๆ — ข้าม
 
-  const user = await findUserByLine(lineUserId);
-  const reply = await routeIncoming(incoming, user);
-  if (reply) {
-    await replyLineMessage(replyToken, Array.isArray(reply) ? reply : [reply]);
+  if (event.type === 'message' && event.message && event.message.type === 'text') {
+    const reply = await routeIncoming(event.message.text, user);
+    if (reply) await replyLineMessage(replyToken, Array.isArray(reply) ? reply : [reply]);
   }
 }
 

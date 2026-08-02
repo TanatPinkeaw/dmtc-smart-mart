@@ -53,11 +53,25 @@ function RequireManager({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-// ⭐️ Require MEMBER only (PreOrder/Shopping)
+// ⭐️ Require MEMBER only (PreOrder/Shopping) — บล็อก ADMIN/CASHIER/MANAGER ไม่ให้เปิดหน้าสั่งจอง
+// เดิม /pre-order ไม่มี guard เลย ทำให้ ADMIN ที่ browser session ยังค้างอยู่หลุดเข้ามาดูหน้าสั่งจองได้
+// แสดงข้อความบล็อกชัดเจน (แทนการ redirect เงียบๆ) ให้รู้ว่าทำไมเข้าไม่ได้ + ทางออกกลับหน้าหลัก/ล็อกอิน
 function RequireMember({ children }: { children: ReactNode }) {
   const user = getCurrentUser();
-  if (!user || user.role !== 'MEMBER') {
-    return <Navigate to="/shift" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'MEMBER') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-6 text-center bg-brand-bg">
+        <div className="text-6xl">🔒</div>
+        <p className="text-base md:text-lg font-bold text-gray-800 max-w-md leading-relaxed">
+          หน้านี้สำหรับสมาชิก (MEMBER) เท่านั้น กรุณาล็อกอินด้วยบัญชีสมาชิก
+        </p>
+        <div className="flex gap-3">
+          <button onClick={() => { window.location.href = '/home'; }} className="bg-white border border-brand-border text-brand px-5 py-2.5 rounded-full font-bold hover:bg-brand-bg transition">กลับหน้าหลัก</button>
+          <button onClick={() => { window.location.href = '/login'; }} className="bg-gradient-to-br from-brand to-brand-dark text-white px-5 py-2.5 rounded-full font-bold transition active:scale-[0.98]">ล็อกอินด้วยบัญชีสมาชิก</button>
+        </div>
+      </div>
+    );
   }
   return <>{children}</>;
 }
@@ -88,7 +102,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 function DefaultRoute() {
   const user = getCurrentUser();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'ADMIN') return <Navigate to="/pre-order" replace />;
+  // ⭐️ ทุก role เข้าหน้า Home กลาง (เดิม ADMIN เด้งไป /pre-order ซึ่งตอนนี้เป็น MEMBER-only แล้ว จะโดนบล็อก)
   return <Navigate to="/home" replace />;
 }
 
@@ -175,7 +189,8 @@ function App() {
           {/* ⭐️ /backup ยังคง ADMIN-only (งานระบบ) */}
           <Route path="/backup" element={<RequireAdmin><BackupManagement /></RequireAdmin>} />
 
-          <Route path="/pre-order" element={<Preorder />} />
+          {/* ⭐️ /pre-order เปิดให้เฉพาะ MEMBER — กัน ADMIN/CASHIER/MANAGER หลุดเข้าหน้าสั่งจอง (ดู RequireMember) */}
+          <Route path="/pre-order" element={<RequireMember><Preorder /></RequireMember>} />
           <Route path="/notifications" element={<Notifications />} /> {/* 👈 เพิ่มบรรทัดนี้ */}
           <Route path="/my-sales" element={<VendorSales />} /> {/* ⭐️ ยอดฝากขายของฉัน */}
           <Route path="/profile" element={<Profile />} /> {/* ⭐️ เดิมเป็น modal — ย้ายมาเป็นหน้าเต็ม */}
