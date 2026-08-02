@@ -9,7 +9,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
 import { getCurrentUser } from '../utils/getCurrentUser';
-import { loadLiffSdk, LIFF_ID, looksLikeLineInApp } from '../utils/liff';
+import { liff, LIFF_ID, looksLikeLineInApp } from '../utils/liff';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -59,12 +59,11 @@ export default function Login() {
     let cancelled = false;
     (async () => {
       try {
-        const liff = await loadLiffSdk();
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isInClient()) { if (!cancelled) setAutoChecking(false); return; }
         if (!liff.isLoggedIn()) { liff.login(); return; } // redirect ออกไปขอ login ของ LINE แล้วกลับมาใหม่
         const profile = await liff.getProfile();
-        const idToken = typeof liff.getIDToken === 'function' ? liff.getIDToken() : null;
+        const idToken = liff.getIDToken() || null;
         const res = await api.post('/auth/line-login', { line_user_id: profile.userId, id_token: idToken });
         localStorage.setItem('user', JSON.stringify(res.data.user));
         setCsrfToken(res.data.csrfToken);
@@ -74,7 +73,7 @@ export default function Login() {
         navigate(dest, { replace: true });
       } catch (err: any) {
         if (cancelled) return;
-        if (err?.response?.status === 404) setNotLinked(true); // บัญชี LINE ยังไม่ผูกกับสมาชิก
+        if (err?.response?.status === 401 || err?.response?.status === 404) setNotLinked(true); // บัญชี LINE ยังไม่ผูกกับสมาชิก
         setAutoChecking(false); // ล้มเหลว/ไม่ใช่ LINE client → โชว์ฟอร์มล็อกอินปกติ
       }
     })();

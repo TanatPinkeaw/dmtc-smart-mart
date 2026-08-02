@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@line/liff": "^2.29.2",
     "axios": "^1.18.1",
     "joi": "^18.2.3",
     "lucide-react": "^1.23.0",

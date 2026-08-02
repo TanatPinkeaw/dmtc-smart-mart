@@ -64,9 +64,9 @@ async function lineLogin(req, res) {
       [lineUserId]
     );
     if (users.length === 0) {
-      // "LINE account not linked" — 404 (ไม่ใช่ 401) เพื่อไม่ให้ interceptor ฝั่ง frontend เข้าใจผิด
-      // ว่าเป็น session หมดอายุแล้วไป auto-refresh/force-logout (ดู api.ts)
-      return res.status(404).json({ error: 'บัญชี LINE นี้ยังไม่ได้ผูกกับสมาชิกในระบบ กรุณาสมัคร/ผูกบัญชีก่อน' });
+      // "LINE account not linked" — 401 (frontend api.ts ใส่ /auth/line-login ไว้ใน NO_REFRESH_PATHS
+      // แล้ว จึงไม่ไป auto-refresh/force-logout ตอนเจอ 401 จาก endpoint นี้)
+      return res.status(401).json({ error: 'บัญชี LINE นี้ยังไม่ได้ผูกกับสมาชิกในระบบ กรุณาสมัคร/ผูกบัญชีก่อน' });
     }
 
     const user = users[0];
