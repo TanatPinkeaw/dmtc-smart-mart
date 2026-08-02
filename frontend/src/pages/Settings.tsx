@@ -314,6 +314,50 @@ export default function Settings() {
     }
   };
 
+  // ⭐️ ปุ่ม "ลบสมาชิก LINE ทั้งหมด" แยกจาก handleAdminReset ทั่วไป — backend เช็คก่อนว่ามีสมาชิกคนไหน
+  // ติดประวัติเข้า-ออกงาน (attendance) อยู่บ้าง (เกิดจากคนที่เคยเป็น staff แล้วถูกลด role กลับเป็น
+  // MEMBER) ถ้ามีจะตอบ needsConfirmation กลับมาแทนที่จะลบเลย ต้องเปิด popup ถามอีกชั้นว่าจะ "ลบประวัติ
+  // เข้า-ออกงานไปด้วย" หรือ "ข้ามคนเหล่านั้นไว้ก่อน" แล้วค่อยยิงซ้ำพร้อม flag ที่เลือก
+  const handleDeleteMembers = async () => {
+    const confirm = await Swal.fire({
+      title: 'ลบสมาชิกที่สมัครผ่าน LINE ทั้งหมด?', text: 'ลบถาวร กู้คืนไม่ได้ — บัญชี role MEMBER ทั้งหมดจะถูกลบทิ้ง', icon: 'warning',
+      showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af',
+      confirmButtonText: 'ยืนยัน ดำเนินการเลย', cancelButtonText: 'ยกเลิก',
+    });
+    if (!confirm.isConfirmed) return;
+
+    setResetLoading('members');
+    try {
+      let r = await api.post('/admin/reset/members', {});
+      if (r.data?.needsConfirmation) {
+        const names = (r.data.blockedMembers || []).map((m: any) => m.full_name).join(', ');
+        const choice = await Swal.fire({
+          title: 'พบสมาชิกที่มีประวัติเข้า-ออกงาน',
+          html: `พบ ${r.data.blockedMembers?.length || 0} คนที่มีประวัติเข้า-ออกงานติดอยู่:<br/><b>${names}</b><br/><br/>ต้องการลบประวัติเข้า-ออกงานของพวกเขาไปด้วย หรือข้ามคนเหล่านี้ไว้ก่อน?`,
+          icon: 'question',
+          showDenyButton: true, showCancelButton: true,
+          confirmButtonText: 'ลบทั้งหมด (รวมประวัติเข้า-ออกงาน)', confirmButtonColor: '#dc2626',
+          denyButtonText: 'ข้ามคนเหล่านี้ ลบที่เหลือ', denyButtonColor: '#f59e0b',
+          cancelButtonText: 'ยกเลิก',
+        });
+        if (choice.isConfirmed) {
+          r = await api.post('/admin/reset/members', { deleteAttendance: true });
+        } else if (choice.isDenied) {
+          r = await api.post('/admin/reset/members', { skipBlocked: true });
+        } else {
+          setResetLoading(null);
+          return;
+        }
+      }
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ดำเนินการสำเร็จ', showConfirmButton: false, timer: 3000 });
+      fetchUsers();
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'ทำรายการไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setResetLoading(null);
+    }
+  };
+
   // ⭐️ ซิงค์รายชื่อพนักงานจากไฟล์ CSV — ใครไม่มีในไฟล์จะถูกปิดการใช้งาน (soft delete)
   const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -703,7 +747,7 @@ export default function Settings() {
                     <RotateCcw size={16} className={resetLoading === 'unlink-line' ? 'animate-spin' : ''} /> ปลดผูกบัญชี LINE ทั้งหมด
                   </button>
                   <button
-                    onClick={() => handleAdminReset('members', 'ลบสมาชิกที่สมัครผ่าน LINE ทั้งหมด?', 'ลบถาวร กู้คืนไม่ได้ — บัญชี role MEMBER ทั้งหมดจะถูกลบทิ้ง', 'members')}
+                    onClick={handleDeleteMembers}
                     disabled={resetLoading === 'members'}
                     className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
                   >

@@ -47,13 +47,16 @@ async function unlinkAllLine(req, res) {
 // ⭐️ audit_logs มี FK ผูกกับ users.id แบบไม่มี ON DELETE — และสมาชิกทุกคนที่สมัครผ่าน LINE จะมีแถว
 // audit_logs (action=MEMBER_REGISTER_LINE) ติดตัวมาด้วยเสมอ (ดู memberController.js registerViaLine)
 // เท่ากับ DELETE users ตรงๆ พังทุกครั้งแน่นอน 100% ไม่ใช่แค่บางเคส — ต้องล้าง audit_logs ก่อนด้วย
-// เช่นเดียวกับ point_transactions/revoked_tokens/notifications/promotion_usages ที่เป็นแค่ log/ประวัติ
-// ภายในของสมาชิก ไม่มีมูลค่าทางธุรกิจอิสระเมื่อตัวสมาชิกถูกลบไปแล้ว จึงลบตามได้อย่างปลอดภัย
+// เช่นเดียวกับ point_transactions/revoked_tokens/notifications/promotion_usages/password_resets ที่
+// เป็นแค่ log/ประวัติภายในของสมาชิก ไม่มีมูลค่าทางธุรกิจอิสระเมื่อตัวสมาชิกถูกลบไปแล้ว จึงลบตามได้เลย
 // ⭐️ sales.member_id / orders.user_id เป็นประวัติการขาย/ออเดอร์จริง — "ตัดสาย" ด้วยการ SET NULL แทน
 // การลบทิ้ง (เหมือน products.vendor_id ON DELETE SET NULL ที่มีอยู่แล้ว) ยอดขาย/ออเดอร์เดิมยังอยู่ครบ
-// แค่ไม่มีสมาชิกผูกอยู่แล้ว (กลายเป็นเหมือนขายแบบไม่ระบุตัวลูกค้า) — ตัดสินใจร่วมกับผู้ใช้แล้วว่าจะไม่ลบ
-// ยอดขาย/ออเดอร์จริงทิ้งเด็ดขาด เพราะกระทบข้อมูลบัญชี/รายงานย้อนหลัง
-// ทั้งหมดอยู่ใน transaction เดียวกับการลบ users เอง กันเคสลบ/ตัดสายไปแล้วแต่ลบ user ไม่สำเร็จ
+// แค่ไม่มีสมาชิกผูกอยู่แล้ว — ตัดสินใจร่วมกับผู้ใช้แล้วว่าจะไม่ลบยอดขาย/ออเดอร์จริงทิ้งเด็ดขาด
+// ⭐️ attendance.user_id เป็น NOT NULL (SET NULL ไม่ได้) และเป็นประวัติเข้า-ออกงาน/เงินเดือนจริง — เกิดได้
+// เพราะหน้า Settings แก้ role คนกลับเป็น MEMBER ได้ (คนที่เคยเป็น staff จริง) endpoint นี้กวาดตาม
+// role='MEMBER' ปัจจุบันเลยไปเจอเข้า จึง "เช็คก่อน" เสมอว่ามีใครติด attendance บ้าง ถ้ามีและ caller ยัง
+// ไม่ได้ระบุมาชัดๆ ว่าจะเอาแบบไหน (deleteAttendance / skipBlocked) จะหยุดแค่ตรงนี้ ส่งรายชื่อกลับไปให้
+// frontend เปิด popup ถามก่อนเสมอ ไม่ลบประวัติเข้า-ออกงานเงียบๆ เด็ดขาด
 async function resetMembers(req, res) {
   // ⭐️ ต้องส่ง field "error" (ไม่ใช่ "message") — getErrorMessage() ฝั่ง frontend (utils/errorMessage.ts)
   // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
@@ -63,27 +66,67 @@ async function resetMembers(req, res) {
       error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
     });
   }
+  const deleteAttendance = req.body?.deleteAttendance === true;
+  const skipBlocked = req.body?.skipBlocked === true;
   const conn = await pool.getConnection();
   try {
+    const [blockedRows] = await conn.query(
+      `SELECT DISTINCT u.id, u.full_name, u.student_id FROM users u
+       JOIN attendance a ON a.user_id = u.id WHERE u.role = 'MEMBER'`
+    );
+
+    if (blockedRows.length > 0 && !deleteAttendance && !skipBlocked) {
+      return res.json({
+        success: false,
+        needsConfirmation: true,
+        blockedMembers: blockedRows,
+        message: `พบสมาชิก ${blockedRows.length} คนที่มีประวัติเข้า-ออกงานติดอยู่ (${blockedRows.map(r => r.full_name).join(', ')}) — ต้องการลบประวัติเข้า-ออกงานไปด้วย หรือข้ามคนเหล่านี้ไว้ก่อน?`,
+      });
+    }
+
+    const blockedIds = blockedRows.map(r => r.id);
     await conn.beginTransaction();
-    await conn.query("DELETE FROM point_transactions WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("DELETE FROM audit_logs WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("DELETE FROM revoked_tokens WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("DELETE FROM promotion_usages WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("UPDATE sales SET member_id = NULL WHERE member_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    await conn.query("UPDATE orders SET user_id = NULL WHERE user_id IN (SELECT id FROM users WHERE role = 'MEMBER')");
-    const [result] = await conn.query("DELETE FROM users WHERE role = 'MEMBER'");
+
+    let targetSql = "SELECT id FROM users WHERE role = 'MEMBER'";
+    const targetParams = [];
+    if (skipBlocked && blockedIds.length > 0) {
+      targetSql += ' AND id NOT IN (?)';
+      targetParams.push(blockedIds);
+    }
+    const [targetRows] = await conn.query(targetSql, targetParams);
+    const targetIds = targetRows.map(r => r.id);
+
+    if (targetIds.length === 0) {
+      await conn.commit();
+      return res.json({ success: true, message: 'ไม่มีสมาชิกให้ลบ (ทั้งหมดถูกข้ามเพราะมีประวัติเข้า-ออกงาน)', affected: 0, skipped: blockedIds.length });
+    }
+
+    if (deleteAttendance) {
+      await conn.query('DELETE FROM attendance WHERE user_id IN (?)', [targetIds]);
+    }
+    await conn.query('DELETE FROM point_transactions WHERE user_id IN (?)', [targetIds]);
+    await conn.query('DELETE FROM audit_logs WHERE user_id IN (?)', [targetIds]);
+    await conn.query('DELETE FROM revoked_tokens WHERE user_id IN (?)', [targetIds]);
+    await conn.query('DELETE FROM notifications WHERE user_id IN (?)', [targetIds]);
+    await conn.query('DELETE FROM promotion_usages WHERE member_id IN (?)', [targetIds]);
+    await conn.query('DELETE FROM password_resets WHERE user_id IN (?)', [targetIds]);
+    await conn.query('UPDATE sales SET member_id = NULL WHERE member_id IN (?)', [targetIds]);
+    await conn.query('UPDATE orders SET user_id = NULL WHERE user_id IN (?)', [targetIds]);
+    const [result] = await conn.query('DELETE FROM users WHERE id IN (?)', [targetIds]);
     await conn.commit();
-    await logAdminReset('ADMIN_RESET_MEMBERS', req.user.id, { affected: result.affectedRows });
-    res.json({ success: true, message: `ลบสมาชิก MEMBER แล้ว ${result.affectedRows} คน`, affected: result.affectedRows });
+
+    const skippedCount = skipBlocked ? blockedIds.length : 0;
+    await logAdminReset('ADMIN_RESET_MEMBERS', req.user.id, { affected: result.affectedRows, deleteAttendance, skipped: skippedCount });
+    res.json({
+      success: true,
+      message: skippedCount > 0
+        ? `ลบสมาชิก MEMBER แล้ว ${result.affectedRows} คน (ข้าม ${skippedCount} คนที่มีประวัติเข้า-ออกงาน)`
+        : `ลบสมาชิก MEMBER แล้ว ${result.affectedRows} คน`,
+      affected: result.affectedRows,
+      skipped: skippedCount,
+    });
   } catch (error) {
     await conn.rollback();
-    // ⭐️ FK constraint อื่นที่เหลือ (เช่น shifts/schedules/attendance ถ้าสมาชิกดันมี role เดิมเป็น staff
-    // มาก่อน — สำคัญ: ตารางพวกนี้เป็นประวัติเข้า-ออกงาน/เงินเดือนจริง ไม่ auto-clear ให้เหมือนตารางอื่น
-    // เพราะ endpoint นี้กวาดตาม role='MEMBER' ปัจจุบัน ถ้ามีคนเคยเป็น staff แล้วถูกลดขั้นกลับเป็น MEMBER
-    // (ทำได้จากหน้า Settings) ประวัติเก่าของเขายังอยู่ ไม่ควรถูกลบไปพร้อมสมาชิกทดสอบ)
     // ⭐️ log error.message เต็มๆ ไว้เสมอ (ไม่ใช่แค่ตอน 500) เพราะ MySQL error message บอกชื่อ
     // constraint/ตารางที่ชนอยู่แล้ว — ใช้ไล่ดูใน log ได้ทันทีว่าตารางไหนบล็อกจริง โดยไม่ต้องเดา
     console.error('[resetMembers] FK/DB error:', error.code, error.message);
