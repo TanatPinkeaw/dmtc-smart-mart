@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bell, Store, Menu, User, Home, ShoppingBag } from 'lucide-react';
+import { Bell, Store, Menu, User, Home, ShoppingBag, LayoutDashboard } from 'lucide-react';
 import { MobNavItem } from './NavItem';
 
 interface MobileBottomNavProps {
@@ -45,9 +45,13 @@ export function MobileBottomNav({
         <div className="w-16 shrink-0" />
 
         <div className="flex-1 flex items-center justify-around h-full">
-          {isStaff && isCashier
+          {/* ⭐️ CASHIER → POS, ADMIN/MANAGER (staff อื่น) → สรุปยอดขาย, MEMBER → สั่งจอง
+              (เดิม staff ที่ไม่ใช่ CASHIER ตกไป else = /pre-order ซึ่งตอนนี้ MEMBER-only จะโดนบล็อก) */}
+          {isCashier
             ? <MobNavItem to="/pos" icon={<Store size={20} />} label="POS" />
-            : <MobNavItem to="/pre-order" icon={<ShoppingBag size={20} />} label="จอง" />}
+            : isStaff
+              ? <MobNavItem to="/dashboard" icon={<LayoutDashboard size={20} />} label="สรุป" />
+              : <MobNavItem to="/pre-order" icon={<ShoppingBag size={20} />} label="จอง" />}
           <button onClick={onOpenProfile} className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-gray-400 hover:text-brand transition-colors duration-150">
             <User size={20} />
             <span className="text-[10px] font-medium">โปรไฟล์</span>

@@ -86,7 +86,7 @@ export default function POS() {
   useEffect(() => {
     // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
     // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
-    if (localStorage.getItem('session_mode') === 'shop') { navigate('/pre-order'); return; }
+    // (เดิมมี logic เด้งออก /pre-order ถ้าอยู่ "โหมดซื้อของ" — ถอดออกพร้อมการเลิกใช้ session_mode)
     fetchCategories(); fetchProducts(); fetchPromotions(); fetchStoreInfo(); fetchLoyaltyRate();
     // ⭐️ POS ออฟไลน์ — เช็คคิวค้างตอน mount ด้วย เผื่อรีเฟรชหน้าหลังขายออฟไลน์ไปแล้วแต่ยังไม่ทันซิงค์
     getOfflineSalesCount().then(setPendingOfflineCount).catch(() => {});

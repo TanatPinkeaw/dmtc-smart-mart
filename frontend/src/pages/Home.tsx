@@ -128,10 +128,9 @@ export default function Home() {
     return 'สวัสดีตอนเย็น';
   };
 
-  const goTo = (mode: 'work' | 'shop', path: string) => {
-    localStorage.setItem('session_mode', mode);
-    navigate(path);
-  };
+  // ⭐️ เดิมเซ็ต session_mode (work/shop) ก่อน navigate — ตอนนี้ถอด "โหมดซื้อของ" ของ staff ออกแล้ว
+  //   จึงเหลือแค่ navigate เฉยๆ (session_mode ไม่มีใครอ่านอีกต่อไป)
+  const goTo = (path: string) => navigate(path);
 
   const handleLogout = () => {
     Swal.fire({ title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
@@ -146,10 +145,12 @@ export default function Home() {
   // mockup เพราะต้องเรียก endpoint เพิ่มอีกจุด ยังไม่คุ้มสำหรับหน้ากลางที่ควรโหลดไว)
   const modules = [
     {
-      key: 'pre-order', show: true, icon: ShoppingCart,
+      // ⭐️ การ์ดสั่งจอง/ซื้อสินค้า เปิดให้เฉพาะ MEMBER — staff (ADMIN/CASHIER/MANAGER) ไม่มีโหมดซื้อของแล้ว
+      //   (/pre-order เป็น MEMBER-only) จึงซ่อนการ์ดนี้จาก staff ไม่ให้กดไปเจอหน้าบล็อก
+      key: 'pre-order', show: !isStaff, icon: ShoppingCart,
       title: 'สั่งจอง/ซื้อสินค้า', subtitle: 'เลือกดูสินค้าและสั่งจอง',
       badge: productCount > 0 ? `${productCount} รายการ` : null,
-      onClick: () => goTo('shop', '/pre-order'),
+      onClick: () => goTo('/pre-order'),
     },
     // ⭐️ 3 การ์ดนี้ล็อกพร้อมกันตอน CASHIER ยังไม่เปิดกะ — ล็อกแค่ POS ใบเดียวไม่พอ เพราะกดใบอื่น
     //   จะตั้ง session_mode เป็น 'work' ทำให้เมนู staff (รวมลิงก์ POS) กลับมาโผล่ = อ้อมกติกาได้
@@ -158,26 +159,26 @@ export default function Home() {
       key: 'pos', show: isCashier, icon: CreditCard, locked: workLocked,
       title: 'หน้าขาย (POS)', subtitle: workLocked ? 'ต้องเปิดกะก่อนถึงจะขายได้' : 'ขายสินค้า/รับชำระเงิน',
       badge: null,
-      onClick: () => goTo('work', '/pos'),
+      onClick: () => goTo('/pos'),
     },
     {
       key: 'dashboard', show: isStaff, icon: LayoutDashboard, locked: workLocked,
       title: 'สรุปยอดขาย', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'รายงาน/สถิติการขาย',
       badge: summary ? `วันนี้ ฿${Number(summary.total_sales).toLocaleString()}` : null,
-      onClick: () => goTo('work', '/dashboard'),
+      onClick: () => goTo('/dashboard'),
     },
     {
       key: 'inventory', show: isStaff, icon: Boxes, locked: workLocked,
       title: 'คลังสินค้า', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'จัดการสินค้าและสต๊อก',
       badge: lowStockCount > 0 ? `${lowStockCount} ใกล้หมด` : null,
-      onClick: () => goTo('work', '/inventory'),
+      onClick: () => goTo('/inventory'),
     },
     {
       // ⭐️ ลงชื่อเข้า-ออกงาน (clock-in/out) เปิดให้เฉพาะ CASHIER และ MANAGER — ADMIN ไม่ต้องลงชื่อเข้า-ออกงานอีกต่อไป
       key: 'shift', show: isCashier || isManager, icon: Clock,
       title: 'จัดการกะการขาย', subtitle: 'ลงชื่อเข้า-ออกงาน/นับเงิน',
       badge: null,
-      onClick: () => goTo('work', '/shift'),
+      onClick: () => goTo('/shift'),
     },
   ].filter(m => m.show);
 
@@ -278,7 +279,7 @@ export default function Home() {
                 </button>
               ) : (
                 <button
-                  onClick={() => goTo('shop', '/pre-order?view=orders')}
+                  onClick={() => goTo('/pre-order?view=orders')}
                   className="mt-3 w-full py-2.5 rounded-full bg-brand-bg text-brand text-sm font-bold transition-all duration-150 active:scale-[0.98] hover:bg-brand-border/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   ดูรายละเอียด
@@ -361,7 +362,7 @@ export default function Home() {
         <div className="mt-5 max-w-lg mx-auto">
           <div className="px-5 flex items-center justify-between mb-2">
             <p className="text-sm font-extrabold text-gray-900">🔥 สินค้าขายดีประจำสัปดาห์</p>
-            <button onClick={() => goTo('shop', '/pre-order')} className="text-xs font-bold text-brand hover:underline shrink-0">
+            <button onClick={() => goTo('/pre-order')} className="text-xs font-bold text-brand hover:underline shrink-0">
               ดูทั้งหมด
             </button>
           </div>
@@ -402,7 +403,7 @@ export default function Home() {
                           )}
                         </div>
                         <button
-                          onClick={() => goTo('shop', `/pre-order?add=${p.id}`)}
+                          onClick={() => goTo(`/pre-order?add=${p.id}`)}
                           className="mt-2 w-full py-1.5 rounded-full bg-gradient-to-br from-brand to-brand-dark text-white text-[11px] font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                         >
                           + เพิ่มลงตะกร้า

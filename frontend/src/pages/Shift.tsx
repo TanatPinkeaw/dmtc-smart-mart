@@ -88,10 +88,6 @@ export default function Shift() {
       const fd = new FormData(); fd.append('photo', checkInPhoto);
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/attendance/check-in', { check_in_photo: uploadRes.data.photo_url });
-      // 🐛 FIX — ต้องตั้งโหมดทำงานก่อนเด้งไป /dashboard ไม่งั้นถ้ามาถึงหน้านี้ตอน session_mode='shop'
-      //   (เช่นพิมพ์ URL ตรง/กด back) Dashboard.tsx จะเห็น 'shop' แล้วเตะไป /pre-order ทันที
-      //   ทั้งที่เพิ่งลงชื่อเข้างานสำเร็จ — คู่กับตอนออกงานที่ตั้งกลับเป็น 'shop'
-      localStorage.setItem('session_mode', 'work');
       navigate('/dashboard');
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckInLoading(false); }
@@ -108,8 +104,6 @@ export default function Shift() {
       await api.put('/attendance/check-out', { check_out_photo: uploadRes.data.photo_url });
       Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
       // ⭐️ ลงชื่อออกงานเสร็จแล้วไม่ต้องเตะออกจากระบบ (ตามคำขอผู้ใช้) — กลับหน้า Home ให้เลือกทำอย่างอื่นต่อได้
-      //   แต่ต้องสลับเป็นโหมดซื้อของด้วย ให้ตรงกับกติกาเดียวกับตอนล็อกอิน (ไม่ได้เข้างาน = สมาชิก)
-      localStorage.setItem('session_mode', 'shop');
       setTimeout(() => navigate('/home'), 1500);
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckOutLoading(false); }
@@ -124,8 +118,6 @@ export default function Shift() {
       const fd = new FormData(); fd.append('photo', checkInPhoto);
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/shifts/open', { cashier_id: user.id, opening_cash: openingCash, cash_breakdown: denomCounts, open_photo: uploadRes.data.photo_url });
-      // 🐛 FIX — เหตุผลเดียวกับ check-in: POS.tsx เตะไป /pre-order ถ้า session_mode ยังเป็น 'shop'
-      localStorage.setItem('session_mode', 'work');
       navigate('/pos');
     } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
@@ -269,8 +261,6 @@ export default function Shift() {
       onSubmit={handleCloseShift}
       onClose={() => navigate('/home')}
       onDone={() => {
-        // ⭐️ ปิดกะแล้ว = ไม่ได้เข้างานอยู่ กลับเป็นโหมดซื้อของ (กติกาเดียวกับตอนล็อกอิน)
-        localStorage.setItem('session_mode', 'shop');
         navigate('/home');
       }}
     />

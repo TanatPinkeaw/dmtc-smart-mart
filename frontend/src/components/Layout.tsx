@@ -36,12 +36,11 @@ function LayoutInner() {
   //   มาบอกให้อ่านค่าใหม่จาก localStorage (ไม่งั้นรูปในเมนูค้างเป็นรูปเก่าจนกว่าจะรีเฟรชหน้า)
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(user.profile_image_url || null);
 
-  const sessionMode = localStorage.getItem('session_mode');
-  // ⭐️ ADMIN ไม่ถูกกรองด้วยสถานะเข้างาน — งานหลังบ้าน (ตั้งค่า/รายงาน/จัดการพนักงาน) ไม่ใช่กะขายของ
-  //   จะบังคับให้ลงชื่อเข้างานก่อนถึงจะเข้าเมนูผู้จัดการได้ไม่สมเหตุสมผล
-  //   ส่วน CASHIER ยังกรองตามโหมด (ไม่ได้เปิดกะ = ใช้งานได้เท่าสมาชิก) ตามที่ตกลงไว้
-  // ⭐️ MANAGER = staff เต็มตัว (ไม่ผูกกับกะ เหมือน ADMIN) — CASHIER ยังกรองตามโหมด shop/work
-  const isStaff = user.role === 'ADMIN' || user.role === 'MANAGER' || (user.role === 'CASHIER' && sessionMode !== 'shop');
+  // ⭐️ staff = ADMIN/MANAGER/CASHIER (ตาม role ล้วนๆ) — เดิม CASHIER ถูกกรองด้วย session_mode='shop'
+  //   (โหมดซื้อของ) ให้กลายเป็นสมาชิกชั่วคราว แต่ตอนนี้ถอด "โหมดซื้อของ" ของ staff ออกทั้งหมดแล้ว
+  //   (staff จัดการการซื้อ/จองผ่านเว็บไม่ได้ — หน้า /pre-order เป็นของ MEMBER เท่านั้น) CASHIER จึงเป็น
+  //   staff เสมอ ส่วนการบังคับเปิดกะก่อนขายจริงยังคุมที่ backend (/sales/checkout) + การ์ดในหน้า Home
+  const isStaff = user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'CASHIER';
   const isAdmin = user.role === 'ADMIN';
   // ⭐️ เมนูจัดการร้าน (ตั้งค่า/รายงาน/สินค้า/กลุ่มสมาชิก) เปิดให้ทั้ง ADMIN และ MANAGER
   const isStoreAdmin = user.role === 'ADMIN' || user.role === 'MANAGER';

@@ -43,7 +43,6 @@ function forceLogout() {
   sessionExpired = true;
   csrfToken = null;
   localStorage.removeItem('user');
-  localStorage.removeItem('session_mode');
 
   Swal.fire({
     icon: 'warning',
@@ -245,8 +244,11 @@ api.interceptors.response.use(
     // ยกเว้น change-password/logout (ดู requirePasswordChange middleware). หน้า /shift ไม่ได้ห่อด้วย
     // Layout (ที่ force-open ChangePasswordModal) เลยต้องดักตรงนี้เป็น fallback แล้วเด้งไปหน้าที่มี Layout
     if (error.response?.status === 403 && error.response?.data?.code === 'MUST_CHANGE_PASSWORD') {
-      if (!window.location.pathname.startsWith('/settings') && !window.location.pathname.startsWith('/pre-order')) {
-        window.location.href = '/pre-order';
+      // ⭐️ เด้งไปหน้าที่มี Layout ครอบ (Layout เป็นตัว force-open ChangePasswordModal) — ใช้ /profile
+      //   เพราะเปิดได้ทุก role และไม่มี role guard (เดิมใช้ /pre-order แต่ตอนนี้เป็น MEMBER-only แล้ว
+      //   staff จะโดนบล็อกแทนที่จะเจอ modal เปลี่ยนรหัส)
+      if (!window.location.pathname.startsWith('/settings') && !window.location.pathname.startsWith('/profile')) {
+        window.location.href = '/profile';
       }
       return Promise.reject(error);
     }

@@ -17,7 +17,6 @@ export async function performLogout() {
     console.error('Logout error:', err);
   } finally {
     localStorage.removeItem('user');
-    localStorage.removeItem('session_mode');
     setCsrfToken(null);
   }
 }

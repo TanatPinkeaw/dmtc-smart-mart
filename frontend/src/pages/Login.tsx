@@ -58,21 +58,9 @@ export default function Login() {
       // ⭐️ F4 — Notify Socket context that token has changed (for same-tab reconnection)
       window.dispatchEvent(new Event('tokenChanged'));
 
-      // ⭐️ NEW — ตั้งโหมดใช้งานอัตโนมัติจากสถานะเข้างานจริง (backend ส่ง has_active_work_session มาให้)
-      //   staff ที่ยังเข้างานค้างอยู่ (เปิดกะ/ลงชื่อเข้างานแล้วยังไม่ออก) = เข้าโหมดทำงานต่อได้เลย
-      //   ใครที่ไม่ได้เข้างาน (รวม MEMBER ทุกคน) = โหมดซื้อของตามเดิม
-      //   ยังเปลี่ยนเองได้ทีหลังจากการ์ดโมดูลในหน้า Home (goTo ตั้ง session_mode ทับ)
-      // 🐛 FIX — ต้องแยก undefined (backend รุ่นเก่ายังไม่ deploy = ไม่มี field นี้) ออกจาก false
-      //   ไม่งั้น `undefined ? 'work' : 'shop'` จะเหวี่ยง staff ทุกคนไปโหมดซื้อของ ทั้งที่เข้างานอยู่จริง
-      //   กรณีไม่มี field ให้คงพฤติกรรมเดิม (ไม่ตั้งค่า = Layout ถือว่าเป็น staff) จนกว่า backend จะอัปเดต
-      // ⭐️ ADMIN เข้าโหมดทำงานเสมอ ไม่ต้องลงชื่อเข้างานก่อน (งานหลังบ้านไม่ใช่กะขายของ)
-      //   กติกาเช็คกะใช้กับ CASHIER เท่านั้น
-      const workFlag = response.data.has_active_work_session;
-      if (response.data.user.role === 'ADMIN') localStorage.setItem('session_mode', 'work');
-      else if (workFlag === undefined) localStorage.removeItem('session_mode');
-      else localStorage.setItem('session_mode', workFlag ? 'work' : 'shop');
-      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ (เดิม ADMIN เด้งไป /pre-order ซึ่งตอนนี้เป็น MEMBER-only
-      //   แล้ว ADMIN จะโดนบล็อก — ส่งไป /home ให้เลือกโมดูลเองแทน)
+      // ⭐️ ทุก role เข้าหน้า Home กลางก่อนเสมอ ให้เลือกโมดูลเองจากการ์ดในหน้า Home
+      //   (เดิมมี logic ตั้ง session_mode work/shop ตามสถานะเข้างาน — ถอดออกแล้วพร้อมการเลิกใช้
+      //    "โหมดซื้อของ" ของ staff ทั้งระบบ; staff จัดการงานผ่านเมนู staff, MEMBER ซื้อของผ่าน /pre-order)
       navigate('/home');
     } catch (err: any) {
       if (err.response?.status !== 429) {
