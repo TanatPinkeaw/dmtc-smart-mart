@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../api';
 import Swal from '../../swal';
@@ -24,10 +25,14 @@ interface OrderDetailModalProps {
   onRefundReasonChange: (value: string) => void;
   onClose: () => void;
   onCancelOrder: (order: any, reason: string) => void;
+  // ⭐️ Phase 3 — ล็อกปุ่ม "ยกเลิกออเดอร์" ระหว่าง request ยังไม่จบ กัน double-submit
+  cancelling: boolean;
   fetchMyOrders: () => Promise<void>;
 }
 
-export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonChange, onClose, onCancelOrder, fetchMyOrders }: OrderDetailModalProps) {
+export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonChange, onClose, onCancelOrder, cancelling, fetchMyOrders }: OrderDetailModalProps) {
+  // ⭐️ Phase 3 — กันแตะซ้ำระหว่างอัปโหลดสลิปยังไม่จบ (เดิมไม่มี guard เลย กดซ้ำได้ยิง request ซ้อนกัน)
+  const [uploading, setUploading] = useState(false);
   return (
     // ⭐️ FIX: z-50 เดิมเท่ากับ bottom nav (z-50 ใน Layout.tsx) — เพราะ nav อยู่หลัง <main> ใน DOM ทำให้
     // แม้ backdrop คลุมเต็มจอ nav ก็ยังโผล่ทับด้านบนอยู่ (ตามภาพที่แจ้ง) ยกเป็น z-[80] ให้อยู่เหนือ nav แน่นอน
@@ -102,9 +107,10 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
 
           {/* Upload Slip Section */}
           {selectedOrder.status === 'PENDING_VERIFY' && !selectedOrder.slip_image && (
-            <label className="block cursor-pointer group">
-              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+            <label className={`block group ${uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
+              <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={async (e) => {
                 const file = e.target.files?.[0]; if (!file) return;
+                setUploading(true);
                 try {
                   const fd = new FormData(); fd.append('slip', file);
                   await api.post(`/orders/${selectedOrder.id}/upload-slip`, fd);
@@ -112,20 +118,33 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
                   await fetchMyOrders();
                   onClose();
                   Swal.fire({ icon: 'success', title: 'อัปโหลดสลิปสำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
-                } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+                } catch (err: any) {
+                  Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
+                } finally {
+                  setUploading(false);
+                }
               }} />
               <div className="border-2 border-dashed border-brand-mid rounded-2xl p-6 sm:p-7 text-center bg-brand-bg group-hover:bg-brand-border group-active:bg-brand-border transition-colors duration-150">
-                <p className="text-brand font-bold text-sm sm:text-base">📎 แตะเพื่ออัปโหลดสลิป</p>
-                <p className="text-brand text-xs sm:text-sm mt-2">(รูปภาพขนาดไม่เกิน 5 MB)</p>
+                {uploading ? (
+                  <p className="text-brand font-bold text-sm sm:text-base flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" /> กำลังอัปโหลด...
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-brand font-bold text-sm sm:text-base">📎 แตะเพื่ออัปโหลดสลิป</p>
+                    <p className="text-brand text-xs sm:text-sm mt-2">(รูปภาพขนาดไม่เกิน 5 MB)</p>
+                  </>
+                )}
               </div>
             </label>
           )}
 
           {/* Resubmit Slip */}
           {selectedOrder.status === 'SLIP_REJECTED' && (
-            <label className="block cursor-pointer group">
-              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+            <label className={`block group ${uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
+              <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={async (e) => {
                 const file = e.target.files?.[0]; if (!file) return;
+                setUploading(true);
                 try {
                   const fd = new FormData(); fd.append('slip', file);
                   await api.post(`/orders/${selectedOrder.id}/upload-slip`, fd);
@@ -133,11 +152,23 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
                   await fetchMyOrders();
                   onClose();
                   Swal.fire({ icon: 'success', title: 'ส่งสลิปใหม่สำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
-                } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+                } catch (err: any) {
+                  Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
+                } finally {
+                  setUploading(false);
+                }
               }} />
               <div className="border-2 border-dashed border-red-300 rounded-2xl p-6 sm:p-7 text-center bg-red-50 group-hover:bg-red-100 group-active:bg-red-75 transition-colors duration-150">
-                <p className="text-red-600 font-bold text-sm sm:text-base">📎 แตะเพื่อส่งสลิปใหม่</p>
-                <p className="text-red-500 text-xs sm:text-sm mt-2">สลิปของท่านไม่ถูกต้อง กรุณาส่งสลิปใหม่</p>
+                {uploading ? (
+                  <p className="text-red-600 font-bold text-sm sm:text-base flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" /> กำลังส่งสลิป...
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-red-600 font-bold text-sm sm:text-base">📎 แตะเพื่อส่งสลิปใหม่</p>
+                    <p className="text-red-500 text-xs sm:text-sm mt-2">สลิปของท่านไม่ถูกต้อง กรุณาส่งสลิปใหม่</p>
+                  </>
+                )}
               </div>
             </label>
           )}
@@ -214,10 +245,12 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
             {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(selectedOrder.status) && (
               <button
                 onClick={() => onCancelOrder(selectedOrder, refundReason)}
-                disabled={!refundReason.trim()}
-                className="flex-1 px-4 py-3 bg-gradient-to-br from-red-500 to-red-600 active:scale-[0.98] text-white font-bold rounded-full transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                disabled={!refundReason.trim() || cancelling}
+                className="flex-1 px-4 py-3 bg-gradient-to-br from-red-500 to-red-600 active:scale-[0.98] text-white font-bold rounded-full transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
               >
-                ยกเลิกออเดอร์
+                {cancelling ? (
+                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังยกเลิก...</>
+                ) : 'ยกเลิกออเดอร์'}
               </button>
             )}
           </div>

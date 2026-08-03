@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { X, RotateCw } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -24,13 +24,17 @@ const STATUS_LABEL: Record<string, string> = {
 
 interface MyOrdersModalProps {
   myOrders: any[];
+  // ⭐️ Phase 3 — แยก "กำลังโหลด" / "โหลดไม่สำเร็จ" ออกจาก "ไม่มีประวัติจริงๆ" ให้ชัดเจน
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
   onClose: () => void;
   onSelectOrder: (order: any) => void;
   /** ⭐️ ทางลัดส่งสลิปใหม่จากการ์ดเลย ไม่ต้องเข้าไปในหน้ารายละเอียดออเดอร์ก่อน */
   onResubmitSlip: (order: any) => void;
 }
 
-export function MyOrdersModal({ myOrders, onClose, onSelectOrder, onResubmitSlip }: MyOrdersModalProps) {
+export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSelectOrder, onResubmitSlip }: MyOrdersModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
       {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
@@ -40,7 +44,21 @@ export function MyOrdersModal({ myOrders, onClose, onSelectOrder, onResubmitSlip
           <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
         </div>
         <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
-          {myOrders.length === 0 ? (
+          {/* ⭐️ Phase 3 — ลำดับความสำคัญ: กำลังโหลด (ยังไม่มีข้อมูลเก่า) > โหลดพังไม่มีข้อมูลเก่า >
+              ว่างจริงๆ > มีข้อมูล (โชว์ต่อแม้ background refresh ล่าสุดจะพัง ดีกว่าล้างของเดิมทิ้ง) */}
+          {loading && myOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-gray-400 py-16 gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
+              <p className="text-sm font-medium">กำลังโหลดประวัติการสั่งจอง...</p>
+            </div>
+          ) : error && myOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-gray-400 py-16 gap-3">
+              <p className="text-sm font-medium text-red-500">โหลดประวัติการสั่งจองไม่สำเร็จ</p>
+              <button onClick={onRetry} className="flex items-center gap-1.5 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-4 py-2 rounded-full active:scale-95 transition-all duration-150">
+                <RotateCw size={14} /> ลองใหม่
+              </button>
+            </div>
+          ) : myOrders.length === 0 ? (
             <p className="text-center text-gray-400 py-10">ยังไม่มีประวัติการสั่งจอง</p>
           ) : (
             myOrders.map(order => (

@@ -70,10 +70,17 @@ export default function PreOrder() {
 
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
+  // ⭐️ Phase 3 — แยก loading/error ของประวัติออเดอร์ออกจากกัน: เดิม fetchMyOrders พังแล้วเงียบ
+  // (console.error เฉยๆ) ทำให้ myOrders ค้างค่าเดิม (ว่างเปล่าถ้ายังไม่เคยโหลดสำเร็จ) หน้า modal
+  // จะโชว์ "ยังไม่มีประวัติการสั่งจอง" ทั้งที่จริงๆ แค่โหลดไม่สำเร็จ — คนละความหมายกันสิ้นเชิง
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null); // ✅ CHANGED: modal order detail
   // ⭐️ ออเดอร์ที่กำลังจะส่งสลิปใหม่ (เปิดจากการ์ดประวัติออเดอร์ตรงๆ)
   const [slipOrder, setSlipOrder] = useState<any>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
+  // ⭐️ Phase 3 — กันกดปุ่ม "ยกเลิกออเดอร์" ซ้ำระหว่างที่ request แรกยังไม่จบ (double-submit)
+  const [cancelling, setCancelling] = useState(false);
   // ⭐️ Deep link จากหน้า Home — 'slip' = ดันออเดอร์ที่สลิปไม่ผ่านขึ้นบนสุดของประวัติ (ไม่ได้กรองออก
   //   รายการอื่นทิ้ง แค่จัดลำดับใหม่ ยังเห็นออเดอร์อื่นได้เหมือนเดิม)
   const [orderFilter, setOrderFilter] = useState<'slip' | null>(null);
@@ -382,10 +389,19 @@ export default function PreOrder() {
   };
 
   const fetchMyOrders = async () => {
+    setOrdersLoading(true);
     try {
       const res = await api.get(`/orders?t=${Date.now()}`);
       setMyOrders(res.data);
-    } catch (err) { console.error(err); }
+      setOrdersError(false);
+    } catch (err) {
+      console.error(err);
+      // ⭐️ Phase 3 — โหลดไม่สำเร็จ ≠ ไม่มีประวัติ ต้องแยกให้ modal บอกผู้ใช้ถูกต้อง ไม่ทำให้ myOrders
+      // เป็น [] เอง (เก็บของเก่าที่เคยโหลดได้ไว้ ถ้ามี ดีกว่าล้างทิ้งจนดูเหมือนประวัติหายไปเฉยๆ)
+      setOrdersError(true);
+    } finally {
+      setOrdersLoading(false);
+    }
   };
 
   // ⭐️ เปิดออเดอร์เจาะจง (จากการกดแจ้งเตือน) → เด้งเข้า modal รายละเอียดเลย
@@ -406,7 +422,9 @@ export default function PreOrder() {
       Swal.fire({ icon: 'warning', title: 'ต้องระบุเหตุผล', text: 'กรุณาใส่เหตุผลการยกเลิกออเดอร์' });
       return;
     }
+    if (cancelling) return; // ⭐️ Phase 3 — กันกดซ้ำระหว่าง request แรกยังไม่จบ (double-submit)
 
+    setCancelling(true);
     try {
       await api.put(`/orders/${order.id}/cancel-by-user`, { refund_info: reason });
       Swal.fire({ icon: 'success', title: 'ยกเลิกออเดอร์สำเร็จ', showConfirmButton: false, timer: 1500 });
@@ -416,6 +434,8 @@ export default function PreOrder() {
       fetchProducts();
     } catch (err: any) {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -543,6 +563,9 @@ export default function PreOrder() {
       {showMyOrders && (
         <MyOrdersModal
           myOrders={displayedOrders}
+          loading={ordersLoading}
+          error={ordersError}
+          onRetry={fetchMyOrders}
           onClose={() => { setShowMyOrders(false); setOrderFilter(null); }}
           onSelectOrder={(order) => { setSelectedOrder(order); setRefundReason(''); setShowMyOrders(false); setOrderFilter(null); }}
           onResubmitSlip={(order) => setSlipOrder(order)}
@@ -567,6 +590,7 @@ export default function PreOrder() {
           onRefundReasonChange={setRefundReason}
           onClose={() => setSelectedOrder(null)}
           onCancelOrder={handleCancelMyOrder}
+          cancelling={cancelling}
           fetchMyOrders={fetchMyOrders}
         />
       )}
