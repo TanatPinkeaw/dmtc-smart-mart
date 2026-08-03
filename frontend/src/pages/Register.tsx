@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { API_BASE_URL } from '../config';
+import { liff, ensureLiffInit } from '../utils/liff';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
 // เข้าระบบนี้เสมอ (LIFF มี session ของ LINE เอง ไม่ใช่ JWT ของแอปนี้) ยิง fetch ตรงไป API_BASE_URL
 // แทนที่จะใช้ api.ts instance ตัวหลัก — instance นั้นมี global state (sessionExpired/csrfToken/
 // forceLogout) ผูกกับ auth flow ปกติของแอป ใช้ในหน้านี้เสี่ยงชนกับ session ที่ไม่มีอยู่จริง
-const LIFF_ID = '2010928001-YxK4Atjv';
-const LIFF_SDK_SRC = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
+// ⭐️ LIFF ID/SDK loading — เดิมหน้านี้มี LIFF_ID + script loader แยกของตัวเอง (คนละ id กับ Login.tsx)
+// รวมเป็น liffId เดียวทั้งแอปแล้ว ใช้ utils/liff.ts ร่วมกัน (ensureLiffInit กัน init ซ้ำซ้อนตอนสลับหน้า)
 
 type MemberUser = {
   id: number;
@@ -25,18 +26,6 @@ type MemberUser = {
 const AUTO_REFRESH_MS = 60 * 1000;
 
 type Stage = 'loading' | 'error' | 'card' | 'form' | 'submitting' | 'done';
-
-function loadLiffSdk(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const w = window as any;
-    if (w.liff) return resolve(w.liff);
-    const script = document.createElement('script');
-    script.src = LIFF_SDK_SRC;
-    script.onload = () => resolve(w.liff);
-    script.onerror = () => reject(new Error('โหลด LINE SDK ไม่สำเร็จ กรุณาลองใหม่'));
-    document.head.appendChild(script);
-  });
-}
 
 // ⭐️ เบอร์มือถือไทย: ขึ้นต้น 0 ตามด้วยเลข 9 หลัก รวม 10 หลัก
 const PHONE_RE = /^0[0-9]{9}$/;
@@ -84,8 +73,7 @@ export default function Register() {
   useEffect(() => {
     (async () => {
       try {
-        const liff = await loadLiffSdk();
-        await liff.init({ liffId: LIFF_ID });
+        await ensureLiffInit();
         if (!liff.isLoggedIn()) {
           liff.login();
           return; // ⭐️ liff.login() นำทางออกจากหน้านี้ไป LINE login ก่อน — component จะ mount ใหม่ตอนกลับมา

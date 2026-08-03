@@ -9,7 +9,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
 import { getCurrentUser } from '../utils/getCurrentUser';
-import { liff, LIFF_ID, looksLikeLineInApp } from '../utils/liff';
+import { liff, ensureLiffInit, looksLikeLineInApp } from '../utils/liff';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -59,7 +59,7 @@ export default function Login() {
     let cancelled = false;
     (async () => {
       try {
-        await liff.init({ liffId: LIFF_ID });
+        await ensureLiffInit();
         if (!liff.isInClient()) { if (!cancelled) setAutoChecking(false); return; }
         if (!liff.isLoggedIn()) { liff.login(); return; } // redirect ออกไปขอ login ของ LINE แล้วกลับมาใหม่
         const profile = await liff.getProfile();
