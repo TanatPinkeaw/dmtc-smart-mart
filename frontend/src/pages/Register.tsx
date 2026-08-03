@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { API_BASE_URL } from '../config';
 import { liff, ensureLiffInit } from '../utils/liff';
+import { getCurrentUser } from '../utils/getCurrentUser';
+import { performLogout } from '../utils/logout';
+import api from '../api';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
 // เข้าระบบนี้เสมอ (LIFF มี session ของ LINE เอง ไม่ใช่ JWT ของแอปนี้) ยิง fetch ตรงไป API_BASE_URL
 // แทนที่จะใช้ api.ts instance ตัวหลัก — instance นั้นมี global state (sessionExpired/csrfToken/
 // forceLogout) ผูกกับ auth flow ปกติของแอป ใช้ในหน้านี้เสี่ยงชนกับ session ที่ไม่มีอยู่จริง
+// ⭐️ ข้อยกเว้น: ถ้ามี session ของแอปอยู่จริง (persistent login — โชว์การ์ด "เป็นสมาชิกอยู่แล้ว")
+// ใช้ api.ts instance ปกติได้ (GET /users/me, logout) เพราะ session มีจริง ไม่เสี่ยงชนแบบข้างต้น
 // ⭐️ LIFF ID/SDK loading — เดิมหน้านี้มี LIFF_ID + script loader แยกของตัวเอง (คนละ id กับ Login.tsx)
 // รวมเป็น liffId เดียวทั้งแอปแล้ว ใช้ utils/liff.ts ร่วมกัน (ensureLiffInit กัน init ซ้ำซ้อนตอนสลับหน้า)
 
@@ -25,16 +31,24 @@ type MemberUser = {
 // ที่โชว์บนจอต้องไม่ค้างเก่าไว้นาน ไม่ใช่ตัว QR code เปลี่ยนค่า — เพราะรหัสนักศึกษาไม่เปลี่ยนอยู่แล้ว
 const AUTO_REFRESH_MS = 60 * 1000;
 
-type Stage = 'loading' | 'error' | 'card' | 'form' | 'submitting' | 'done';
+// ⭐️ 'authenticated' — ผู้ใช้ที่มี session ของแอปอยู่แล้ว (persistent login) เปิด /register จะเจอการ์ด
+//   "คุณเป็นสมาชิกอยู่แล้ว" แทนฟอร์มสมัคร (ไม่ redirect ออก, ไม่ล้าง localStorage — ยังคง session ไว้)
+type Stage = 'loading' | 'error' | 'card' | 'form' | 'submitting' | 'done' | 'authenticated';
+
+type SessionMember = { full_name: string; role: string; points: number };
 
 // ⭐️ เบอร์มือถือไทย: ขึ้นต้น 0 ตามด้วยเลข 9 หลัก รวม 10 หลัก
 const PHONE_RE = /^0[0-9]{9}$/;
 
 export default function Register() {
+  const navigate = useNavigate();
   const [stage, setStage] = useState<Stage>('loading');
   const [errorMsg, setErrorMsg] = useState('');
   const [lineUserId, setLineUserId] = useState('');
   const [member, setMember] = useState<MemberUser | null>(null);
+  // ⭐️ ข้อมูลจาก session ของแอป (persistent login) — โชว์ในการ์ด "เป็นสมาชิกอยู่แล้ว"
+  const [sessionMember, setSessionMember] = useState<SessionMember | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const [studentId, setStudentId] = useState('');
   const [fullName, setFullName] = useState('');
@@ -70,31 +84,71 @@ export default function Register() {
     }
   }, []);
 
+  // ⭐️ LIFF flow ล้วนๆ (ไม่เช็ค session ของแอป) — แยกออกมาเป็นฟังก์ชันเรียกซ้ำได้ เพราะหลัง logout
+  // ต้องเรียกใหม่อีกครั้งเพื่อกลับไปเจอฟอร์มสมัคร/บัตรสมาชิกตาม LINE ปกติ (useEffect เดิม deps [] ไม่
+  // รีรันเองตอน state เปลี่ยน — ต้อง call ตรงๆ จาก handleLogout)
+  const runLiffFlow = useCallback(async () => {
+    try {
+      await ensureLiffInit();
+      // ⭐️ CRITICAL: ห้ามเรียก liff.login() ตอนอยู่ในแอป LINE (isInClient=true) — จะบังคับ reload
+      //   หน้าวนไม่จบ. เรียก liff.login() ได้เฉพาะเบราว์เซอร์ภายนอก (นอกแอป LINE) ที่ยังไม่ได้ login
+      //   จริงๆ เท่านั้น. ในแอป LINE จะ auto-login ให้เอง เรียก getProfile ต่อได้เลย
+      if (!liff.isLoggedIn() && !liff.isInClient()) {
+        liff.login();
+        return; // liff.login() นำทางออกไป LINE login ก่อน — component จะ mount ใหม่ตอนกลับมา
+      }
+      const profile = await liff.getProfile();
+      setLineUserId(profile.userId);
+      await refreshMemberStatus(profile.userId, false);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่ภายหลัง');
+      setStage('error');
+    }
+  }, [refreshMemberStatus]);
+
   // ⭐️ กัน LIFF init/login ทำงานซ้ำ (StrictMode double-invoke / re-render) — ต้องรันครั้งเดียวเท่านั้น
   const hasInit = useRef(false);
   useEffect(() => {
     if (hasInit.current) return;
     hasInit.current = true;
     (async () => {
-      try {
-        await ensureLiffInit();
-        // ⭐️ CRITICAL: ห้ามเรียก liff.login() ตอนอยู่ในแอป LINE (isInClient=true) — จะบังคับ reload
-        //   หน้าวนไม่จบ. เรียก liff.login() ได้เฉพาะเบราว์เซอร์ภายนอก (นอกแอป LINE) ที่ยังไม่ได้ login
-        //   จริงๆ เท่านั้น. ในแอป LINE จะ auto-login ให้เอง เรียก getProfile ต่อได้เลย
-        if (!liff.isLoggedIn() && !liff.isInClient()) {
-          liff.login();
-          return; // liff.login() นำทางออกไป LINE login ก่อน — component จะ mount ใหม่ตอนกลับมา
-        }
-        const profile = await liff.getProfile();
-        setLineUserId(profile.userId);
-        await refreshMemberStatus(profile.userId, false);
-      } catch (err: any) {
-        setErrorMsg(err?.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่ภายหลัง');
-        setStage('error');
+      // ⭐️ UX fix — persistent session (localStorage 'user' จาก login ปกติ หรือ LIFF auto-login
+      // ที่ผ่านมาก่อนหน้านี้) ยังคงอยู่ → ไม่ redirect ออกจาก /register และไม่แตะ localStorage เลย
+      // (ไม่ทำลาย persistent login) แค่โชว์การ์ด "เป็นสมาชิกอยู่แล้ว" แทนฟอร์มสมัคร ข้าม LIFF flow
+      // ทั้งหมดไปเลย เพราะมี session ของแอปอยู่แล้ว ไม่จำเป็นต้องผูก LINE ซ้ำ
+      const sessionUser = getCurrentUser();
+      if (sessionUser) {
+        // ⭐️ localStorage.user (จาก login response) ไม่มีฟิลด์ points — ต้องดึงสดจาก /api/users/me
+        // (self-only endpoint, ปลอดภัยสำหรับทุก role เพราะคืนแค่ข้อมูลของ req.user เอง) ใช้ api.ts
+        // instance ปกติได้ตรงนี้เพราะ session มีอยู่จริง (ต่างจากฟลว LIFF ด้านล่างที่ยังไม่มี JWT)
+        let points = 0;
+        try {
+          const meRes = await api.get('/users/me');
+          points = Number(meRes.data?.points) || 0;
+        } catch { /* ดึงแต้มสดไม่สำเร็จ — โชว์การ์ดต่อได้ แค่แต้มเป็น 0 ชั่วคราว ไม่ block UX */ }
+        setSessionMember({ full_name: sessionUser.full_name, role: sessionUser.role, points });
+        setStage('authenticated');
+        return;
       }
+      await runLiffFlow();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ⭐️ Logout จากการ์ด "เป็นสมาชิกอยู่แล้ว" — เรียก logout จริง (performLogout: POST /auth/logout +
+  // เคลียร์ cookie/csrf ฝั่ง backend, ล้าง localStorage.user ฝั่ง client) จากนั้นกลับไปรันฟลว LIFF ปกติ
+  // ต่อทันที (ไม่ reload หน้า) ให้เจอฟอร์มสมัคร/บัตรสมาชิกตาม LINE เหมือนผู้ใช้ใหม่
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await performLogout();
+    } finally {
+      setSessionMember(null);
+      setStage('loading');
+      setLoggingOut(false);
+      await runLiffFlow();
+    }
+  };
 
   // ⭐️ auto-refresh แต้ม/กลุ่มทุก 60 วิ ระหว่างที่บัตรสมาชิกกำลังแสดงอยู่ (เช่น เปิดค้างไว้ให้พนักงานดู)
   useEffect(() => {
@@ -162,6 +216,43 @@ export default function Register() {
           <div className="bg-white rounded-3xl shadow-md border border-brand-border p-8 text-center">
             <p className="text-red-500 font-bold mb-2">เกิดข้อผิดพลาด</p>
             <p className="text-sm text-gray-500">{errorMsg}</p>
+          </div>
+        )}
+
+        {/* ⭐️ persistent session อยู่แล้ว (login ปกติ หรือ LIFF auto-login ก่อนหน้านี้) — โชว์การ์ด
+            "เป็นสมาชิกอยู่แล้ว" แทนฟอร์มสมัครซ้ำ ไม่ redirect ออก ไม่แตะ localStorage */}
+        {stage === 'authenticated' && sessionMember && (
+          <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden">
+            <div className="bg-gradient-to-br from-brand to-brand-dark px-6 py-8 text-white text-center">
+              <p className="text-3xl mb-1">👋</p>
+              <p className="text-sm font-medium opacity-90">คุณเป็นสมาชิกอยู่แล้ว</p>
+              <p className="text-2xl font-bold mt-1">{sessionMember.full_name}</p>
+              <span className="inline-block mt-2 bg-white/25 text-white text-xs font-bold px-3 py-1 rounded-full">
+                {sessionMember.role}
+              </span>
+            </div>
+            <div className="p-6 text-center">
+              <p className="text-xs text-gray-400 mb-1">แต้มสะสมปัจจุบัน</p>
+              <p className="text-4xl font-bold text-brand mb-6">{sessionMember.points.toLocaleString()} <span className="text-base font-medium text-gray-400">แต้ม</span></p>
+              <button
+                onClick={() => navigate('/pre-order')}
+                className="w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold rounded-full transition-all duration-150 active:scale-[0.98]"
+              >
+                🛒 ไปที่ร้านค้า
+              </button>
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="w-full py-3.5 mt-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {loggingOut ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500" />
+                    กำลังออกจากระบบ...
+                  </>
+                ) : '🚪 ออกจากระบบ'}
+              </button>
+            </div>
           </div>
         )}
 
