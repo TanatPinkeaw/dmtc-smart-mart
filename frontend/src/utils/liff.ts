@@ -7,6 +7,19 @@ export { liff };
 
 export const LIFF_ID: string = import.meta.env.VITE_LIFF_ID || '2010928001-sEGaB0XN';
 
+// ⭐️ Deep-link — Rich Menu เปิด https://liff.line.me/<id>?path=/register (หรือ /pre-order) LIFF จะพา
+// มาที่ Endpoint URL ของแอปพร้อม query ?path=... ติดมาด้วย. "จับค่า path ตั้งแต่ตอน bundle โหลดครั้งแรก"
+// (module eval รันก่อน React render/redirect ใดๆ) เก็บไว้ในตัวแปร module — เพราะ react-router
+// <Navigate>/redirect จะเขียน URL ใหม่ทับ query เดิมทิ้ง ถ้าไปอ่าน window.location.search ทีหลังใน
+// component จะว่างแล้ว (โดยเฉพาะถ้า Endpoint URL ชี้ที่ '/' แล้ว DefaultRoute เด้งไป /login)
+const initialLiffTargetPath: string | null =
+  typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('path') : null;
+
+// path ปลายทางที่ Rich Menu ส่งมา (เช่น '/register', '/pre-order') หรือ null ถ้าไม่มี
+export function getLiffTargetPath(): string | null {
+  return initialLiffTargetPath;
+}
+
 let initPromise: Promise<void> | null = null;
 
 // ⭐️ SPA เดียว หลายหน้าใช้ LIFF ร่วมกัน (Login auto-login, Register สมัคร/บัตรสมาชิก) — เปลี่ยนหน้าใน

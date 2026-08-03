@@ -9,7 +9,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
 import { getCurrentUser } from '../utils/getCurrentUser';
-import { liff, ensureLiffInit, looksLikeLineInApp } from '../utils/liff';
+import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath } from '../utils/liff';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -21,8 +21,8 @@ export default function Login() {
 
   // ⭐️ LINE Auto-Login — ถ้าเปิดจากเบราว์เซอร์ในแอป LINE (Rich Menu) จะพยายามล็อกอินอัตโนมัติก่อน
   //   ระหว่างนั้นโชว์สปินเนอร์แทนฟอร์ม (autoChecking) เพื่อไม่ให้ผู้ใช้เห็นฟอร์มล็อกอินเลย
-  const [autoChecking, setAutoChecking] = useState(looksLikeLineInApp());
-  const [notLinked, setNotLinked] = useState(false);
+  //   โชว์สปินเนอร์ด้วยถ้ามี deep-link ?path=... ติดมา (กันฟอร์ม flash ก่อน redirect ไปหน้าปลายทาง)
+  const [autoChecking, setAutoChecking] = useState(looksLikeLineInApp() || !!getLiffTargetPath());
 
   // ⭐️ F4 — countdown ตอนโดน rate limit (429)
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
@@ -50,12 +50,25 @@ export default function Login() {
 
   const isRateLimited = rateLimitCountdown > 0;
 
-  // ⭐️ LINE Auto-Login (LIFF) — รันครั้งเดียวตอนหน้า Login โหลด ถ้าอยู่ในแอป LINE:
-  //   liff.init → เอา userId (+ id_token) → POST /auth/line-login → เก็บ session → เด้งเข้าหน้าที่ตั้งใจ
-  //   โดยผู้ใช้ไม่ต้องเห็นฟอร์มล็อกอินเลย. ผู้ใช้เว็บปกติ (ไม่ใช่ LINE) ข้ามทั้งหมด ไม่โหลด LIFF ไม่หน่วง
+  // ⭐️ LINE Auto-Login + Deep-link (LIFF) — รันครั้งเดียวตอนหน้า Login โหลด
+  //   Rich Menu เปิด liff.line.me/<id>?path=/register (หรือ /pre-order) — อ่าน path แล้วแยกทาง:
+  //     • path=/register  → เด้งไป /register ทันที (ไม่ต้อง line-login — Register.tsx จัดการ LIFF เอง)
+  //     • path=/pre-order → auto-login แล้วเด้งไป /pre-order
+  //   auto-login: liff.init → userId (+ id_token) → POST /auth/line-login → เก็บ session → เด้งเข้าหน้า
+  //   ถ้ายังไม่ผูกบัญชี (401/404) → พาไป /register อย่างนุ่มนวล (ให้ไปสมัคร/ผูกบัญชี) ไม่โชว์ error ดิบ
+  //   ผู้ใช้เว็บปกติ (ไม่ใช่ LINE และไม่มี ?path=) ข้ามทั้งหมด ไม่โหลด LIFF ไม่หน่วง
   useEffect(() => {
-    if (!looksLikeLineInApp()) return;
-    if (getCurrentUser()) { navigate('/home', { replace: true }); return; } // มี session อยู่แล้ว
+    const targetPath = getLiffTargetPath();
+
+    // ⭐️ กฎสำคัญ: ปุ่มสมัครสมาชิก — เด้งไป /register ทันทีก่อนยิง line-login ใดๆ
+    if (targetPath === '/register') { navigate('/register', { replace: true }); return; }
+
+    if (!looksLikeLineInApp() && !targetPath) return; // เว็บปกติ ไม่มี deep-link — ไม่ทำอะไร
+    if (getCurrentUser()) {
+      navigate(targetPath === '/pre-order' ? '/pre-order' : '/home', { replace: true });
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -69,18 +82,20 @@ export default function Login() {
         setCsrfToken(res.data.csrfToken);
         window.dispatchEvent(new Event('tokenChanged')); // ให้ SocketContext ต่อ socket ใหม่
         if (cancelled) return;
-        const dest = res.data.user.role === 'MEMBER' ? '/pre-order' : '/home';
+        // path=/pre-order → /pre-order เสมอ; ไม่ระบุ path → เลือกตาม role
+        const dest = targetPath === '/pre-order' ? '/pre-order'
+          : res.data.user.role === 'MEMBER' ? '/pre-order' : '/home';
         navigate(dest, { replace: true });
       } catch (err: any) {
         if (cancelled) return;
-        // ⭐️ DIAGNOSTIC — โชว์ error จริงบนจอมือถือ (LINE in-app browser ไม่มี devtools) เพื่อแยกสาเหตุ:
-        //   มี response.status = ตอบกลับจาก backend จริง (401 ยังไม่ผูก / 500 / ฯลฯ)
-        //   'no-response' = ยิงไม่ถึง backend เลย (CORS / เน็ต / endpoint ผิด)
-        const status = err?.response?.status ?? 'no-response';
-        const detail = err?.response?.data?.error || err?.response?.data?.message || err?.message || JSON.stringify(err);
-        alert('LIFF Error [' + status + ']: ' + detail);
-        if (err?.response?.status === 401 || err?.response?.status === 404) setNotLinked(true); // บัญชี LINE ยังไม่ผูกกับสมาชิก
-        setAutoChecking(false); // ล้มเหลว/ไม่ใช่ LINE client → โชว์ฟอร์มล็อกอินปกติ
+        // ⭐️ ยังไม่ผูกบัญชี (401/404) → พาไปสมัคร/ผูกบัญชีที่ /register แทนการโชว์ error
+        if (err?.response?.status === 401 || err?.response?.status === 404) {
+          navigate('/register', { replace: true });
+          return;
+        }
+        // error อื่นๆ (เน็ต/CORS/500) — log ไว้ debug แล้ว fallback ไปโชว์ฟอร์มล็อกอินปกติ
+        console.error('[LIFF auto-login] failed:', err?.response?.status, err?.message);
+        setAutoChecking(false);
       }
     })();
     return () => { cancelled = true; };
@@ -150,12 +165,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* ⭐️ บัญชี LINE ยังไม่ผูกกับสมาชิก (จาก auto-login 404) — ชวนไปสมัคร/ผูกบัญชี */}
-          {notLinked && (
-            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-2xl">
-              บัญชี LINE ของคุณยังไม่ได้ผูกกับสมาชิก — <Link to="/register" className="font-bold underline">สมัคร/ผูกบัญชีที่นี่</Link> หรือเข้าสู่ระบบด้านล่าง
-            </div>
-          )}
 
           {/* ⭐️ F4 — แจ้งเตือน rate limit + countdown */}
           {isRateLimited && (

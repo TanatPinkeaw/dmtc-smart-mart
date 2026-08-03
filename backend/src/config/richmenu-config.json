@@ -9,7 +9,7 @@
       "action": {
         "type": "uri",
         "label": "สมัคร/บัตรสมาชิก",
-        "uri": "https://liff.line.me/2010928001-YxK4Atjv"
+        "uri": "https://liff.line.me/2010928001-sEGaB0XN?path=/register"
       }
     },
     {
@@ -25,7 +25,7 @@
       "action": {
         "type": "uri",
         "label": "สั่งซื้อล่วงหน้า",
-        "uri": "https://liff.line.me/2010928001-sEGaB0XN"
+        "uri": "https://liff.line.me/2010928001-sEGaB0XN?path=/pre-order"
       }
     },
     {
