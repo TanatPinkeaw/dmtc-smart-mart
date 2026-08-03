@@ -6,6 +6,7 @@ import { liff, ensureLiffInit } from '../utils/liff';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { performLogout } from '../utils/logout';
 import api from '../api';
+import { MemberBottomNav } from '../components/layout/MemberBottomNav';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
 // เข้าระบบนี้เสมอ (LIFF มี session ของ LINE เอง ไม่ใช่ JWT ของแอปนี้) ยิง fetch ตรงไป API_BASE_URL
@@ -203,7 +204,7 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
+    <div className={`min-h-screen bg-brand-bg flex items-center justify-center p-4 ${stage === 'authenticated' ? 'pb-24' : ''}`}>
       <div className="w-full max-w-md">
         {stage === 'loading' && (
           <div className="bg-white rounded-3xl shadow-md border border-brand-border p-8 flex flex-col items-center gap-4">
@@ -367,6 +368,9 @@ export default function Register() {
           </div>
         )}
       </div>
+
+      {/* ⭐️ Phase 1 (5-day plan) — โชว์เฉพาะตอน login แล้วเท่านั้น (การ์ด "เป็นสมาชิกอยู่แล้ว") */}
+      {stage === 'authenticated' && <MemberBottomNav />}
     </div>
   );
 }
