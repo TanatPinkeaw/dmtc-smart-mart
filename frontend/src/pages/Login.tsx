@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
+import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath } from '../utils/liff';
 
@@ -77,7 +78,14 @@ export default function Login() {
       if (justBounced) sessionStorage.removeItem('liff_loop_breaker');
     } catch { /* storage ถูกบล็อก — ข้าม loop breaker ไป (LIFF flow ยังทำงานได้ปกติ) */ }
     if (justBounced) {
-      alert('เซสชั่นหมดอายุ หรือเบราว์เซอร์ LINE บล็อกคุกกี้ กรุณาล็อกอินด้วยรหัสผ่าน');
+      // ⭐️ Phase 4 — เปลี่ยนจาก alert() ดิบๆ (ใช้ตอน debug ปัญหา loop) เป็น Swal ให้ตรงธีม/สไตล์
+      //   เดียวกับข้อความอื่นทั้งแอป (เช่น forceLogout ใน api.ts ก็ใช้ pattern เดียวกันนี้)
+      Swal.fire({
+        icon: 'warning',
+        title: 'เซสชันหมดอายุ',
+        text: 'เซสชันหมดอายุ หรือเบราว์เซอร์ LINE บล็อกคุกกี้ กรุณาล็อกอินด้วยรหัสผ่าน',
+        confirmButtonText: 'ตกลง',
+      });
       setAutoChecking(false); // โชว์ฟอร์มล็อกอินปกติ
       return;
     }

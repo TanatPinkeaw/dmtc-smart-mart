@@ -420,10 +420,8 @@ io.use(async (socket, next) => {
     }
 
     socket.user = decoded; // { id, role, full_name }
-    console.log(`[DEBUG SOCKET AUTH] Token verified - user_id=${decoded.id}, role=${decoded.role}`);
     next();
   } catch (err) {
-    console.log(`[DEBUG SOCKET AUTH] ERROR: ${err.message}`);
     next(new Error('Invalid or expired token'));
   }
 });
@@ -772,7 +770,6 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     console.log(`🔴 หน้าจอ POS ปิดการเชื่อมต่อ: ${socket.id} - reason: ${reason}`);
-    console.log(`[DEBUG SOCKET] Disconnect details - socket.id=${socket.id}, user_id=${socket.user?.id}, reason=${reason}`);
     pool.query(
       'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
       ['SOCKET_DISCONNECTED', socket.user?.id || null, JSON.stringify({ socket_id: socket.id, reason })]
@@ -1788,11 +1785,6 @@ app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) =>
 });
 
 app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
-  // ⭐️ DEBUG: ดูว่า server ใหม่รับ request จริงไหม และ body มีอะไร
-  console.log('[sync-csv] body keys:', Object.keys(req.body));
-  console.log('[sync-csv] rows count:', req.body.rows?.length, '| dry_run:', req.body.dry_run);
-  if (req.body.rows?.length > 0) console.log('[sync-csv] first row:', JSON.stringify(req.body.rows[0]));
-
   const { rows, dry_run } = req.body;
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: "รายชื่อจาก CSV ว่างเปล่า ยกเลิกการซิงค์เพื่อความปลอดภัย" });
@@ -1809,7 +1801,6 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
     const existingSet = new Set(existing.map(u => u.student_id));
     // ⭐️ คนที่มีอยู่แล้วแต่ถูก soft-delete → reactivate แทนสร้างใหม่
     const inactiveInCsv = existing.filter(u => !u.is_active).map(u => u.student_id);
-    console.log('[sync-csv] existing:', existingSet.size, '| inactive:', inactiveInCsv.length);
     const toCreate = rows.filter(r => r.username && !existingSet.has(r.username));
 
     // 2. ใครอยู่ในระบบแต่ไม่มีใน CSV (ไม่ใช่ ADMIN) → ปิดการใช้งาน
