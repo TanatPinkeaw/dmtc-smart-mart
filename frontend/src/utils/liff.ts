@@ -12,12 +12,27 @@ export const LIFF_ID: string = import.meta.env.VITE_LIFF_ID || '2010928001-sEGaB
 // (module eval รันก่อน React render/redirect ใดๆ) เก็บไว้ในตัวแปร module — เพราะ react-router
 // <Navigate>/redirect จะเขียน URL ใหม่ทับ query เดิมทิ้ง ถ้าไปอ่าน window.location.search ทีหลังใน
 // component จะว่างแล้ว (โดยเฉพาะถ้า Endpoint URL ชี้ที่ '/' แล้ว DefaultRoute เด้งไป /login)
-const initialLiffTargetPath: string | null =
-  typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('path') : null;
+const initialSearchParams: URLSearchParams =
+  typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const initialLiffTargetPath: string | null = initialSearchParams.get('path');
+// ⭐️ query param อื่นๆ นอกจาก path (เช่น ?view=orders จากลิงก์ประวัติการซื้อใน LINE webhook) — เก็บไว้
+// ตั้งแต่ตอน bundle โหลดครั้งแรกเหมือนกับ path เพื่อ forward ต่อไปยังหน้าปลายทางหลัง auto-login สำเร็จ
+// (ดู Login.tsx: ?path=/pre-order&view=orders → เด้งไป /pre-order?view=orders ให้ PreOrder.tsx เปิด
+// โมดัลประวัติออเดอร์เองตาม deep-link ที่รองรับอยู่แล้ว)
+const initialLiffExtraParams: string = (() => {
+  const p = new URLSearchParams(initialSearchParams);
+  p.delete('path');
+  return p.toString();
+})();
 
 // path ปลายทางที่ Rich Menu ส่งมา (เช่น '/register', '/pre-order') หรือ null ถ้าไม่มี
 export function getLiffTargetPath(): string | null {
   return initialLiffTargetPath;
+}
+
+// query string อื่นๆ (ไม่รวม path) เช่น 'view=orders' หรือ '' ถ้าไม่มี — ใช้ต่อท้าย targetPath ตอน navigate
+export function getLiffExtraParams(): string {
+  return initialLiffExtraParams;
 }
 
 let initPromise: Promise<void> | null = null;

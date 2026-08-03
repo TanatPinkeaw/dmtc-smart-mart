@@ -120,7 +120,7 @@ const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
 const { createBackup, restoreBackupRow } = require('./src/services/backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
 const { sendMail } = require('./src/services/mailer'); // ⭐️ Phase 4 — backup success/failure notifications
-const { sendLowStockAlert, sendPreOrderReadyNotification } = require('./src/services/lineService'); // ⭐️ Day 3 — LINE Messaging API
+const { sendLowStockAlert, sendPreOrderReadyNotification, pushLineMessage } = require('./src/services/lineService'); // ⭐️ Day 3 — LINE Messaging API
 const reportsExport = require('./src/services/reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
 // ⭐️ Sprint 0 — A4: evaluated once at module load = ตอนที่ process นี้ boot ขึ้นมาจริงๆ
@@ -4758,7 +4758,13 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     }
 
     // อัปเดตสถานะ
-    await conn.query('UPDATE orders SET status = ? WHERE id = ?', [status, orderId]);
+    // ⭐️ ตั้ง ready_at ตอนเปลี่ยนเป็น READY เท่านั้น — ใช้เป็นจุดอ้างอิงของ cron เตือนลูกค้าที่ของพร้อม
+    // แล้วแต่ยังไม่มารับ (แยกจาก completed_at ที่นับตอนลูกค้ามารับของจริงๆ)
+    if (status === 'READY') {
+      await conn.query('UPDATE orders SET status = ?, ready_at = NOW() WHERE id = ?', [status, orderId]);
+    } else {
+      await conn.query('UPDATE orders SET status = ? WHERE id = ?', [status, orderId]);
+    }
 
     // ถ้ายกเลิกออเดอร์ (เช่น สลิปมั่ว) — คืนสต๊อกกลับ เพราะตัดไปแล้วตั้งแต่ตอนลูกค้าจอง
     let cancelMsg = null;
@@ -6060,5 +6066,60 @@ server.listen(PORT, '0.0.0.0', () => {
     } catch (e) { console.error('❌ revoked_tokens cleanup cron ล้มเหลว:', e.message); }
   });
 
-  console.log('🕐 ตั้ง cron: backup (ตี 2), auto-checkout (เที่ยงคืน), รายงานประจำวัน (ตี 6), ตรวจสินค้าหมดอายุ (ทุกชั่วโมง), ล้าง revoked tokens (ตี 2:30) เรียบร้อย');
+  // ⭐️ LINE Bot — แจ้งเตือนสต๊อกใกล้หมดประจำวัน ทุกวัน 17:00 น. เวลาไทย (10:00 UTC เพราะไทย = UTC+7)
+  // ส่งถึง MANAGER ที่ผูกบัญชี LINE แล้วเท่านั้น (ตามสเปก ไม่ส่งถึง ADMIN/CASHIER)
+  // ต่างจาก sendLowStockAlert เดิม (ยิงเข้ากลุ่ม LINE_MANAGER_GROUP_ID กลุ่มเดียว) — อันนี้ push ถึง
+  // ผู้จัดการแต่ละคนเป็นรายบุคคลโดยตรง ตาม role ไม่ใช่กลุ่มแชท
+  cron.schedule('0 10 * * *', async () => {
+    try {
+      const [lowStock] = await pool.query(
+        'SELECT name, stock, min_stock FROM products WHERE is_active = 1 AND stock <= min_stock ORDER BY stock ASC'
+      );
+      if (lowStock.length === 0) {
+        console.log('📦 [CRON] เช็คสต๊อกประจำวัน (17:00) — ไม่มีสินค้าใกล้หมด');
+        return;
+      }
+      const [managers] = await pool.query(
+        "SELECT line_user_id FROM users WHERE role = 'MANAGER' AND is_active = 1 AND line_user_id IS NOT NULL"
+      );
+      if (managers.length === 0) {
+        console.log('📦 [CRON] พบสินค้าใกล้หมด แต่ไม่มี MANAGER ที่ผูกบัญชี LINE ไว้ — ข้ามการแจ้งเตือน');
+        return;
+      }
+      const list = lowStock.map(p => `• ${p.name} (เหลือ ${p.stock} ชิ้น)`).join('\n');
+      const text = `⚠️ อัปเดตสต๊อกสินค้าประจำวัน (17:00 น.) ⚠️\nแอดมินครับ ตอนนี้มีสินค้าใกล้หมดสต๊อก:\n${list}\nอย่าลืมเช็กและสั่งมาเติมด้วยนะครับ 📦`;
+      for (const m of managers) {
+        await pushLineMessage(m.line_user_id, [{ type: 'text', text }])
+          .catch(err => console.error('❌ [CRON] ส่ง low-stock alert ไม่สำเร็จ (manager):', err.message));
+      }
+      console.log(`📦 [CRON] แจ้งเตือนสต๊อกใกล้หมด ${lowStock.length} รายการ ถึง MANAGER ${managers.length} คน`);
+    } catch (e) { console.error('❌ low-stock alert cron ล้มเหลว:', e.message); }
+  });
+
+  // ⭐️ LINE Bot — เตือนลูกค้ามารับของ ทุกชั่วโมง (0 * * * * เป็น top-of-hour เดียวกันทั้ง UTC/ไทย เพราะ
+  // ต่างกันแค่จำนวนชั่วโมงเต็มๆ ไม่ต้องปรับ offset เหมือน cron รายวันด้านบน) เตือนแค่ครั้งเดียวต่อออเดอร์
+  // (pickup_reminder_sent กันสแปมทุกชั่วโมงไม่รู้จบ) เฉพาะออเดอร์ที่ READY มาแล้วเกิน threshold ชั่วโมง
+  const PICKUP_REMINDER_THRESHOLD_HOURS = 2;
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const [staleOrders] = await pool.query(
+        `SELECT o.id, u.line_user_id FROM orders o
+         JOIN users u ON u.id = o.user_id
+         WHERE o.status = 'READY' AND (o.pickup_reminder_sent = 0 OR o.pickup_reminder_sent IS NULL)
+           AND o.ready_at IS NOT NULL AND o.ready_at <= (NOW() - INTERVAL ? HOUR)`,
+        [PICKUP_REMINDER_THRESHOLD_HOURS]
+      );
+      for (const o of staleOrders) {
+        if (!o.line_user_id) continue; // ไม่ได้ผูกบัญชี LINE — ข้ามเงียบๆ (fail-soft เหมือนจุดอื่น)
+        const text = `🏃‍♂️ ก๊อกๆ! ออเดอร์ #${o.id} ของคุณเตรียมเสร็จเรียบร้อยแล้วน้า อย่าลืมแวะมารับที่ร้าน DMTC Mart นะครับ รออยู่น้าค้าบ ✨`;
+        const sent = await pushLineMessage(o.line_user_id, [{ type: 'text', text }])
+          .catch(err => { console.error(`❌ [CRON] ส่ง pickup reminder ไม่สำเร็จ (order #${o.id}):`, err.message); return false; });
+        // ⭐️ ตั้ง sent flag เฉพาะตอนส่งสำเร็จจริง — ถ้าพัง (เช่น LINE API ล่มชั่วคราว) ปล่อยให้ลองใหม่ชั่วโมงถัดไป
+        if (sent) await pool.query('UPDATE orders SET pickup_reminder_sent = 1 WHERE id = ?', [o.id]);
+      }
+      if (staleOrders.length > 0) console.log(`🏃 [CRON] เตือนมารับของแล้ว ${staleOrders.length} ออเดอร์`);
+    } catch (e) { console.error('❌ pickup reminder cron ล้มเหลว:', e.message); }
+  });
+
+  console.log('🕐 ตั้ง cron: backup (ตี 2), auto-checkout (เที่ยงคืน), รายงานประจำวัน (ตี 6), ตรวจสินค้าหมดอายุ (ทุกชั่วโมง), ล้าง revoked tokens (ตี 2:30), แจ้งสต๊อกใกล้หมด (17:00), เตือนมารับของ (ทุกชั่วโมง) เรียบร้อย');
 });

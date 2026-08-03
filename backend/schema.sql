@@ -232,6 +232,8 @@ CREATE TABLE `orders` (
   `slip_verification_status` enum('PENDING','VERIFIED','REJECTED') COLLATE utf8mb4_unicode_ci DEFAULT 'PENDING',
   `assigned_to` int DEFAULT NULL,
   `idempotency_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ready_at` timestamp NULL DEFAULT NULL,
+  `pickup_reminder_sent` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   KEY `user_id` (`user_id`),

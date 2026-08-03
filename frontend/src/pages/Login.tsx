@@ -10,7 +10,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
-import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath } from '../utils/liff';
+import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath, getLiffExtraParams } from '../utils/liff';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -96,8 +96,14 @@ export default function Login() {
     if (targetPath === '/register') { navigate('/register', { replace: true }); return; }
 
     if (!looksLikeLineInApp() && !targetPath) return; // เว็บปกติ ไม่มี deep-link — ไม่ทำอะไร
+
+    // ⭐️ query param อื่นๆ นอกจาก path (เช่น ?view=orders จากลิงก์ประวัติการซื้อใน LINE webhook) —
+    // forward ต่อไปยัง /pre-order เท่านั้น (หน้าอื่นไม่มี deep-link แบบนี้ให้ใช้)
+    const extra = getLiffExtraParams();
+    const preOrderDest = extra ? `/pre-order?${extra}` : '/pre-order';
+
     if (getCurrentUser()) {
-      navigate(targetPath === '/pre-order' ? '/pre-order' : '/home', { replace: true });
+      navigate(targetPath === '/pre-order' ? preOrderDest : '/home', { replace: true });
       return;
     }
 
@@ -116,9 +122,9 @@ export default function Login() {
         setCsrfToken(res.data.csrfToken);
         window.dispatchEvent(new Event('tokenChanged')); // ให้ SocketContext ต่อ socket ใหม่
         if (cancelled) return;
-        // path=/pre-order → /pre-order เสมอ; ไม่ระบุ path → เลือกตาม role
-        const dest = targetPath === '/pre-order' ? '/pre-order'
-          : res.data.user.role === 'MEMBER' ? '/pre-order' : '/home';
+        // path=/pre-order → /pre-order (พร้อม extra params ถ้ามี) เสมอ; ไม่ระบุ path → เลือกตาม role
+        const dest = targetPath === '/pre-order' ? preOrderDest
+          : res.data.user.role === 'MEMBER' ? preOrderDest : '/home';
         navigate(dest, { replace: true });
       } catch (err: any) {
         if (cancelled) return;

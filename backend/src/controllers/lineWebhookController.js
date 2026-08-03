@@ -6,17 +6,25 @@
 //   2) ตอบ HTTP 200 กลับ LINE ให้เร็ว ไม่งั้น LINE จะ retry ซ้ำ — จึง res 200 ก่อน แล้วค่อยประมวลผล event
 //   3) ตอบผู้ใช้ด้วย replyToken (replyLineMessage) ไม่ใช่ push (ประหยัดโควตา + ตอบได้ใน ~30 วิ)
 //
-// รองรับ: สถานะการจอง (pre-order), โปรโมชั่น, บัตรสมาชิก/แต้ม, ประวัติการซื้อ (เลือกวันที่ผ่าน
-// DateTimePicker → postback), ลิงก์สั่งจอง, ติดต่อแอดมิน
+// รองรับ: สถานะการจอง (pre-order), โปรโมชั่น, บัตรสมาชิก/แต้ม, ประวัติการซื้อ/ใบเสร็จ (ลิงก์ LIFF ไปหน้า
+// ประวัติออเดอร์บนเว็บโดยตรง — ให้ผู้ใช้เลือกวันที่เองบนเว็บ แทนการทำ DateTimePicker ในแชท LINE ซึ่งมี
+// ข้อจำกัดเรื่อง deep-link/cookie มากกว่า), ลิงก์สั่งจอง, ติดต่อแอดมิน
 // หมายเหตุ: ระบบลงเวลาทำงาน (clock-in/out) ผ่าน LINE ถูกถอดออกแล้ว — จัดการผ่านเว็บแพลตฟอร์มแทน
+// ⭐️ โทนคำตอบทั้งหมด: สุภาพแต่เป็นกันเอง (ลงท้ายด้วย "ครับ/น้า/น้าค้าบ" ผสมกัน) ตามที่ผู้ใช้ระบุไว้
 const crypto = require('crypto');
 const pool = require('../config/db');
 const config = require('../config/config');
 const { replyLineMessage } = require('../services/lineService');
 
-// LIFF สมัคร/ผูกบัญชีสมาชิก (ตรงกับ richmenu-config.json ปุ่ม "สมัคร/บัตรสมาชิก")
+// LIFF สมัคร/ผูกบัญชีสมาชิก (ตรงกับ richmenu-config.json ปุ่ม "สมัคร/บัตรสมาชิก") — คนละ liff app กับ
+// ตัวหลัก (ของเดิมก่อนรวม liffId — เก็บไว้ตามที่เคย deploy จริงใน richmenu-config.json)
 const LIFF_REGISTER_URL = 'https://liff.line.me/2010928001-YxK4Atjv';
 const PREORDER_URL = `${config.FRONTEND_URL}/pre-order`;
+// ⭐️ ลิงก์ประวัติการซื้อ — ผ่าน liff.line.me ตัวหลักเดียวกับ auto-login flow (utils/liff.ts ฝั่ง
+// frontend ใช้ liffId นี้เป็นค่า default) พร้อม ?view=orders ต่อท้าย ?path=/pre-order ให้ Login.tsx
+// forward ต่อไปเปิดโมดัลประวัติออเดอร์ทันที (ไม่ใช่หน้า /my-orders แยกต่างหาก — แอปนี้ไม่มีหน้านั้น
+// ประวัติออเดอร์เป็นโมดัลใน /pre-order)
+const MY_ORDERS_LIFF_URL = 'https://liff.line.me/2010928001-sEGaB0XN?path=/pre-order&view=orders';
 
 // ⭐️ ออเดอร์ที่ถือว่า "จบแล้ว" (ไม่นับเป็นการจองที่กำลังดำเนินอยู่) — ที่เหลือถือเป็น active/pending
 const ORDER_TERMINAL_STATUSES = ['COMPLETED', 'CANCELLED', 'REJECTED', 'SLIP_REJECTED'];
@@ -54,13 +62,6 @@ async function findUserByLine(lineUserId) {
   return rows[0] || null;
 }
 
-// แปลง 'YYYY-MM-DD' (จาก DateTimePicker) เป็นวันที่ไทยอ่านง่าย
-function thaiDateLabel(isoDate) {
-  const d = new Date(`${isoDate}T00:00:00+07:00`);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  return d.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', year: 'numeric', month: 'long', day: 'numeric' });
-}
-
 function notRegisteredReply() {
   return text(`ยังไม่ได้ผูกบัญชีสมาชิก 🙏\nกรุณาสมัคร/ผูกบัญชีที่นี่ก่อน แล้วลองใหม่อีกครั้ง:\n${LIFF_REGISTER_URL}`);
 }
@@ -80,6 +81,8 @@ function handlePoints(user) {
 }
 
 // ⭐️ Feature 2 — เช็คสถานะการจอง (แทนที่ "เช็คยอดปันผล" เดิม) — ดึงออเดอร์ที่ยัง active/pending
+// ⭐️ ข้อความตามสเปกใหม่ (สุภาพแต่เป็นกันเอง) เป็น template ต่อ "หนึ่ง" ออเดอร์ — ถ้ามีหลายออเดอร์
+// พร้อมกัน ใช้ template เดิมซ้ำต่อรายการ คั่นด้วยบรรทัดว่าง (ไม่มีสเปกแยกสำหรับเคสหลายออเดอร์)
 async function handlePreorderStatus(user) {
   if (!user) return notRegisteredReply();
   const placeholders = ORDER_TERMINAL_STATUSES.map(() => '?').join(',');
@@ -89,47 +92,25 @@ async function handlePreorderStatus(user) {
      ORDER BY id DESC`,
     [user.id, ...ORDER_TERMINAL_STATUSES]
   );
-  if (rows.length === 0) return text('ไม่มีสินค้าที่กำลังจองอยู่ในขณะนี้');
-  const lines = rows.map(o => {
+  if (rows.length === 0) {
+    return text('ตอนนี้คุณยังไม่มีออเดอร์ที่กำลังดำเนินการอยู่ครับผม แวะไปดูสินค้าที่หน้าร้าน หรือกดสั่งซื้อล่วงหน้า (Pre-Order) ก่อนได้เลยน้า 🛒✨');
+  }
+  const messages = rows.map(o => {
     const label = ORDER_STATUS_LABEL[o.status] || o.status;
-    return `• ออเดอร์ #${o.id} — ${label} — ${Number(o.total_amount || 0).toLocaleString()} บาท`;
-  }).join('\n');
-  return text(`📦 สถานะการจองของคุณ (${rows.length} รายการ)\n\n${lines}`);
+    return `📦 ออเดอร์ #${o.id} ของคุณกำลังดำเนินการอยู่ครับ! (สถานะ: ${label}) ถ้าของพร้อมแล้วระบบจะรีบแจ้งเตือนให้มารับน้า`;
+  });
+  return text(messages.join('\n\n'));
 }
 
-// ⭐️ Feature 4 — ประวัติการซื้อ: ส่ง DateTimePicker ให้ผู้ใช้เลือกวันที่ก่อน (ไม่ตอบ list ทันที)
-function handlePurchaseHistoryPicker(user) {
+// ⭐️ Feature 4 — ประวัติการซื้อ/ใบเสร็จ: เปลี่ยนจาก DateTimePicker ในแชท (เลือกวันที่ผ่าน postback)
+// เป็นลิงก์ LIFF ไปหน้าเว็บโดยตรงแทน — ให้ผู้ใช้เลือกวันที่ได้เต็มรูปแบบบนเว็บ (โมดัลประวัติออเดอร์ใน
+// /pre-order รองรับอยู่แล้ว) ไม่ต้องพึ่งความสามารถจำกัดของ UI ในแชท LINE
+function handleOrderHistoryLink(user) {
   if (!user) return notRegisteredReply();
-  return {
-    type: 'template',
-    altText: 'โปรดเลือกวันที่ต้องการตรวจสอบประวัติการซื้อ',
-    template: {
-      type: 'buttons',
-      text: 'โปรดเลือกวันที่ต้องการตรวจสอบประวัติการซื้อ',
-      actions: [
-        { type: 'datetimepicker', label: '📅 เลือกวันที่', data: 'action=purchase_history', mode: 'date' },
-      ],
-    },
-  };
+  return text(`🧾 สามารถตรวจสอบประวัติการซื้อและใบเสร็จย้อนหลังแบบเลือกวันที่ได้ ที่นี่เลยครับ 👉 ${MY_ORDERS_LIFF_URL}`);
 }
 
-// ⭐️ Feature 4 — สรุปประวัติการซื้อของวันที่เลือก (เรียกจาก postback ของ DateTimePicker)
-async function handlePurchaseHistoryForDate(user, isoDate) {
-  if (!user) return notRegisteredReply();
-  const [rows] = await pool.query(
-    `SELECT id, total_amount, created_at FROM sales
-     WHERE member_id = ? AND status = 'COMPLETED' AND DATE(created_at) = ?
-     ORDER BY id DESC`,
-    [user.id, isoDate]
-  );
-  const label = thaiDateLabel(isoDate);
-  if (rows.length === 0) return text(`🧾 วันที่ ${label}\nไม่มีประวัติการซื้อ`);
-  const total = rows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
-  const lines = rows.map(r => `• #${r.id} — ${Number(r.total_amount || 0).toLocaleString()} บาท`).join('\n');
-  return text(`🧾 ประวัติการซื้อ วันที่ ${label}\n\n${lines}\n\nรวม ${total.toLocaleString()} บาท (${rows.length} รายการ)`);
-}
-
-// ⭐️ Feature 3 — โปรโมชั่น: ถ้าไม่มีโปรที่ใช้งานอยู่ ตอบข้อความตายตัว "ไม่มีโปรโมชั่นในตอนนี้"
+// ⭐️ Feature 3 — โปรโมชั่น: อัปเดตคำตอบตามสเปกใหม่ (สุภาพแต่เป็นกันเอง) ทั้ง 2 กรณี
 async function handlePromotions() {
   const [rows] = await pool.query(
     `SELECT name, discount_type, discount_value FROM promotions
@@ -138,19 +119,21 @@ async function handlePromotions() {
        AND (end_date IS NULL OR end_date >= CURDATE())
      ORDER BY id DESC LIMIT 10`
   );
-  if (rows.length === 0) return text('ไม่มีโปรโมชั่นในตอนนี้');
-  const lines = rows.map(p => {
+  if (rows.length === 0) {
+    return text('ช่วงนี้ยังไม่มีโปรโมชั่นใหม่เลยครับ แต่รอติดตามได้เลยนะ เดี๋ยวมีจัดเต็มแน่นอน! 🎁');
+  }
+  const promoList = rows.map(p => {
     const v = p.discount_type === 'PERCENT' ? `ลด ${Number(p.discount_value)}%`
       : p.discount_type === 'FIXED' ? `ลด ${Number(p.discount_value)} บาท`
       : 'ซื้อ 1 แถม 1';
     return `• ${p.name} — ${v}`;
   }).join('\n');
-  return text(`🎁 โปรโมชั่นวันนี้\n\n${lines}`);
+  return text(`🎉 โปรโมชั่นเด็ดมาแล้วครับ!\n${promoList}\n💡 หมายเหตุ: โปรโมชั่นนี้ต้องมาใช้ที่หน้าร้าน DMTC Mart เท่านั้นนะครับ แวะมาใช้สิทธิ์กันน้า!`);
 }
 
-// ⭐️ Feature 5A — ติดต่อขอความช่วยเหลือ (ข้อความตายตัวตามสเปก)
+// ⭐️ Feature 5A — ติดต่อขอความช่วยเหลือ (ข้อความตายตัวตามสเปกล่าสุด)
 function handleContact() {
-  return text('ติดต่อขอความช่วยเหลือได้ที่แอดมินโดยตรง\nLINE ID: tanatpinkeaw\nเพิ่มเพื่อน: https://line.me/ti/p/~tanatpinkeaw');
+  return text('หากมีข้อสงสัยหรือต้องการความช่วยเหลือ ทักแชทคุยกับแอดมินโดยตรงได้ที่ LINE ID: tanatpinkeaw ได้เลยครับ ยินดีให้บริการเสมอครับผม! 💬👨‍💻');
 }
 
 // ⭐️ map ข้อความ (จาก Rich Menu หรือที่พิมพ์เอง) → handler. ลำดับสำคัญ: เช็คคำเฉพาะก่อนคำกว้าง
@@ -158,7 +141,7 @@ function handleContact() {
 async function routeIncoming(raw, user) {
   const t = (raw || '').trim();
   if (!t) return null;
-  if (/(ประวัติการซื้อ|ประวัติ)/.test(t)) return handlePurchaseHistoryPicker(user);
+  if (/(ประวัติการซื้อ|ใบเสร็จ|ประวัติ)/.test(t)) return handleOrderHistoryLink(user);
   if (/(สถานะการจอง|เช็คสถานะสินค้า|สถานะสินค้า|สถานะการสั่ง|สถานะ|ปันผล)/.test(t)) return handlePreorderStatus(user);
   if (/(บัตรสมาชิก|สมาชิก)/.test(t)) return handleMemberCard(user);
   if (/(แต้ม|คะแนน)/.test(t)) return handlePoints(user);
@@ -181,16 +164,10 @@ async function handleEvent(event) {
     ]);
   }
 
-  // ⭐️ Feature 4 — postback: DateTimePicker ส่งวันที่ที่เลือกมาใน event.postback.params.date
   if (event.type === 'postback') {
+    // ⭐️ ไม่มี DateTimePicker แล้ว (เปลี่ยนเป็นลิงก์ LIFF ไปเว็บแทน) — postback ที่เหลือ (ถ้ามีปุ่มอื่น
+    // ในอนาคตที่ส่ง data มา) ตีความเป็นคำสั่งข้อความปกติผ่าน routeIncoming เหมือนเดิม
     const data = (event.postback && event.postback.data) || '';
-    const pickedDate = event.postback && event.postback.params && event.postback.params.date;
-    if (data.includes('purchase_history') && pickedDate) {
-      const reply = await handlePurchaseHistoryForDate(user, pickedDate);
-      if (reply) await replyLineMessage(replyToken, [reply]);
-      return;
-    }
-    // postback อื่นๆ — ตีความ data เป็นคำสั่งข้อความปกติ
     const reply = await routeIncoming(data, user);
     if (reply) await replyLineMessage(replyToken, Array.isArray(reply) ? reply : [reply]);
     return;

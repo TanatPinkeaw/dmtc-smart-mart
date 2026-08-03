@@ -418,6 +418,25 @@ const initDB = async () => {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE orders (completed_at) ล้มเหลว:", alterErr.message);
     }
 
+    // ⭐️ Defensive patch: ready_at — เวลาที่ออเดอร์เปลี่ยนเป็น READY จริง (แยกจาก completed_at ที่นับ
+    // ตอนลูกค้ามารับของแล้ว) ใช้เป็นจุดอ้างอิงของ cron เตือนลูกค้าที่ของพร้อมแล้วแต่ยังไม่มารับ
+    // (ดู server.js PUT /api/orders/:id ที่ set ready_at = NOW() ตอน status → READY, และ cron
+    // "pickup reminder" รายชั่วโมงที่เช็คว่า ready_at นานเกิน threshold หรือยัง)
+    try {
+      await connection.query(`ALTER TABLE orders ADD COLUMN ready_at TIMESTAMP NULL`);
+      console.log("🔧 เพิ่มคอลัมน์ orders.ready_at ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE orders (ready_at) ล้มเหลว:", alterErr.message);
+    }
+    // ⭐️ Defensive patch: pickup_reminder_sent — กันส่งข้อความเตือน "มารับของ" ซ้ำทุกชั่วโมงไม่รู้จบ
+    // ให้สมาชิกโดนเตือนแค่ครั้งเดียวต่อออเดอร์ (cron ตั้งเป็น 1 หลังส่งสำเร็จ)
+    try {
+      await connection.query(`ALTER TABLE orders ADD COLUMN pickup_reminder_sent TINYINT(1) DEFAULT 0`);
+      console.log("🔧 เพิ่มคอลัมน์ orders.pickup_reminder_sent ที่ขาดไปให้แล้ว");
+    } catch (alterErr) {
+      if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE orders (pickup_reminder_sent) ล้มเหลว:", alterErr.message);
+    }
+
     // ⭐️ Defensive patch: โปรโมชั่น BOGO/ซื้อครบแถม + จำกัดสิทธิ์การใช้
     const promoColumns = [
       ['buy_product_id', 'INT NULL'],
