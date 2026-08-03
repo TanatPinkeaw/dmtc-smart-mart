@@ -174,7 +174,15 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config as any;
-    
+
+    // ⭐️ STRICT EXEMPTION — /auth/line-login (LINE auto-login) ต้องไม่โดน global handler ใดๆ ทั้งสิ้น
+    //   (auto-refresh / forceLogout / redirect) เด็ดขาด — ปล่อยให้ catch ใน Login.tsx จัดการเอง
+    //   (โชว์ banner "ยังไม่ผูกบัญชี" / alert error) ไม่งั้น interceptor จะเด้งกลับ /login ก่อนที่ผู้ใช้
+    //   จะเห็น error จริง reject ทันทีตั้งแต่บรรทัดแรก
+    if ((originalRequest?.url || '').startsWith('/auth/line-login')) {
+      return Promise.reject(error);
+    }
+
     // ⭐️ F4 — โดน rate limit (429): แจ้งเตือนผู้ใช้ + broadcast ให้หน้าที่สนใจ (เช่น Login) ปิดปุ่ม/นับถอยหลังได้
     if (error.response?.status === 429) {
       const retryAfter = Number(error.response.headers['retry-after']) || 60;

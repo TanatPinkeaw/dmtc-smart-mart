@@ -73,6 +73,12 @@ export default function Login() {
         navigate(dest, { replace: true });
       } catch (err: any) {
         if (cancelled) return;
+        // ⭐️ DIAGNOSTIC — โชว์ error จริงบนจอมือถือ (LINE in-app browser ไม่มี devtools) เพื่อแยกสาเหตุ:
+        //   มี response.status = ตอบกลับจาก backend จริง (401 ยังไม่ผูก / 500 / ฯลฯ)
+        //   'no-response' = ยิงไม่ถึง backend เลย (CORS / เน็ต / endpoint ผิด)
+        const status = err?.response?.status ?? 'no-response';
+        const detail = err?.response?.data?.error || err?.response?.data?.message || err?.message || JSON.stringify(err);
+        alert('LIFF Error [' + status + ']: ' + detail);
         if (err?.response?.status === 401 || err?.response?.status === 404) setNotLinked(true); // บัญชี LINE ยังไม่ผูกกับสมาชิก
         setAutoChecking(false); // ล้มเหลว/ไม่ใช่ LINE client → โชว์ฟอร์มล็อกอินปกติ
       }
