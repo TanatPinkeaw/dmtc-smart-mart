@@ -43,6 +43,10 @@ export default function PreOrder() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false); // ⭐️ มือถือ: ยุบ/ขยายแผงชำระเงิน (กันจอสั้นล้น)
   const [loading, setLoading] = useState(false);
+  // ⭐️ Phase 2 — โหลดสินค้าครั้งแรก (แยกจาก `loading` ที่ใช้ตอนกดยืนยันคำสั่งซื้อ): กันจอว่างเปล่า
+  // ระหว่างรอ fetchProducts() รอบแรก (เน็ตช้า/backend cold start) เป็นเท็จถาวรหลังจบรอบแรกรอบเดียว
+  // ไม่โชว์ซ้ำตอน refetch จาก socket 'stock_updated' หรือหลังเช็คเอาท์สำเร็จ
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // State สำหรับการชำระเงิน
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('QR');
@@ -210,7 +214,11 @@ export default function PreOrder() {
         }
         return nextCart;
       });
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setInitialLoading(false);
+    }
   };
 
   // 🐛 FIX (Sprint 0 — A2) — เดิมใช้ /api/users/search (staff-only, ค้นข้ามคนได้ + คืนแต้ม/เบอร์โทร
@@ -351,9 +359,11 @@ export default function PreOrder() {
         await handleUploadSlip(orderId);
       }
 
+      // ⭐️ Phase 2 — success modal โชว์เลขออเดอร์อ้างอิงด้วย (เดิมไม่มี ผู้ใช้ไม่มีเลขไว้ติดต่อ/ค้นประวัติ)
       Swal.fire({
         icon: 'success', title: 'ส่งออเดอร์สำเร็จ! 🎉',
-        text: (paymentMethod === 'QR' ? 'สลิปอัปโหลดสำเร็จ กรุณารอพนักงานตรวจสอบสักครู่นะครับ' : 'กรุณานำเงินสดมาชำระที่หน้าร้านได้เลยครับ')
+        html: `<b>หมายเลขออเดอร์ #${orderId}</b><br/>`
+          + (paymentMethod === 'QR' ? 'สลิปอัปโหลดสำเร็จ กรุณารอพนักงานตรวจสอบสักครู่นะครับ' : 'กรุณานำเงินสดมาชำระที่หน้าร้านได้เลยครับ')
           + (pointsDiscount > 0 ? ` (ใช้แต้มลดไปแล้ว ${pointsDiscount} บาท)` : '')
       });
 
@@ -362,7 +372,10 @@ export default function PreOrder() {
       fetchProducts(); // ดึงสต๊อกใหม่
       fetchMyPoints(); // ⭐️ แต้มถูกหักไปแล้วถ้ามีการแลก ต้องดึงยอดคงเหลือใหม่
     } catch (error: any) {
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.response?.data?.error || 'ไม่สามารถสั่งซื้อได้' });
+      // ⭐️ Phase 2 — ใช้ getErrorMessage เหมือนจุดอื่นในไฟล์นี้ (handleVerifyPhone/handleCancelMyOrder)
+      // เดิมอ่าน error.response?.data?.error ตรงๆ พลาดเคส "เน็ตหลุด/เชื่อมเซิร์ฟเวอร์ไม่ได้" (ไม่มี
+      // response เลย) ไปเห็นแค่ fallback ทั่วไปที่ไม่บอกสาเหตุจริง ระหว่างขั้นตอนสำคัญที่สุดของ flow
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(error, 'ไม่สามารถสั่งซื้อได้') });
     } finally {
       setLoading(false);
     }
@@ -452,22 +465,37 @@ export default function PreOrder() {
             </button>
           )}
 
-          <PromoPopularRow
-            selectedCategory={selectedCategory}
-            productSearch={productSearch}
-            storePromos={storePromos}
-            highlights={highlights}
-            onAddToCart={addToCart}
-          />
+          {/* ⭐️ Phase 2 — skeleton ตอนโหลดสินค้ารอบแรก กันจอว่างเปล่าถ้าเน็ตช้า/backend cold start */}
+          {initialLoading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 animate-pulse">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-white border border-brand-border rounded-3xl p-3 shadow-sm">
+                  <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2" />
+                  <div className="h-3 bg-brand-bg rounded-full w-3/4 mb-2 mx-auto" />
+                  <div className="h-7 bg-brand-bg rounded-lg" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <PromoPopularRow
+                selectedCategory={selectedCategory}
+                productSearch={productSearch}
+                storePromos={storePromos}
+                highlights={highlights}
+                onAddToCart={addToCart}
+              />
 
-          <ProductGrid
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
-            products={visibleProducts}
-            productSearch={productSearch}
-            onAddToCart={addToCart}
-          />
+              <ProductGrid
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+                products={visibleProducts}
+                productSearch={productSearch}
+                onAddToCart={addToCart}
+              />
+            </>
+          )}
         </div>
       </div>
 

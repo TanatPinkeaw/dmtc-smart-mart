@@ -1,4 +1,4 @@
-import { PackagePlus } from 'lucide-react';
+import { PackagePlus, PackageSearch } from 'lucide-react';
 
 interface Category { id: number; name: string; }
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
@@ -31,6 +31,15 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
         <div className="pointer-events-none absolute right-2.5 top-2.5 bottom-2.5 w-8 bg-gradient-to-l from-white to-transparent rounded-r-xl" />
       </div>
 
+      {/* ⭐️ Phase 2 — empty state: ค้นหา/หมวดหมู่ไม่มีสินค้าตรงเงื่อนไข (แทนพื้นที่ว่างเปล่าไม่บอกอะไรเลย) */}
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-gray-400 py-16 gap-2">
+          <PackageSearch size={40} className="opacity-40" />
+          <p className="text-sm font-medium">
+            {productSearch.trim() ? `ไม่พบสินค้าที่ตรงกับ "${productSearch.trim()}"` : 'ไม่พบสินค้าในหมวดหมู่นี้'}
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {filtered.map((product) => (
           // ⭐️ FIX: เปลี่ยนการ์ดให้เหมือนหน้า POS ทั้งหมด — ขนาด/ระยะห่างเท่ากัน + มีปุ่ม "เพิ่มลงตะกร้า"
@@ -65,6 +74,7 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
           </div>
         ))}
       </div>
+      )}
     </>
   );
 }
