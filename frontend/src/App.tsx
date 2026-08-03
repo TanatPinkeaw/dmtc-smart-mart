@@ -101,7 +101,11 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 // ⭐️ Update — ADMIN เป็นข้อยกเว้น: ไม่ต้องผ่านหน้า Home กลาง เด้งตรงไปหน้าสั่งจอง/ซื้อสินค้าเลย
 function DefaultRoute() {
   const user = getCurrentUser();
-  if (!user) return <Navigate to="/login" replace />;
+  // ⭐️ preserve ?path=... (LIFF deep-link) ตอนเด้งจาก root ไป /login — ถ้า LIFF Endpoint URL ชี้ที่ '/'
+  //   แล้ว LINE เปิด /?path=/pre-order การ redirect ไป /login เฉยๆ จะทำ query หาย ทำให้ auto-login
+  //   ไม่รู้ปลายทาง (utils/liff.ts จับ ?path= ตั้งแต่ตอน bundle โหลดไว้แล้วชั้นหนึ่ง แต่พก query ต่อไป
+  //   ด้วยให้ URL สะอาด/เผื่อโค้ดอื่นอ่าน window.location.search)
+  if (!user) return <Navigate to={`/login${window.location.search}`} replace />;
   // ⭐️ ทุก role เข้าหน้า Home กลาง (เดิม ADMIN เด้งไป /pre-order ซึ่งตอนนี้เป็น MEMBER-only แล้ว จะโดนบล็อก)
   return <Navigate to="/home" replace />;
 }

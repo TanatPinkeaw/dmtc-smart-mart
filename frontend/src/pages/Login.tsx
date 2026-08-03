@@ -65,6 +65,23 @@ export default function Login() {
     if (hasAttemptedLiffLogin.current) return;
     hasAttemptedLiffLogin.current = true;
 
+    // ⭐️ PING-PONG LOOP BREAKER — ถ้าเพิ่งเด้งกลับมาจาก protected route ที่ 401 (LIFF auto-login ผ่าน
+    //   แต่ /pre-order ยิง API แล้ว 401 เพราะ LINE in-app browser บล็อก cookie ด้วย ITP → forceLogout
+    //   → reload /login → เกือบจะ auto-login ใหม่วนไม่จบ) ให้ "หยุด" ตรงนี้เลย: ล้าง flag, เตือนผู้ใช้,
+    //   แล้ว return ทิ้งทันที ปล่อยให้ผู้ใช้ล็อกอินด้วยรหัสผ่านเองแทน — ตัดวงจร ping-pong ทางกายภาพ
+    // ⭐️ ห่อ try/catch — บางเบราว์เซอร์/โหมด (private / cookie ถูกบล็อก) เข้าถึง sessionStorage แล้ว throw
+    //   ถ้าไม่ดักไว้ exception จะเด้งออกจาก effect ทันที = autoChecking ค้าง true = สปินเนอร์ค้างวนเอง
+    let justBounced = false;
+    try {
+      justBounced = sessionStorage.getItem('liff_loop_breaker') === 'true';
+      if (justBounced) sessionStorage.removeItem('liff_loop_breaker');
+    } catch { /* storage ถูกบล็อก — ข้าม loop breaker ไป (LIFF flow ยังทำงานได้ปกติ) */ }
+    if (justBounced) {
+      alert('เซสชั่นหมดอายุ หรือเบราว์เซอร์ LINE บล็อกคุกกี้ กรุณาล็อกอินด้วยรหัสผ่าน');
+      setAutoChecking(false); // โชว์ฟอร์มล็อกอินปกติ
+      return;
+    }
+
     const targetPath = getLiffTargetPath();
 
     // ⭐️ กฎสำคัญ: ปุ่มสมัครสมาชิก — เด้งไป /register ทันทีก่อนยิง line-login ใดๆ

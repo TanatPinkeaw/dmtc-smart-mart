@@ -44,6 +44,13 @@ function forceLogout() {
   csrfToken = null;
   localStorage.removeItem('user');
 
+  // ⭐️ Ping-Pong loop breaker — ตั้ง flag ก่อน reload กลับ /login เสมอ ให้ Login.tsx รู้ว่า "เพิ่งเด้ง
+  //   กลับมาจาก protected route ที่ 401" (เช่น LIFF auto-login ผ่านแต่ /pre-order 401 เพราะ ITP บล็อก
+  //   cookie) แล้ว Login.tsx จะ "หยุด" auto-login รอบใหม่ทันที ไม่วิ่งวนไม่จบ — flag อยู่ใน
+  //   sessionStorage เพราะต้องรอดข้าม full page reload (window.location.href) ที่ useRef/ตัวแปร JS
+  //   หายหมด
+  try { sessionStorage.setItem('liff_loop_breaker', 'true'); } catch { /* storage ถูกบล็อก — ข้าม */ }
+
   Swal.fire({
     icon: 'warning',
     title: 'เซสชันหมดอายุ',
