@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { API_BASE_URL } from '../config';
 import { liff, ensureLiffInit } from '../utils/liff';
@@ -70,13 +70,20 @@ export default function Register() {
     }
   }, []);
 
+  // ⭐️ กัน LIFF init/login ทำงานซ้ำ (StrictMode double-invoke / re-render) — ต้องรันครั้งเดียวเท่านั้น
+  const hasInit = useRef(false);
   useEffect(() => {
+    if (hasInit.current) return;
+    hasInit.current = true;
     (async () => {
       try {
         await ensureLiffInit();
-        if (!liff.isLoggedIn()) {
+        // ⭐️ CRITICAL: ห้ามเรียก liff.login() ตอนอยู่ในแอป LINE (isInClient=true) — จะบังคับ reload
+        //   หน้าวนไม่จบ. เรียก liff.login() ได้เฉพาะเบราว์เซอร์ภายนอก (นอกแอป LINE) ที่ยังไม่ได้ login
+        //   จริงๆ เท่านั้น. ในแอป LINE จะ auto-login ให้เอง เรียก getProfile ต่อได้เลย
+        if (!liff.isLoggedIn() && !liff.isInClient()) {
           liff.login();
-          return; // ⭐️ liff.login() นำทางออกจากหน้านี้ไป LINE login ก่อน — component จะ mount ใหม่ตอนกลับมา
+          return; // liff.login() นำทางออกไป LINE login ก่อน — component จะ mount ใหม่ตอนกลับมา
         }
         const profile = await liff.getProfile();
         setLineUserId(profile.userId);
@@ -86,7 +93,8 @@ export default function Register() {
         setStage('error');
       }
     })();
-  }, [refreshMemberStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ⭐️ auto-refresh แต้ม/กลุ่มทุก 60 วิ ระหว่างที่บัตรสมาชิกกำลังแสดงอยู่ (เช่น เปิดค้างไว้ให้พนักงานดู)
   useEffect(() => {

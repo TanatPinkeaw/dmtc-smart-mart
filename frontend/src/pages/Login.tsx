@@ -23,6 +23,9 @@ export default function Login() {
   //   ระหว่างนั้นโชว์สปินเนอร์แทนฟอร์ม (autoChecking) เพื่อไม่ให้ผู้ใช้เห็นฟอร์มล็อกอินเลย
   //   โชว์สปินเนอร์ด้วยถ้ามี deep-link ?path=... ติดมา (กันฟอร์ม flash ก่อน redirect ไปหน้าปลายทาง)
   const [autoChecking, setAutoChecking] = useState(looksLikeLineInApp() || !!getLiffTargetPath());
+  // ⭐️ กันเอฟเฟกต์ auto-login ทำงานซ้ำ (StrictMode double-invoke / re-render) — line-login + navigate
+  //   ต้องรัน "ครั้งเดียว" ต่อ lifecycle เท่านั้น
+  const hasAttemptedLiffLogin = useRef(false);
 
   // ⭐️ F4 — countdown ตอนโดน rate limit (429)
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
@@ -58,6 +61,10 @@ export default function Login() {
   //   ถ้ายังไม่ผูกบัญชี (401/404) → พาไป /register อย่างนุ่มนวล (ให้ไปสมัคร/ผูกบัญชี) ไม่โชว์ error ดิบ
   //   ผู้ใช้เว็บปกติ (ไม่ใช่ LINE และไม่มี ?path=) ข้ามทั้งหมด ไม่โหลด LIFF ไม่หน่วง
   useEffect(() => {
+    // ⭐️ รันครั้งเดียวเท่านั้น (กัน StrictMode double-invoke / re-render loop)
+    if (hasAttemptedLiffLogin.current) return;
+    hasAttemptedLiffLogin.current = true;
+
     const targetPath = getLiffTargetPath();
 
     // ⭐️ กฎสำคัญ: ปุ่มสมัครสมาชิก — เด้งไป /register ทันทีก่อนยิง line-login ใดๆ
@@ -74,7 +81,9 @@ export default function Login() {
       try {
         await ensureLiffInit();
         if (!liff.isInClient()) { if (!cancelled) setAutoChecking(false); return; }
-        if (!liff.isLoggedIn()) { liff.login(); return; } // redirect ออกไปขอ login ของ LINE แล้วกลับมาใหม่
+        // ⭐️ CRITICAL: ห้ามเรียก liff.login() ตอนอยู่ในแอป LINE (isInClient=true) — จะบังคับ reload
+        //   หน้าวนไม่จบ. อยู่ในแอป LINE จะ auto-login ให้เองอยู่แล้ว เรียก getProfile ต่อได้เลย
+        //   (liff.login() ใช้เฉพาะเบราว์เซอร์ภายนอกเท่านั้น ซึ่ง path นี้ไม่ถึงอยู่แล้วเพราะ isInClient=true)
         const profile = await liff.getProfile();
         const idToken = liff.getIDToken() || null;
         const res = await api.post('/auth/line-login', { line_user_id: profile.userId, id_token: idToken });
