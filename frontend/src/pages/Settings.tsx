@@ -396,6 +396,53 @@ export default function Settings() {
     }
   };
 
+  // ⭐️ Phase 5 (presentation readiness) — ล้างสินค้า+หมวดหมู่+โปรโมชั่นทั้งหมดถาวร แล้วไปเรียก
+  // GET /api/seed-data ต่อเองเพื่อใส่ข้อมูลตัวอย่าง (66 รายการ 5 หมวดหมู่) กลับเข้าไป
+  // ⚠️ กว้างกว่า handleDeleteMembers — นี่คือ "ล้างชุดข้อมูลร้านทั้งหมด" (สินค้า/หมวดหมู่/โปร +
+  // ประวัติการขาย/ออเดอร์/ใบสั่งซื้อของสินค้าที่ติดอยู่ ถ้าเลือกลบทั้งหมด) ไม่ใช่แค่ "ลบสินค้าขยะบางชิ้น"
+  const handleResetProducts = async () => {
+    const confirm = await Swal.fire({
+      title: 'ล้างสินค้า+หมวดหมู่+โปรโมชั่นทั้งหมด?',
+      html: 'ลบถาวร กู้คืนไม่ได้ — สินค้า/หมวดหมู่/โปรโมชั่น <b>ทั้งหมด</b> จะถูกลบทิ้ง<br/>(สินค้าที่มีประวัติการขาย/สั่งจอง/รับสินค้าจริงติดอยู่ จะถามเพิ่มอีกขั้นว่าจะจัดการอย่างไร)',
+      icon: 'warning',
+      showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af',
+      confirmButtonText: 'ยืนยัน ดำเนินการเลย', cancelButtonText: 'ยกเลิก',
+    });
+    if (!confirm.isConfirmed) return;
+
+    setResetLoading('products');
+    try {
+      let r = await api.post('/admin/reset/products', {});
+      if (r.data?.needsConfirmation) {
+        const names = (r.data.blockedProducts || []).map((p: any) => p.name).join(', ');
+        const choice = await Swal.fire({
+          title: 'พบสินค้าที่มีประวัติการขาย/สั่งจอง',
+          html: `พบ ${r.data.blockedProducts?.length || 0} รายการที่มีประวัติการขาย/สั่งจอง/รับสินค้าจริงติดอยู่:<br/><b>${names}</b><br/><br/>ต้องการลบประวัติการขาย/ออเดอร์/ใบสั่งซื้อที่เกี่ยวข้องไปด้วย หรือข้ามสินค้าเหล่านี้ไว้ก่อน?`,
+          icon: 'question',
+          showDenyButton: true, showCancelButton: true,
+          confirmButtonText: 'ลบทั้งหมด (รวมประวัติการขาย/ออเดอร์)', confirmButtonColor: '#dc2626',
+          denyButtonText: 'ข้ามสินค้าเหล่านี้ ลบที่เหลือ', denyButtonColor: '#f59e0b',
+          cancelButtonText: 'ยกเลิก',
+        });
+        if (choice.isConfirmed) {
+          r = await api.post('/admin/reset/products', { deleteTransactionHistory: true });
+        } else if (choice.isDenied) {
+          r = await api.post('/admin/reset/products', { skipBlocked: true });
+        } else {
+          setResetLoading(null);
+          return;
+        }
+      }
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ดำเนินการสำเร็จ', showConfirmButton: false, timer: 4000 });
+      fetchProducts();
+      fetchCategories();
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'ทำรายการไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally {
+      setResetLoading(null);
+    }
+  };
+
   // ⭐️ ซิงค์รายชื่อพนักงานจากไฟล์ CSV — ใครไม่มีในไฟล์จะถูกปิดการใช้งาน (soft delete)
   const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -792,7 +839,7 @@ export default function Settings() {
                   <h3 className="text-base md:text-lg font-bold text-red-700">เครื่องมือสำหรับผู้ดูแลระบบ (Developer & Testing Tools)</h3>
                 </div>
                 <p className="text-xs text-red-500 mb-4">ใช้สำหรับเทสต์ระบบเท่านั้น การกระทำเหล่านี้กู้คืนไม่ได้ — ปิดใช้งานอัตโนมัติบน production</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <button
                     onClick={() => handleAdminReset('unlink-line', 'ปลดผูกบัญชี LINE ทั้งหมด?', 'สมาชิกทุกคนจะต้องสแกน/ผูกบัญชี LINE ใหม่ผ่าน LIFF', 'unlink-line')}
                     disabled={resetLoading === 'unlink-line'}
@@ -813,6 +860,15 @@ export default function Settings() {
                     className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
                   >
                     <Coins size={16} className={resetLoading === 'member-points' ? 'animate-spin' : ''} /> รีเซ็ตแต้มสะสมทั้งหมด
+                  </button>
+                  {/* ⭐️ Phase 5 — ล้างสินค้า+หมวดหมู่+โปรโมชั่นทั้งหมด (กว้างกว่าปุ่มอื่น: อาจรวมประวัติการขาย/
+                      ออเดอร์/ใบสั่งซื้อของสินค้าที่ติดอยู่ด้วย ถ้าเลือก "ลบทั้งหมด" ในขั้นยืนยันที่สอง) */}
+                  <button
+                    onClick={handleResetProducts}
+                    disabled={resetLoading === 'products'}
+                    className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-3 rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <Package size={16} className={resetLoading === 'products' ? 'animate-spin' : ''} /> ล้างสินค้า+หมวดหมู่ทั้งหมด
                   </button>
                 </div>
               </div>

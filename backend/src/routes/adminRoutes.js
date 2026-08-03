@@ -1,6 +1,6 @@
 // ⭐️ Dev/testing data-reset endpoints — ADMIN เท่านั้น, บล็อกทั้งชุดบน production ใน controller เอง
 const express = require('express');
-const { unlinkAllLine, resetMembers, resetMemberPoints } = require('../controllers/adminController');
+const { unlinkAllLine, resetMembers, resetMemberPoints, resetProducts } = require('../controllers/adminController');
 
 const router = express.Router();
 
@@ -18,5 +18,6 @@ function requireRole(...roles) {
 router.post('/unlink-line', requireRole('ADMIN'), unlinkAllLine);
 router.post('/members', requireRole('ADMIN'), resetMembers);
 router.post('/member-points', requireRole('ADMIN'), resetMemberPoints);
+router.post('/products', requireRole('ADMIN'), resetProducts);
 
 module.exports = router;
