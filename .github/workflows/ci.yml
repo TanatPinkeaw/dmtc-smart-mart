@@ -69,4 +69,4 @@ jobs:
       - name: Load schema.sql into test database
         run: mysql -h127.0.0.1 -uroot -pci_test_password pos_coop_ci < schema.sql
       - run: node -c server.js
-      - run: node smoke-test.js
+      - run: node tests/smokeTest.js

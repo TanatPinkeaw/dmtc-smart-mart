@@ -13,7 +13,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { toSatang, fromSatang, lineTotalSatang } from '../utils/money'; // ⭐️ Sprint 1 — B3
 import { useOnlineStatus } from '../hooks/useOnlineStatus'; // ⭐️ Sprint 2 — B6
-import OfflineBanner from '../components/OfflineBanner'; // ⭐️ Sprint 2 — B6
+import OfflineBanner from '../components/common/OfflineBanner'; // ⭐️ Sprint 2 — B6
 import { saveOfflineSale, getOfflineSalesCount, type OfflineSale } from '../utils/offlineSalesDb'; // ⭐️ POS ออฟไลน์
 import { syncOfflineSales } from '../utils/syncOfflineSales'; // ⭐️ POS ออฟไลน์
 import { ProductGrid } from '../components/pos/ProductGrid';

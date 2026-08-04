@@ -1,4 +1,4 @@
-import { validatePasswordStrength } from '../utils/passwordValidator';
+import { validatePasswordStrength } from '../../validators/passwordValidator';
 
 interface PasswordStrengthMeterProps {
   password: string;

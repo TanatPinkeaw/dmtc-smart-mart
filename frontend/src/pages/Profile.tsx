@@ -10,7 +10,7 @@ import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
-import { ChangePasswordModal } from '../components/ChangePasswordModal';
+import { ChangePasswordModal } from '../components/auth/ChangePasswordModal';
 
 export default function Profile() {
   const user = getCurrentUserOrRedirect();

@@ -9,12 +9,15 @@
 // verified by hand. Runs against whatever DB the DB_* env vars point to (see .github/workflows
 // for how CI wires this up to a throwaway MySQL service loaded from schema.sql).
 //
-// Usage: node smoke-test.js   (needs config.js's required env vars already set)
+// Usage: node tests/smokeTest.js   (run from backend/; needs config.js's required env vars already set)
 
 require('dotenv').config({ quiet: true });
+const path = require('path');
 const { spawn } = require('child_process');
 const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
+
+const BACKEND_ROOT = path.resolve(__dirname, '..');
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -87,7 +90,7 @@ async function main() {
   log('seeded test cashier + test product');
 
   const serverProc = spawn(process.execPath, ['server.js'], {
-    cwd: __dirname,
+    cwd: BACKEND_ROOT,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });

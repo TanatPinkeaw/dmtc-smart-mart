@@ -700,7 +700,7 @@ const initDB = async () => {
 
     // ⭐️ Update — offsite copy of each backup on Cloudinary (resource_type: raw), so a backup
     // survives Render's ephemeral disk being wiped on redeploy/restart, before backup_path
-    // (local-disk-only) ever gets touched. See backup.js/cloudinary-config.js for the upload +
+    // (local-disk-only) ever gets touched. See backup.js/config/cloudinary.js for the upload +
     // signed-download logic; restore now falls back to these columns when backup_path is gone.
     try {
       await connection.query(`ALTER TABLE backups ADD COLUMN cloud_public_id VARCHAR(255) DEFAULT NULL`);

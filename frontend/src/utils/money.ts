@@ -1,4 +1,4 @@
-// ⭐️ Sprint 1 — B3: shared integer-satang money helpers (frontend mirror of backend/money.js).
+// ⭐️ Sprint 1 — B3: shared integer-satang money helpers (frontend mirror of backend/src/utils/money.js).
 //
 // Context: the DB stores money as exact DECIMAL(10,2) baht — the float-drift bug (0.1+0.2 style)
 // only happens in JS once values are pulled out and arithmetic (cart totals, discounts, points

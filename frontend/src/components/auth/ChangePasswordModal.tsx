@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import Swal from '../swal';
-import api from '../api';
+import Swal from '../../swal';
+import api from '../../api';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
-import { validatePasswordStrength } from '../utils/passwordValidator';
+import { validatePasswordStrength } from '../../validators/passwordValidator';
 import { KeyRound, X } from 'lucide-react';
-import { getErrorMessage } from '../utils/errorMessage';
+import { getErrorMessage } from '../../utils/errorMessage';
 
 interface ChangePasswordModalProps {
   userId: number;

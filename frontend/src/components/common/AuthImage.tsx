@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../api';
+import api from '../../api';
 
 // ⭐️ SECURITY FIX (วิกฤต #1) — เดิมรูปสลิป/รูปเข้างานโหลดด้วย <img src="http://localhost:3000/uploads/...">
 // ตรงๆ ซึ่งไม่ได้แนบ JWT (browser <img> ไม่ผ่าน axios) หลังล็อก /uploads ให้ต้อง auth แล้ว

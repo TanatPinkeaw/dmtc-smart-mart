@@ -6,7 +6,7 @@ import { useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
-import AuthImage, { openAuthImage } from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
+import AuthImage, { openAuthImage } from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 
 // ⭐️ Construct slip image path from created_at date + filename
 // รูปใหม่เก็บเป็น URL/พาธเต็ม (https://cloudinary... หรือ /uploads/...) → คืนตรงๆ

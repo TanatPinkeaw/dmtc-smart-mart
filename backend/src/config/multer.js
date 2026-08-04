@@ -22,7 +22,7 @@ function getBangkokTime() {
 }
 
 // ⭐️ เปลี่ยนเป็น memoryStorage — ไฟล์อยู่ใน req.file.buffer (RAM) ไม่แตะดิสก์
-// จากนั้น route จะส่ง buffer ขึ้น Cloudinary เอง (ดู cloudinary-config.js)
+// จากนั้น route จะส่ง buffer ขึ้น Cloudinary เอง (ดู config/cloudinary.js)
 // เดิมใช้ diskStorage เขียนลง uploads/ ซึ่งบน Render free จะโดนลบตอน redeploy
 const memoryStorage = multer.memoryStorage();
 

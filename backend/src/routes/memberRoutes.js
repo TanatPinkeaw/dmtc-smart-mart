@@ -5,7 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
 const config = require('../config/config');
 const { checkLineStatus, registerViaLine, lookupMember } = require('../controllers/memberController');
-const { registerLineValidator } = require('../../validators');
+const { registerLineValidator } = require('../validators');
 
 const router = express.Router();
 

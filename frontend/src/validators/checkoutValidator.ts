@@ -1,9 +1,9 @@
 import Joi from 'joi';
 
-// ⭐️ F5 — duplicated from backend/validators.js (checkoutValidator), kept in sync manually.
+// ⭐️ F5 — duplicated from backend/src/validators/index.js (checkoutValidator), kept in sync manually.
 // Real POST /api/sales/checkout body: cashier_id, member_id, promotion_id, redeem_points,
 // payment_method (CASH/QR/MIXED — NOT BANK_TRANSFER/CARD), amount_received, items[].
-// If backend/validators.js's checkoutValidator ever changes, mirror the change here too.
+// If backend/src/validators/index.js's checkoutValidator ever changes, mirror the change here too.
 export const checkoutValidator = Joi.object({
   cashier_id: Joi.number().integer().positive().required(),
   member_id: Joi.number().integer().positive().allow(null).optional(),

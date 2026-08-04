@@ -4,7 +4,7 @@ import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { formatBangkokTime } from '../../utils/timezone';
-import AuthImage from '../AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
+import AuthImage from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 
 // ⭐️ Construct slip image path from created_at date + filename
 // รูปใหม่เก็บเป็น URL/พาธเต็ม (https://cloudinary... หรือ /uploads/...) → คืนตรงๆ

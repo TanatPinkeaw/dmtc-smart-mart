@@ -9,7 +9,7 @@ import api from '../api';
 import { performLogout } from '../utils/logout';
 import { SocketProvider, useSocket } from '../SocketContext';
 import { getCurrentUser, getCurrentUserOrRedirect } from '../utils/getCurrentUser';
-import { ChangePasswordModal } from './ChangePasswordModal';
+import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { Sidebar } from './layout/Sidebar';
 import { MobileBottomNav } from './layout/MobileBottomNav';
 import { MemberBottomNav } from './layout/MemberBottomNav';

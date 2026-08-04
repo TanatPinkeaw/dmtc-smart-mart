@@ -14,7 +14,7 @@ import { useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
-import PendingShiftClosesWidget from '../components/PendingShiftClosesWidget'; // ⭐️ Sprint 2 — D1
+import PendingShiftClosesWidget from '../components/dashboard/PendingShiftClosesWidget'; // ⭐️ Sprint 2 — D1
 import { Section } from '../components/dashboard/Section';
 import { StatCards } from '../components/dashboard/StatCards';
 import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx

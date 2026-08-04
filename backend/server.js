@@ -13,8 +13,8 @@ const cron = require('node-cron');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');  // ← เพิ่มบรรทัดนี้
 const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
-const { slipUpload, shiftPhotoUpload, profilePhotoUpload } = require('./multer-config');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
-const { saveImage } = require('./cloudinary-config');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
+const { slipUpload, shiftPhotoUpload, profilePhotoUpload } = require('./src/config/multer');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
+const { saveImage } = require('./src/config/cloudinary');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
 
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
 // รอบเดียวก็โดนล็อกยาว) NODE_ENV=production ยังคงเข้มเท่าเดิม, ค่าอื่นๆ (development/undefined) ผ่อนให้
@@ -115,9 +115,9 @@ const uploadLimiter = rateLimit({
 const {
   checkoutValidator, productValidator, orderValidator,
   shiftCloseValidator, userRegisterValidator, syncOfflineValidator,
-} = require('./validators');
-const { toSatang, fromSatang } = require('./money'); // ⭐️ Sprint 1 — B3
-const { sendDailyReport } = require('./daily-report'); // ⭐️ Sprint 1 — D4
+} = require('./src/validators');
+const { toSatang, fromSatang } = require('./src/utils/money'); // ⭐️ Sprint 1 — B3
+const { sendDailyReport } = require('./src/scripts/dailyReport'); // ⭐️ Sprint 1 — D4
 const { createBackup, restoreBackupRow } = require('./src/services/backup'); // ⭐️ Sprint 2 — C3: Backup & Restore
 const { sendMail } = require('./src/services/mailer'); // ⭐️ Phase 4 — backup success/failure notifications
 const { sendLowStockAlert, sendPreOrderReadyNotification, pushLineMessage } = require('./src/services/lineService'); // ⭐️ Day 3 — LINE Messaging API
@@ -4522,7 +4522,7 @@ app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
 
 // ⭐️ Refactor — ลบ endpoint เก่า POST /api/orders/upload-slip (ไม่มี :id) ทิ้ง: ไม่มี frontend
 // เรียกใช้แล้ว (PreOrder.tsx เปลี่ยนไปใช้ POST /api/orders/:id/upload-slip ทั้งหมดแล้ว) และของเก่า
-// เก็บไฟล์ลง uploads/ ตรงๆ ไม่ได้จัดโฟลเดอร์ตามวันที่แบบระบบใหม่ (slipUpload ใน multer-config.js)
+// เก็บไฟล์ลง uploads/ ตรงๆ ไม่ได้จัดโฟลเดอร์ตามวันที่แบบระบบใหม่ (slipUpload ใน src/config/multer.js)
 
 // 2. API สร้างออเดอร์ใหม่
 app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateRequest(orderValidator), async (req, res) => {

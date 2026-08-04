@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import api from '../api';
-import Swal from '../swal';
-import { useSocket } from '../SocketContext';
-import AuthImage, { openAuthImage } from './AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดรูปเข้างานผ่าน JWT
+import api from '../../api';
+import Swal from '../../swal';
+import { useSocket } from '../../SocketContext';
+import AuthImage, { openAuthImage } from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดรูปเข้างานผ่าน JWT
 
 interface PendingShift {
   id: number;

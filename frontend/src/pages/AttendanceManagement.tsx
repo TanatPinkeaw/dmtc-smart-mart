@@ -7,8 +7,8 @@ import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
-import AuthImage from '../components/AuthImage'; // ⭐️ SECURITY FIX #1 — เปิดรูปเข้า-ออกงานผ่าน JWT
-import PhotoLightbox from '../components/PhotoLightbox'; // ⭐️ mobile — แตะรูปดูแบบ modal ในหน้า แทนเปิดแท็บใหม่ (window.open blob ที่มือถือหลายรุ่นบล็อก)
+import AuthImage from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — เปิดรูปเข้า-ออกงานผ่าน JWT
+import PhotoLightbox from '../components/common/PhotoLightbox'; // ⭐️ mobile — แตะรูปดูแบบ modal ในหน้า แทนเปิดแท็บใหม่ (window.open blob ที่มือถือหลายรุ่นบล็อก)
 
 export default function AttendanceManagement() {
   const [records, setRecords] = useState<any[]>([]);

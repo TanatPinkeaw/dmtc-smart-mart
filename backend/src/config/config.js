@@ -1,5 +1,5 @@
 // ⭐️ Single source of truth for backend config — replaces scattered process.env.X reads
-// across server.js/db.js/cloudinary-config.js/mailer.js/daily-report.js.
+// across server.js/db.js/config/cloudinary.js/mailer.js/scripts/dailyReport.js.
 //
 // This is the ONLY file in the backend that should read raw process.env. Everything else
 // requires('./config') and uses the exported values instead. Benefits over the old scattered

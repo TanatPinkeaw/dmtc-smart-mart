@@ -1,7 +1,7 @@
 // ⭐️ Day 3 — LINE Messaging API integration. Push-only (no webhook receiver in this app), so this
 // uses plain `fetch` against LINE's REST push endpoint directly rather than pulling in
 // @line/bot-sdk as a dependency for a single call — same "don't add a package for one HTTP call"
-// judgment already used elsewhere in this backend (e.g. Cloudinary raw fetch in cloudinary-config.js).
+// judgment already used elsewhere in this backend (e.g. Cloudinary raw fetch in config/cloudinary.js).
 //
 // Fails soft on purpose, same pattern as mailer.js: if LINE isn't configured (no access token —
 // e.g. local dev before the manager sets up a channel), these functions log and return instead of

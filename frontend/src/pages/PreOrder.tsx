@@ -7,7 +7,7 @@ import { useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { toSatang, fromSatang, lineTotalSatang } from '../utils/money'; // ⭐️ Sprint 1 — B3
-import { validatePaymentSlip } from '../utils/fileValidator'; // ⭐️ Sprint 2 — B9
+import { validatePaymentSlip } from '../validators/fileValidator'; // ⭐️ Sprint 2 — B9
 import { PromoPopularRow } from '../components/preorder/PromoPopularRow';
 import { ProductGrid } from '../components/preorder/ProductGrid';
 import { CartPanel } from '../components/preorder/CartPanel';
