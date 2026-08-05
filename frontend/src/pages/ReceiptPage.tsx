@@ -4,6 +4,7 @@ import { toPng } from 'html-to-image';
 import { Printer, Download, ArrowLeft } from 'lucide-react';
 import { ReceiptSlip } from '../components/pos/ReceiptSlip';
 import { Button } from '../components/ui/Button';
+import { getCurrentUser } from '../utils/getCurrentUser';
 
 export default function ReceiptPage() {
   const location = useLocation();
@@ -26,12 +27,14 @@ export default function ReceiptPage() {
   }, [state]);
 
   if (!state?.receiptData) {
+    const user = getCurrentUser();
+    const fallback = user?.role === 'MEMBER' ? '/pre-order' : '/pos';
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-gray-500 text-lg">ไม่พบข้อมูลใบเสร็จ</p>
-          <Button variant="secondary" onClick={() => navigate('/pos')}>
-            <ArrowLeft size={16} /> กลับหน้า POS
+          <Button variant="secondary" onClick={() => navigate(fallback)}>
+            <ArrowLeft size={16} /> กลับ
           </Button>
         </div>
       </div>

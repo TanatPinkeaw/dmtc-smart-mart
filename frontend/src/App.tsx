@@ -88,6 +88,13 @@ function RequireCashier({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// ใช้กับหน้าที่ล็อกอินแล้วเข้าได้ทุก role (เช่น ReceiptPage ที่ MEMBER ก็ต้องดูใบเสร็จได้)
+function RequireAuth({ children }: { children: ReactNode }) {
+  const user = getCurrentUser();
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 // ⭐️ Require ADMIN only (หน้าสรุปข้อมูล/payroll — ข้อมูลค่าจ้างพนักงาน ห้าม CASHIER เห็น)
 function RequireAdmin({ children }: { children: ReactNode }) {
   const user = getCurrentUser();
@@ -175,7 +182,7 @@ function App() {
         <Route path="/home" element={<Home />} />
         {/* ⭐️ Sprint 0 — A1: /shift เดิมไม่มี guard เลย MEMBER พิมพ์ URL ตรงเข้าได้ ห่อ RequireStaff แล้ว */}
         <Route path="/shift" element={<RequireStaff><Shift /></RequireStaff>} />
-        <Route path="/receipt" element={<RequireStaff><ReceiptPage /></RequireStaff>} />
+        <Route path="/receipt" element={<RequireAuth><ReceiptPage /></RequireAuth>} />
         
         {/* โซนที่ต้องมี Sidebar ครอบอยู่ */}
         <Route element={<Layout />}>
