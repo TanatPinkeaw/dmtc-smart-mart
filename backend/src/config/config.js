@@ -33,6 +33,10 @@ if (IS_PRODUCTION && process.env.DB_SSL !== 'true') {
   process.exit(1);
 }
 
+if (IS_PRODUCTION && process.env.DB_SSL === 'true' && !process.env.DB_SSL_CA) {
+  console.error('⚠️⚠️⚠️ [BOOT WARNING] DB_SSL=true แต่ไม่ได้ตั้ง DB_SSL_CA — การเชื่อมต่อจะเข้ารหัสแต่ไม่ verify cert (เสี่ยง MITM) ตั้ง DB_SSL_CA ด้วย CA cert จาก cloud provider ด่วน ⚠️⚠️⚠️');
+}
+
 // ⭐️ Render ตั้ง process.env.RENDER ให้อัตโนมัติ ถ้าเจอว่ารันบน Render แต่ NODE_ENV ดันไม่ใช่
 // 'production' (ลืมตั้งใน dashboard) trust proxy ใน server.js จะไม่ทำงาน — เตือนดังๆ ให้เห็นใน log
 const IS_RENDER = !!process.env.RENDER;

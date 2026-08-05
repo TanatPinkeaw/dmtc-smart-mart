@@ -50,7 +50,10 @@ async function lineLogin(req, res) {
       return res.status(401).json({ error: 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาลองใหม่' });
     }
   } else {
-    // fallback: เชื่อ line_user_id ดิบ (ดูคำเตือนด้านบน)
+    if (config.IS_PRODUCTION) {
+      console.error('[line-login] BLOCKED: LINE_LIFF_CHANNEL_ID not configured in production — refusing unverified LINE login');
+      return res.status(503).json({ error: 'ระบบยืนยันตัวตน LINE ยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ' });
+    }
     lineUserId = bodyLineUserId;
   }
 

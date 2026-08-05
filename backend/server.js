@@ -113,8 +113,9 @@ const uploadLimiter = rateLimit({
 });
 
 const {
-  checkoutValidator, productValidator, orderValidator,
+  checkoutValidator, productValidator, productUpdateValidator, orderValidator,
   shiftCloseValidator, userRegisterValidator, syncOfflineValidator,
+  updateRoleValidator, storeSettingsValidator, promotionValidator,
 } = require('./src/validators');
 const { toSatang, fromSatang } = require('./src/utils/money'); // ⭐️ Sprint 1 — B3
 const { sendDailyReport } = require('./src/scripts/dailyReport'); // ⭐️ Sprint 1 — D4
@@ -657,10 +658,11 @@ app.get('/api/health', async (req, res) => {
       uptime: process.uptime(),
     });
   } catch (err) {
+    console.error('[health] DB check failed:', err.message);
     res.status(503).json({
       status: 'degraded',
       db: 'disconnected',
-      error: err.message,
+      error: 'database connection failed',
     });
   }
 });
@@ -982,7 +984,7 @@ app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(produ
   }
 });
 
-app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(productUpdateValidator), async (req, res) => {
   const { barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, promo_percent, promo_start, promo_end, is_reward_item, points_required, min_stock } = req.body;
   try {
     // ⭐️ Sprint 2: Validate expiry_date if provided
@@ -1234,6 +1236,13 @@ app.post('/api/users/verify-phone', async (req, res) => {
   if (!phone_number) return res.status(400).json({ error: 'กรุณาระบุเบอร์โทรศัพท์' });
 
   try {
+    if (req.user.role === 'MEMBER') {
+      const [ownRows] = await pool.query('SELECT phone_number FROM users WHERE id = ?', [req.user.id]);
+      if (ownRows[0]?.phone_number !== phone_number) {
+        return res.status(403).json({ error: 'สิทธิ์ไม่เพียงพอ' });
+      }
+    }
+
     const [rows] = await pool.query(
       'SELECT full_name FROM users WHERE phone_number = ?',
       [phone_number]
@@ -1672,7 +1681,7 @@ app.put('/api/users/:id/change-password', async (req, res) => {
   }
 });
 
-app.put('/api/users/update-role', requireRole('ADMIN'), async (req, res) => {
+app.put('/api/users/update-role', requireRole('ADMIN'), validateRequest(updateRoleValidator), async (req, res) => {
   const { student_id, role } = req.body;
   try {
     // ⭐️ Task 5 — เก็บ role เดิมไว้เทียบใน audit log
@@ -3276,7 +3285,7 @@ app.delete('/api/sales/hold/:id', requireRole('CASHIER', 'ADMIN'), async (req, r
 // ระบบสมาชิกตัวจริงอยู่ที่ /api/users/search, /api/users/register, /api/users/:id/profile
 // เหลือไว้เฉพาะ /api/members/import เพราะ insert เข้า users ถูกต้องอยู่แล้ว (ดูโค้ดด้านล่าง)
 
-app.post('/api/members/import', requireRole('ADMIN'), csvUpload.single('file'), async (req, res) => {
+app.post('/api/members/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "กรุณาเลือกไฟล์ CSV" });
 
   const results = [];
@@ -3290,13 +3299,15 @@ app.post('/api/members/import', requireRole('ADMIN'), csvUpload.single('file'), 
           const { student_id, full_name, phone_number } = row;
           if (!student_id || !full_name) continue; // ข้ามแถวที่ข้อมูลไม่ครบ
 
-          const password = await bcrypt.hash(phone_number || '123456', 10);
+          const rawPassword = phone_number || crypto.randomBytes(8).toString('hex');
+          const password = await bcrypt.hash(rawPassword, 10);
+          const mustChangePassword = phone_number ? 0 : 1;
 
           await pool.query(
-            `INSERT INTO users (student_id, password, full_name, phone_number, role)
-             VALUES (?, ?, ?, ?, 'MEMBER')
+            `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
+             VALUES (?, ?, ?, ?, 'MEMBER', ?)
              ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number)`,
-            [student_id, password, full_name, phone_number || null]
+            [student_id, password, full_name, phone_number || null, mustChangePassword]
           );
         }
         fs.unlinkSync(req.file.path); // ลบไฟล์ทิ้งหลัง Import เสร็จ
@@ -4081,7 +4092,7 @@ app.get('/api/settings/store', async (req, res) => {
   }
 });
 
-app.put('/api/settings/store', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+app.put('/api/settings/store', requireRole('ADMIN', 'MANAGER'), validateRequest(storeSettingsValidator), async (req, res) => {
   const { store_name, tax_id, address, receipt_footer } = req.body;
   try {
     await pool.query(
@@ -4349,7 +4360,7 @@ app.get('/api/promotions/active', async (req, res) => {
   }
 });
 
-app.post('/api/promotions', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+app.post('/api/promotions', requireRole('ADMIN', 'MANAGER'), validateRequest(promotionValidator), async (req, res) => {
   const {
     name, discount_type, discount_value, start_date, end_date,
     buy_product_id, buy_qty, free_product_id, free_qty,
@@ -5420,7 +5431,7 @@ app.post('/api/admin/backups/create', requireRole('ADMIN'), async (req, res) => 
     console.error('[backups/create] ERROR:', err.code || '', err.sqlMessage || err.message);
     console.error(err.stack);
 
-    res.status(500).json({ error: err.sqlMessage || err.message });
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -5479,7 +5490,7 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
     console.error('[restore] ERROR:', err.code || '', err.sqlMessage || err.message);
     console.error(err.stack);
 
-    res.status(500).json({ error: err.sqlMessage || err.message });
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -5812,8 +5823,8 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async 
     res.setHeader('Content-Disposition', `attachment; filename="sales-${filenameTag}${range}.csv"`);
     res.send('﻿' + csv); // BOM ให้ Excel อ่านภาษาไทยถูก
   } catch (err) {
-    console.error('[sales-csv export] ERROR:', err.code || '', err.sqlMessage || err.message); // ⭐️ โชว์ error จริงใน terminal
-    res.status(500).json({ error: err.sqlMessage || err.message });
+    console.error('[sales-csv export] ERROR:', err.code || '', err.sqlMessage || err.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -5848,7 +5859,7 @@ app.get('/api/reports/executive-export', requireRole('ADMIN', 'MANAGER'), async 
     res.end();
   } catch (err) {
     console.error('[executive-export] ERROR:', err.code || '', err.sqlMessage || err.message);
-    res.status(500).json({ error: err.sqlMessage || err.message });
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -5910,7 +5921,7 @@ app.get('/api/reports/accounting-summary/export', requireRole('ADMIN', 'MANAGER'
     res.end();
   } catch (err) {
     console.error('[accounting-summary/export] ERROR:', err.code || '', err.sqlMessage || err.message);
-    res.status(500).json({ error: err.sqlMessage || err.message });
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 

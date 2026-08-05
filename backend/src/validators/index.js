@@ -124,6 +124,56 @@ module.exports = {
       .messages({ 'string.pattern.base': 'phone_number must be a valid phone number' }),
   }),
 
+  // PUT /api/users/update-role — ADMIN only, enum-check role
+  updateRoleValidator: Joi.object({
+    student_id: Joi.string().trim().min(1).max(50).required(),
+    role: Joi.string().valid('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN').required(),
+  }),
+
+  // PUT /api/products/:id — same fields as productValidator but all optional (partial update)
+  productUpdateValidator: Joi.object({
+    barcode: Joi.string().trim().max(50).allow(null, '').optional(),
+    name: Joi.string().trim().min(1).max(200).optional(),
+    category_id: Joi.number().integer().positive().allow(null).optional(),
+    price: Joi.number().precision(2).positive().optional(),
+    cost: Joi.number().precision(2).min(0).allow(null).optional(),
+    stock: Joi.number().integer().min(0).optional(),
+    image_url: Joi.string().trim().max(500).allow(null, '').optional(),
+    vendor_id: Joi.number().integer().positive().allow(null).optional(),
+    gp_rate: Joi.number().min(0).max(100).allow(null).optional(),
+    expiry_date: Joi.string().allow(null, '').optional(),
+    discount_percent: Joi.number().integer().min(0).max(100).allow(null).optional(),
+    promo_percent: Joi.number().integer().min(0).max(100).allow(null).optional(),
+    promo_start: Joi.string().allow(null, '').optional(),
+    promo_end: Joi.string().allow(null, '').optional(),
+    is_reward_item: Joi.boolean().optional(),
+    points_required: Joi.number().integer().min(0).allow(null).optional(),
+    min_stock: Joi.number().integer().min(0).allow(null).optional(),
+  }),
+
+  // PUT /api/settings/store
+  storeSettingsValidator: Joi.object({
+    store_name: Joi.string().trim().min(1).max(255).required(),
+    tax_id: Joi.string().trim().max(50).allow(null, '').optional(),
+    address: Joi.string().trim().max(1000).allow(null, '').optional(),
+    receipt_footer: Joi.string().trim().max(1000).allow(null, '').optional(),
+  }),
+
+  // POST /api/promotions
+  promotionValidator: Joi.object({
+    name: Joi.string().trim().min(1).max(255).required(),
+    discount_type: Joi.string().valid('PERCENT', 'FIXED', 'BOGO').required(),
+    discount_value: Joi.number().precision(2).min(0).required(),
+    start_date: Joi.string().allow(null, '').optional(),
+    end_date: Joi.string().allow(null, '').optional(),
+    buy_product_id: Joi.number().integer().positive().allow(null).optional(),
+    buy_qty: Joi.number().integer().min(1).allow(null).optional(),
+    free_product_id: Joi.number().integer().positive().allow(null).optional(),
+    free_qty: Joi.number().integer().min(1).allow(null).optional(),
+    usage_limit: Joi.number().integer().min(1).allow(null).optional(),
+    usage_limit_per_user: Joi.number().integer().min(1).allow(null).optional(),
+  }),
+
   // POST /api/members/register-line — สมัคร/ผูกบัญชีผ่าน LINE LIFF (memberController.js)
   // เหมือน userRegisterValidator ทุกอย่าง + line_user_id บังคับ (LIFF SDK ให้มาเสมอ ไม่มีทางเป็นค่าว่าง
   // ถ้า LIFF init สำเร็จ — ถ้าไม่มีแปลว่าเรียกผิดทาง ไม่ใช่ผ่าน LIFF จริง)

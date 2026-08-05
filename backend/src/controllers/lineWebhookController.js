@@ -188,6 +188,10 @@ async function handleWebhook(req, res) {
     return res.status(401).end();
   }
   if (valid === null) {
+    if (config.IS_PRODUCTION) {
+      console.error('[LINE webhook] BLOCKED: LINE_CHANNEL_SECRET not configured in production');
+      return res.status(503).end();
+    }
     console.warn('⚠️ LINE webhook: ไม่ได้ตั้ง LINE_CHANNEL_SECRET — ข้ามการตรวจ signature (ใช้ได้เฉพาะ dev)');
   }
 

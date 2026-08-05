@@ -46,37 +46,6 @@ export async function validatePaymentSlip(file: File): Promise<FileValidationRes
 }
 
 /**
- * Validate shift close photo for POS
- * - Type: JPG, PNG only
- * - Size: max 10 MB
- * - Dimensions: min 800×600
- */
-export async function validateShiftPhoto(file: File): Promise<FileValidationResult> {
-  // Type check (JPG, PNG only)
-  const allowedTypes = ['image/jpeg', 'image/png'];
-  if (!allowedTypes.includes(file.type)) {
-    return { valid: false, error: 'Only JPG or PNG allowed for shift photos' };
-  }
-
-  // Size check (10 MB max)
-  if (file.size > 10 * 1024 * 1024) {
-    return { valid: false, error: 'File too large (max 10 MB)' };
-  }
-
-  // Dimension check
-  const dimensions = await getImageDimensions(file);
-  if (!dimensions) {
-    return { valid: false, error: 'Could not read image dimensions' };
-  }
-
-  if (dimensions.width < 800 || dimensions.height < 600) {
-    return { valid: false, error: `Image too small (min 800×600, got ${dimensions.width}×${dimensions.height})` };
-  }
-
-  return { valid: true, file, dimensions };
-}
-
-/**
  * Helper: Get image dimensions from File object
  * Returns Promise<{width, height}> or null if image cannot be read
  */

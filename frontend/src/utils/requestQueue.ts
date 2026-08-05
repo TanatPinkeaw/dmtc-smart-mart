@@ -55,10 +55,3 @@ export function incrementRetries(index: number): void {
   }
 }
 
-export function clearQueue(): void {
-  localStorage.removeItem(QUEUE_KEY);
-}
-
-export function getQueueSize(): number {
-  return getQueue().length;
-}

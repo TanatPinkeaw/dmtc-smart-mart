@@ -28,11 +28,4 @@ function fromSatang(satang) {
   return Math.round(satang) / 100;
 }
 
-// Sum an array of baht values entirely in satang space, return baht. Use this instead of
-// `arr.reduce((a,b) => a + b, 0)` on money values.
-function sumSatangFromBaht(bahtValues) {
-  const totalSatang = bahtValues.reduce((sum, v) => sum + toSatang(v), 0);
-  return fromSatang(totalSatang);
-}
-
-module.exports = { toSatang, fromSatang, sumSatangFromBaht };
+module.exports = { toSatang, fromSatang };
