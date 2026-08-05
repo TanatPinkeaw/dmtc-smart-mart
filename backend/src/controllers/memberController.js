@@ -58,7 +58,10 @@ async function checkLineStatus(req, res) {
     if (rows.length === 0) {
       return res.json({ registered: false });
     }
-    return res.json({ registered: true, user: await attachGroupInfo(rows[0]) });
+    return res.json({
+      registered: true,
+      user: { id: rows[0].id, full_name: rows[0].full_name },
+    });
   } catch (error) {
     console.error('[500] checkLineStatus', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });

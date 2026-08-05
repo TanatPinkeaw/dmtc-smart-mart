@@ -2,7 +2,7 @@
 // ถ้าไม่ได้ตั้งค่า Cloudinary (เช่น dev บนเครื่อง local) จะ fallback เขียนลงดิสก์ uploads/ เหมือนเดิม
 const fs = require('fs');
 const path = require('path');
-const config = require('./src/config/config'); // ⭐️ ค่า CLOUDINARY_* มาจากที่นี่แทน process.env ตรงๆ
+const config = require('./config'); // ⭐️ ค่า CLOUDINARY_* มาจากที่นี่แทน process.env ตรงๆ
 
 const CLOUDINARY_ENABLED = !!(
   config.CLOUDINARY_CLOUD_NAME &&

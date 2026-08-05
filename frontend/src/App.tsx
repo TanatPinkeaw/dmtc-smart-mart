@@ -25,6 +25,7 @@ import VendorSales from './pages/VendorSales'; // ⭐️ หน้ายอด�
 import Summary from './pages/Summary'; // ⭐️ หน้าสรุปข้อมูล (ชั่วโมงทำงาน/มาสาย/ค่าจ้าง) — ADMIN เท่านั้น
 import AccountingSummary from './pages/AccountingSummary'; // ⭐️ สรุปบัญชีสหกรณ์ — หมวดหมู่/ยอดจ่ายคืนผู้ฝากขาย/Export Excel
 import BackupManagement from './pages/BackupManagement'; // ⭐️ หน้าสำรอง & กู้คืนข้อมูล — ADMIN เท่านั้น
+import ReceiptPage from './pages/ReceiptPage';
 
 // 🐛 FIX (MEMBER login bug) — ไม่เคยมี route guard เลยตั้งแต่แรก: MEMBER ที่พิมพ์ URL /pos ตรงๆ
 // (หรือกด back/forward จากแท็บเก่า) โหลดหน้า POS ได้เต็มๆ แม้ Layout.tsx จะซ่อนลิงก์ไปหน้านี้ไว้แล้ว
@@ -174,6 +175,7 @@ function App() {
         <Route path="/home" element={<Home />} />
         {/* ⭐️ Sprint 0 — A1: /shift เดิมไม่มี guard เลย MEMBER พิมพ์ URL ตรงเข้าได้ ห่อ RequireStaff แล้ว */}
         <Route path="/shift" element={<RequireStaff><Shift /></RequireStaff>} />
+        <Route path="/receipt" element={<RequireStaff><ReceiptPage /></RequireStaff>} />
         
         {/* โซนที่ต้องมี Sidebar ครอบอยู่ */}
         <Route element={<Layout />}>
