@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toPng } from 'html-to-image';
 import { Printer, Download, ArrowLeft } from 'lucide-react';
@@ -6,25 +6,42 @@ import { ReceiptSlip } from '../components/pos/ReceiptSlip';
 import { Button } from '../components/ui/Button';
 import { getCurrentUser } from '../utils/getCurrentUser';
 
+// มือถือ (iOS/LINE browser) ไม่รองรับ link.download → ใช้ open tab แทน
+const isMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 export default function ReceiptPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const state = location.state as { receiptData: any; storeInfo: any } | null;
 
-  const handleDownloadPng = useCallback(async () => {
-    if (!receiptRef.current) return;
+  const handleSave = useCallback(async () => {
+    if (!receiptRef.current || loading) return;
+    setLoading(true);
     try {
       const dataUrl = await toPng(receiptRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 });
-      const link = document.createElement('a');
-      link.download = `receipt-${state?.receiptData?.sale_id || 'pos'}.png`;
-      link.href = dataUrl;
-      link.click();
+      if (isMobile()) {
+        // มือถือ: เปิดรูปใน tab ใหม่ให้ user กด "บันทึกรูปภาพ" เอง
+        setPreviewUrl(dataUrl);
+      } else {
+        // Desktop: download ตรง
+        const link = document.createElement('a');
+        link.download = `receipt-${state?.receiptData?.sale_id || 'pos'}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err) {
       console.error('PNG export failed:', err);
+      alert('ไม่สามารถสร้างรูปได้ กรุณาลองใหม่');
+    } finally {
+      setLoading(false);
     }
-  }, [state]);
+  }, [state, loading]);
 
   if (!state?.receiptData) {
     const user = getCurrentUser();
@@ -57,11 +74,34 @@ export default function ReceiptPage() {
           <Button variant="secondary" onClick={() => window.print()}>
             <Printer size={16} /> พิมพ์ใบเสร็จ
           </Button>
-          <Button variant="primary" onClick={handleDownloadPng}>
-            <Download size={16} /> ดาวน์โหลด PNG
+          <Button variant="primary" onClick={handleSave} disabled={loading}>
+            {loading ? <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <Download size={16} />}
+            {isMobile() ? 'บันทึกรูปภาพ' : 'ดาวน์โหลด PNG'}
           </Button>
         </div>
       </div>
+
+      {/* Mobile image preview — กด "กดค้างที่รูป แล้วเลือกบันทึก" */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-4 p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <p className="text-white text-sm font-medium">กดค้างที่รูปแล้วเลือก "บันทึกรูปภาพ"</p>
+          <img
+            src={previewUrl}
+            alt="ใบเสร็จ"
+            className="max-w-full max-h-[75vh] rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            className="text-white/70 text-sm underline"
+            onClick={() => setPreviewUrl(null)}
+          >
+            ปิด
+          </button>
+        </div>
+      )}
 
       <style>{`
         @media print {
