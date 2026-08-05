@@ -42,19 +42,25 @@ async function verifyLiffIdToken(idToken) {
 async function lineLogin(req, res) {
   const { line_user_id: bodyLineUserId, id_token } = req.body || {};
 
-  // ⭐️ เลือกแหล่ง userId ตามความปลอดภัย: ถ้ามี config ยืนยัน token ได้ ต้องใช้ค่าที่ยืนยันแล้วเท่านั้น
+  // ⭐️ เลือกแหล่ง userId ตามความปลอดภัย:
+  //   Secure path: LINE_LIFF_CHANNEL_ID ตั้งไว้ + id_token มา → ยืนยันกับ LINE ก่อน (ปลอดภัยที่สุด)
+  //   Compat path: ไม่ได้ตั้ง LINE_LIFF_CHANNEL_ID → fallback เชื่อ line_user_id ตรงๆ (เหมือนเดิม)
+  //   Block path:  LINE_LIFF_CHANNEL_ID ตั้งไว้แล้ว แต่ id_token ไม่มา → LIFF scope ไม่มี openid
   let lineUserId = null;
   if (config.LINE_LIFF_CHANNEL_ID && id_token) {
     lineUserId = await verifyLiffIdToken(id_token);
     if (!lineUserId) {
       return res.status(401).json({ error: 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาลองใหม่' });
     }
-  } else {
+  } else if (!config.LINE_LIFF_CHANNEL_ID) {
+    // ยังไม่ได้ config LINE_LIFF_CHANNEL_ID — fallback เหมือน code เดิม พร้อม log เตือน
     if (config.IS_PRODUCTION) {
-      console.error('[line-login] BLOCKED: LINE_LIFF_CHANNEL_ID not configured in production — refusing unverified LINE login');
-      return res.status(503).json({ error: 'ระบบยืนยันตัวตน LINE ยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ' });
+      console.warn('[line-login] WARNING: LINE_LIFF_CHANNEL_ID not set — trusting unverified line_user_id. ตั้ง LINE_LIFF_CHANNEL_ID ใน Render env เพื่อความปลอดภัยสูงสุด');
     }
     lineUserId = bodyLineUserId;
+  } else {
+    // LINE_LIFF_CHANNEL_ID ตั้งไว้แล้วแต่ id_token ไม่มา → LIFF app ไม่มี openid scope
+    return res.status(401).json({ error: 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาตรวจสอบ LIFF scope (openid) ใน LINE Developers Console' });
   }
 
   if (!lineUserId || !String(lineUserId).trim()) {
