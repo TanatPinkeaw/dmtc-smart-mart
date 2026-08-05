@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -21,6 +22,7 @@ function getSlipImagePath(createdAt: string, filename: string): string {
 
 interface OrderDetailModalProps {
   selectedOrder: any;
+  storeInfo?: any;
   refundReason: string;
   onRefundReasonChange: (value: string) => void;
   onClose: () => void;
@@ -30,9 +32,36 @@ interface OrderDetailModalProps {
   fetchMyOrders: () => Promise<void>;
 }
 
-export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonChange, onClose, onCancelOrder, cancelling, fetchMyOrders }: OrderDetailModalProps) {
+export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRefundReasonChange, onClose, onCancelOrder, cancelling, fetchMyOrders }: OrderDetailModalProps) {
   // ⭐️ Phase 3 — กันแตะซ้ำระหว่างอัปโหลดสลิปยังไม่จบ (เดิมไม่มี guard เลย กดซ้ำได้ยิง request ซ้อนกัน)
   const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
+
+  const viewOrderReceipt = () => {
+    const o = selectedOrder;
+    const subtotal = (o.items || []).reduce((s: number, i: any) => s + Number(i.subtotal), 0);
+    const receiptData = {
+      sale_id: `P${o.id}`,
+      created_at: o.created_at,
+      cashier_name: 'สั่งจองล่วงหน้า',
+      member_name: null,
+      payment_method: o.payment_method || 'QR',
+      items: (o.items || []).map((item: any) => ({
+        name: item.product_name,
+        quantity: item.quantity,
+        price: item.quantity > 0 ? Number(item.subtotal) / item.quantity : 0,
+      })),
+      subtotal,
+      discount_amount: 0,
+      points_discount: o.points_discount || 0,
+      points_redeemed: o.points_redeemed || 0,
+      total_amount: o.total_amount,
+      amount_received: o.total_amount,
+      change_amount: 0,
+      earned_points: 0,
+    };
+    navigate('/receipt', { state: { receiptData, storeInfo } });
+  };
   return (
     // ⭐️ FIX: z-50 เดิมเท่ากับ bottom nav (z-50 ใน Layout.tsx) — เพราะ nav อยู่หลัง <main> ใน DOM ทำให้
     // แม้ backdrop คลุมเต็มจอ nav ก็ยังโผล่ทับด้านบนอยู่ (ตามภาพที่แจ้ง) ยกเป็น z-[80] ให้อยู่เหนือ nav แน่นอน
@@ -242,6 +271,14 @@ export function OrderDetailModal({ selectedOrder, refundReason, onRefundReasonCh
             >
               ปิด
             </button>
+            {selectedOrder.status === 'COMPLETED' && (
+              <button
+                onClick={viewOrderReceipt}
+                className="flex-1 px-4 py-3 bg-gradient-to-br from-brand to-brand-dark active:scale-[0.98] text-white font-bold rounded-full transition-all duration-150 text-sm flex items-center justify-center gap-2"
+              >
+                <FileText size={15} /> ดูใบเสร็จ
+              </button>
+            )}
             {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(selectedOrder.status) && (
               <button
                 onClick={() => onCancelOrder(selectedOrder, refundReason)}

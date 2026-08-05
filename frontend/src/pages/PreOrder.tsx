@@ -78,6 +78,7 @@ export default function PreOrder() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null); // ✅ CHANGED: modal order detail
   // ⭐️ ออเดอร์ที่กำลังจะส่งสลิปใหม่ (เปิดจากการ์ดประวัติออเดอร์ตรงๆ)
   const [slipOrder, setSlipOrder] = useState<any>(null);
+  const [storeInfo, setStoreInfo] = useState<any>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
   // ⭐️ Phase 3 — กันกดปุ่ม "ยกเลิกออเดอร์" ซ้ำระหว่างที่ request แรกยังไม่จบ (double-submit)
   const [cancelling, setCancelling] = useState(false);
@@ -128,6 +129,7 @@ export default function PreOrder() {
   const visibleProducts = promoOnlyFilter ? products.filter(p => (p as any).promo_active) : products;
 
   useEffect(() => {
+    api.get('/settings/store').then(res => setStoreInfo(res.data)).catch(() => {});
     fetchProducts();
     fetchMyPoints();
 
@@ -586,6 +588,7 @@ export default function PreOrder() {
       {selectedOrder && (
         <OrderDetailModal
           selectedOrder={selectedOrder}
+          storeInfo={storeInfo}
           refundReason={refundReason}
           onRefundReasonChange={setRefundReason}
           onClose={() => setSelectedOrder(null)}
