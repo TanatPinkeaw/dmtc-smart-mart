@@ -54,6 +54,26 @@ if (IS_RENDER && !IS_PRODUCTION) {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+// ⭐️ Cookie policy — auth ใช้ httpOnly cookie. ปัจจุบัน frontend (Vercel) กับ backend (Render) อยู่คนละ
+// registrable domain = "cross-site" จึงบังคับต้อง SameSite=None + Secure ซึ่ง LINE in-app browser (ITP)
+// จัดเป็น third-party แล้ว "บล็อก" → LINE auto-login ผ่านแต่ request ถัดไป 401 วน ping-pong (ดู
+// Login.tsx liff_loop_breaker). ทางแก้ราก: ย้าย frontend+backend ให้อยู่โดเมนเดียวกัน (same-site เช่น
+// coop.dmtc.ac.th + api.coop.dmtc.ac.th) แล้วตั้ง COOKIE_SAMESITE=lax → cookie เป็น first-party → ITP
+// ไม่บล็อก. ถ้าใช้ subdomain ต่างกันให้ตั้ง COOKIE_DOMAIN=.dmtc.ac.th เพื่อแชร์ cookie ข้าม subdomain
+// ค่า default คงพฤติกรรมเดิมเป๊ะ (prod=none, dev=lax) จึงไม่กระทบระบบที่รันอยู่จนกว่าจะตั้ง env ใหม่
+const COOKIE_SAMESITE = (process.env.COOKIE_SAMESITE || (IS_PRODUCTION ? 'none' : 'lax')).toLowerCase();
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || null;
+const VALID_SAMESITE = ['lax', 'none', 'strict'];
+if (!VALID_SAMESITE.includes(COOKIE_SAMESITE)) {
+  console.error(`❌ config.js: COOKIE_SAMESITE ต้องเป็นหนึ่งใน ${VALID_SAMESITE.join('/')} (ค่าปัจจุบัน: ${COOKIE_SAMESITE})`);
+  process.exit(1);
+}
+// SameSite=None บังคับต้อง Secure=true (สเปก browser) — บน production Secure=true อยู่แล้ว แต่ถ้าตั้ง
+// none บน dev (http) browser จะไม่ยอมเซ็ต cookie เลย ล็อกอินไม่ติด — เตือนดังๆ
+if (COOKIE_SAMESITE === 'none' && !IS_PRODUCTION) {
+  console.error('⚠️⚠️⚠️ [BOOT WARNING] COOKIE_SAMESITE=none บน dev (http) — browser จะไม่ยอมเซ็ต cookie (ต้องมาคู่ Secure=true/https) ล็อกอินจะไม่ติด ใช้ lax บน dev ⚠️⚠️⚠️');
+}
+
 // ⭐️ FRONTEND_URL ผิด/ลืมตั้งบน Render = CORS/Socket.io ล็อกเป็น localhost เงียบๆ (fail closed
 // อยู่แล้ว ไม่ใช่ช่องโหว่ แต่ debug ยาก เพราะ error ที่ผู้ใช้เห็นคือ CORS ทั่วไป ไม่บอกสาเหตุจริง)
 if (IS_PRODUCTION && (!process.env.FRONTEND_URL || FRONTEND_URL === 'http://localhost:5173' || !FRONTEND_URL.startsWith('https://'))) {
@@ -69,6 +89,11 @@ module.exports = {
   JWT_SECRET: process.env.JWT_SECRET,
   SETUP_KEY: process.env.SETUP_KEY || null, // null = bootstrap endpoints stay disabled (503)
   FRONTEND_URL,
+
+  // ⭐️ Cookie policy (ดูคำอธิบาย + วิธีย้าย same-site ด้านบน) — authTokens.js อ่านจากตรงนี้ที่เดียว
+  COOKIE_SAMESITE,
+  COOKIE_DOMAIN,
+  COOKIE_SECURE: IS_PRODUCTION, // https เท่านั้นบน prod (SameSite=None บังคับต้อง Secure ด้วย)
 
   DB_HOST: process.env.DB_HOST,
   DB_USER: process.env.DB_USER,

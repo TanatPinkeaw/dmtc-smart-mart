@@ -12,11 +12,23 @@ const JWT_SECRET = config.JWT_SECRET;
 const IS_PRODUCTION = config.IS_PRODUCTION;
 
 // ⭐️ Security remediation — ย้าย JWT จาก localStorage ไป httpOnly cookie (ดูคำอธิบายเต็มที่ server.js
-// เดิม) cross-site cookie (Vercel↔Render) ต้อง SameSite=None+Secure บน production, dev ใช้ Lax ได้
-const COOKIE_SECURE = IS_PRODUCTION;
-const COOKIE_SAMESITE = IS_PRODUCTION ? 'none' : 'lax';
+// เดิม). cookie policy อ่านจาก config ที่เดียว (config.js): cross-site (Vercel↔Render) default
+// SameSite=None+Secure; ถ้าย้าย same-site (โดเมนเดียวกัน) ตั้ง COOKIE_SAMESITE=lax [+COOKIE_DOMAIN]
+// เพื่อให้ cookie เป็น first-party กัน LINE in-app browser (ITP) บล็อก — ดูคำอธิบายเต็มใน config.js
+const COOKIE_SECURE = config.COOKIE_SECURE;
+const COOKIE_SAMESITE = config.COOKIE_SAMESITE;
+const COOKIE_DOMAIN = config.COOKIE_DOMAIN;
 const ACCESS_TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000;   // 8h ตรงกับอายุ access token
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7d ตรงกับอายุ refresh token
+
+// ⭐️ รวม option ของ cookie ไว้ที่เดียว — set กับ clear ต้องใช้ค่า (secure/sameSite/domain/path) ตรงกัน
+// เป๊ะ ไม่งั้น clearCookie จะไม่ลบ cookie จริง (browser จับคู่ด้วย attribute เหล่านี้)
+function cookieOptions(path, maxAge) {
+  const opts = { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path };
+  if (maxAge != null) opts.maxAge = maxAge;
+  if (COOKIE_DOMAIN) opts.domain = COOKIE_DOMAIN;
+  return opts;
+}
 
 // ⭐️ csrfToken ฝังเป็น claim ในนี้ (เซ็นแล้ว ปลอมไม่ได้) แทนการเก็บใน cookie แยก — เรียกด้วย
 // generateAccessToken(user, csrfToken) เสมอ, csrfToken สุ่มไว้ที่ผู้เรียก แล้วส่งค่าเดียวกันกลับไป
@@ -47,18 +59,14 @@ function verifyRefreshToken(token) {
 }
 
 function setAuthCookies(res, accessToken, refreshToken) {
-  res.cookie('access_token', accessToken, {
-    httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: ACCESS_TOKEN_MAX_AGE_MS, path: '/',
-  });
+  res.cookie('access_token', accessToken, cookieOptions('/', ACCESS_TOKEN_MAX_AGE_MS));
   // ⭐️ path ต้องกว้างพอให้ /api/auth/logout อ่านคุกกี้นี้ได้ด้วย (ไปเพิกถอน refresh token ตอน logout)
-  res.cookie('refresh_token', refreshToken, {
-    httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, maxAge: REFRESH_TOKEN_MAX_AGE_MS, path: '/api/auth',
-  });
+  res.cookie('refresh_token', refreshToken, cookieOptions('/api/auth', REFRESH_TOKEN_MAX_AGE_MS));
 }
 
 function clearAuthCookies(res) {
-  res.clearCookie('access_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' });
-  res.clearCookie('refresh_token', { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/api/auth' });
+  res.clearCookie('access_token', cookieOptions('/'));
+  res.clearCookie('refresh_token', cookieOptions('/api/auth'));
 }
 
 module.exports = {
