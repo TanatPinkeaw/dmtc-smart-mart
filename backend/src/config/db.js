@@ -781,6 +781,18 @@ const initDB = async () => {
       }
     }
 
+    // 🐛 FIX — DECIMAL(10,2) เก็บได้แค่ 2 ตำแหน่งทศนิยม อัตราแลกแต้มที่ละเอียดกว่านั้น (เช่น 0.001
+    // สำหรับ "1000 แต้ม = 1 บาท") จะถูก MySQL ปัดลง "เงียบๆ" โดยไม่มี error ใดๆ กลับมา — ถ้าปัดจนเหลือ
+    // 0.00 พอดี getLoyaltyRates() (ดู server.js) จะเห็นค่า <= 0 แล้วตกไปใช้ default (1 บาท/แต้ม) แทน
+    // ทำให้ "ตั้งค่าหนึ่งแต่ระบบใช้จริงอีกค่า" แบบไม่มีสัญญาณเตือนใดๆ เลย — ขยายเป็น 4 ตำแหน่งกันปัดหาย
+    // MODIFY COLUMN ไม่ error ตอนรันซ้ำ (ไม่ต้อง swallow ER_DUP_FIELDNAME เหมือน ADD COLUMN ด้านบน)
+    try {
+      await connection.query(`ALTER TABLE settings MODIFY COLUMN points_redeem_value_per_point DECIMAL(10,4) DEFAULT 1.0000`);
+      console.log("🔧 ขยายความละเอียด settings.points_redeem_value_per_point เป็น 4 ตำแหน่งทศนิยมแล้ว");
+    } catch (alterErr) {
+      console.error("⚠️ ALTER TABLE settings (points_redeem_value_per_point precision) ล้มเหลว:", alterErr.message);
+    }
+
     // ⭐️ Part 4 — สินค้าแลกของรางวัลด้วยแต้ม
     for (const [col, ddl] of [
       ['is_reward_item', 'ADD COLUMN is_reward_item TINYINT(1) DEFAULT 0'],

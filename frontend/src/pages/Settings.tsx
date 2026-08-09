@@ -58,8 +58,7 @@ export default function Settings() {
 
   const [startDate, setStartDate] = useState(getLocalDate());
   const [endDate, setEndDate] = useState(getLocalDate());
-  const [exportLevel, setExportLevel] = useState<'item' | 'bill' | 'daily'>('item'); // ⭐️ ระดับความละเอียด CSV
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<'excel' | 'csv' | null>(null);
   const [exportingExecutive, setExportingExecutive] = useState<'excel' | 'csv' | null>(null);
   const [viewingBillItems, setViewingBillItems] = useState<any[] | null>(null);
   const [viewingBillInfo, setViewingBillInfo] = useState<any | null>(null);
@@ -111,18 +110,18 @@ export default function Settings() {
   }, [activeTab, socket, startDate, endDate]); // 👈 เพิ่ม dependencies ให้คร
 
   const fetchStoreSettings = async () => { const res = await api.get('/settings/store'); setStoreInfo(res.data); };
-  // ⭐️ Export ยอดขาย/รายได้เป็น CSV (โหลดผ่าน api = แนบ JWT) แล้วสั่งดาวน์โหลดไฟล์
-  const handleExportCsv = async () => {
-    setExporting(true);
+  // ⭐️ Export ยอดขาย/รายได้ (รวมรายชิ้น+รายบิล+สรุปรายวันไฟล์เดียวเสมอ ดู server.js) เลือกได้แค่ format
+  const handleExportCsv = async (format: 'excel' | 'csv') => {
+    setExporting(format);
     try {
       const res = await api.get('/reports/export/sales-csv', {
-        params: { start_date: startDate, end_date: endDate, level: exportLevel },
+        params: { start_date: startDate, end_date: endDate, format },
         responseType: 'blob',
       });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `sales-${exportLevel}_${startDate}_ถึง_${endDate}.csv`;
+      a.download = `sales-export_${startDate}_ถึง_${endDate}.${format === 'excel' ? 'xlsx' : 'csv'}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -130,7 +129,7 @@ export default function Settings() {
     } catch (err: any) {
       Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   };
   // ⭐️ Phase 4 Part 2 — Executive Summary export (KPI/top-products/category/inventory + full
@@ -245,6 +244,23 @@ export default function Settings() {
     } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
+  // ⭐️ ปลดผูก LINE รายบุคคล (ต่างจาก unlink-all ในเครื่องมือรีเซ็ต demo) — ปลดแล้วแก้ไข student_id ได้
+  // ต่อทันทีในโมดัลเดิม (เคลียร์ line_user_id ใน editingUser local state ไม่ต้องปิด/เปิดโมดัลใหม่)
+  const handleUnlinkLine = async (u: any) => {
+    const confirm = await Swal.fire({
+      icon: 'warning', title: `ยกเลิกผูก LINE ของ "${u.full_name}"?`,
+      text: 'สมาชิกจะต้องผูกบัญชี LINE ใหม่เองถึงจะ login/ดูบัตรสมาชิกผ่าน LINE ได้อีกครั้ง',
+      showCancelButton: true, confirmButtonText: 'ยกเลิกผูก', cancelButtonText: 'ไม่ยกเลิก', confirmButtonColor: '#ef4444',
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await api.put(`/users/${u.id}/unlink-line`);
+      setEditingUser((prev: any) => prev ? { ...prev, line_user_id: null } : prev);
+      fetchUsers();
+      Swal.fire({ icon: 'success', title: 'ปลดผูกบัญชี LINE แล้ว', showConfirmButton: false, timer: 1500 });
+    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+  };
+
   const handleAddCategory = async (e: React.FormEvent) => { e.preventDefault(); await api.post('/categories', { name: newCategory }); setNewCategory(''); fetchCategories(); setActiveModal(null); Swal.fire({ icon: 'success', title: 'เพิ่มหมวดหมู่สำเร็จ', showConfirmButton: false, timer: 1500 }); };
   const handleAddSupplier = async (e: React.FormEvent) => { e.preventDefault(); await api.post('/suppliers', newSupplier); setNewSupplier({ name: '', contact_info: '' }); fetchSuppliers(); setActiveModal(null); Swal.fire({ icon: 'success', title: 'เพิ่มซัพพลายเออร์สำเร็จ', showConfirmButton: false, timer: 1500 }); };
   const handleAddPromotion = async (e: React.FormEvent) => {
@@ -289,6 +305,17 @@ export default function Settings() {
 
   const handleDeleteCategory = async (id: number) => { const res = await Swal.fire({ title: 'ลบหมวดหมู่นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/categories/${id}`); fetchCategories(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
   const handleDeleteProduct = async (id: number) => { const res = await Swal.fire({ title: 'ลบสินค้านี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/products/${id}`); fetchProducts(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+  // ⭐️ ถ้าโปรโมชั่นเคยถูกใช้จริงมาแล้ว backend จะปิดใช้งานแทนลบถาวร (กันประวัติการใช้งานหาย) — ข้อความ
+  // ตอบกลับต่างกันตามเคส (ดู DELETE /api/promotions/:id) โชว์ข้อความจาก backend ตรงๆ ให้ผู้ใช้รู้ว่าเกิดอะไรขึ้น
+  const handleDeletePromotion = async (p: any) => {
+    const res = await Swal.fire({ title: `ลบโปรโมชั่น "${p.name}"?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' });
+    if (!res.isConfirmed) return;
+    try {
+      const delRes = await api.delete(`/promotions/${p.id}`);
+      fetchPromotions();
+      Swal.fire({ icon: 'success', title: delRes.data.message, showConfirmButton: false, timer: 1800 });
+    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+  };
   // ⭐️ ปุ่มลบราย user เป็น soft-delete (backend UPDATE is_active=FALSE ไม่ได้ลบจริง กันบิลเก่าพัง) —
   // ตั้งแต่เอา filter is_active ออก การ์ดจะไม่หายไปหลังกด ต้องบอกให้ชัดว่านี่คือ "ระงับการใช้งาน"
   // (การ์ดจะกลายเป็นสีเทา + badge ระงับแล้ว) ไม่ใช่ลบทิ้งถาวร
@@ -566,25 +593,27 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* ⭐️ Export CSV — เลือกระดับความละเอียดแล้วดาวน์โหลด ไปเปิดใน Google Sheets/Excel คำนวณต่อได้ */}
+              {/* ⭐️ Export — เดิมต้องเลือกระดับความละเอียด (รายชิ้น/รายบิล/สรุปรายวัน) แล้วโหลดทีละไฟล์
+                  3 รอบ ตอนนี้รวมทั้ง 3 ระดับไว้ไฟล์เดียวเสมอ (Excel = 3 ชีท, CSV = 3 ส่วนคั่นด้วย
+                  หัวข้อ) เลือกแค่ format ที่จะเปิด — ไปเปิดใน Excel/Google Sheets คำนวณต่อได้ */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-white border border-brand-border rounded-xl p-2.5">
-                <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 px-1"><Download size={14} className="text-brand" /> ส่งออกข้อมูล (ช่วงวันที่ที่เลือกด้านบน)</span>
-                <select
-                  value={exportLevel}
-                  onChange={e => setExportLevel(e.target.value as 'item' | 'bill' | 'daily')}
-                  className="text-sm border border-brand-border rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-brand bg-brand-bg font-medium text-gray-700 sm:ml-auto"
-                >
-                  <option value="item">รายชิ้น (ละเอียดสุด — ทำ pivot ได้)</option>
-                  <option value="bill">รายบิล</option>
-                  <option value="daily">สรุปรายวัน</option>
-                </select>
-                <button
-                  onClick={handleExportCsv}
-                  disabled={exporting}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
-                >
-                  <Download size={15} /> {exporting ? 'กำลังสร้างไฟล์...' : 'ดาวน์โหลด CSV'}
-                </button>
+                <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 px-1"><Download size={14} className="text-brand" /> ส่งออกข้อมูล (ช่วงวันที่ที่เลือกด้านบน — รวมรายชิ้น/รายบิล/สรุปรายวัน)</span>
+                <div className="flex gap-2 sm:ml-auto">
+                  <button
+                    onClick={() => handleExportCsv('excel')}
+                    disabled={!!exporting}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                    <Download size={15} /> {exporting === 'excel' ? 'กำลังสร้างไฟล์...' : 'Export Excel'}
+                  </button>
+                  <button
+                    onClick={() => handleExportCsv('csv')}
+                    disabled={!!exporting}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                    <Download size={15} /> {exporting === 'csv' ? 'กำลังสร้างไฟล์...' : 'Export CSV'}
+                  </button>
+                </div>
               </div>
 
               {/* ⭐️ Phase 4 Part 2 — Executive Summary: KPI/สินค้าขายดี/หมวดหมู่/คลังสินค้า
@@ -673,6 +702,7 @@ export default function Settings() {
                     <input type="text" placeholder="ค้นหาสินค้า..." value={searchProduct} onChange={e => setSearchProduct(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
+                  <ExportImportButtons entity="products" onImportDone={fetchProducts} />
                   <button onClick={() => { setActiveModal('ADD_PRODUCT'); setVendorSearch(''); }} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มสินค้า</span></button>
                 </div>
               </div>
@@ -712,6 +742,7 @@ export default function Settings() {
                     <input type="text" placeholder="ค้นหาหมวดหมู่..." value={searchCategory} onChange={e => setSearchCategory(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
+                  <ExportImportButtons entity="categories" onImportDone={fetchCategories} />
                   <button onClick={() => setActiveModal('ADD_CATEGORY')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มหมวดหมู่</span></button>
                 </div>
               </div>
@@ -736,6 +767,7 @@ export default function Settings() {
                     <input type="text" placeholder="ค้นหาชื่อ, เบอร์ติดต่อ..." value={searchSupplier} onChange={e => setSearchSupplier(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
+                  <ExportImportButtons entity="suppliers" onImportDone={fetchSuppliers} />
                   <button onClick={() => setActiveModal('ADD_SUPPLIER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มบริษัท</span></button>
                 </div>
               </div>
@@ -766,6 +798,9 @@ export default function Settings() {
                     <input type="text" placeholder="ค้นหาชื่อ, รหัสนักศึกษา..." value={searchUser} onChange={e => setSearchUser(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
+                  {/* ⭐️ Export ข้อมูลพนักงาน/สมาชิกออกไปแก้ (import กลับใช้ปุ่ม "ซิงค์รายชื่อจาก CSV" ด้านล่าง
+                      ซึ่งเป็นเครื่องมือเทียบรายชื่อ create/reactivate/deactivate อยู่แล้ว ไม่ทำซ้ำ) */}
+                  <ExportImportButtons entity="users" onImportDone={fetchUsers} showImport={false} />
                   {/* ⭐️ ซิงค์รายชื่อจาก CSV */}
                   <label className="shrink-0 bg-white border border-brand-border text-brand px-4 py-2 rounded-xl font-bold hover:bg-brand-bg flex justify-center items-center gap-2 transition cursor-pointer">
                     <Upload size={18} /> <span className="hidden sm:inline">นำเข้า CSV</span>
@@ -893,7 +928,10 @@ export default function Settings() {
                   <div key={p.id} className="bg-white p-4 rounded-3xl shadow-sm border border-brand-border flex flex-col gap-2 relative">
                     <div className="flex justify-between items-start">
                       <h3 className="font-bold text-gray-800">{p.name}</h3>
-                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>{p.is_active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>{p.is_active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</span>
+                        <button onClick={() => handleDeletePromotion(p)} title="ลบโปรโมชั่น" className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors duration-150"><Trash2 size={14} /></button>
+                      </div>
                     </div>
                     <p className="text-sm font-bold text-brand mt-2">
                       {p.discount_type === 'PERCENT' ? `ลด ${p.discount_value}%` : p.discount_type === 'FIXED' ? `ลด ฿${p.discount_value}` :
@@ -1174,7 +1212,23 @@ export default function Settings() {
         <CustomModal title="แก้ไขข้อมูลผู้ใช้งาน" onClose={() => { setActiveModal(null); setEditingUser(null); }}>
           <form onSubmit={handleEditUserRole} className="space-y-4">
             <Input label="ชื่อ-นามสกุล" value={editingUser.full_name} onChange={(v: any) => setEditingUser({ ...editingUser, full_name: v })} />
-            <Input label="รหัสนักศึกษา" value={editingUser.student_id ?? editingUser.username} onChange={(v: any) => setEditingUser({ ...editingUser, student_id: v })} />
+            <div>
+              {/* ⭐️ ผูก LINE แล้ว = ล็อกรหัสนักศึกษา (สมัครผ่าน LIFF ผูก student_id คู่กับ line_user_id
+                  ไว้แน่นตั้งแต่แรก แก้ตรงนี้จะทำให้บัตรสมาชิก/QR ที่แคชเชียร์สแกนไม่ตรงตัวจริงเจ้าของ LINE
+                  อีกต่อไป — backend เองก็ล็อกด้วย ดู PUT /api/users/:id — ต้องปลดผูก LINE ก่อนถึงจะแก้ได้) */}
+              <Input label="รหัสนักศึกษา" value={editingUser.student_id ?? editingUser.username}
+                onChange={(v: any) => setEditingUser({ ...editingUser, student_id: v })}
+                disabled={!!editingUser.line_user_id} />
+              {editingUser.line_user_id && (
+                <div className="flex items-center justify-between gap-2 mt-1.5">
+                  <p className="text-[11px] text-gray-400">🔒 ผูกบัญชี LINE แล้ว แก้รหัสนี้ไม่ได้ (ปลดผูกก่อนถ้าต้องแก้)</p>
+                  <button type="button" onClick={() => handleUnlinkLine(editingUser)}
+                    className="shrink-0 text-[11px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors duration-150">
+                    ยกเลิกผูก LINE
+                  </button>
+                </div>
+              )}
+            </div>
             <Input label="เบอร์โทรศัพท์" value={editingUser.phone_number || ''} onChange={(v: any) => setEditingUser({ ...editingUser, phone_number: v })} required={false} />
             <Input label="แต้มสะสม" type="number" value={editingUser.points ?? 0} onChange={(v: any) => setEditingUser({ ...editingUser, points: v === '' ? 0 : Number(v) })} required={false} />
             <div>
@@ -1295,6 +1349,67 @@ const TabButton = ({ icon, label, isActive, onClick, badge }: any) => (
     {!!badge && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/25 text-white' : 'bg-brand-bg text-brand'}`}>{badge}</span>}
   </button>
 );
+
+// ⭐️ Export/Import CSV+Excel ใช้ร่วมกัน 4 แท็บ (สินค้า/หมวดหมู่/ซัพพลายเออร์/พนักงาน) — ดึงออกไปแก้ไข
+// นอกระบบ (Excel/Google Sheets) แล้วนำเข้ากลับ backend endpoint คู่กันของแต่ละ entity (ดู server.js:
+// GET /api/<entity>/export, POST /api/<entity>/import — users ใช้ /api/members/import ของเดิม)
+function ExportImportButtons({ entity, onImportDone, showImport = true }: { entity: 'products' | 'categories' | 'suppliers' | 'users'; onImportDone: () => void; showImport?: boolean }) {
+  const [busy, setBusy] = useState<'excel' | 'csv' | 'import' | null>(null);
+  const fileInputId = `import-file-${entity}`;
+
+  const handleExport = async (format: 'excel' | 'csv') => {
+    setBusy(format);
+    try {
+      const res = await api.get(`/${entity}/export`, { params: { format }, responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${entity}-export.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally { setBusy(null); }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // กันเลือกไฟล์เดิมซ้ำแล้วไม่ trigger onChange
+    if (!file) return;
+    setBusy('import');
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await api.post(entity === 'users' ? '/members/import' : `/${entity}/import`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      Swal.fire({ icon: 'success', title: res.data.message, showConfirmButton: false, timer: 2500 });
+      onImportDone();
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'นำเข้าไม่สำเร็จ', text: getErrorMessage(err) });
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="flex gap-1.5 shrink-0">
+      <button type="button" onClick={() => handleExport('excel')} disabled={!!busy} title="ส่งออก Excel"
+        className="p-2 bg-white border border-brand-border text-emerald-600 rounded-xl hover:bg-emerald-50 active:scale-95 transition-all duration-150 disabled:opacity-50">
+        <FileSpreadsheet size={16} />
+      </button>
+      <button type="button" onClick={() => handleExport('csv')} disabled={!!busy} title="ส่งออก CSV"
+        className="p-2 bg-white border border-brand-border text-brand rounded-xl hover:bg-brand-bg active:scale-95 transition-all duration-150 disabled:opacity-50">
+        <Download size={16} />
+      </button>
+      {showImport && (
+        <label htmlFor={fileInputId} title="นำเข้า CSV (แก้ไข/เพิ่มจากไฟล์)"
+          className={`p-2 bg-white border border-brand-border text-gray-500 rounded-xl hover:bg-brand-bg active:scale-95 transition-all duration-150 cursor-pointer flex items-center justify-center ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+          <Upload size={16} />
+          <input id={fileInputId} type="file" accept=".csv,text/csv" onChange={handleImport} className="hidden" />
+        </label>
+      )}
+    </div>
+  );
+}
 
 const Input = ({ label, value, onChange, type = "text", required = true, disabled = false }: any) => (
   <div>

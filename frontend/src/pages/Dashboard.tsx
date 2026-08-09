@@ -309,7 +309,11 @@ export default function Dashboard() {
                   return (
                     <div className="flex items-end gap-1 h-32">
                       {hourly.map(h => (
-                        <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group">
+                        // 🐛 FIX — ต้องมี h-32 ตรงนี้ด้วย (เท่า parent) ไม่งั้น bar ด้านในที่ตั้ง height
+                        // เป็น % จะไม่มีความสูงตั้งต้นให้อ้างอิง (parent เดิม auto height เพราะ items-end
+                        // ไม่ stretch ลูก) → % คำนวณไม่ได้ กลายเป็น 0 เสมอไม่ว่ายอดขายจะเท่าไหร่
+                        // (ข้อความ "ช่วงพีค" ด้านบนยังโชว์ถูกเพราะมาจาก data ตรงๆ ไม่เกี่ยว layout นี้)
+                        <div key={h.hour} className="flex-1 h-32 flex flex-col items-center justify-end group">
                           <div
                             className={`w-full rounded-t transition-all duration-150 relative ${h.hour === peakHour ? 'bg-amber-500 hover:bg-amber-600' : 'bg-brand-mid hover:bg-brand'}`}
                             style={{ height: `${(Number(h.total) / max) * 100}%` }}

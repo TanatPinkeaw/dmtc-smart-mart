@@ -9,11 +9,13 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
 
 interface CategoryBreakdown { name: string; sales: number; cost: number; profit: number; percentage: number; }
+interface ProductBreakdown { name: string; category: string; qty: number; revenue: number; profit: number; }
 interface SupplierPayout { vendor_id: number; vendor_name: string; total_items_sold: number; total_sales: number; coop_gp_earnings: number; vendor_payout: number; }
 interface AccountingData {
   period: { start_date: string | null; end_date: string | null };
   kpis: { totalRevenue: number; totalCost: number; totalProfit: number; totalOrders: number; aov: number };
   categoryBreakdown: CategoryBreakdown[];
+  productBreakdown: ProductBreakdown[];
   supplierPayouts: SupplierPayout[];
 }
 
@@ -155,6 +157,43 @@ export default function AccountingSummary() {
                           <td className="p-3 text-right text-orange-600">{baht(c.cost)}</td>
                           <td className="p-3 text-right font-bold text-brand">{baht(c.profit)}</td>
                           <td className="p-3 text-right text-gray-500">{c.percentage.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* ⭐️ ผู้ใช้ขอ — บอกด้วยว่าขายสินค้าอะไรบ้าง (เดิมมีแค่สรุปตามหมวดหมู่) ครบทุกตัว ไม่ตัด top 10 */}
+            <div className="bg-white rounded-3xl shadow-md border border-brand-border overflow-hidden mb-8">
+              <div className="px-5 py-4 border-b border-brand-border">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-brand" /> สินค้าที่ขาย ({data?.productBreakdown.length || 0} รายการ)
+                </h2>
+              </div>
+              {!data || data.productBreakdown.length === 0 ? (
+                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลการขายในช่วงวันที่นี้</p>
+              ) : (
+                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                  <table className="w-full text-left whitespace-nowrap text-sm">
+                    <thead className="bg-gray-50 text-gray-600 text-xs sticky top-0">
+                      <tr>
+                        <th className="p-3 border-b">สินค้า</th>
+                        <th className="p-3 border-b">หมวดหมู่</th>
+                        <th className="p-3 border-b text-right">จำนวนที่ขายได้</th>
+                        <th className="p-3 border-b text-right">ยอดขายรวม</th>
+                        <th className="p-3 border-b text-right">กำไรรวม</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.productBreakdown.map(p => (
+                        <tr key={p.name} className="border-b last:border-0 hover:bg-brand-bg">
+                          <td className="p-3 font-semibold text-gray-800">{p.name}</td>
+                          <td className="p-3 text-gray-500">{p.category}</td>
+                          <td className="p-3 text-right">{p.qty.toLocaleString()} ชิ้น</td>
+                          <td className="p-3 text-right">{baht(p.revenue)}</td>
+                          <td className="p-3 text-right font-bold text-brand">{baht(p.profit)}</td>
                         </tr>
                       ))}
                     </tbody>

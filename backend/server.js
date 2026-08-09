@@ -809,6 +809,52 @@ app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) =>
   }
 });
 
+// ⭐️ Export หมวดหมู่ CSV/Excel — แก้ไขนอกระบบแล้วนำเข้ากลับผ่าน POST /api/categories/import ด้านล่าง
+app.get('/api/categories/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT id, name FROM categories ORDER BY id');
+    await sendTableExport(res, {
+      filename: `categories-export_${Date.now()}`, sheetName: 'หมวดหมู่',
+      headers: ['id', 'name'], rows: rows.map(r => [r.id, r.name]),
+    }, validateExportFormat(req, res));
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ Import หมวดหมู่ CSV — มี id = UPDATE ชื่อ (แก้ของเดิม), ไม่มี id/id ว่าง = INSERT ใหม่ (เพิ่ม)
+// มี id แต่หา id นั้นไม่เจอ = ข้ามแถวนั้นไปเงียบๆ (กันพิมพ์ id ผิดแล้วสร้างแถวใหม่โดยไม่ตั้งใจ)
+app.post('/api/categories/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'กรุณาเลือกไฟล์ CSV' });
+  const results = [];
+  fs.createReadStream(req.file.path)
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      try {
+        let inserted = 0, updated = 0, skipped = 0;
+        for (const row of results) {
+          const name = (row.name || '').trim();
+          const id = row.id ? Number(row.id) : null;
+          if (!name) { skipped++; continue; }
+          if (id) {
+            const [r] = await pool.query('UPDATE categories SET name = ? WHERE id = ?', [name, id]);
+            if (r.affectedRows > 0) updated++; else skipped++;
+          } else {
+            await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
+            inserted++;
+          }
+        }
+        fs.unlinkSync(req.file.path);
+        res.json({ message: `นำเข้าสำเร็จ: เพิ่มใหม่ ${inserted}, แก้ไข ${updated}, ข้าม ${skipped} รายการ` });
+      } catch (error) {
+        console.error('[500]', error.message);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+      }
+    });
+});
+
 app.delete('/api/categories/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
@@ -858,6 +904,45 @@ function getBestItemDiscountPercent(product) {
   if (isProductPromoActive(product)) pct = Math.max(pct, Number(product.promo_percent) || 0);
   if (getProductExpiry(product).status === 'near_expiry') pct = Math.max(pct, Number(product.discount_percent) || 0);
   return pct;
+}
+
+// ⭐️ CSV/Excel export ใช้ร่วมกันทั้ง 4 หน้าจัดการข้อมูล (พนักงาน/สิทธิ์, ซัพพลายเออร์, หมวดหมู่, สินค้า)
+// — ผู้ใช้ขอไว้ในหน้าคลังสินค้า/Settings เพื่อดึงออกไปแก้ไขนอกระบบแล้วนำเข้ากลับ (ดู import คู่กันด้านล่าง
+// ของแต่ละ entity) รูปแบบเดียวกับ toCsv ใน /api/reports/export/sales-csv (ครอบ " กัน , ในข้อมูล + BOM)
+function toCsvString(headers, rows) {
+  const body = [headers, ...rows]
+    .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  return '﻿' + body; // BOM ให้ Excel อ่านภาษาไทยถูก
+}
+async function sendTableExport(res, { filename, sheetName, headers, rows }, format) {
+  if (format === 'excel') {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'DMTC Mart';
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet(sheetName);
+    sheet.addRow(headers);
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } };
+    rows.forEach(r => sheet.addRow(r));
+    sheet.columns.forEach((col, i) => {
+      let maxLen = String(headers[i] ?? '').length;
+      for (const r of rows) { const len = String(r[i] ?? '').length; if (len > maxLen) maxLen = len; }
+      col.width = Math.min(Math.max(maxLen + 2, 10), 40);
+    });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
+  res.send(toCsvString(headers, rows));
+}
+function validateExportFormat(req, res) {
+  const format = req.query.format === 'excel' ? 'excel' : 'csv';
+  return format;
 }
 
 app.get('/api/products', async (req, res) => {
@@ -982,6 +1067,75 @@ app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(produ
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
+});
+
+// ⭐️ Export สินค้า CSV/Excel — เลือกคอลัมน์ที่แก้บ่อยสุด (ไม่รวม vendor_id/gp_rate/promo/รูป/วันหมดอายุ
+// ที่ควรแก้ผ่านฟอร์มปกติเพราะมี validation เฉพาะทาง เช่น เช็ควันที่ย้อนหลัง) ตัด id ออกก็ยัง export ได้
+// ปกติแต่ import กลับจะกลายเป็น "เพิ่มใหม่" เสมอ (ไม่มี id ให้จับคู่อัปเดตของเดิม)
+app.get('/api/products/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, barcode, name, category_id, price, cost, stock, min_stock FROM products WHERE is_active = 1 ORDER BY id'
+    );
+    await sendTableExport(res, {
+      filename: `products-export_${Date.now()}`, sheetName: 'สินค้า',
+      headers: ['id', 'barcode', 'name', 'category_id', 'price', 'cost', 'stock', 'min_stock'],
+      rows: rows.map(r => [r.id, r.barcode || '', r.name, r.category_id ?? '', r.price, r.cost, r.stock, r.min_stock]),
+    }, validateExportFormat(req, res));
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ Import สินค้า CSV — มี id ที่มีจริง = UPDATE (แก้ไข, เฉพาะ 6 คอลัมน์ที่ export ไป ฟิลด์อื่นไม่แตะ)
+// ไม่มี id/id หาไม่เจอ = INSERT ใหม่ — barcode ซ้ำจะโดน DB unique constraint reject แถวนั้น (ข้าม ไม่ทำทั้งไฟล์พัง)
+app.post('/api/products/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'กรุณาเลือกไฟล์ CSV' });
+  const results = [];
+  fs.createReadStream(req.file.path)
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      try {
+        let inserted = 0, updated = 0, skipped = 0;
+        for (const row of results) {
+          const name = (row.name || '').trim();
+          const price = Number(row.price);
+          if (!name || !Number.isFinite(price) || price < 0) { skipped++; continue; }
+          const barcode = (row.barcode || '').trim() || null;
+          const category_id = row.category_id ? Number(row.category_id) : null;
+          const cost = Number(row.cost) || 0;
+          const stock = Number.isFinite(Number(row.stock)) ? Number(row.stock) : 0;
+          const min_stock = Number.isFinite(Number(row.min_stock)) ? Number(row.min_stock) : 10;
+          const id = row.id ? Number(row.id) : null;
+
+          try {
+            if (id) {
+              const [r] = await pool.query(
+                'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, stock=?, min_stock=? WHERE id=?',
+                [barcode, name, category_id, price, cost, stock, min_stock, id]
+              );
+              if (r.affectedRows > 0) updated++; else skipped++;
+            } else {
+              await pool.query(
+                'INSERT INTO products (barcode, name, category_id, price, cost, stock, min_stock) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [barcode, name, category_id, price, cost, stock, min_stock]
+              );
+              inserted++;
+            }
+          } catch (rowErr) {
+            if (rowErr.code === 'ER_DUP_ENTRY') { skipped++; continue; } // บาร์โค้ดซ้ำ — ข้ามแถวนี้ ไม่ทำทั้งไฟล์พัง
+            throw rowErr;
+          }
+        }
+        fs.unlinkSync(req.file.path);
+        res.json({ message: `นำเข้าสำเร็จ: เพิ่มใหม่ ${inserted}, แก้ไข ${updated}, ข้าม ${skipped} รายการ` });
+      } catch (error) {
+        console.error('[500]', error.message);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+      }
+    });
 });
 
 app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(productUpdateValidator), async (req, res) => {
@@ -1535,6 +1689,25 @@ app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
+// ⭐️ Export พนักงาน/สมาชิก CSV/Excel — ห้ามใส่ password/password_hash ลงไปเด็ดขาด (เหตุผลเดียวกับ
+// GET /api/users ด้านบน) student_id ที่ผูก LINE แล้วส่งออกมาด้วยได้ (ดูอย่างเดียว) แต่ import กลับเข้า
+// จะไม่แก้ student_id ของแถวที่ผูก LINE แล้วเช่นกัน (ดู PUT /api/users/:id ที่ล็อกฟิลด์นี้ไว้)
+app.get('/api/users/export', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, student_id, full_name, phone_number, role, points, is_active FROM users ORDER BY created_at DESC'
+    );
+    await sendTableExport(res, {
+      filename: `users-export_${Date.now()}`, sheetName: 'พนักงาน-สมาชิก',
+      headers: ['id', 'student_id', 'full_name', 'phone_number', 'role', 'points', 'is_active'],
+      rows: rows.map(r => [r.id, r.student_id, r.full_name, r.phone_number || '', r.role, r.points, r.is_active ? 1 : 0]),
+    }, validateExportFormat(req, res));
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
 // ⭐️ Update — ใช้เลือก "พนักงานที่กำหนดกะได้" ในหน้าตารางเวลา (Schedules.tsx) เท่านั้น
 //   คืนเฉพาะ CASHIER/MANAGER (คนที่ลงชื่อเข้า-ออกงาน/เปิดปิดกะจริง) ตัด ADMIN ออกทั้งหมด
 app.get('/api/staff-list', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
@@ -1592,15 +1765,22 @@ app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     return res.status(400).json({ error: 'กรุณาระบุชื่อ, รหัสนักศึกษา และบทบาทให้ครบถ้วน' });
   }
   try {
-    const [existingRows] = await pool.query('SELECT is_active FROM users WHERE id = ?', [req.params.id]);
+    const [existingRows] = await pool.query('SELECT is_active, student_id, line_user_id FROM users WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+
+    // 🐛 FIX — สมาชิกที่ผูกบัญชี LINE แล้ว (line_user_id ไม่ null) ห้ามแก้ student_id: สมัครผ่าน LIFF
+    // ตอนแรกจะสร้าง student_id คู่กับ line_user_id ไว้แน่นแล้ว (memberController.registerViaLine)
+    // ถ้าแอดมินพลาดแก้รหัสนี้ทีหลัง จะทำให้บัตรสมาชิก/QR ที่แคชเชียร์สแกน (ค้นด้วย student_id ตรงๆ)
+    // ไม่ตรงกับตัวตนจริงของเจ้าของบัญชี LINE อีกต่อไป — ล็อกไว้ที่ backend ด้วย (กัน frontend เพี้ยน/ยิง
+    // API ตรง ไม่ใช่ล็อกแค่ UI) ใช้ค่าจาก DB ทับ ไม่ error ทิ้งไปเงียบๆ ให้เปลี่ยนฟิลด์อื่นสำเร็จต่อได้
+    const nextStudentId = existingRows[0].line_user_id ? existingRows[0].student_id : student_id;
 
     // ⭐️ is_active/points เป็น optional — ไม่ส่งมาก็คงค่าเดิมไว้ (ฟอร์มแก้ไขปัจจุบันไม่ได้มีสวิตช์ is_active)
     const nextIsActive = is_active !== undefined ? is_active : existingRows[0].is_active;
 
     await pool.query(
       'UPDATE users SET full_name = ?, student_id = ?, phone_number = ?, role = ?, points = COALESCE(?, points), is_active = ? WHERE id = ?',
-      [full_name, student_id, phone_number || null, role, points === undefined || points === null || points === '' ? null : points, nextIsActive, req.params.id]
+      [full_name, nextStudentId, phone_number || null, role, points === undefined || points === null || points === '' ? null : points, nextIsActive, req.params.id]
     );
 
     await pool.query(
@@ -3285,8 +3465,14 @@ app.delete('/api/sales/hold/:id', requireRole('CASHIER', 'ADMIN'), async (req, r
 // ระบบสมาชิกตัวจริงอยู่ที่ /api/users/search, /api/users/register, /api/users/:id/profile
 // เหลือไว้เฉพาะ /api/members/import เพราะ insert เข้า users ถูกต้องอยู่แล้ว (ดูโค้ดด้านล่าง)
 
+// 🐛 FIX (ผู้ใช้ขอ) — เดิมรองรับแค่คอลัมน์ student_id/full_name/phone_number สร้าง role=MEMBER เสมอ
+// (import พนักงาน/เปลี่ยนสิทธิ์ผ่าน CSV ทำไม่ได้) เพิ่ม role เป็น optional column: ถ้า CSV มีคอลัมน์
+// role ที่ valid (MEMBER/CASHIER/MANAGER/ADMIN) จะ set ให้ตอนสร้างใหม่ + update ตอนซ้ำ (re-import)
+// ด้วย — ถ้าไม่มีคอลัมน์นี้/ค่าว่าง พฤติกรรมเดิมเป๊ะ (สร้างใหม่=MEMBER, ซ้ำ=ไม่แตะ role เดิม กัน
+// import ซ้ำแล้ว role พนักงานเดิมโดนรีเซ็ตกลับ MEMBER โดยไม่ตั้งใจ)
 app.post('/api/members/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "กรุณาเลือกไฟล์ CSV" });
+  const VALID_ROLES = ['MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'];
 
   const results = [];
   fs.createReadStream(req.file.path)
@@ -3295,23 +3481,34 @@ app.post('/api/members/import', requireRole('ADMIN'), uploadLimiter, csvUpload.s
     .on('end', async () => {
       try {
         for (const row of results) {
-          // สมมติใน CSV มีหัวตาราง: student_id, full_name, phone_number
+          // สมมติใน CSV มีหัวตาราง: student_id, full_name, phone_number, role (optional)
           const { student_id, full_name, phone_number } = row;
           if (!student_id || !full_name) continue; // ข้ามแถวที่ข้อมูลไม่ครบ
 
           const rawPassword = phone_number || crypto.randomBytes(8).toString('hex');
           const password = await bcrypt.hash(rawPassword, 10);
           const mustChangePassword = phone_number ? 0 : 1;
+          const role = VALID_ROLES.includes(String(row.role || '').trim().toUpperCase())
+            ? String(row.role).trim().toUpperCase() : null;
 
-          await pool.query(
-            `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
-             VALUES (?, ?, ?, ?, 'MEMBER', ?)
-             ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number)`,
-            [student_id, password, full_name, phone_number || null, mustChangePassword]
-          );
+          if (role) {
+            await pool.query(
+              `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number), role = VALUES(role)`,
+              [student_id, password, full_name, phone_number || null, role, mustChangePassword]
+            );
+          } else {
+            await pool.query(
+              `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
+               VALUES (?, ?, ?, ?, 'MEMBER', ?)
+               ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number)`,
+              [student_id, password, full_name, phone_number || null, mustChangePassword]
+            );
+          }
         }
         fs.unlinkSync(req.file.path); // ลบไฟล์ทิ้งหลัง Import เสร็จ
-        res.json({ message: `นำเข้าสมาชิกสำเร็จ ${results.length} รายการ` });
+        res.json({ message: `นำเข้าสำเร็จ ${results.length} รายการ` });
       } catch (error) {
         console.error('[500]', error.message);
 
@@ -3554,24 +3751,38 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN', 'MANAGER'), async 
 // ต่อวัน ย้อนหลัง 7 วัน (รวมวันนี้) เติมวันที่ไม่มียอดขายให้เป็น 0 ให้กราฟต่อเนื่อง
 app.get('/api/reports/weekly-sales', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
+    // 🐛 FIX — เดิมใช้ DATE(created_at) ตรงๆ (UTC ดิบ) ต่างจาก /api/reports/hourly-sales ข้างล่างที่
+    // แปลง CONVERT_TZ('+07:00') ก่อนเสมอ บิลที่ขายช่วงเที่ยงคืน–06:59 เวลาไทย (=17:00–23:59 UTC ของ
+    // วันก่อนหน้า) เลยถูกนับเป็น "เมื่อวาน" ผิดวัน ทำให้กราฟรายสัปดาห์คลาดเคลื่อนไป 1 วันจากของจริง
     const [rows] = await pool.query(`
       SELECT d, COALESCE(SUM(total), 0) as total FROM (
-        SELECT DATE(created_at) as d, total_amount as total FROM sales
-          WHERE status = 'COMPLETED' AND created_at >= CURDATE() - INTERVAL 6 DAY
+        SELECT DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) as d, total_amount as total FROM sales
+          WHERE status = 'COMPLETED' AND created_at >= CURDATE() - INTERVAL 7 DAY
         UNION ALL
-        SELECT DATE(completed_at) as d, total_amount as total FROM orders
-          WHERE status = 'COMPLETED' AND completed_at >= CURDATE() - INTERVAL 6 DAY
+        SELECT DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) as d, total_amount as total FROM orders
+          WHERE status = 'COMPLETED' AND completed_at >= CURDATE() - INTERVAL 7 DAY
       ) combined
       GROUP BY d
     `);
     const map = {};
-    rows.forEach(r => { map[new Date(r.d).toISOString().slice(0, 10)] = Number(r.total); });
+    // ⭐️ r.d เป็นค่า DATE ล้วน (ไม่มี time/timezone) จาก mysql2 แล้ว — ต่อ key เป็น string ตรงๆ พอ
+    // ไม่ต้องผ่าน new Date().toISOString() ซ้ำ (เดิมพอ wrap Date อีกชั้นแล้ว toISOString แปลงกลับเป็น
+    // UTC จะเลื่อนวันผิดอีกรอบถ้า Node process ไม่ได้รันที่ UTC โดยบังเอิญ)
+    rows.forEach(r => {
+      const key = r.d instanceof Date
+        ? `${r.d.getFullYear()}-${String(r.d.getMonth() + 1).padStart(2, '0')}-${String(r.d.getDate()).padStart(2, '0')}`
+        : String(r.d);
+      map[key] = Number(r.total);
+    });
     const DAY_LABELS = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+    // ⭐️ "วันนี้" อิงเวลาไทย (server อาจรันที่ UTC) ไม่งั้นช่วงเที่ยงคืน–06:59 ไทย จะคำนวณ "วันนี้" ผิด
+    // เป็นเมื่อวานของ UTC แล้วกราฟ 7 วันจะเลื่อนวันไปอีกจุดหนึ่ง
+    const nowTH = new Date(Date.now() + 7 * 60 * 60 * 1000);
     const result = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      result.push({ date: key, day: DAY_LABELS[d.getDay()], total: map[key] || 0 });
+      const d = new Date(nowTH); d.setUTCDate(d.getUTCDate() - i);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+      result.push({ date: key, day: DAY_LABELS[d.getUTCDay()], total: map[key] || 0 });
     }
     res.json(result);
   } catch (error) {
@@ -4144,10 +4355,16 @@ app.put('/api/settings/loyalty', requireRole('ADMIN', 'MANAGER'), async (req, re
   const redeem = Number(points_redeem_value_per_point);
   if (!Number.isFinite(earn) || earn <= 0) return res.status(400).json({ error: 'จำนวนบาทต่อ 1 แต้ม ต้องเป็นตัวเลขมากกว่า 0' });
   if (!Number.isFinite(redeem) || redeem <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้ม ต้องเป็นตัวเลขมากกว่า 0' });
+  // 🐛 FIX — column เก็บได้ 4 ตำแหน่งทศนิยม (DECIMAL(10,4)) ค่าที่ละเอียดกว่านั้นจะถูกปัดเหลือ 0 แบบ
+  // เงียบๆ ตอน UPDATE (ไม่มี error ใดๆ) ทำให้แอดมินคิดว่าบันทึกค่าหนึ่งไปแต่ระบบใช้จริงเป็นอีกค่า
+  // (ตกไปใช้ default 1 บาท/แต้มแทน เพราะ 0 ไม่ผ่านเช็ค >0 ใน getLoyaltyRates) — ปัดเองตรงนี้ก่อน แล้ว
+  // เช็คว่าปัดแล้วยังไม่เป็น 0 ถ้าเป็น 0 คือค่าที่กรอกมาละเอียดเกินกว่าระบบรองรับ ให้ error ชัดเจนแทน
+  const redeemRounded = Math.round(redeem * 10000) / 10000;
+  if (redeemRounded <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้มละเอียดเกินไป (รองรับสูงสุด 4 ตำแหน่งทศนิยม เช่น 0.0001)' });
   try {
     await pool.query(
       'UPDATE settings SET points_earn_amount_per_point = ?, points_redeem_value_per_point = ? WHERE id = 1',
-      [Math.round(earn), redeem]
+      [Math.round(earn), redeemRounded]
     );
     res.json({ message: 'อัปเดตอัตราแต้มสะสมสำเร็จ' });
   } catch (error) {
@@ -4249,6 +4466,28 @@ app.put('/api/users/:id/group', requireRole('ADMIN', 'MANAGER'), async (req, res
   try {
     await pool.query('UPDATE users SET group_id = ? WHERE id = ?', [group_id || null, req.params.id]);
     res.json({ message: 'กำหนดกลุ่มสมาชิกสำเร็จ' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+// ⭐️ ปลดผูกบัญชี LINE รายบุคคล — ต่างจาก POST /api/admin/reset/unlink-line (adminController.js) ที่
+// ปลดทั้งหมดทีเดียวและเป็นเครื่องมือรีเซ็ตข้อมูลสำหรับ demo (ปิดใช้งานบน production ตาม
+// ALLOW_DATA_RESET) endpoint นี้ใช้งานได้ปกติทุกวัน เช่น สมาชิกทำมือถือหาย/เปลี่ยนบัญชี LINE ต้องผูกใหม่
+// — ปลดแล้ว student_id กลับมาแก้ไขได้ตามปกติ (ดู PUT /api/users/:id ด้านบนที่ล็อกฟิลด์นี้ไว้ตอนมี line_user_id)
+app.put('/api/users/:id/unlink-line', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT line_user_id, full_name FROM users WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+    if (!rows[0].line_user_id) return res.status(400).json({ error: 'สมาชิกคนนี้ยังไม่ได้ผูกบัญชี LINE' });
+
+    await pool.query('UPDATE users SET line_user_id = NULL WHERE id = ?', [req.params.id]);
+    await pool.query(
+      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+      ['UNLINK_LINE', req.user.id, 'USER', req.params.id, JSON.stringify({ target_full_name: rows[0].full_name })]
+    );
+    res.json({ message: `ปลดผูกบัญชี LINE ของ ${rows[0].full_name} แล้ว` });
   } catch (error) {
     console.error('[500]', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
@@ -4389,6 +4628,29 @@ app.post('/api/promotions', requireRole('ADMIN', 'MANAGER'), validateRequest(pro
   }
 });
 
+// ⭐️ ลบโปรโมชั่น — promotion_usages.promotion_id ไม่มี ON DELETE clause (default RESTRICT ของ MySQL)
+// ถ้าโปรโมชั่นเคยถูกใช้จริงมาก่อน (มีแถวใน promotion_usages) hard DELETE จะถูก DB ปฏิเสธ (จงใจ กัน
+// ประวัติการใช้โปรโมชั่นหาย) แทนที่จะโชว์ error ดิบๆ ให้ผู้ใช้ กรณีนี้ fallback ไปปิดใช้งาน (is_active=0)
+// แทน — ยังหายไปจากรายการที่แคชเชียร์เลือกได้ (ตรงกับสิ่งที่แอดมินต้องการ "ลบ") แต่ประวัติ/รายงานเก่ายังอ้างอิงได้
+// (sales.promotion_id เป็น ON DELETE SET NULL อยู่แล้ว ไม่ติดปัญหานี้)
+app.delete('/api/promotions/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [existing] = await pool.query('SELECT id FROM promotions WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'ไม่พบโปรโมชั่นนี้' });
+
+    try {
+      await pool.query('DELETE FROM promotions WHERE id = ?', [req.params.id]);
+      return res.json({ message: 'ลบโปรโมชั่นสำเร็จ' });
+    } catch (deleteErr) {
+      if (deleteErr.code !== 'ER_ROW_IS_REFERENCED_2' && deleteErr.code !== 'ER_ROW_IS_REFERENCED') throw deleteErr;
+      await pool.query('UPDATE promotions SET is_active = FALSE WHERE id = ?', [req.params.id]);
+      return res.json({ message: 'โปรโมชั่นนี้เคยถูกใช้งานแล้ว ลบถาวรไม่ได้ (กันประวัติการใช้งานหาย) ปิดใช้งานให้แทน' });
+    }
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
 
 // ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — endpoint นี้มีแค่ POS.tsx (staff-only page) เรียกใช้
 // ล็อกให้ตรงกับผู้ใช้จริงเพื่อความสม่ำเสมอ (severity ต่ำ เพราะ response แค่ preview ไม่ใช่ยอดที่เชื่อถือได้
@@ -4445,6 +4707,50 @@ app.post('/api/suppliers', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
+});
+
+app.get('/api/suppliers/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT id, name, contact_info FROM suppliers ORDER BY id');
+    await sendTableExport(res, {
+      filename: `suppliers-export_${Date.now()}`, sheetName: 'ซัพพลายเออร์',
+      headers: ['id', 'name', 'contact_info'], rows: rows.map(r => [r.id, r.name, r.contact_info || '']),
+    }, validateExportFormat(req, res));
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+});
+
+app.post('/api/suppliers/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'กรุณาเลือกไฟล์ CSV' });
+  const results = [];
+  fs.createReadStream(req.file.path)
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      try {
+        let inserted = 0, updated = 0, skipped = 0;
+        for (const row of results) {
+          const name = (row.name || '').trim();
+          const contact = (row.contact_info || '').trim();
+          const id = row.id ? Number(row.id) : null;
+          if (!name) { skipped++; continue; }
+          if (id) {
+            const [r] = await pool.query('UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?', [name, contact || null, id]);
+            if (r.affectedRows > 0) updated++; else skipped++;
+          } else {
+            await pool.query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact || null]);
+            inserted++;
+          }
+        }
+        fs.unlinkSync(req.file.path);
+        res.json({ message: `นำเข้าสำเร็จ: เพิ่มใหม่ ${inserted}, แก้ไข ${updated}, ข้าม ${skipped} รายการ` });
+      } catch (error) {
+        console.error('[500]', error.message);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+      }
+    });
 });
 
 app.delete('/api/suppliers/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
@@ -5674,8 +5980,14 @@ app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => 
 // ⭐️ EXPORT รายงานยอดขาย/รายได้เป็น CSV (เปิดใน Google Sheets/Excel คำนวณต่อได้)
 // level=item  (รายชิ้น — ละเอียดสุด, ทำ pivot ได้), bill (รายบิล), daily (สรุปรายวัน)
 // ครอบทั้งบิลหน้าร้าน (POS) และพรีออเดอร์ที่ COMPLETED แล้ว; ไม่รวมบิลที่ถูก void
+// 🐛 FIX (ผู้ใช้ขอ) — เดิม 3 ระดับ (รายชิ้น/รายบิล/สรุปรายวัน) ต้องเลือกทีละอันแล้วโหลดทีละไฟล์ 3 รอบ
+// ตอนนี้คำนวณทั้ง 3 เสมอ รวมเป็นไฟล์เดียว: format=excel → 3 ชีทในเวิร์กบุ๊กเดียว (ExcelJS, เหมือน
+// reports-export.js), format=csv (default) → 3 ส่วนในไฟล์เดียว คั่นด้วยบรรทัดว่าง + หัวข้อ === ส่วน ===
 app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  const { start_date, end_date, level = 'item' } = req.query;
+  const { start_date, end_date, format = 'csv' } = req.query;
+  if (format !== 'excel' && format !== 'csv') {
+    return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });
+  }
 
   // แปลง array-of-rows -> CSV string (ใส่ " ครอบทุกช่อง กัน , ในข้อมูล)
   const toCsv = (headers, rows) =>
@@ -5687,9 +5999,9 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async 
   const hasRange = !!(start_date && end_date);
 
   try {
-    let headers, dataRows, filenameTag;
+    const sections = {}; // { daily: {headers, rows}, bill: {...}, item: {...} }
 
-    if (level === 'daily') {
+    {
       // สรุปรายวัน: รวมทั้ง POS + พรีออเดอร์ต่อวัน
       const params = [];
       let wSale = "s.status = 'COMPLETED'";
@@ -5717,15 +6029,18 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async 
         ) t
         GROUP BY day ORDER BY day DESC
       `, params);
-      headers = ['วันที่', 'จำนวนบิล', 'ยอดขายรวม', 'เงินสด', 'โอน/QR'];
-      dataRows = rows.map(r => [
-        r.day instanceof Date ? r.day.toISOString().slice(0, 10) : r.day,
-        r.bills, Number(r.total_sales).toFixed(2),
-        Number(r.cash_sales).toFixed(2), Number(r.qr_sales).toFixed(2),
-      ]);
-      filenameTag = 'daily';
+      sections.daily = {
+        title: 'สรุปรายวัน', sheetName: 'สรุปรายวัน',
+        headers: ['วันที่', 'จำนวนบิล', 'ยอดขายรวม', 'เงินสด', 'โอน/QR'],
+        rows: rows.map(r => [
+          r.day instanceof Date ? r.day.toISOString().slice(0, 10) : r.day,
+          r.bills, Number(r.total_sales).toFixed(2),
+          Number(r.cash_sales).toFixed(2), Number(r.qr_sales).toFixed(2),
+        ]),
+      };
+    }
 
-    } else if (level === 'bill') {
+    {
       // รายบิล
       const params = [];
       let wSale = "s.status = 'COMPLETED'";
@@ -5754,17 +6069,20 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async 
           WHERE ${wOrder}
         ) t ORDER BY sort_at DESC
       `, params);
-      headers = ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'จำนวนรายการ', 'ส่วนลด', 'ยอดสุทธิ', 'ชำระโดย', 'แคชเชียร์/ลูกค้า'];
-      dataRows = rows.map(r => [
-        r.dt, r.channel, r.bill_no, r.item_count,
-        Number(r.discount_amount).toFixed(2), Number(r.total_amount).toFixed(2),
-        r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
-        r.party || '-',
-      ]);
-      filenameTag = 'bill';
+      sections.bill = {
+        title: 'รายบิล', sheetName: 'รายบิล',
+        headers: ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'จำนวนรายการ', 'ส่วนลด', 'ยอดสุทธิ', 'ชำระโดย', 'แคชเชียร์/ลูกค้า'],
+        rows: rows.map(r => [
+          r.dt, r.channel, r.bill_no, r.item_count,
+          Number(r.discount_amount).toFixed(2), Number(r.total_amount).toFixed(2),
+          r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
+          r.party || '-',
+        ]),
+      };
+    }
 
-    } else {
-      // item (ค่าเริ่มต้น) — รายชิ้น ละเอียดสุด พร้อมคอลัมน์ช่วยคำนวณรายได้สหกรณ์
+    {
+      // รายชิ้น ละเอียดสุด พร้อมคอลัมน์ช่วยคำนวณรายได้สหกรณ์
       const params = [];
       let wSale = "s.status = 'COMPLETED'";
       let wOrder = "o.status = 'COMPLETED'";
@@ -5805,23 +6123,52 @@ app.get('/api/reports/export/sales-csv', requireRole('ADMIN', 'MANAGER'), async 
           WHERE ${wOrder}
         ) t ORDER BY sort_at DESC
       `, params);
-      headers = ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'สินค้า', 'หมวดหมู่', 'จำนวน', 'ราคา/ชิ้น',
-        'ยอดรวมรายการ', 'ทุนรวม', 'GP%', 'รายได้สหกรณ์(ประมาณ)', 'เจ้าของฝากขาย', 'ยอดเจ้าของได้', 'ชำระโดย'];
-      dataRows = rows.map(r => [
-        r.dt, r.channel, r.bill_no, r.product, r.category || '-', r.quantity,
-        Number(r.price).toFixed(2), Number(r.subtotal).toFixed(2), Number(r.cost_total).toFixed(2),
-        Number(r.gp_rate).toFixed(2), Number(r.coop_income).toFixed(2), r.vendor,
-        Number(r.vendor_earn).toFixed(2),
-        r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
-      ]);
-      filenameTag = 'item';
+      sections.item = {
+        title: 'รายชิ้น', sheetName: 'รายชิ้น',
+        headers: ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'สินค้า', 'หมวดหมู่', 'จำนวน', 'ราคา/ชิ้น',
+          'ยอดรวมรายการ', 'ทุนรวม', 'GP%', 'รายได้สหกรณ์(ประมาณ)', 'เจ้าของฝากขาย', 'ยอดเจ้าของได้', 'ชำระโดย'],
+        rows: rows.map(r => [
+          r.dt, r.channel, r.bill_no, r.product, r.category || '-', r.quantity,
+          Number(r.price).toFixed(2), Number(r.subtotal).toFixed(2), Number(r.cost_total).toFixed(2),
+          Number(r.gp_rate).toFixed(2), Number(r.coop_income).toFixed(2), r.vendor,
+          Number(r.vendor_earn).toFixed(2),
+          r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
+        ]),
+      };
     }
 
-    const csv = toCsv(headers, dataRows);
     const range = hasRange ? `_${start_date}_to_${end_date}` : ''; // ⭐️ HTTP header ต้อง ASCII ห้ามมีไทย
+    const sectionOrder = [sections.item, sections.bill, sections.daily]; // ละเอียดสุด → สรุปสุด
+
+    if (format === 'excel') {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'DMTC Mart';
+      workbook.created = new Date();
+      for (const sec of sectionOrder) {
+        const sheet = workbook.addWorksheet(sec.sheetName);
+        sheet.addRow(sec.headers);
+        sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } };
+        sec.rows.forEach(r => sheet.addRow(r));
+        sheet.columns.forEach((col, i) => {
+          let maxLen = String(sec.headers[i] ?? '').length;
+          for (const r of sec.rows) { const len = String(r[i] ?? '').length; if (len > maxLen) maxLen = len; }
+          col.width = Math.min(Math.max(maxLen + 2, 10), 40);
+        });
+      }
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="sales-export${range}.xlsx"`);
+      await workbook.xlsx.write(res);
+      return res.end();
+    }
+
+    // ⭐️ CSV รวม 3 ส่วนในไฟล์เดียว — คั่นด้วยบรรทัดว่าง + หัวข้อ === ชื่อส่วน === (convention ทั่วไป
+    // สำหรับ multi-table CSV, Excel/Google Sheets เปิดอ่านได้ปกติ เห็นเป็น text แทรกอยู่ระหว่างตาราง)
+    const combined = sectionOrder.map(sec => `=== ${sec.title} ===\n${toCsv(sec.headers, sec.rows)}`).join('\n\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="sales-${filenameTag}${range}.csv"`);
-    res.send('﻿' + csv); // BOM ให้ Excel อ่านภาษาไทยถูก
+    res.setHeader('Content-Disposition', `attachment; filename="sales-export${range}.csv"`);
+    res.send('﻿' + combined); // BOM ให้ Excel อ่านภาษาไทยถูก
   } catch (err) {
     console.error('[sales-csv export] ERROR:', err.code || '', err.sqlMessage || err.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
@@ -5886,6 +6233,7 @@ app.get('/api/reports/accounting-summary', requireRole('ADMIN', 'MANAGER'), asyn
         aov: kpis.aov,
       },
       categoryBreakdown: kpis.categorySummary,
+      productBreakdown: kpis.productBreakdown,
       supplierPayouts,
     });
   } catch (error) {
@@ -5911,6 +6259,7 @@ app.get('/api/reports/accounting-summary/export', requireRole('ADMIN', 'MANAGER'
       endDate: end_date,
       kpis: { totalRevenue: kpis.totalRevenue, totalCost, totalProfit: kpis.totalProfit, totalOrders: kpis.totalOrders },
       categoryBreakdown: kpis.categorySummary,
+      productBreakdown: kpis.productBreakdown,
       supplierPayouts,
     });
 

@@ -115,9 +115,11 @@ function aggregate(rows) {
   }
 
   const totalOrders = transactionKeys.size;
-  const topProducts = [...byProduct.values()]
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 10);
+  // ⭐️ ผู้ใช้ขอ — รายงานสรุปบัญชีสหกรณ์ต้องบอกด้วยว่าขายสินค้าอะไรบ้าง (เดิมมีแค่สรุปตามหมวดหมู่)
+  // เก็บ list เต็มไม่ตัด top 10 แบบ topProducts (ใช้เฉพาะ executive summary ที่เป็นรายงาน "ขายดี"
+  // ไม่ใช่บัญชี — รายงานบัญชีต้องเห็นครบทุกตัวถึงจะกระทบยอดถูก) เรียงตามรายได้มากไปน้อยเหมือนกัน
+  const allProductsByRevenue = [...byProduct.values()].sort((a, b) => b.revenue - a.revenue);
+  const topProducts = allProductsByRevenue.slice(0, 10);
   const categorySummary = [...byCategory.values()]
     .sort((a, b) => b.sales - a.sales)
     .map((c) => ({ ...c, percentage: totalRevenue > 0 ? (c.sales / totalRevenue) * 100 : 0 }));
@@ -128,6 +130,7 @@ function aggregate(rows) {
     totalOrders,
     aov: totalOrders > 0 ? totalRevenue / totalOrders : 0,
     topProducts,
+    productBreakdown: allProductsByRevenue,
     categorySummary,
   };
 }
@@ -344,7 +347,7 @@ async function buildWorkbook({ storeName, startDate, endDate, kpis, inventory, r
 
 // ⭐️ Co-op Accounting Summary — workbook แยกจาก buildWorkbook (executive export) เพราะโครงสร้าง
 // รายงานต่างกัน (นี่เน้นบัญชี: ต้นทุน/กำไรต่อหมวดหมู่ + ยอดต้องจ่ายคืนผู้ฝากขาย ไม่ใช่ top-products)
-async function buildAccountingWorkbook({ storeName, startDate, endDate, kpis, categoryBreakdown, supplierPayouts }) {
+async function buildAccountingWorkbook({ storeName, startDate, endDate, kpis, categoryBreakdown, productBreakdown, supplierPayouts }) {
   const ExcelJS = require('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'DMTC Mart';
@@ -407,7 +410,24 @@ async function buildAccountingWorkbook({ storeName, startDate, endDate, kpis, ca
   summary.getColumn(4).width = 20;
   summary.getColumn(5).width = 18;
 
-  // ===== Sheet 2: Supplier GP Payouts =====
+  // ===== Sheet 2: Product Breakdown =====
+  // ⭐️ ผู้ใช้ขอ — บอกด้วยว่าขายสินค้าอะไรบ้าง (ไม่ใช่แค่สรุปตามหมวดหมู่) ใส่ครบทุกตัว ไม่ตัด top 10
+  // (ต่างจาก executive summary ที่เป็นรายงาน "ขายดี" — นี่คือรายงานบัญชีต้องเห็นครบ)
+  const productSheet = workbook.addWorksheet('สินค้าที่ขาย');
+  const prodHeaders = ['สินค้า', 'หมวดหมู่', 'จำนวนที่ขายได้', 'ยอดขายรวม', 'กำไรรวม'];
+  productSheet.getRow(1).values = prodHeaders;
+  styleHeaderRow(productSheet.getRow(1));
+  const prodRows = productBreakdown.map((p) => [p.name, p.category, p.qty, p.revenue, p.profit]);
+  prodRows.forEach((values, i) => {
+    const rowIdx = i + 2;
+    productSheet.getRow(rowIdx).values = values;
+    productSheet.getCell(`D${rowIdx}`).numFmt = THB_FORMAT;
+    productSheet.getCell(`E${rowIdx}`).numFmt = THB_FORMAT;
+  });
+  if (prodRows.length > 0) addGridlines(productSheet, 2, prodRows.length + 1, prodHeaders.length);
+  autoFitColumns(productSheet, prodHeaders, prodRows);
+
+  // ===== Sheet 3: Supplier GP Payouts =====
   const supplierSheet = workbook.addWorksheet('ยอดจ่ายคืนผู้ฝากขาย');
   const supHeaders = ['ผู้ฝากขาย', 'จำนวนที่ขายได้ (ชิ้น)', 'ยอดขายรวม', 'ส่วนแบ่ง GP ของสหกรณ์', 'ยอดต้องจ่ายคืนผู้ฝากขาย'];
   supplierSheet.getRow(1).values = supHeaders;

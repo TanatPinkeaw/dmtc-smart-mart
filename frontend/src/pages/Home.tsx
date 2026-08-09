@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock, ShoppingBag, Receipt, FileCheck, Percent } from 'lucide-react';
+import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock, ShoppingBag, Receipt, FileCheck, Percent, Calendar } from 'lucide-react';
 import api from '../api';
 import { performLogout } from '../utils/logout';
 import Swal from '../swal';
@@ -168,10 +168,22 @@ export default function Home() {
       onClick: () => goTo('/dashboard'),
     },
     {
-      key: 'inventory', show: isStaff, icon: Boxes, locked: workLocked,
+      // 🐛 FIX — เดิม CASHIER เห็นการ์ดคลังสินค้าด้วย (isStaff ครอบทั้ง ADMIN/MANAGER/CASHIER) ทั้งที่
+      // ไม่ใช่งานของแคชเชียร์ (ไม่มีสิทธิ์แก้สต๊อก/ราคา) เหลือแค่ ADMIN/MANAGER — CASHIER เห็นการ์ด
+      // "ตารางกะ" แทนด้านล่าง (ดูตารางเวลาทำงานของตัวเอง มีประโยชน์กว่า)
+      key: 'inventory', show: isStaff && !isCashier, icon: Boxes, locked: workLocked,
       title: 'คลังสินค้า', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'จัดการสินค้าและสต๊อก',
       badge: lowStockCount > 0 ? `${lowStockCount} ใกล้หมด` : null,
       onClick: () => goTo('/inventory'),
+    },
+    {
+      // ⭐️ แทนที่การ์ดคลังสินค้าสำหรับ CASHIER — ดูตารางกะได้ (Schedules.tsx: canManage=false สำหรับ
+      // CASHIER = ดูอย่างเดียว แก้ไม่ได้) ไม่ล็อกด้วย workLocked (ต่างจาก POS/dashboard/inventory
+      // ด้านบน) เพราะต้องดูได้ก่อนเปิดกะเสมอ — จะเปิดกะกี่โมงก็ต้องเช็คตารางได้ก่อน ไม่งั้นไก่กับไข่
+      key: 'schedule', show: isCashier, icon: Calendar,
+      title: 'ตารางกะ', subtitle: 'ดูตารางเวลาทำงานของคุณ',
+      badge: null,
+      onClick: () => goTo('/schedules'),
     },
     {
       // ⭐️ ลงชื่อเข้า-ออกงาน (clock-in/out) เปิดให้เฉพาะ CASHIER และ MANAGER — ADMIN ไม่ต้องลงชื่อเข้า-ออกงานอีกต่อไป
