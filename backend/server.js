@@ -3751,29 +3751,25 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN', 'MANAGER'), async 
 // ต่อวัน ย้อนหลัง 7 วัน (รวมวันนี้) เติมวันที่ไม่มียอดขายให้เป็น 0 ให้กราฟต่อเนื่อง
 app.get('/api/reports/weekly-sales', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    // 🐛 FIX — เดิมใช้ DATE(created_at) ตรงๆ (UTC ดิบ) ต่างจาก /api/reports/hourly-sales ข้างล่างที่
-    // แปลง CONVERT_TZ('+07:00') ก่อนเสมอ บิลที่ขายช่วงเที่ยงคืน–06:59 เวลาไทย (=17:00–23:59 UTC ของ
-    // วันก่อนหน้า) เลยถูกนับเป็น "เมื่อวาน" ผิดวัน ทำให้กราฟรายสัปดาห์คลาดเคลื่อนไป 1 วันจากของจริง
+    // 🐛 FIX (round 2) — เดิมใช้ DATE(created_at) ตรงๆ (UTC ดิบ) ไม่แปลงเวลาไทยก่อน (แก้ไปรอบแรกแล้ว)
+    // แต่ยังเพี้ยนอยู่ เพราะ DATE(...) คืนค่าเป็น DATE type ที่ mysql2 parse กลับเป็น JS Date object
+    // (ผ่าน string parsing ที่ตีความเป็น UTC midnight ตาม spec) แล้วโค้ด JS ฝั่งนี้อ่านด้วย local
+    // getters (getFullYear/getMonth/getDate) — ถ้า Node process ไม่ได้รันที่ UTC พอดี (เช่น Render
+    // ตั้ง TZ อื่น) การแปลง Date→string จะเพี้ยนไปอีกชั้นซ้อนกับที่ SQL แปลงมาแล้ว ทำให้ key ไม่ตรงกับ
+    // key ฝั่ง "7 วันล่าสุด" ที่สร้างจาก UTC getters ล้วนๆ (ดูด้านล่าง) — แก้เด็ดขาดด้วยการให้ MySQL
+    // คืนเป็น string ตรงๆ (DATE_FORMAT) ตัด JS Date object ออกจากสมการทั้งหมด ไม่มีช่องให้ตีความเพี้ยนอีก
     const [rows] = await pool.query(`
       SELECT d, COALESCE(SUM(total), 0) as total FROM (
-        SELECT DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) as d, total_amount as total FROM sales
+        SELECT DATE_FORMAT(CONVERT_TZ(created_at,'+00:00','+07:00'), '%Y-%m-%d') as d, total_amount as total FROM sales
           WHERE status = 'COMPLETED' AND created_at >= CURDATE() - INTERVAL 7 DAY
         UNION ALL
-        SELECT DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) as d, total_amount as total FROM orders
+        SELECT DATE_FORMAT(CONVERT_TZ(completed_at,'+00:00','+07:00'), '%Y-%m-%d') as d, total_amount as total FROM orders
           WHERE status = 'COMPLETED' AND completed_at >= CURDATE() - INTERVAL 7 DAY
       ) combined
       GROUP BY d
     `);
     const map = {};
-    // ⭐️ r.d เป็นค่า DATE ล้วน (ไม่มี time/timezone) จาก mysql2 แล้ว — ต่อ key เป็น string ตรงๆ พอ
-    // ไม่ต้องผ่าน new Date().toISOString() ซ้ำ (เดิมพอ wrap Date อีกชั้นแล้ว toISOString แปลงกลับเป็น
-    // UTC จะเลื่อนวันผิดอีกรอบถ้า Node process ไม่ได้รันที่ UTC โดยบังเอิญ)
-    rows.forEach(r => {
-      const key = r.d instanceof Date
-        ? `${r.d.getFullYear()}-${String(r.d.getMonth() + 1).padStart(2, '0')}-${String(r.d.getDate()).padStart(2, '0')}`
-        : String(r.d);
-      map[key] = Number(r.total);
-    });
+    rows.forEach(r => { map[String(r.d)] = Number(r.total); });
     const DAY_LABELS = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
     // ⭐️ "วันนี้" อิงเวลาไทย (server อาจรันที่ UTC) ไม่งั้นช่วงเที่ยงคืน–06:59 ไทย จะคำนวณ "วันนี้" ผิด
     // เป็นเมื่อวานของ UTC แล้วกราฟ 7 วันจะเลื่อนวันไปอีกจุดหนึ่ง
