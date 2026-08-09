@@ -13,7 +13,8 @@ interface CartPanelProps {
   cart: CartItem[];
   onUpdateQuantity: (id: number, delta: number) => void;
   grandTotal: number;
-  pointsDiscount: number;
+  pointsDiscount: number; // ⭐️ มูลค่าส่วนลด หน่วยบาท (= redeemPointsUsed * redeemRate)
+  redeemPointsUsed: number; // ⭐️ จำนวนแต้มที่แลกจริง หน่วยแต้ม — คนละหน่วยกับ pointsDiscount เสมอถ้า redeemRate ≠ 1
   finalTotal: number;
   phoneNumber: string;
   onPhoneNumberChange: (value: string) => void;
@@ -40,7 +41,7 @@ interface CartPanelProps {
 
 export function CartPanel({
   isCartOpen, onCloseCart, payOpen, onTogglePay, cart, onUpdateQuantity,
-  grandTotal, pointsDiscount, finalTotal,
+  grandTotal, pointsDiscount, redeemPointsUsed, finalTotal,
   phoneNumber, onPhoneNumberChange, phoneVerified, verifying, onVerifyPhone,
   myPoints, maxRedeemable, redeemPoints, onRedeemPointsChange,
   paymentMethod, onSetPaymentMethod, promptpayId,
@@ -96,7 +97,9 @@ export function CartPanel({
           </div>
           {pointsDiscount > 0 && (
             <div className="flex justify-between text-sm text-yellow-600 font-bold">
-              <span>แลกแต้ม ({pointsDiscount} 🌟):</span> <span>-฿{pointsDiscount.toFixed(2)}</span>
+              {/* 🐛 FIX — เดิมโชว์ pointsDiscount (บาท) คู่กับ 🌟 (สื่อว่าเป็นแต้ม) ผิดหน่วยกันถ้า
+                  redeemRate ≠ 1 ต้องแยก: จำนวนแต้ม (redeemPointsUsed) คู่ดาว, มูลค่าลด (pointsDiscount) คู่ ฿ */}
+              <span>แลกแต้ม ({redeemPointsUsed} 🌟):</span> <span>-฿{pointsDiscount.toFixed(2)}</span>
             </div>
           )}
           <div className="flex justify-between text-xl font-bold text-gray-800 pt-1 border-t border-brand-border">

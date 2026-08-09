@@ -59,7 +59,11 @@ export default function PreOrder() {
   // State สำหรับสะสมแต้ม
   const [phoneNumber, setPhoneNumber] = useState('');
 
-  // ⭐️ State สำหรับแลกแต้มเป็นส่วนลด (1 แต้ม = ฿1) — pattern เดียวกับ POS.tsx
+  // 🐛 FIX — เดิม hardcode "1 แต้ม = ฿1" ตรงๆ ไม่ได้ดึงจาก settings เลย (ต่างจาก POS.tsx ที่ fetch
+  // redeemRate จริงจาก /settings/loyalty) พอแอดมินปรับอัตราแลกเป็นค่าอื่น (เช่น 100 แต้ม = ฿1)
+  // หน้านี้ยังคำนวณเหมือนเดิมอยู่ (1:1) แล้วส่ง "จำนวนบาทที่อยากลด" ไปเป็น redeem_points ตรงๆ
+  // (บาท≠แต้ม) ทำให้แต้มที่หักจริงกับส่วนลดที่ลูกค้าเห็นไม่ตรงกันเลยหลังปรับอัตรา
+  const [redeemRate, setRedeemRate] = useState(1);
   const [myPoints, setMyPoints] = useState(0);
   const [redeemPoints, setRedeemPoints] = useState<number | ''>('');
   const [phoneVerified, setPhoneVerified] = useState<any>(null); // ผลตรวจเบอร์ (แสดงชื่อ+แต้มยืนยัน)
@@ -130,6 +134,7 @@ export default function PreOrder() {
 
   useEffect(() => {
     api.get('/settings/store').then(res => setStoreInfo(res.data)).catch(() => {});
+    api.get('/settings/loyalty').then(res => setRedeemRate(Number(res.data?.points_redeem_value_per_point) || 1)).catch(() => {});
     fetchProducts();
     fetchMyPoints();
 
@@ -357,7 +362,9 @@ export default function PreOrder() {
         payment_method: paymentMethod,
         slip_image: null, // ⭐️ Sprint 2 — B9: Upload slip separately after order creation
         use_phone_for_points: phoneNumber.trim().length >= 9, // ถ้ากรอกเบอร์มา ถือว่าสะสมแต้ม
-        redeem_points: pointsDiscount > 0 ? pointsDiscount : 0 // 👈 แต้มที่จะแลกเป็นส่วนลด
+        // 🐛 FIX — เดิมส่ง pointsDiscount (หน่วยบาท) เป็น redeem_points ที่ backend คาดว่าเป็นหน่วย
+        // "แต้ม" ตรงๆ พอ redeemRate ไม่ใช่ 1:1 อีกต่อไป สองหน่วยนี้เลขไม่เท่ากันแล้ว ต้องส่งแต้มจริง
+        redeem_points: redeemPointsUsed > 0 ? redeemPointsUsed : 0
       };
 
       const orderRes = await api.post('/orders', payload);
@@ -445,9 +452,12 @@ export default function PreOrder() {
   const grandTotalSatang = cart.reduce((total, item) => total + lineTotalSatang(item.price, item.quantity), 0);
   const grandTotal = fromSatang(grandTotalSatang);
 
-  // ⭐️ ส่วนลดจากแต้ม (1 แต้ม = ฿1) ห้ามเกินแต้มที่มี และห้ามเกินยอดที่ต้องจ่าย (cap เหมือนฝั่ง backend)
-  const maxRedeemable = Math.min(myPoints, Math.floor(grandTotal));
-  const pointsDiscount = redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
+  // 🐛 FIX — ต้องคูณ/หารด้วย redeemRate จริง (ไม่ใช่ 1:1 ตายตัว) ตาม pattern เดียวกับ POS.tsx:
+  // maxRedeemable = แต้มสูงสุดที่แลกได้ (หน่วย: แต้ม) redeemPointsUsed = แต้มที่แลกจริง (แต้ม)
+  // pointsDiscount = มูลค่าส่วนลด (หน่วย: บาท) = redeemPointsUsed * redeemRate
+  const maxRedeemable = Math.min(myPoints, Math.floor(grandTotal / redeemRate));
+  const redeemPointsUsed = redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
+  const pointsDiscount = fromSatang(toSatang(redeemPointsUsed * redeemRate));
   const finalTotal = fromSatang(Math.max(0, grandTotalSatang - toSatang(pointsDiscount)));
 
   return (
@@ -537,6 +547,7 @@ export default function PreOrder() {
         onUpdateQuantity={updateQuantity}
         grandTotal={grandTotal}
         pointsDiscount={pointsDiscount}
+        redeemPointsUsed={redeemPointsUsed}
         finalTotal={finalTotal}
         phoneNumber={phoneNumber}
         onPhoneNumberChange={(value) => { setPhoneNumber(value); setPhoneVerified(null); }}
