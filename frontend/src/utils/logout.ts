@@ -1,4 +1,4 @@
-import api, { setCsrfToken } from '../api';
+import api, { setCsrfToken, setBearerToken } from '../api';
 
 // 🐛 FIX (session bug) — หลายหน้า (Shift.tsx, Dashboard.tsx) เคย "ออกจากระบบ" ด้วย
 // `localStorage.clear(); navigate('/login')` เฉยๆ ซึ่งล้างแค่ข้อมูลฝั่ง client — cookie
@@ -18,5 +18,6 @@ export async function performLogout() {
   } finally {
     localStorage.removeItem('user');
     setCsrfToken(null);
+    setBearerToken(null); // ⭐️ ล้าง bearer token fallback ด้วย (ถ้ามี — LINE in-app browser)
   }
 }

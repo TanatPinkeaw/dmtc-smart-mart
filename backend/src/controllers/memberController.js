@@ -152,10 +152,15 @@ async function registerViaLine(req, res) {
       { type: 'text', text: '🎉 ลงทะเบียนสมาชิก DMTC Smart Mart เรียบร้อยแล้ว! สามารถเช็กบัตรสมาชิกและแต้มสะสมผ่านเมนูได้เลยครับ' },
     ]).catch(err => console.error('[LINE] ส่งข้อความยืนยันสมัครสมาชิกไม่สำเร็จ:', err.message));
 
-    // ⭐️ Deviation จาก spec เดิม (ที่ขอ field "token" ตรงๆ ใน response body) — ระบบนี้ห้ามส่ง raw JWT
-    // ออกทาง response body เด็ดขาด (ป้องกัน XSS ขโมย token) ทุก endpoint ที่ login สำเร็จ ใช้ pattern
+    // ⭐️ เดิม: ห้ามส่ง raw JWT ออกทาง response body เด็ดขาด (ป้องกัน XSS ขโมย token) ใช้ pattern
     // เดียวกับ POST /api/auth/login เสมอ: ออก access/refresh token เป็น httpOnly cookie
     // (setAuthCookies) แล้วส่งแค่ csrfToken กลับไปทาง body ให้ frontend แนบเป็น header ทีหลัง
+    //
+    // ⭐️ Bearer token fallback (deviation เฉพาะ endpoint นี้ — เหมือน authController.lineLogin)
+    // endpoint นี้สมัคร/ผูกบัญชีผ่าน LIFF แล้ว "login เข้าเลย" ทันที (setAuthCookies ด้านล่าง) — ถ้า
+    // เปิดจาก LINE in-app browser คุกกี้จะโดน ITP บล็อกเหมือน line-login ทำให้ request หลังสมัครเสร็จ
+    // 401 ทันที ส่ง access_token ให้ frontend เก็บเป็น bearer fallback เหมือนกัน (ผลกระทบ XSS จำกัด
+    // แค่บัญชี MEMBER ที่เพิ่งสมัคร — /api/auth/login ฝั่ง staff/ADMIN ไม่แตะ)
     const csrfToken = crypto.randomBytes(32).toString('hex');
     const accessToken = generateAccessToken(user, csrfToken);
     const refreshToken = generateRefreshToken(user);
@@ -166,6 +171,7 @@ async function registerViaLine(req, res) {
       message: 'ลงทะเบียนสำเร็จ',
       user: toSafeUser(user),
       csrfToken,
+      access_token: accessToken,
     });
   } catch (error) {
     await conn.rollback();

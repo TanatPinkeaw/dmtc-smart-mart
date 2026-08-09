@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import api, { setCsrfToken } from '../api';
+import api, { setCsrfToken, setBearerToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath, getLiffExtraParams } from '../utils/liff';
@@ -120,6 +120,10 @@ export default function Login() {
         const res = await api.post('/auth/line-login', { line_user_id: profile.userId, id_token: idToken });
         localStorage.setItem('user', JSON.stringify(res.data.user));
         setCsrfToken(res.data.csrfToken);
+        // ⭐️ Bearer token fallback — LINE in-app browser (ITP) บล็อก cookie ข้าม origin แบบ
+        // deterministic เก็บ access_token ไว้แนบเป็น Authorization header เอง กันหลุด 401 ping-pong
+        // loop ตั้งแต่ request แรกหลัง auto-login (ไม่มีผล ถ้า cookie ใช้ได้อยู่แล้ว — แค่ redundant)
+        if (res.data.access_token) setBearerToken(res.data.access_token);
         window.dispatchEvent(new Event('tokenChanged')); // ให้ SocketContext ต่อ socket ใหม่
         if (cancelled) return;
         // path=/pre-order → /pre-order (พร้อม extra params ถ้ามี) เสมอ; ไม่ระบุ path → เลือกตาม role

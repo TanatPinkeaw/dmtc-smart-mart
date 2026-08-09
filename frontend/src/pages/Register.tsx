@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../config';
 import { liff, ensureLiffInit } from '../utils/liff';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { performLogout } from '../utils/logout';
-import api from '../api';
+import api, { setCsrfToken, setBearerToken } from '../api';
 import { MemberBottomNav } from '../components/layout/MemberBottomNav';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
@@ -186,6 +186,14 @@ export default function Register() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'ลงทะเบียนไม่สำเร็จ');
+
+      // ⭐️ backend login ให้ทันทีหลังสมัครสำเร็จ (ตั้ง auth cookie แล้ว) — ให้ frontend state ตรงกัน
+      // เผื่อ closeWindow() ไม่ทำงาน/ผู้ใช้ navigate ต่อก่อนหน้าต่างปิด (เช่น เข้า /pre-order เอง)
+      // และเก็บ bearer token ไว้ด้วย (LINE in-app ITP บล็อก cookie เหมือนกับ line-login — ดู api.ts)
+      if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+      if (data.csrfToken) setCsrfToken(data.csrfToken);
+      if (data.access_token) setBearerToken(data.access_token);
+      window.dispatchEvent(new Event('tokenChanged'));
 
       setStage('done');
       setTimeout(() => {

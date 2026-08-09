@@ -110,6 +110,14 @@ async function lineLogin(req, res) {
       },
       csrfToken,
       has_active_work_session: hasActiveWorkSession,
+      // ⭐️ Bearer token fallback (เฉพาะ endpoint นี้ — deviation จาก policy "ห้ามส่ง JWT ทาง body"
+      // ที่ authController/memberController อื่นๆ ยังยึดอยู่เดิม) LINE in-app browser (ITP) บล็อก
+      // cookie ข้าม origin (Vercel↔Render) แบบ deterministic ทำให้ auto-login ผ่านแต่ request ถัดไป
+      // 401 วนไม่จบ — ส่ง access_token ให้ frontend เก็บ sessionStorage แนบเป็น Authorization header
+      // เอง (authenticateToken รองรับ Bearer header อยู่แล้ว) ผลกระทบถ้าหลุดจาก XSS จำกัดแค่บัญชี
+      // MEMBER เท่านั้น (ดูแต้ม/สั่งจองของตัวเอง) — /api/auth/login (staff/ADMIN) ไม่แตะ ยังคืนแค่
+      // csrfToken เหมือนเดิม 100%
+      access_token: accessToken,
     });
   } catch (error) {
     console.error('[500] lineLogin', error.message);

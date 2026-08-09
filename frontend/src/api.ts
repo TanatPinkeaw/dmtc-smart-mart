@@ -2,6 +2,7 @@ import axios from 'axios';
 import Swal from './swal';
 import { saveRequestToQueue, getQueue, removeFromQueue, incrementRetries } from './utils/requestQueue';
 import { API_BASE_URL } from './config'; // ⭐️ DEPLOY FIX — URL จาก env แทนฮาร์ดโค้ด
+import { liff, ensureLiffInit } from './utils/liff';
 
 // ⭐️ auth ทั้งระบบใช้ httpOnly cookie ข้าม origin (Vercel → Render) ทุก request จึงต้องส่ง cookie ไปด้วย
 // instance `api` กับ refreshClient ด้านล่างตั้ง withCredentials เองอยู่แล้ว บรรทัดนี้เป็น safety net
@@ -51,6 +52,8 @@ function forceLogout() {
   //   หายหมด
   try { sessionStorage.setItem('liff_loop_breaker', 'true'); } catch { /* storage ถูกบล็อก — ข้าม */ }
 
+  setBearerToken(null); // ⭐️ session ตายแล้ว — ล้าง bearer token ทิ้งด้วย (ถ้ามี)
+
   Swal.fire({
     icon: 'warning',
     title: 'เซสชันหมดอายุ',
@@ -60,6 +63,30 @@ function forceLogout() {
   }).then(() => {
     window.location.href = '/login';
   });
+}
+
+// ⭐️ Sprint 2 — B5: Track in-flight LIFF reauth to prevent multiple simultaneous attempts (bearer mode)
+let reauthPromise: Promise<string | null> | null = null;
+
+// ⭐️ Bearer mode 401 recovery — cookie-based /auth/refresh จะ fail แน่นอนในบริบทนี้ (refresh_token
+// cookie โดน ITP บล็อกเหมือน access_token cookie) ใช้ LIFF re-login แทน: liff session ของ LINE เองยัง
+// อยู่ (ไม่ต้อง liff.login() ใหม่) แค่เรียก getProfile() + POST /auth/line-login ซ้ำ ขอ access_token
+// ใหม่แบบเงียบๆ ไม่รบกวนผู้ใช้ — ใช้ refreshClient (ไม่มี interceptor) กันวน recursive เหมือน cookie flow
+async function reauthViaLiff(): Promise<string | null> {
+  try {
+    await ensureLiffInit();
+    if (!liff.isInClient()) return null; // ไม่ได้อยู่ใน LINE app แล้ว (เช่นเปิดค้างไว้นานมาก) — reauth เองไม่ได้
+    const profile = await liff.getProfile();
+    const idToken = liff.getIDToken() || null;
+    const { data } = await refreshClient.post('/auth/line-login', { line_user_id: profile.userId, id_token: idToken });
+    if (!data?.access_token) return null;
+    setBearerToken(data.access_token);
+    if (data?.csrfToken) csrfToken = data.csrfToken;
+    if (data?.user) localStorage.setItem('user', JSON.stringify(data.user));
+    return data.access_token;
+  } catch {
+    return null;
+  }
 }
 
 // ⭐️ Sprint 2 — B6: Idempotency key generator (UUID-like)
@@ -79,6 +106,30 @@ let isProcessingQueue = false;
 // ตอน reload หน้าเว็บ (คนละ token ต่อ access token ที่ backend ฝังไว้เป็น JWT claim อยู่แล้ว)
 let csrfToken: string | null = null;
 export function setCsrfToken(token: string | null) { csrfToken = token; }
+
+// ⭐️ Bearer token fallback — เฉพาะ LINE in-app browser (LIFF) ที่ ITP บล็อก cookie ข้าม origin แบบ
+// deterministic (ดู liff_loop_breaker/forceLogout ด้านล่าง) เก็บ access_token จาก response body ของ
+// /auth/line-login หรือ /members/register-line (สอง endpoint นี้เท่านั้นที่ส่ง token ทาง body — ดู
+// authController.js/memberController.js) แนบเป็น Authorization header เอง แทนที่จะพึ่ง cookie
+// อย่างเดียว — ผู้ใช้ที่ login ด้วยรหัสผ่านปกติ (/auth/login) จะไม่มี bearer token เลย ใช้ cookie
+// flow เดิม 100% ไม่กระทบ
+//
+// เก็บใน sessionStorage (ไม่ใช่ localStorage) — จำกัดอายุแค่ session ของ browsing context นี้ ลด
+// blast radius ถ้าเกิด XSS เทียบ persist ข้ามวัน และเพราะ LIFF webview มักเปิดใหม่ทุกครั้งที่กด
+// Rich Menu อยู่แล้ว (auto-login เร็ว ไม่จำเป็นต้อง persist ยาว)
+const BEARER_TOKEN_KEY = 'line_bearer_token';
+let bearerToken: string | null = (() => {
+  try { return sessionStorage.getItem(BEARER_TOKEN_KEY); } catch { return null; }
+})();
+
+export function setBearerToken(token: string | null) {
+  bearerToken = token;
+  try {
+    if (token) sessionStorage.setItem(BEARER_TOKEN_KEY, token);
+    else sessionStorage.removeItem(BEARER_TOKEN_KEY);
+  } catch { /* storage ถูกบล็อก — bearerToken ยังใช้ได้จาก JS var ระหว่าง session นี้ */ }
+}
+export function hasBearerToken() { return !!bearerToken; }
 
 // เรียกครั้งเดียวตอนโหลดแอป (module init) — ถ้ามี access_token cookie ที่ valid อยู่แล้ว (เช่น
 // reload หน้าเว็บ) จะได้ csrf token กลับมาเก็บไว้ใช้ทันที ถ้ายังไม่ login ก็แค่ล้มเหลวเงียบๆ (401)
@@ -128,6 +179,12 @@ api.interceptors.request.use(
     const path = config.url || '';
     if (sessionExpired && !ALWAYS_ALLOWED_PATHS.some(p => path.startsWith(p))) {
       return Promise.reject(new axios.Cancel('session expired — request blocked'));
+    }
+
+    // ⭐️ Bearer token fallback — แนบทุก request ถ้ามี (LINE in-app browser ที่ cookie ใช้ไม่ได้)
+    // authenticateToken ฝั่ง backend เช็ค cookie ก่อน แล้วค่อย fallback มา header นี้ ไม่ชนกัน
+    if (bearerToken) {
+      config.headers['Authorization'] = `Bearer ${bearerToken}`;
     }
 
     // ⭐️ Security remediation — แนบ CSRF token เฉพาะ request ที่เปลี่ยนแปลงข้อมูล (backend ก็เช็คแค่เท่านี้)
@@ -229,6 +286,22 @@ api.interceptors.response.use(
     // ⭐️ Sprint 2 — B5: Auto-refresh on 401
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
+
+      // ⭐️ Bearer mode (LINE in-app, cookie ใช้ไม่ได้) — ข้าม cookie-refresh ไปเลย (จะ fail แน่นอน
+      // เพราะ refresh_token cookie ก็โดนบล็อกเหมือนกัน) ใช้ LIFF re-login แทน
+      if (hasBearerToken()) {
+        try {
+          if (!reauthPromise) reauthPromise = reauthViaLiff();
+          const newToken = await reauthPromise;
+          reauthPromise = null;
+          if (!newToken) throw new Error('LIFF reauth failed');
+          return api(originalRequest);
+        } catch (reauthError) {
+          reauthPromise = null;
+          forceLogout();
+          return Promise.reject(reauthError);
+        }
+      }
 
       try {
         // Prevent multiple simultaneous refresh calls
