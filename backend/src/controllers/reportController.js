@@ -4,6 +4,8 @@
 // module กลางเดียวกับที่ server.js ใช้ (pool, money utils) กัน logic เพี้ยนไปคนละแบบ
 const pool = require('../config/db');
 const { toSatang, fromSatang } = require('../utils/money');
+const { sendDailyReport } = require('../scripts/dailyReport'); // ⭐️ Sprint 1 — D4
+const reportsExport = require('../services/reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
 // GET /api/reports/weekly-sales — ยอดขายรวม (POS + พรีออเดอร์) รายวัน ย้อนหลัง 7 วัน
 async function weeklySales(req, res) {
@@ -559,9 +561,508 @@ async function vendorSummary(req, res) {
   }
 }
 
+// GET /api/reports/payroll — ค่าจ้างพนักงานทั้งหมดตามเดือน (ชั่วโมงทำงาน × อัตราค่าจ้าง, ADMIN เท่านั้น)
+async function payroll(req, res) {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+    // พนักงานทั้งหมด (CASHIER + MANAGER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
+    // ⭐️ Update — เพิ่ม MANAGER (ผู้ใช้ attendance clock-in/out ตัวจริงตอนนี้แทน ADMIN) คง ADMIN ไว้
+    //   เผื่อมีข้อมูลชั่วโมงเก่าก่อนเปลี่ยนสิทธิ์ (ไม่งั้นประวัติค่าจ้างเดือนที่ผ่านมาของ ADMIN จะหายจากตาราง)
+    const [staff] = await pool.query(
+      `SELECT id, full_name, role, hourly_rate FROM users WHERE role IN ('CASHIER','MANAGER','ADMIN') AND is_active = TRUE ORDER BY full_name`
+    );
+
+    // ชั่วโมงทำงาน: CASHIER นับจาก shifts ที่ปิดสมบูรณ์แล้ว (status='CLOSED'), MANAGER/ADMIN นับจาก attendance
+    const [shiftMinutes] = await pool.query(
+      `SELECT cashier_id as user_id, SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
+       FROM shifts
+       WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND DATE_FORMAT(opened_at, '%Y-%m') = ?
+       GROUP BY cashier_id`,
+      [month]
+    );
+    const [attendanceMinutes] = await pool.query(
+      `SELECT user_id, SUM(TIMESTAMPDIFF(MINUTE, check_in, check_out)) as total_minutes
+       FROM attendance
+       WHERE check_out IS NOT NULL AND DATE_FORMAT(check_in, '%Y-%m') = ?
+       GROUP BY user_id`,
+      [month]
+    );
+
+    // มาสาย: ใช้ตรรกะเดียวกับ /api/reports/attendance (เทียบ schedules.expected_start กับเวลาจริง) ยกเว้นวันหยุด
+    const [lateRows] = await pool.query(
+      `SELECT user_id, work_date, actual_time,
+         CASE WHEN actual_time IS NULL THEN NULL
+              ELSE TIMESTAMPDIFF(MINUTE, CONCAT(work_date, ' ', expected_start), actual_time)
+         END as late_minutes
+       FROM (
+         SELECT s.cashier_id as user_id, s.work_date, s.expected_start, sh.opened_at as actual_time
+         FROM schedules s
+         JOIN users u ON s.cashier_id = u.id AND u.role = 'CASHIER'
+         LEFT JOIN shifts sh ON sh.cashier_id = s.cashier_id AND DATE(sh.opened_at) = s.work_date
+         UNION ALL
+         SELECT s.cashier_id as user_id, s.work_date, s.expected_start, att.check_in as actual_time
+         FROM schedules s
+         JOIN users u ON s.cashier_id = u.id AND u.role IN ('ADMIN', 'MANAGER')
+         LEFT JOIN attendance att ON att.user_id = s.cashier_id AND DATE(att.check_in) = s.work_date
+       ) combined
+       WHERE work_date NOT IN (SELECT holiday_date FROM holidays)
+         AND DATE_FORMAT(work_date, '%Y-%m') = ?`,
+      [month]
+    );
+
+    const minutesByUser = {};
+    for (const r of shiftMinutes) minutesByUser[r.user_id] = (minutesByUser[r.user_id] || 0) + Number(r.total_minutes || 0);
+    for (const r of attendanceMinutes) minutesByUser[r.user_id] = (minutesByUser[r.user_id] || 0) + Number(r.total_minutes || 0);
+
+    const lateMinutesByUser = {};
+    for (const r of lateRows) {
+      if (r.late_minutes && r.late_minutes > 0) {
+        lateMinutesByUser[r.user_id] = (lateMinutesByUser[r.user_id] || 0) + r.late_minutes;
+      }
+    }
+
+    const result = staff.map(u => {
+      const totalMinutes = minutesByUser[u.id] || 0;
+      const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+      const lateMinutes = lateMinutesByUser[u.id] || 0;
+      const lateHours = Math.round((lateMinutes / 60) * 100) / 100;
+      const hourlyRate = Number(u.hourly_rate) || 0;
+      const calculatedPay = Math.round(totalHours * hourlyRate * 100) / 100;
+      return {
+        user_id: u.id,
+        full_name: u.full_name,
+        role: u.role,
+        hourly_rate: hourlyRate,
+        total_hours: totalHours,
+        late_minutes: lateMinutes,
+        late_hours: lateHours,
+        calculated_pay: calculatedPay,
+      };
+    });
+
+    res.json({ month, staff: result });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// GET /api/reports/my-hours — เวอร์ชัน self-service ของ payroll (ดูได้แค่ของตัวเอง, ไม่ต้องเป็น ADMIN)
+async function myHours(req, res) {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    const userId = req.user.id;
+
+    const [users] = await pool.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้' });
+    const me = users[0];
+
+    const [[shiftRow]] = await pool.query(
+      `SELECT SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
+       FROM shifts
+       WHERE cashier_id = ? AND status = 'CLOSED' AND closed_at IS NOT NULL AND DATE_FORMAT(opened_at, '%Y-%m') = ?`,
+      [userId, month]
+    );
+    const [[attendanceRow]] = await pool.query(
+      `SELECT SUM(TIMESTAMPDIFF(MINUTE, check_in, check_out)) as total_minutes
+       FROM attendance
+       WHERE user_id = ? AND check_out IS NOT NULL AND DATE_FORMAT(check_in, '%Y-%m') = ?`,
+      [userId, month]
+    );
+
+    const totalMinutes = Number(shiftRow?.total_minutes || 0) + Number(attendanceRow?.total_minutes || 0);
+    const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+    const hourlyRate = Number(me.hourly_rate) || 0;
+    const calculatedPay = Math.round(totalHours * hourlyRate * 100) / 100;
+
+    res.json({
+      month,
+      full_name: me.full_name,
+      role: me.role,
+      hourly_rate: hourlyRate,
+      total_hours: totalHours,
+      calculated_pay: calculatedPay,
+    });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// GET /api/reports/monthly-overview — ยอดขาย/สมาชิก/สต๊อกใกล้หมด/ออเดอร์ค้าง/บิลยกเลิก ของเดือนที่เลือก
+async function monthlyOverview(req, res) {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+
+    // ยอดขายรวมเดือนนี้ (sales หน้าร้าน + orders จองที่มารับแล้ว)
+    const [salesRows] = await pool.query(
+      `SELECT COALESCE(SUM(cnt), 0) as total_bills, COALESCE(SUM(total), 0) as total_sales
+       FROM (
+         SELECT COUNT(id) as cnt, SUM(total_amount) as total
+         FROM sales WHERE status = 'COMPLETED' AND DATE_FORMAT(created_at, '%Y-%m') = ?
+         UNION ALL
+         SELECT COUNT(id), SUM(total_amount)
+         FROM orders WHERE status = 'COMPLETED' AND DATE_FORMAT(completed_at, '%Y-%m') = ?
+       ) combined`,
+      [month, month]
+    );
+
+    // สมาชิก: รวมทั้งหมด + สมัครใหม่เดือนนี้
+    const [memberRows] = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM users WHERE role = 'MEMBER') as total_members,
+         (SELECT COUNT(*) FROM users WHERE role = 'MEMBER' AND DATE_FORMAT(created_at, '%Y-%m') = ?) as new_members`,
+      [month]
+    );
+
+    // สต๊อกใกล้หมด (ข้อมูลปัจจุบัน ไม่ผูกกับเดือนที่เลือก)
+    const [lowStockRows] = await pool.query(
+      `SELECT COUNT(*) as count FROM products WHERE is_active = TRUE AND stock <= 5`
+    );
+
+    // ออเดอร์จองที่ยังค้างอยู่ (ข้อมูลปัจจุบัน)
+    const [pendingOrderRows] = await pool.query(
+      `SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('COMPLETED', 'CANCELLED')`
+    );
+
+    // บิลยกเลิกเดือนนี้
+    const [voidRows] = await pool.query(
+      `SELECT COUNT(*) as void_count, COALESCE(SUM(total_amount), 0) as void_amount
+       FROM sales WHERE status = 'VOIDED' AND DATE_FORMAT(created_at, '%Y-%m') = ?`,
+      [month]
+    );
+
+    res.json({
+      month,
+      total_bills: Number(salesRows[0].total_bills),
+      total_sales: Number(salesRows[0].total_sales),
+      total_members: Number(memberRows[0].total_members),
+      new_members: Number(memberRows[0].new_members),
+      low_stock_count: Number(lowStockRows[0].count),
+      pending_orders_count: Number(pendingOrderRows[0].count),
+      void_count: Number(voidRows[0].void_count),
+      void_amount: Number(voidRows[0].void_amount),
+    });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// POST /api/reports/daily/send — สั่งส่งรายงานสรุปยอดประจำวันทางอีเมลทันที (ปกติรันเองผ่าน cron)
+async function dailySend(req, res) {
+  try {
+    const result = await sendDailyReport(req.query.date);
+    res.json({
+      message: result.sent ? "ส่งรายงานสรุปยอดประจำวันสำเร็จ" : "สร้างรายงานสำเร็จ แต่ไม่ได้ส่งอีเมล (ตรวจ ADMIN_EMAIL / SMTP ใน .env)",
+      sent: result.sent,
+      report: result.data,
+    });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// GET /api/reports/export/sales-csv — export ยอดขายรวม 3 ระดับ (รายชิ้น/รายบิล/สรุปรายวัน) ไฟล์เดียว
+// format=excel (3 ชีท) หรือ csv (3 ส่วนคั่นหัวข้อ) — ดู ExportImportButtons/handleExportCsv ฝั่ง frontend
+async function exportSalesCsv(req, res) {
+  const { start_date, end_date, format = 'csv' } = req.query;
+  if (format !== 'excel' && format !== 'csv') {
+    return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });
+  }
+
+  // แปลง array-of-rows -> CSV string (ใส่ " ครอบทุกช่อง กัน , ในข้อมูล)
+  const toCsv = (headers, rows) =>
+    [headers, ...rows]
+      .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+  // WHERE ช่วงวันที่ (ถ้าไม่ส่งมา = ทั้งหมด)
+  const hasRange = !!(start_date && end_date);
+
+  try {
+    const sections = {}; // { daily: {headers, rows}, bill: {...}, item: {...} }
+
+    {
+      // สรุปรายวัน: รวมทั้ง POS + พรีออเดอร์ต่อวัน
+      const params = [];
+      let wSale = "s.status = 'COMPLETED'";
+      let wOrder = "o.status = 'COMPLETED'";
+      if (hasRange) {
+        wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+        wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+        params.push(start_date, end_date, start_date, end_date);
+      }
+      const [rows] = await pool.query(`
+        SELECT day, SUM(bill_count) AS bills, SUM(total_sales) AS total_sales,
+               SUM(cash_sales) AS cash_sales, SUM(qr_sales) AS qr_sales
+        FROM (
+          SELECT DATE(s.created_at) AS day, COUNT(*) AS bill_count,
+                 SUM(s.total_amount) AS total_sales,
+                 SUM(CASE WHEN s.payment_method='CASH' THEN s.total_amount ELSE 0 END) AS cash_sales,
+                 SUM(CASE WHEN s.payment_method='QR' THEN s.total_amount ELSE 0 END) AS qr_sales
+          FROM sales s WHERE ${wSale} GROUP BY DATE(s.created_at)
+          UNION ALL
+          SELECT DATE(o.completed_at) AS day, COUNT(*) AS bill_count,
+                 SUM(o.total_amount) AS total_sales,
+                 SUM(CASE WHEN o.payment_method='CASH' THEN o.total_amount ELSE 0 END) AS cash_sales,
+                 SUM(CASE WHEN o.payment_method='QR' THEN o.total_amount ELSE 0 END) AS qr_sales
+          FROM orders o WHERE ${wOrder} GROUP BY DATE(o.completed_at)
+        ) t
+        GROUP BY day ORDER BY day DESC
+      `, params);
+      sections.daily = {
+        title: 'สรุปรายวัน', sheetName: 'สรุปรายวัน',
+        headers: ['วันที่', 'จำนวนบิล', 'ยอดขายรวม', 'เงินสด', 'โอน/QR'],
+        rows: rows.map(r => [
+          r.day instanceof Date ? r.day.toISOString().slice(0, 10) : r.day,
+          r.bills, Number(r.total_sales).toFixed(2),
+          Number(r.cash_sales).toFixed(2), Number(r.qr_sales).toFixed(2),
+        ]),
+      };
+    }
+
+    {
+      // รายบิล
+      const params = [];
+      let wSale = "s.status = 'COMPLETED'";
+      let wOrder = "o.status = 'COMPLETED'";
+      if (hasRange) {
+        wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+        wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+        params.push(start_date, end_date, start_date, end_date);
+      }
+      const [rows] = await pool.query(`
+        SELECT * FROM (
+          SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'POS' AS channel, s.id AS bill_no,
+                 (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id=s.id) AS item_count,
+                 s.discount_amount, s.total_amount, s.payment_method,
+                 cs.full_name AS party, s.created_at AS sort_at
+          FROM sales s LEFT JOIN users cs ON s.cashier_id=cs.id
+          WHERE ${wSale}
+          UNION ALL
+          SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'พรีออเดอร์' AS channel, o.id AS bill_no,
+                 (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) AS item_count,
+                 0 AS discount_amount, o.total_amount, o.payment_method,
+                 cust.full_name AS party, o.completed_at AS sort_at
+          FROM orders o LEFT JOIN users cust ON o.user_id=cust.id
+          WHERE ${wOrder}
+        ) t ORDER BY sort_at DESC
+      `, params);
+      sections.bill = {
+        title: 'รายบิล', sheetName: 'รายบิล',
+        headers: ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'จำนวนรายการ', 'ส่วนลด', 'ยอดสุทธิ', 'ชำระโดย', 'แคชเชียร์/ลูกค้า'],
+        rows: rows.map(r => [
+          r.dt, r.channel, r.bill_no, r.item_count,
+          Number(r.discount_amount).toFixed(2), Number(r.total_amount).toFixed(2),
+          r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
+          r.party || '-',
+        ]),
+      };
+    }
+
+    {
+      // รายชิ้น ละเอียดสุด พร้อมคอลัมน์ช่วยคำนวณรายได้สหกรณ์
+      const params = [];
+      let wSale = "s.status = 'COMPLETED'";
+      let wOrder = "o.status = 'COMPLETED'";
+      if (hasRange) {
+        wSale += ' AND DATE(s.created_at) BETWEEN ? AND ?';
+        wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
+        params.push(start_date, end_date, start_date, end_date);
+      }
+      // coop_income: สินค้าฝากขาย = subtotal*gp% ; สินค้าสหกรณ์เอง = subtotal - ทุน
+      const coopIncome = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal * p.gp_rate/100 ELSE it.subtotal - p.cost*it.quantity END`;
+      const vendorEarn = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal - it.subtotal*p.gp_rate/100 ELSE 0 END`;
+      const [rows] = await pool.query(`
+        SELECT * FROM (
+          SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'POS' AS channel, s.id AS bill_no, p.name AS product, c.name AS category,
+                 it.quantity, it.price, it.subtotal, (p.cost*it.quantity) AS cost_total,
+                 p.gp_rate, ${coopIncome} AS coop_income,
+                 COALESCE(v.full_name,'สหกรณ์') AS vendor, ${vendorEarn} AS vendor_earn,
+                 s.payment_method, s.created_at AS sort_at
+          FROM sale_items it
+          JOIN sales s ON it.sale_id=s.id
+          JOIN products p ON it.product_id=p.id
+          LEFT JOIN categories c ON p.category_id=c.id
+          LEFT JOIN users v ON p.vendor_id=v.id
+          WHERE ${wSale}
+          UNION ALL
+          SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+                 'พรีออเดอร์' AS channel, o.id AS bill_no, p.name AS product, c.name AS category,
+                 it.quantity, it.price, it.subtotal, (p.cost*it.quantity) AS cost_total,
+                 p.gp_rate, ${coopIncome} AS coop_income,
+                 COALESCE(v.full_name,'สหกรณ์') AS vendor, ${vendorEarn} AS vendor_earn,
+                 o.payment_method, o.completed_at AS sort_at
+          FROM order_items it
+          JOIN orders o ON it.order_id=o.id
+          JOIN products p ON it.product_id=p.id
+          LEFT JOIN categories c ON p.category_id=c.id
+          LEFT JOIN users v ON p.vendor_id=v.id
+          WHERE ${wOrder}
+        ) t ORDER BY sort_at DESC
+      `, params);
+      sections.item = {
+        title: 'รายชิ้น', sheetName: 'รายชิ้น',
+        headers: ['วันที่-เวลา', 'ช่องทาง', 'เลขบิล', 'สินค้า', 'หมวดหมู่', 'จำนวน', 'ราคา/ชิ้น',
+          'ยอดรวมรายการ', 'ทุนรวม', 'GP%', 'รายได้สหกรณ์(ประมาณ)', 'เจ้าของฝากขาย', 'ยอดเจ้าของได้', 'ชำระโดย'],
+        rows: rows.map(r => [
+          r.dt, r.channel, r.bill_no, r.product, r.category || '-', r.quantity,
+          Number(r.price).toFixed(2), Number(r.subtotal).toFixed(2), Number(r.cost_total).toFixed(2),
+          Number(r.gp_rate).toFixed(2), Number(r.coop_income).toFixed(2), r.vendor,
+          Number(r.vendor_earn).toFixed(2),
+          r.payment_method === 'QR' ? 'โอน/QR' : r.payment_method === 'CASH' ? 'เงินสด' : r.payment_method,
+        ]),
+      };
+    }
+
+    const range = hasRange ? `_${start_date}_to_${end_date}` : ''; // ⭐️ HTTP header ต้อง ASCII ห้ามมีไทย
+    const sectionOrder = [sections.item, sections.bill, sections.daily]; // ละเอียดสุด → สรุปสุด
+
+    if (format === 'excel') {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'DMTC Mart';
+      workbook.created = new Date();
+      for (const sec of sectionOrder) {
+        const sheet = workbook.addWorksheet(sec.sheetName);
+        sheet.addRow(sec.headers);
+        sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } };
+        sec.rows.forEach(r => sheet.addRow(r));
+        sheet.columns.forEach((col, i) => {
+          let maxLen = String(sec.headers[i] ?? '').length;
+          for (const r of sec.rows) { const len = String(r[i] ?? '').length; if (len > maxLen) maxLen = len; }
+          col.width = Math.min(Math.max(maxLen + 2, 10), 40);
+        });
+      }
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="sales-export${range}.xlsx"`);
+      await workbook.xlsx.write(res);
+      return res.end();
+    }
+
+    // ⭐️ CSV รวม 3 ส่วนในไฟล์เดียว — คั่นด้วยบรรทัดว่าง + หัวข้อ === ชื่อส่วน === (convention ทั่วไป
+    // สำหรับ multi-table CSV, Excel/Google Sheets เปิดอ่านได้ปกติ เห็นเป็น text แทรกอยู่ระหว่างตาราง)
+    const combined = sectionOrder.map(sec => `=== ${sec.title} ===\n${toCsv(sec.headers, sec.rows)}`).join('\n\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="sales-export${range}.csv"`);
+    res.send('﻿' + combined); // BOM ให้ Excel อ่านภาษาไทยถูก
+  } catch (err) {
+    console.error('[sales-csv export] ERROR:', err.code || '', err.sqlMessage || err.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// GET /api/reports/executive-export — Excel (KPI/top-products/category/inventory + full transaction
+// detail) หรือ CSV fallback (แค่ transaction detail)
+async function executiveExport(req, res) {
+  const { startDate, endDate, format = 'excel' } = req.query;
+  if (format !== 'excel' && format !== 'csv') {
+    return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });
+  }
+  try {
+    const rows = await reportsExport.fetchLineItems(pool, startDate, endDate);
+    const range = startDate && endDate ? `_${startDate}_to_${endDate}` : ''; // ⭐️ ASCII เท่านั้นใน HTTP header
+
+    if (format === 'csv') {
+      const csv = reportsExport.buildCsv(rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="executive-summary${range}.csv"`);
+      return res.send(csv);
+    }
+
+    const [storeName, inventory] = await Promise.all([
+      reportsExport.fetchStoreName(pool),
+      reportsExport.fetchInventorySummary(pool),
+    ]);
+    const kpis = reportsExport.aggregate(rows);
+    const workbook = await reportsExport.buildWorkbook({ storeName, startDate, endDate, kpis, inventory, rows });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="executive-summary${range}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[executive-export] ERROR:', err.code || '', err.sqlMessage || err.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// GET /api/reports/accounting-summary — สรุปบัญชีสหกรณ์ (JSON: หมวดหมู่+สินค้า+ยอดจ่ายคืนผู้ฝากขาย)
+// ⭐️ Co-op Accounting Summary — ใช้ query เดียวกับ executive-export (fetchLineItems) มา aggregate ต่อ
+// ไม่ต้อง round-trip DB ซ้ำ
+async function accountingSummary(req, res) {
+  const { start_date, end_date } = req.query;
+  try {
+    const [rows, supplierPayouts] = await Promise.all([
+      reportsExport.fetchLineItems(pool, start_date, end_date),
+      reportsExport.fetchVendorPayouts(pool, start_date, end_date),
+    ]);
+    const kpis = reportsExport.aggregate(rows);
+    const totalCost = kpis.categorySummary.reduce((sum, c) => sum + c.cost, 0);
+
+    res.json({
+      period: { start_date: start_date || null, end_date: end_date || null },
+      kpis: {
+        totalRevenue: kpis.totalRevenue,
+        totalCost,
+        totalProfit: kpis.totalProfit,
+        totalOrders: kpis.totalOrders,
+        aov: kpis.aov,
+      },
+      categoryBreakdown: kpis.categorySummary,
+      productBreakdown: kpis.productBreakdown,
+      supplierPayouts,
+    });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
+// GET /api/reports/accounting-summary/export — Excel ของ accountingSummary (3 ชีท)
+async function accountingSummaryExport(req, res) {
+  const { start_date, end_date } = req.query;
+  try {
+    const [rows, supplierPayouts, storeName] = await Promise.all([
+      reportsExport.fetchLineItems(pool, start_date, end_date),
+      reportsExport.fetchVendorPayouts(pool, start_date, end_date),
+      reportsExport.fetchStoreName(pool),
+    ]);
+    const kpis = reportsExport.aggregate(rows);
+    const totalCost = kpis.categorySummary.reduce((sum, c) => sum + c.cost, 0);
+    const workbook = await reportsExport.buildAccountingWorkbook({
+      storeName,
+      startDate: start_date,
+      endDate: end_date,
+      kpis: { totalRevenue: kpis.totalRevenue, totalCost, totalProfit: kpis.totalProfit, totalOrders: kpis.totalOrders },
+      categoryBreakdown: kpis.categorySummary,
+      productBreakdown: kpis.productBreakdown,
+      supplierPayouts,
+    });
+
+    const range = start_date && end_date ? `_${start_date}_to_${end_date}` : ''; // ⭐️ ASCII เท่านั้นใน HTTP header
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="accounting-summary${range}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[accounting-summary/export] ERROR:', err.code || '', err.sqlMessage || err.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+  }
+}
+
 module.exports = {
   weeklySales, hourlySales,
   attendance, dashboard, topSelling, vendorSales, vendorSalesDetail,
   voidSummary, shiftAnomalies, salesComparison, salesByCashier, openShifts,
   pendingOrders, salesChannel, grossProfit, profitSummary, deadStock, vendorSummary,
+  payroll, myHours, monthlyOverview, dailySend, exportSalesCsv,
+  executiveExport, accountingSummary, accountingSummaryExport,
 };

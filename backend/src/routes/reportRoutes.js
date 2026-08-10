@@ -40,4 +40,13 @@ router.get('/profit-summary', requireRole('ADMIN', 'MANAGER'), reportController.
 router.get('/dead-stock', requireRole('ADMIN', 'MANAGER'), reportController.deadStock);
 router.get('/vendor-summary', requireRole('ADMIN', 'MANAGER'), reportController.vendorSummary);
 
+router.get('/payroll', requireRole('ADMIN'), reportController.payroll);
+router.get('/my-hours', requireRole('ADMIN', 'CASHIER', 'MANAGER'), reportController.myHours);
+router.get('/monthly-overview', requireRole('ADMIN', 'MANAGER'), reportController.monthlyOverview);
+router.post('/daily/send', requireRole('ADMIN'), reportController.dailySend);
+router.get('/export/sales-csv', requireRole('ADMIN', 'MANAGER'), reportController.exportSalesCsv);
+router.get('/executive-export', requireRole('ADMIN', 'MANAGER'), reportController.executiveExport);
+router.get('/accounting-summary', requireRole('ADMIN', 'MANAGER'), reportController.accountingSummary);
+router.get('/accounting-summary/export', requireRole('ADMIN', 'MANAGER'), reportController.accountingSummaryExport);
+
 module.exports = router;
