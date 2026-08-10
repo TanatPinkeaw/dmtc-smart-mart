@@ -795,21 +795,27 @@ async function exportSalesCsv(req, res) {
         wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
         params.push(start_date, end_date, start_date, end_date);
       }
+      // 🐛 FIX (root cause — same as weekly-sales/hourly-sales/monthly-overview) — created_at/
+      // completed_at เป็น TIMESTAMP และ pool ตั้ง SET time_zone='+07:00' ทุก connection แล้ว MySQL
+      // คืนเป็นเวลาไทยตั้งแต่อ่านแล้ว ใช้คอลัมน์ตรงๆ ได้เลย ไม่ต้องแปลงซ้ำ. เดิม DATE(...) คืน DATE
+      // type ที่ mysql2 parse เป็น JS Date object แล้วโค้ด JS อ่านด้วย .toISOString() (UTC) อีกที
+      // เพี้ยนได้ถ้า Node process ไม่ได้รันที่ UTC พอดี — เปลี่ยนเป็น DATE_FORMAT คืน string ตรงๆ
+      // ตัด JS Date object ออกจากสมการทั้งหมด (เหมือน weekly-sales)
       const [rows] = await pool.query(`
         SELECT day, SUM(bill_count) AS bills, SUM(total_sales) AS total_sales,
                SUM(cash_sales) AS cash_sales, SUM(qr_sales) AS qr_sales
         FROM (
-          SELECT DATE(s.created_at) AS day, COUNT(*) AS bill_count,
+          SELECT DATE_FORMAT(s.created_at, '%Y-%m-%d') AS day, COUNT(*) AS bill_count,
                  SUM(s.total_amount) AS total_sales,
                  SUM(CASE WHEN s.payment_method='CASH' THEN s.total_amount ELSE 0 END) AS cash_sales,
                  SUM(CASE WHEN s.payment_method='QR' THEN s.total_amount ELSE 0 END) AS qr_sales
-          FROM sales s WHERE ${wSale} GROUP BY DATE(s.created_at)
+          FROM sales s WHERE ${wSale} GROUP BY DATE_FORMAT(s.created_at, '%Y-%m-%d')
           UNION ALL
-          SELECT DATE(o.completed_at) AS day, COUNT(*) AS bill_count,
+          SELECT DATE_FORMAT(o.completed_at, '%Y-%m-%d') AS day, COUNT(*) AS bill_count,
                  SUM(o.total_amount) AS total_sales,
                  SUM(CASE WHEN o.payment_method='CASH' THEN o.total_amount ELSE 0 END) AS cash_sales,
                  SUM(CASE WHEN o.payment_method='QR' THEN o.total_amount ELSE 0 END) AS qr_sales
-          FROM orders o WHERE ${wOrder} GROUP BY DATE(o.completed_at)
+          FROM orders o WHERE ${wOrder} GROUP BY DATE_FORMAT(o.completed_at, '%Y-%m-%d')
         ) t
         GROUP BY day ORDER BY day DESC
       `, params);
@@ -817,8 +823,7 @@ async function exportSalesCsv(req, res) {
         title: 'สรุปรายวัน', sheetName: 'สรุปรายวัน',
         headers: ['วันที่', 'จำนวนบิล', 'ยอดขายรวม', 'เงินสด', 'โอน/QR'],
         rows: rows.map(r => [
-          r.day instanceof Date ? r.day.toISOString().slice(0, 10) : r.day,
-          r.bills, Number(r.total_sales).toFixed(2),
+          r.day, r.bills, Number(r.total_sales).toFixed(2),
           Number(r.cash_sales).toFixed(2), Number(r.qr_sales).toFixed(2),
         ]),
       };
@@ -834,9 +839,11 @@ async function exportSalesCsv(req, res) {
         wOrder += ' AND DATE(o.completed_at) BETWEEN ? AND ?';
         params.push(start_date, end_date, start_date, end_date);
       }
+      // 🐛 FIX (root cause) — เดิม CONVERT_TZ(...,'+00:00','+07:00') แปลงเวลาซ้ำ (session tz +07:00
+      // จัดการให้แล้ว) บวก 7 ชม.เกิน ตัดออกให้ตรงกับจุดอื่นที่แก้ไปแล้ว
       const [rows] = await pool.query(`
         SELECT * FROM (
-          SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+          SELECT DATE_FORMAT(s.created_at,'%Y-%m-%d %H:%i') AS dt,
                  'POS' AS channel, s.id AS bill_no,
                  (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id=s.id) AS item_count,
                  s.discount_amount, s.total_amount, s.payment_method,
@@ -844,7 +851,7 @@ async function exportSalesCsv(req, res) {
           FROM sales s LEFT JOIN users cs ON s.cashier_id=cs.id
           WHERE ${wSale}
           UNION ALL
-          SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+          SELECT DATE_FORMAT(o.completed_at,'%Y-%m-%d %H:%i') AS dt,
                  'พรีออเดอร์' AS channel, o.id AS bill_no,
                  (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) AS item_count,
                  0 AS discount_amount, o.total_amount, o.payment_method,
@@ -878,9 +885,10 @@ async function exportSalesCsv(req, res) {
       // coop_income: สินค้าฝากขาย = subtotal*gp% ; สินค้าสหกรณ์เอง = subtotal - ทุน
       const coopIncome = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal * p.gp_rate/100 ELSE it.subtotal - p.cost*it.quantity END`;
       const vendorEarn = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal - it.subtotal*p.gp_rate/100 ELSE 0 END`;
+      // 🐛 FIX (root cause) — เดิม CONVERT_TZ(...,'+00:00','+07:00') แปลงเวลาซ้ำ ตัดออกเหมือนด้านบน
       const [rows] = await pool.query(`
         SELECT * FROM (
-          SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+          SELECT DATE_FORMAT(s.created_at,'%Y-%m-%d %H:%i') AS dt,
                  'POS' AS channel, s.id AS bill_no, p.name AS product, c.name AS category,
                  it.quantity, it.price, it.subtotal, (p.cost*it.quantity) AS cost_total,
                  p.gp_rate, ${coopIncome} AS coop_income,
@@ -893,7 +901,7 @@ async function exportSalesCsv(req, res) {
           LEFT JOIN users v ON p.vendor_id=v.id
           WHERE ${wSale}
           UNION ALL
-          SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+          SELECT DATE_FORMAT(o.completed_at,'%Y-%m-%d %H:%i') AS dt,
                  'พรีออเดอร์' AS channel, o.id AS bill_no, p.name AS product, c.name AS category,
                  it.quantity, it.price, it.subtotal, (p.cost*it.quantity) AS cost_total,
                  p.gp_rate, ${coopIncome} AS coop_income,

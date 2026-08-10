@@ -4249,7 +4249,7 @@ app.get('/api/orders', async (req, res) => {
   try {
     let query = `
       SELECT o.*, u.full_name as customer_name, u.phone_number,
-             DATE_FORMAT(CONVERT_TZ(o.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as created_at_bkk
+             DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') as created_at_bkk
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
       ORDER BY o.created_at DESC
@@ -4260,7 +4260,7 @@ app.get('/api/orders', async (req, res) => {
     if (req.user.role === 'MEMBER') {
       query = `
         SELECT o.*, u.full_name as customer_name, u.phone_number,
-               DATE_FORMAT(CONVERT_TZ(o.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as created_at_bkk
+               DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') as created_at_bkk
         FROM orders o
         LEFT JOIN users u ON o.user_id = u.id
         WHERE o.user_id = ?
@@ -5058,7 +5058,7 @@ app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req
         al.id, al.user_id, u.full_name,
         al.action, al.resource_type, al.resource_id,
         al.description, al.amount_cents, al.status,
-        DATE_FORMAT(CONVERT_TZ(al.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as timestamp_bkk
+        DATE_FORMAT(al.created_at, '%Y-%m-%d %H:%i:%s') as timestamp_bkk
       FROM audit_logs al
       JOIN users u ON al.user_id = u.id
       WHERE 1=1
@@ -5181,7 +5181,7 @@ app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => 
         al.id, u.full_name as user_name,
         al.action, al.resource_type, al.description,
         al.amount_cents, al.status,
-        DATE_FORMAT(CONVERT_TZ(al.created_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as timestamp_bkk
+        DATE_FORMAT(al.created_at, '%Y-%m-%d %H:%i:%s') as timestamp_bkk
       FROM audit_logs al
       JOIN users u ON al.user_id = u.id
       WHERE 1=1

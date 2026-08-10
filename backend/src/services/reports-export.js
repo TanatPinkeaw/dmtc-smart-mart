@@ -26,10 +26,14 @@ async function fetchLineItems(pool, startDate, endDate) {
 
   const profitExpr = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal * p.gp_rate/100 ELSE it.subtotal - p.cost*it.quantity END`;
 
+  // 🐛 FIX (root cause) — created_at/completed_at เป็น TIMESTAMP + pool ตั้ง SET time_zone='+07:00'
+  // ทุก connection แล้ว MySQL คืนเป็นเวลาไทยตั้งแต่อ่านแล้ว — CONVERT_TZ(...,'+00:00','+07:00') เดิม
+  // แปลงซ้ำ บวก 7 ชม.เกิน ทำให้เวลาที่โชว์ใน Transaction Details ผิด (เหมือน bug ที่แก้ไปแล้วใน
+  // weekly-sales/hourly-sales/export-sales-csv — ตัดออกให้ตรงกัน)
   const [rows] = await pool.query(
     `SELECT * FROM (
       SELECT s.created_at AS sort_at,
-             DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+             DATE_FORMAT(s.created_at,'%Y-%m-%d %H:%i') AS dt,
              'POS' AS channel, s.id AS transaction_id,
              p.barcode, p.name AS product_name, c.name AS category_name, p.vendor_id,
              p.cost, it.price, it.quantity, it.subtotal,
@@ -41,7 +45,7 @@ async function fetchLineItems(pool, startDate, endDate) {
       WHERE ${wSale}
       UNION ALL
       SELECT o.completed_at AS sort_at,
-             DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m-%d %H:%i') AS dt,
+             DATE_FORMAT(o.completed_at,'%Y-%m-%d %H:%i') AS dt,
              'พรีออเดอร์' AS channel, o.id AS transaction_id,
              p.barcode, p.name AS product_name, c.name AS category_name, p.vendor_id,
              p.cost, it.price, it.quantity, it.subtotal,

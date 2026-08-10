@@ -45,7 +45,9 @@ async function generateDailyReportData(targetDateStr) {
     `SELECT sh.id, sh.cashier_id, u.full_name AS cashier_name,
             sh.opening_cash, sh.expected_cash, sh.actual_cash, sh.difference,
             sh.discrepancy_flag, sh.discrepancy_category, sh.status,
-            DATE_FORMAT(CONVERT_TZ(sh.closed_at, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') as closed_at_bkk
+            // 🐛 FIX (root cause) — closed_at เป็น TIMESTAMP + pool ตั้ง SET time_zone='+07:00' ทุก
+            // connection แล้ว MySQL คืนเป็นเวลาไทยตั้งแต่อ่านแล้ว CONVERT_TZ เดิมแปลงซ้ำ บวก 7 ชม.เกิน
+            DATE_FORMAT(sh.closed_at, '%Y-%m-%d %H:%i:%s') as closed_at_bkk
      FROM shifts sh
      JOIN users u ON u.id = sh.cashier_id
      WHERE sh.status IN ('CLOSED', 'PENDING_APPROVAL')
