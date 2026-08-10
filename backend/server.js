@@ -3751,19 +3751,19 @@ app.get('/api/reports/sales-comparison', requireRole('ADMIN', 'MANAGER'), async 
 // ต่อวัน ย้อนหลัง 7 วัน (รวมวันนี้) เติมวันที่ไม่มียอดขายให้เป็น 0 ให้กราฟต่อเนื่อง
 app.get('/api/reports/weekly-sales', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    // 🐛 FIX (round 2) — เดิมใช้ DATE(created_at) ตรงๆ (UTC ดิบ) ไม่แปลงเวลาไทยก่อน (แก้ไปรอบแรกแล้ว)
-    // แต่ยังเพี้ยนอยู่ เพราะ DATE(...) คืนค่าเป็น DATE type ที่ mysql2 parse กลับเป็น JS Date object
-    // (ผ่าน string parsing ที่ตีความเป็น UTC midnight ตาม spec) แล้วโค้ด JS ฝั่งนี้อ่านด้วย local
-    // getters (getFullYear/getMonth/getDate) — ถ้า Node process ไม่ได้รันที่ UTC พอดี (เช่น Render
-    // ตั้ง TZ อื่น) การแปลง Date→string จะเพี้ยนไปอีกชั้นซ้อนกับที่ SQL แปลงมาแล้ว ทำให้ key ไม่ตรงกับ
-    // key ฝั่ง "7 วันล่าสุด" ที่สร้างจาก UTC getters ล้วนๆ (ดูด้านล่าง) — แก้เด็ดขาดด้วยการให้ MySQL
-    // คืนเป็น string ตรงๆ (DATE_FORMAT) ตัด JS Date object ออกจากสมการทั้งหมด ไม่มีช่องให้ตีความเพี้ยนอีก
+    // 🐛 FIX (round 3 — root cause) — created_at/completed_at เป็น TIMESTAMP และ db.js บังคับ
+    // SET time_zone='+07:00' ทุก connection แล้ว → MySQL คืนค่าเป็นเวลาไทยตั้งแต่ตอนอ่านอยู่แล้ว
+    // การใส่ CONVERT_TZ(...,'+00:00','+07:00') ซ้ำ (round 1-2) = แปลงเวลาซ้ำ บวก 7 ชม.เกิน ทำให้บิล
+    // ช่วงเย็นเลื่อนไปนับเป็นวันถัดไป (กราฟเพี้ยน 1 วัน) และ Peak Hours โชว์ 22:00 แทน 15:00
+    // ควรใช้ created_at ตรงๆ ให้ตรงกับ query อื่นในไฟล์นี้ที่ทำถูกอยู่แล้ว (dashboard วันนี้/sales-channel/
+    // comparison ล้วนใช้ DATE(created_at)=CURDATE() ไม่มี CONVERT_TZ) — CURDATE()/NOW() ก็เป็นเวลาไทยแล้ว
+    // DATE_FORMAT คืน string ตรงๆ (ไม่ผ่าน JS Date object) key จึงตรงกับฝั่ง "7 วันล่าสุด" ที่สร้างเป็น string
     const [rows] = await pool.query(`
       SELECT d, COALESCE(SUM(total), 0) as total FROM (
-        SELECT DATE_FORMAT(CONVERT_TZ(created_at,'+00:00','+07:00'), '%Y-%m-%d') as d, total_amount as total FROM sales
+        SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as d, total_amount as total FROM sales
           WHERE status = 'COMPLETED' AND created_at >= CURDATE() - INTERVAL 7 DAY
         UNION ALL
-        SELECT DATE_FORMAT(CONVERT_TZ(completed_at,'+00:00','+07:00'), '%Y-%m-%d') as d, total_amount as total FROM orders
+        SELECT DATE_FORMAT(completed_at, '%Y-%m-%d') as d, total_amount as total FROM orders
           WHERE status = 'COMPLETED' AND completed_at >= CURDATE() - INTERVAL 7 DAY
       ) combined
       GROUP BY d
@@ -3799,25 +3799,28 @@ app.get('/api/reports/hourly-sales', requireRole('ADMIN', 'MANAGER'), async (req
     const period = ['today', '7d', '30d'].includes(req.query.period) ? req.query.period : 'today';
     const days = period === '7d' ? 7 : period === '30d' ? 30 : 1;
 
-    // ⭐️ Bangkok timezone — created_at/completed_at เก็บเป็น UTC ต้องแปลงก่อนดึง HOUR/DATE
+    // 🐛 FIX (root cause) — created_at/completed_at เป็น TIMESTAMP + db.js บังคับ SET time_zone='+07:00'
+    // ทุก connection → MySQL คืนเป็นเวลาไทยตั้งแต่อ่านแล้ว, NOW()/CURDATE() ก็เป็นเวลาไทย ใช้คอลัมน์ตรงๆ
+    // ได้เลย เดิมใส่ CONVERT_TZ(...,'+00:00','+07:00') = แปลงซ้ำ บวก 7 ชม.เกิน ทำให้ Peak โชว์ 22:00 แทน
+    // 15:00 (บ่าย+7=สี่ทุ่ม) — ตรงกับ dashboard วันนี้/sales-channel ที่ใช้ DATE(created_at)=CURDATE() ถูกอยู่แล้ว
     const dateClauseSales = period === 'today'
-      ? `DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))`
-      : `CONVERT_TZ(created_at,'+00:00','+07:00') >= DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+07:00'), INTERVAL ${days} DAY)`;
+      ? `DATE(created_at) = CURDATE()`
+      : `created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`;
     const dateClauseOrders = period === 'today'
-      ? `DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))`
-      : `CONVERT_TZ(completed_at,'+00:00','+07:00') >= DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+07:00'), INTERVAL ${days} DAY)`;
+      ? `DATE(completed_at) = CURDATE()`
+      : `completed_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`;
 
     const [rows] = await pool.query(`
       SELECT hour, SUM(total) as total, COUNT(DISTINCT day) as day_count
       FROM (
-        SELECT HOUR(CONVERT_TZ(created_at,'+00:00','+07:00')) as hour,
-               DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) as day,
+        SELECT HOUR(created_at) as hour,
+               DATE(created_at) as day,
                total_amount as total
         FROM sales
         WHERE status='COMPLETED' AND ${dateClauseSales}
         UNION ALL
-        SELECT HOUR(CONVERT_TZ(completed_at,'+00:00','+07:00')) as hour,
-               DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) as day,
+        SELECT HOUR(completed_at) as hour,
+               DATE(completed_at) as day,
                total_amount as total
         FROM orders
         WHERE status='COMPLETED' AND ${dateClauseOrders}
@@ -3829,9 +3832,9 @@ app.get('/api/reports/hourly-sales', requireRole('ADMIN', 'MANAGER'), async (req
     // ถ้าช่วงนั้นมีแค่บางวันที่ขายของช่วงเช้า — ใช้จำนวนวันที่ "มีบิลอย่างน้อย 1 ใบทั้งวัน" เป็นตัวหาร
     const [[{ active_days } = { active_days: 0 }]] = await pool.query(`
       SELECT COUNT(DISTINCT day) as active_days FROM (
-        SELECT DATE(CONVERT_TZ(created_at,'+00:00','+07:00')) as day FROM sales WHERE status='COMPLETED' AND ${dateClauseSales}
+        SELECT DATE(created_at) as day FROM sales WHERE status='COMPLETED' AND ${dateClauseSales}
         UNION
-        SELECT DATE(CONVERT_TZ(completed_at,'+00:00','+07:00')) as day FROM orders WHERE status='COMPLETED' AND ${dateClauseOrders}
+        SELECT DATE(completed_at) as day FROM orders WHERE status='COMPLETED' AND ${dateClauseOrders}
       ) d
     `);
     const divisor = period === 'today' ? 1 : Math.max(1, Number(active_days));
@@ -3986,11 +3989,11 @@ app.get('/api/reports/profit-summary', requireRole('ADMIN', 'MANAGER'), async (r
              SUM(profit_gp) AS profit_gp,
              SUM(profit_own + profit_gp) AS profit_total
       FROM (
-        SELECT DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+07:00'),'%Y-%m') AS period, ${lineExpr}
+        SELECT DATE_FORMAT(s.created_at,'%Y-%m') AS period, ${lineExpr}
         FROM sale_items it JOIN sales s ON it.sale_id=s.id JOIN products p ON it.product_id=p.id
         WHERE s.status='COMPLETED'
         UNION ALL
-        SELECT DATE_FORMAT(CONVERT_TZ(o.completed_at,'+00:00','+07:00'),'%Y-%m') AS period, ${lineExpr}
+        SELECT DATE_FORMAT(o.completed_at,'%Y-%m') AS period, ${lineExpr}
         FROM order_items it JOIN orders o ON it.order_id=o.id JOIN products p ON it.product_id=p.id
         WHERE o.status='COMPLETED'
       ) t
