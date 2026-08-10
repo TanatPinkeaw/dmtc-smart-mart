@@ -1061,10 +1061,13 @@ export default function Settings() {
             {/* ⭐️ Sprint 2 — Expiry Discount: expiry_date + discount_percent */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-3">
               <p className="text-xs font-bold text-yellow-800">วันหมดอายุและส่วนลด</p>
+              {/* 🐛 FIX — เดิมไม่ตัด .slice(0,10) เหมือน promo_start/promo_end ด้านบน ถ้า backend ส่ง
+                  expiry_date มาเป็น ISO string เต็ม (มีเวลาต่อท้าย) input type="date" จะโชว์ "ว่าง"
+                  เงียบๆ (เป็นกฎ HTML — ไม่ error) ทั้งที่ข้อมูลจริงมีอยู่ ทำให้แอดมินเข้าใจผิดว่าวันหมดอายุหาย */}
               <Input
                 label="วันหมดอายุ (ถ้ามี)"
                 type="date"
-                value={editingProduct.expiry_date || ''}
+                value={editingProduct.expiry_date ? String(editingProduct.expiry_date).slice(0, 10) : ''}
                 required={false}
                 onChange={(v: any) => setEditingProduct({ ...editingProduct, expiry_date: v })}
               />
@@ -1150,7 +1153,7 @@ export default function Settings() {
               <Input
                 label="วันหมดอายุ (ถ้ามี)"
                 type="date"
-                value={newProduct.expiry_date || ''}
+                value={newProduct.expiry_date ? String(newProduct.expiry_date).slice(0, 10) : ''}
                 required={false}
                 onChange={(v: any) => setNewProduct({ ...newProduct, expiry_date: v })}
               />
