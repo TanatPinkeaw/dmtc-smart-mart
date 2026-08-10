@@ -879,10 +879,16 @@ app.delete('/api/categories/:id', requireRole('ADMIN', 'MANAGER'), async (req, r
 function getProductExpiry(product) {
   if (!product.expiry_date) return { status: 'no_expiry' };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
+  // 🐛 FIX (root cause) — เดิมใช้ new Date() + setHours(0,0,0,0) (local) = เวลา/วันที่ของ Node
+  // process เอง ไม่ใช่เวลาไทย ถ้า server รันที่ UTC (ปกติของ cloud) ช่วงเที่ยงคืน–06:59 น. เวลาไทย
+  // (=UTC 17:00-23:59 ของเมื่อวาน) "วันนี้" ที่คำนวณได้จะช้ากว่าความจริง 1 วัน → daysLeft เพี้ยน
+  // (สินค้าที่ควรขึ้น "ใกล้หมดอายุ" แล้วยังไม่ขึ้น หรือ badge กับราคาส่วนลดไม่ตรงกัน เพราะจุดอื่นที่ใช้
+  // SQL CURDATE() คิดถูกอยู่แล้ว แต่จุดนี้คิดช้ากว่า 1 วัน) — ใช้เทคนิคเดียวกับที่ verify แล้วว่าไม่ขึ้น
+  // กับ TZ ของ process เลย (บวก 7 ชม.เข้า UTC timestamp ตรงๆ แล้วอ่านด้วย UTC getters)
+  const nowTH = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const today = new Date(Date.UTC(nowTH.getUTCFullYear(), nowTH.getUTCMonth(), nowTH.getUTCDate()));
   const expiry = new Date(product.expiry_date);
-  expiry.setHours(0, 0, 0, 0);
+  expiry.setUTCHours(0, 0, 0, 0);
 
   const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
 
