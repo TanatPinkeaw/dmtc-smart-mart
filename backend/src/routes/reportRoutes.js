@@ -21,4 +21,23 @@ function requireRole(...roles) {
 router.get('/weekly-sales', requireRole('ADMIN', 'MANAGER'), reportController.weeklySales);
 router.get('/hourly-sales', requireRole('ADMIN', 'MANAGER'), reportController.hourlySales);
 
+router.get('/attendance', requireRole('ADMIN', 'MANAGER'), reportController.attendance);
+router.get('/dashboard', requireRole('CASHIER', 'ADMIN', 'MANAGER'), reportController.dashboard);
+router.get('/top-selling', requireRole('CASHIER', 'ADMIN', 'MANAGER'), reportController.topSelling);
+// ⭐️ ไม่มี requireRole ตั้งใจ — self-scoped ด้วย ownership check ในตัว handler เอง (ดู comment ใน
+// reportController.js) authenticateToken (global middleware) รับรอง req.user อยู่แล้ว
+router.get('/vendor-sales', reportController.vendorSales);
+router.get('/vendor-sales/detail', reportController.vendorSalesDetail);
+router.get('/void-summary', requireRole('ADMIN', 'MANAGER'), reportController.voidSummary);
+router.get('/shift-anomalies', requireRole('ADMIN', 'MANAGER'), reportController.shiftAnomalies);
+router.get('/sales-comparison', requireRole('ADMIN', 'MANAGER'), reportController.salesComparison);
+router.get('/sales-by-cashier', requireRole('ADMIN', 'MANAGER'), reportController.salesByCashier);
+router.get('/open-shifts', requireRole('ADMIN', 'MANAGER'), reportController.openShifts);
+router.get('/pending-orders', requireRole('ADMIN', 'MANAGER'), reportController.pendingOrders);
+router.get('/sales-channel', requireRole('ADMIN', 'MANAGER'), reportController.salesChannel);
+router.get('/gross-profit', requireRole('ADMIN', 'MANAGER'), reportController.grossProfit);
+router.get('/profit-summary', requireRole('ADMIN', 'MANAGER'), reportController.profitSummary);
+router.get('/dead-stock', requireRole('ADMIN', 'MANAGER'), reportController.deadStock);
+router.get('/vendor-summary', requireRole('ADMIN', 'MANAGER'), reportController.vendorSummary);
+
 module.exports = router;
