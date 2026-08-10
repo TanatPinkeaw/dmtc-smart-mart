@@ -958,13 +958,13 @@ app.get('/api/products', async (req, res) => {
       SELECT p.*, c.name as category_name,
              CASE
                WHEN p.expiry_date IS NULL THEN 'no_expiry'
-               WHEN DATE(p.expiry_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00')) THEN 'expired'
-               WHEN DATE(p.expiry_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00')) THEN 'expires_today'
-               WHEN DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00'))) = 1 THEN 'near_expiry'
+               WHEN DATE(p.expiry_date) < CURDATE() THEN 'expired'
+               WHEN DATE(p.expiry_date) = CURDATE() THEN 'expires_today'
+               WHEN DATEDIFF(DATE(p.expiry_date), CURDATE()) = 1 THEN 'near_expiry'
                ELSE 'ok'
              END as expiry_status,
              (p.promo_percent > 0 AND p.promo_start IS NOT NULL AND p.promo_end IS NOT NULL
-               AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN p.promo_start AND p.promo_end) AS promo_active
+               AND CURDATE() BETWEEN p.promo_start AND p.promo_end) AS promo_active
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE p.is_active = 1
@@ -1010,9 +1010,9 @@ app.get('/api/products/highlights', async (req, res) => {
   try {
     const expiryCase = `CASE
       WHEN p.expiry_date IS NULL THEN 'no_expiry'
-      WHEN DATE(p.expiry_date) < DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) THEN 'expired'
-      WHEN DATE(p.expiry_date) = DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) THEN 'expires_today'
-      WHEN DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1 THEN 'near_expiry'
+      WHEN DATE(p.expiry_date) < CURDATE() THEN 'expired'
+      WHEN DATE(p.expiry_date) = CURDATE() THEN 'expires_today'
+      WHEN DATEDIFF(DATE(p.expiry_date), CURDATE()) = 1 THEN 'near_expiry'
       ELSE 'ok' END`;
     // ยอดนิยม — ขายดีรวมทั้งหน้าร้าน (sale_items) + พรีออเดอร์ที่ COMPLETED (order_items)
     const [popular] = await pool.query(`
@@ -1031,14 +1031,14 @@ app.get('/api/products/highlights', async (req, res) => {
     `);
     // มีโปร — โปรระดับสินค้าช่วงวันที่ (promo_percent) ที่กำลัง active + สินค้าใกล้หมดอายุ (near_expiry) + มีสต๊อก
     const promoActiveExpr = `(p.promo_percent > 0 AND p.promo_start IS NOT NULL AND p.promo_end IS NOT NULL
-      AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN p.promo_start AND p.promo_end)`;
+      AND CURDATE() BETWEEN p.promo_start AND p.promo_end)`;
     const [promo] = await pool.query(`
       SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status, ${promoActiveExpr} AS promo_active
       FROM products p
       LEFT JOIN categories c ON p.category_id=c.id
       WHERE p.is_active=1 AND p.stock>0
         AND (
-          (DATEDIFF(DATE(p.expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1 AND COALESCE(p.discount_percent,0) > 0)
+          (DATEDIFF(DATE(p.expiry_date), CURDATE()) = 1 AND COALESCE(p.discount_percent,0) > 0)
           OR ${promoActiveExpr}
         )
       ORDER BY promo_active DESC, p.promo_end ASC, p.expiry_date ASC LIMIT 12
@@ -2063,8 +2063,11 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
     const today = getTodayBangkok();
     const todayStr = dateToString(today);
 
+    // 🐛 FIX (root cause) — เดิม CONVERT_TZ(...,'+00:00','+07:00') แปลงเวลาซ้ำ (opened_at เป็น
+    // TIMESTAMP + session tz +07:00 จัดการให้แล้ว) บวก 7 ชม.เกิน ทำให้ช่วง 17:00–23:59 ทุกวัน เช็ค
+    // กะซ้อนพลาด (มองว่า opened_at อยู่ "พรุ่งนี้" เทียบกับ todayStr ที่ถูกต้อง) เปิดกะซ้ำได้โดยระบบไม่รู้
     const [existing] = await pool.query(
-      "SELECT id FROM shifts WHERE cashier_id = ? AND DATE(CONVERT_TZ(opened_at, '+00:00', '+07:00')) = ? AND status = 'OPEN'",
+      "SELECT id FROM shifts WHERE cashier_id = ? AND DATE(opened_at) = ? AND status = 'OPEN'",
       [cashier_id, todayStr]
     );
 
@@ -2820,10 +2823,10 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
         SELECT id, name, price, stock, category_id, is_reward_item, points_required, expiry_date, discount_percent, promo_percent, promo_start, promo_end,
                GREATEST(
                  CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
-                        AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
+                        AND CURDATE() BETWEEN promo_start AND promo_end
                       THEN promo_percent ELSE 0 END,
                  CASE WHEN expiry_date IS NOT NULL
-                        AND DATEDIFF(DATE(expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+                        AND DATEDIFF(DATE(expiry_date), CURDATE()) = 1
                       THEN COALESCE(discount_percent,0) ELSE 0 END
                ) AS best_discount_percent
         FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
@@ -4127,10 +4130,10 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
         SELECT id, name, price, stock, category_id,
                GREATEST(
                  CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
-                        AND DATE(CONVERT_TZ(NOW(),'+00:00','+07:00')) BETWEEN promo_start AND promo_end
+                        AND CURDATE() BETWEEN promo_start AND promo_end
                       THEN promo_percent ELSE 0 END,
                  CASE WHEN expiry_date IS NOT NULL
-                        AND DATEDIFF(DATE(expiry_date), DATE(CONVERT_TZ(NOW(),'+00:00','+07:00'))) = 1
+                        AND DATEDIFF(DATE(expiry_date), CURDATE()) = 1
                       THEN COALESCE(discount_percent,0) ELSE 0 END
                ) AS best_discount_percent
         FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
