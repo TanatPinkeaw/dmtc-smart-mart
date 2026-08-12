@@ -1,3 +1,14 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/authTokens.js — ออก/ตรวจ JWT token + ตั้ง/ล้าง cookie สำหรับระบบ login
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: รวม logic การออก token ไว้ที่เดียว (server.js กับ memberController.js เรียกใช้ร่วมกัน)
+//   • generateAccessToken(user, csrf) — JWT อายุ 8 ชม. ฝัง role/csrf/jti ไว้ในตัว
+//   • generateRefreshToken(user) — JWT อายุ 7 วัน (type:'refresh') ไว้ต่ออายุ session
+//   • setAuthCookies/clearAuthCookies — เซ็ต/ลบ cookie httpOnly (access_token + refresh_token)
+//   • verifyRefreshToken — ตรวจ refresh token ตอนขอ token ใหม่
+// จุดสำคัญ: token เป็น httpOnly cookie (JS อ่านไม่ได้ กัน XSS ขโมย); cookie policy (secure/sameSite/
+//   domain) อ่านจาก config.js — ดู setAuthCookies
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ ดึงออกจาก server.js — เดิม generateAccessToken/generateRefreshToken/setAuthCookies/
 // clearAuthCookies/verifyRefreshToken เป็น local function ฝังอยู่ใน server.js เอง เรียกใช้ได้แค่
 // ภายในไฟล์เดียวกัน พอต้องออก token ให้ endpoint สมัครสมาชิกผ่าน LINE (memberController.js ใหม่)

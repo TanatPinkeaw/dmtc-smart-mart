@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 config/config.js — ศูนย์รวมค่าตั้งค่า (config) ของ backend ทั้งหมดที่เดียว
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: อ่านค่าจาก .env (process.env) มา validate + ใส่ default แล้ว export เป็น object
+//   ให้ไฟล์อื่นทั้งระบบ require ไปใช้ — ไฟล์อื่น "ห้าม" อ่าน process.env ตรงๆ ต้องผ่านที่นี่ที่เดียว
+// จุดสำคัญ: ถ้า env จำเป็น (เช่น JWT_SECRET) หาย → พิมพ์ error + process.exit(1) กันบูตทั้งที่ตั้งค่าไม่ครบ;
+//   ค่า COOKIE_SAMESITE/COOKIE_DOMAIN คุมพฤติกรรม cookie ข้ามโดเมน (ดูคอมเมนต์ตรงจุดนั้น)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Single source of truth for backend config — replaces scattered process.env.X reads
 // across server.js/db.js/config/cloudinary.js/mailer.js/scripts/dailyReport.js.
 //

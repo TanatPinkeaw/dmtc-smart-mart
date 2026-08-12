@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 config/multer.js — ตั้งค่าตัวรับไฟล์อัปโหลด (middleware multer) สำหรับ route ต่างๆ
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: สร้าง multer instance แบบ memoryStorage (ไฟล์อยู่ใน RAM = req.file.buffer ไม่แตะดิสก์)
+//   แล้ว route ค่อยส่ง buffer ขึ้น Cloudinary เอง (ดู config/cloudinary.js) — จำกัดเฉพาะไฟล์รูป + ขนาดสูงสุด
+// export: slipUpload/shiftPhotoUpload (10MB), profilePhotoUpload (5MB), getBangkokDate/getBangkokTime
+//   (helper วันที่-เวลาไทย ใช้ตั้งชื่อไฟล์)
+// ═══════════════════════════════════════════════════════════════════════════════════
 const multer = require('multer');
 const path = require('path');
 
