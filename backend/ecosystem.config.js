@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 ecosystem.config.js — ไฟล์ตั้งค่า PM2 (ตัวคุมให้ backend รันค้างตลอด) สำหรับ deploy บนเครื่องเซิร์ฟเวอร์
+// ทำอะไร: บอก PM2 ว่ารัน server.js ชื่อ dmtc-mart-api, auto-restart ถ้าแครช/ใช้แรมเกิน, เก็บ log ที่ logs/
+//   ใช้ตอน on-prem/VPS (คำสั่ง: pm2 start ecosystem.config.js) — บน Render/cloud ไม่ได้ใช้ไฟล์นี้
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ DEPLOY — ตั้งค่า PM2 ให้รัน backend แบบ auto-restart + เก็บ log
 // ใช้: pm2 start ecosystem.config.js  แล้ว  pm2 save && pm2 startup
 module.exports = {

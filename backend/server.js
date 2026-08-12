@@ -1,3 +1,26 @@
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// 📄 server.js — ไฟล์หลักของ backend (จุดเริ่มรัน + รวม endpoint ส่วนใหญ่ของทั้งระบบ)
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// ทำอะไร: สร้าง Express app + Socket.io (realtime) แล้วตั้ง middleware กลาง + ประกาศ API endpoint
+//   เกือบทั้งหมด (ขาย/สั่งจอง/สินค้า/กะ/สมาชิก/ตั้งค่า/สำรองข้อมูล ฯลฯ) จบในไฟล์เดียว ~5,400 บรรทัด
+//   (บาง endpoint แยกออกไปเป็นโมดูลแล้ว: /api/reports, /api/members, /api/auth/line-login, /api/line,
+//   /api/admin/reset — ดู src/routes/*)
+//
+// ลำดับการทำงานของทุก request (middleware chain — เรียงตามลำดับที่โค้ดประกาศ):
+//   1) helmet + cors + express.json (แนบ rawBody ไว้ให้ LINE/PromptPay webhook ตรวจ signature)
+//   2) attach req.io (ให้ทุก handler ยิง socket event ได้)
+//   3) authenticateToken — อ่าน JWT จาก cookie (หรือ Bearer header) → เซ็ต req.user ; ข้าม PUBLIC_PATHS
+//   4) requirePasswordChange — บังคับเปลี่ยนรหัสก่อนใช้งานถ้า must_change_password
+//   5) requireCsrf — เช็ค X-CSRF-Token กับ claim ใน JWT (เฉพาะ POST/PUT/DELETE)
+//   6) → เข้า route handler ; ปิดท้ายด้วย error handler กลาง (app.use ตัวสุดท้าย)
+//
+// จุดสำคัญที่ควรรู้ก่อนแก้:
+//   • เงินคิดเป็น "สตางค์" (integer) เสมอ ผ่าน utils/money.js กัน float เพี้ยน
+//   • วันที่/เวลา: คอลัมน์ TIMESTAMP + pool ตั้ง tz +07:00 → ใช้ NOW()/CURDATE()/คอลัมน์ตรงๆ
+//     "ห้าม" ใส่ CONVERT_TZ ซ้ำ (เคยเป็นบั๊กเพี้ยนวัน/ชั่วโมงมาแล้ว)
+//   • ขาย/สั่งจองใช้ transaction + SELECT ... FOR UPDATE ล็อกแถวสินค้า/สมาชิก กันแข่งกันตัดสต๊อก/แลกแต้มเกิน
+//   • สิทธิ์คุมด้วย requireRole(...) ต่อ endpoint (MEMBER/CASHIER/MANAGER/ADMIN)
+// ═══════════════════════════════════════════════════════════════════════════════════════════
 const express = require('express');
 const helmet = require('helmet'); // ⭐️ SECURITY FIX (#8) — security headers
 const cors = require('cors');

@@ -1,3 +1,10 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 tests/smokeTest.js — เทสภาพรวมขั้นต่ำ (พิสูจน์ว่า flow ขายหลักยังทำงาน) รันใน CI
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: รันจริงกับ server + DB จริง (ไม่ mock) ไล่ flow: login → checkout ตอนไม่เปิดกะต้องโดนบล็อก →
+//   เปิดกะ → checkout ผ่าน → ปิดกะ — ถ้าใครแก้โค้ดแล้วเผลอทำ flow นี้พัง จะ fail ที่นี่แทนที่จะไปพังหน้าร้าน
+// รันด้วย: node tests/smokeTest.js (GitHub Actions รันให้อัตโนมัติทุก push — ดู .github/workflows/ci.yml)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Minimal end-to-end smoke test — Phase 3 (foundational safety net).
 //
 // Proves the core cashier flow works against a REAL server + REAL database (not mocks):
