@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 services/lineService.js — ส่งข้อความ/แจ้งเตือนผ่าน LINE Messaging API + ตั้ง Rich Menu
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: ยิง push message ไปหาผู้ใช้/กลุ่ม LINE (เช่น แจ้งสต๊อกใกล้หมด, ออเดอร์พร้อมรับ, ยืนยันสมัคร)
+//   + สร้าง/ตั้ง Rich Menu — ใช้ fetch ยิง REST ของ LINE ตรงๆ ไม่พึ่ง SDK
+// จุดสำคัญ: fail-soft — ถ้าไม่ตั้ง LINE token (เช่น dev) จะ log แล้วคืนค่าเฉยๆ ไม่ throw (แจ้งเตือนล่ม
+//   ต้องไม่ทำให้ขายของ/ปิดกะพัง); "ห้าม" เรียกใน DB transaction — เรียกหลัง commit เสมอ
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Day 3 — LINE Messaging API integration. Push-only (no webhook receiver in this app), so this
 // uses plain `fetch` against LINE's REST push endpoint directly rather than pulling in
 // @line/bot-sdk as a dependency for a single call — same "don't add a package for one HTTP call"

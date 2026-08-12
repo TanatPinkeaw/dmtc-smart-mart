@@ -1,3 +1,10 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 services/mailer.js — ส่งอีเมลผ่าน SMTP (ใช้ไลบรารี nodemailer)
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: sendMail({to, subject, ...}) ส่งอีเมลจริงผ่าน SMTP — ใช้ส่งรายงานสรุปยอดประจำวัน + ไฟล์ backup
+// จุดสำคัญ: fail-soft — ถ้าไม่ตั้ง SMTP_* (dev/ยังไม่ตั้งบน production) จะ log warning แล้วคืน false ไม่ throw
+//   (mail ล่มต้องไม่ทำให้ cron/route พัง); ค่า SMTP อ่านจาก config.js
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 1 — D4: shared SMTP mailer.
 //
 // This is the first feature in this codebase that needs to send real email (password reset

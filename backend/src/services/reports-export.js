@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 services/reports-export.js — ดึงข้อมูล + สร้างไฟล์รายงาน Excel/CSV (สรุปผู้บริหาร/บัญชีสหกรณ์)
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: fetchLineItems() ดึงรายการขายทั้งหมด (POS+พรีออเดอร์) ครั้งเดียว, aggregate() รวมเป็น KPI/
+//   สินค้าขายดี/แยกหมวดหมู่, buildWorkbook()/buildAccountingWorkbook() สร้างไฟล์ .xlsx ด้วย exceljs,
+//   buildCsv() สร้าง CSV — reportController.js เรียกใช้ที่ endpoint /reports/executive-export ฯลฯ
+// จุดสำคัญ: คำนวณ KPI ใน JS จากผลลัพธ์ query เดียว (ไม่ยิง DB ซ้ำหลายรอบ) เหมาะกับสเกลสหกรณ์
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase 4 Part 2 — Executive Summary export (Excel + CSV).
 //
 // Reuses the same combined sales+orders query pattern already established in

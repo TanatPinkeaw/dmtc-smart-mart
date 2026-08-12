@@ -1,3 +1,10 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 scripts/dailyReport.js — สร้าง+ส่งอีเมลรายงานสรุปยอดประจำวัน (กระทบยอดเงินสด/กะ)
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: sendDailyReport(date) รวมข้อมูลของวัน (กะที่ปิด, ยอดขายรวม, เงินสด, เงินขาด/เกิน) แล้วส่ง
+//   อีเมลหา ADMIN_EMAIL ผ่าน mailer.js — รันอัตโนมัติทุกวัน 6 โมงเช้าผ่าน cron (ใน server.js) หรือกดยิงเอง
+//   ผ่าน POST /api/reports/daily/send (ADMIN) เพื่อทดสอบโดยไม่ต้องรอ cron
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 1 — D4: daily reconciliation report — shifts closed, total sales, cash, variance.
 // Runs via cron at 6am (server.js, before the shop opens) and mails ADMIN_EMAIL. Also reachable
 // manually via POST /api/reports/daily/send (ADMIN only) for testing without waiting for 6am.
