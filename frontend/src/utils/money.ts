@@ -30,3 +30,22 @@ export function sumBahtAsSatang(bahtValues: (number | string)[]): number {
   const totalSatang = bahtValues.reduce((sum: number, v) => sum + toSatang(v), 0);
   return fromSatang(totalSatang);
 }
+
+// ⭐️ ราคาต่อชิ้นหลังหักส่วนลดระดับสินค้า (โปรช่วงวันที่ หรือ ใกล้หมดอายุ) — mirror ตรรกะฝั่ง backend
+// เป๊ะ: best_discount_percent = GREATEST(promo_percent ถ้าโปร active, discount_percent ถ้าใกล้หมดอายุ)
+// แล้ว itemPrice -= Math.round(itemPrice * pct/100) (ดู POST /api/sales/checkout + POST /api/orders)
+// ใช้ที่เดียวทั้งการ์ดสินค้า (โชว์ราคา) และตอน addToCart (ราคาที่คิดจริง) กันโชว์กับคิดเงินไม่ตรงกัน
+// หมายเหตุ: ส่วนลดกลุ่มสมาชิก/แลกแต้ม/โปรทั้งบิล ไม่รวมในนี้ (backend คิดแยกตอน checkout) — นี่แค่
+// ส่วนลด "ระดับสินค้า" ที่ทุกคนเห็นเท่ากันบนการ์ด
+export function itemLevelDiscountPercent(product: any): number {
+  const nearExpiryPct = product?.expiry_status === 'near_expiry' ? (Number(product?.discount_percent) || 0) : 0;
+  const promoPct = product?.promo_active ? (Number(product?.promo_percent) || 0) : 0;
+  return Math.max(nearExpiryPct, promoPct);
+}
+
+export function effectiveUnitPrice(product: any): number {
+  const price = Number(product?.price) || 0;
+  const pct = itemLevelDiscountPercent(product);
+  if (pct <= 0) return price;
+  return fromSatang(toSatang(price) - Math.round(toSatang(price) * pct / 100));
+}

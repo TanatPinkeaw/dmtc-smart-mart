@@ -6,7 +6,7 @@ import Swal from '../swal';
 import { useSocket } from '../SocketContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
-import { toSatang, fromSatang, lineTotalSatang } from '../utils/money'; // ⭐️ Sprint 1 — B3
+import { toSatang, fromSatang, lineTotalSatang, effectiveUnitPrice } from '../utils/money'; // ⭐️ Sprint 1 — B3
 import { validatePaymentSlip } from '../validators/fileValidator'; // ⭐️ Sprint 2 — B9
 import { PromoPopularRow } from '../components/preorder/PromoPopularRow';
 import { ProductGrid } from '../components/preorder/ProductGrid';
@@ -282,7 +282,10 @@ export default function PreOrder() {
         }
         return prev.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [...prev, { ...product, quantity: 1 }];
+      // 🐛 FIX — เดิมเก็บ product.price เต็ม ไม่หักส่วนลดระดับสินค้า (ใกล้หมดอายุ/โปรช่วงวันที่) ทำให้
+      // ตะกร้า+ยอดรวมโชว์ราคาเต็ม ทั้งที่ backend คิดส่วนลดให้จริงตอน checkout (best_discount_percent)
+      // ยอดที่ลูกค้าเห็นเลยไม่ตรงกับที่จ่ายจริง — เก็บราคาต่อชิ้นหลังหักส่วนลดระดับสินค้าให้ตรงกับ POS
+      return [...prev, { ...product, price: effectiveUnitPrice(product), quantity: 1 }];
     });
   };
 

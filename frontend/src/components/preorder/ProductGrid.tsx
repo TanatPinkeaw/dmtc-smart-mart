@@ -1,4 +1,5 @@
 import { PackagePlus, PackageSearch } from 'lucide-react';
+import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money';
 
 interface Category { id: number; name: string; }
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
@@ -41,27 +42,42 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
         </div>
       ) : (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {filtered.map((product) => (
+        {filtered.map((product) => {
+          const pAny = product as any;
+          // 🐛 FIX — เดิม preorder โชว์เฉพาะส่วนลดโปรช่วงวันที่ (promo_active) ไม่โชว์ "ใกล้หมดอายุ" เลย
+          // ต่างจาก POS. ใช้ helper กลางเดียวกับตอน addToCart (best ของ โปร กับ ใกล้หมดอายุ) ให้ราคาบน
+          // การ์ด = ราคาที่คิดจริง = ที่ backend หัก ตรงกันทั้งหมด
+          const discountPct = itemLevelDiscountPercent(pAny);
+          const nearExpiry = pAny.expiry_status === 'near_expiry';
+          const finalPrice = effectiveUnitPrice(pAny);
+          return (
           // ⭐️ FIX: เปลี่ยนการ์ดให้เหมือนหน้า POS ทั้งหมด — ขนาด/ระยะห่างเท่ากัน + มีปุ่ม "เพิ่มลงตะกร้า"
           // ชัดเจนแทนการต้องแตะทั้งการ์ด (ปุ่มมี stopPropagation กัน addToCart ยิงซ้อน 2 ครั้งตอนกดปุ่ม)
-          <div key={product.id} onClick={() => onAddToCart(product)} className="relative overflow-hidden bg-white border border-brand-border rounded-3xl p-3 shadow-md transition-all duration-150 flex flex-col items-center cursor-pointer hover:border-brand-mid hover:shadow-lg hover:-translate-y-0.5 active:scale-95 h-full">
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />
+          <div key={product.id} onClick={() => onAddToCart(product)} className={`relative overflow-hidden bg-white border rounded-3xl p-3 shadow-md transition-all duration-150 flex flex-col items-center cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95 h-full ${nearExpiry ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500' : 'border-brand-border hover:border-brand-mid'}`}>
+            {!nearExpiry && <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />}
             <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2 flex items-center justify-center overflow-hidden">
               {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-brand-mid opacity-50" />}
             </div>
             <p className="text-xs font-medium text-gray-800 text-center line-clamp-2 mb-1">{product.name}</p>
 
+            {/* ⭐️ badge ใกล้หมดอายุ (เหมือน POS) */}
+            {nearExpiry && (
+              <div className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
+                🎁 ใกล้หมดอายุ - {pAny.discount_percent}% OFF
+              </div>
+            )}
+
             <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
-              {(product as any).promo_active ? (
-                <p className="text-sm font-bold text-brand flex items-baseline gap-1">
-                  ฿{(Number(product.price) * (1 - (Number((product as any).promo_percent) || 0) / 100)).toFixed(2)}
+              {discountPct > 0 ? (
+                <p className={`text-sm font-bold flex items-baseline gap-1 ${nearExpiry ? 'text-red-600' : 'text-brand'}`}>
+                  ฿{finalPrice.toFixed(2)}
                   <span className="text-[9px] text-gray-400 line-through font-normal">฿{Number(product.price).toFixed(2)}</span>
                 </p>
               ) : (
                 <p className="text-base font-bold text-brand">฿{Number(product.price).toFixed(2)}</p>
               )}
-              {(product as any).promo_active
-                ? <span className="shrink-0 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-bold">-{(product as any).promo_percent}%</span>
+              {discountPct > 0
+                ? <span className={`shrink-0 text-[10px] text-white px-1.5 py-0.5 rounded-md font-bold ${nearExpiry ? 'bg-yellow-500' : 'bg-amber-500'}`}>-{discountPct}%</span>
                 : <p className="shrink-0 text-[10px] bg-brand-bg text-brand px-1.5 py-0.5 rounded-md font-bold">เหลือ {product.stock}</p>}
             </div>
 
@@ -72,7 +88,8 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
               เพิ่มลงตะกร้า
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
       )}
     </>
