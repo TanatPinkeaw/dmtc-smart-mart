@@ -71,6 +71,28 @@ export default function POS() {
   const navigate = useNavigate();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
+  // 🐛 FIX (ช่องโหว่) — /pos guard เดิม (RequireCashier ใน App.tsx) เช็คแค่ role ไม่เช็คว่าเปิดกะหรือยัง
+  // แคชเชียร์จึงเข้าหน้า POS ได้ทั้งที่ยังไม่เปิดกะ (ผ่าน tab ใน bottom nav หรือพิมพ์ URL ตรง) — backend
+  // กัน checkout อยู่แล้ว แต่ไม่ควรเปิดหน้าขายได้เลย. เช็ค /shifts/current ตอน mount ถ้าไม่มีกะเปิด →
+  // เด้งไปหน้า /shift ให้เปิดกะก่อน. fail-open ถ้า API ล่ม (ปล่อยให้ backend กัน checkout เอง) เหมือน
+  // logic เดียวกับ Home.tsx (เรียกไม่ได้ = ไม่ล็อก)
+  const [shiftChecked, setShiftChecked] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/shifts/current?cashier_id=${user.id}`)
+      .then(res => {
+        if (cancelled) return;
+        if (res.data?.id) { setShiftChecked(true); return; }
+        Swal.fire({
+          icon: 'warning', title: 'ยังไม่ได้เปิดกะการขาย',
+          text: 'ต้องเปิดกะก่อนถึงจะเข้าหน้าขายได้ กรุณาไปที่หน้าจัดการกะการขายเพื่อเปิดกะ',
+          confirmButtonText: 'ไปเปิดกะ', allowOutsideClick: false,
+        }).then(() => navigate('/shift'));
+      })
+      .catch(() => { if (!cancelled) setShiftChecked(true); });
+    return () => { cancelled = true; };
+  }, [user.id, navigate]);
+
   // ── Handlers (unchanged) ──────────────────────────────────────────────────
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault(); setRegLoading(true);
@@ -422,6 +444,15 @@ export default function POS() {
   };
 
   // ── JSX ──────────────────────────────────────────────────────────────────
+  // 🐛 FIX (ช่องโหว่) — ยังไม่ยืนยันกะ ไม่ render UI ขาย (กันแฟลชหน้า POS ก่อนเด้งไป /shift)
+  if (!shiftChecked) {
+    return (
+      <div className="flex h-full items-center justify-center bg-brand-bg">
+        <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <>
       {/* ⭐️ Sprint 2 — B6: Offline Banner */}
