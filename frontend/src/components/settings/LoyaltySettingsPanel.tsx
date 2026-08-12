@@ -1,3 +1,6 @@
+// 📄 components/settings/LoyaltySettingsPanel.tsx — แผงตั้งค่าอัตราแต้มสะสม (แท็บในหน้า Settings)
+//    ทำอะไร: ตั้ง "กี่บาทได้ 1 แต้ม" (earn) + "1 แต้ม = กี่บาท" (redeem) + ส่วนลด default ต่อกลุ่มสมาชิก
+//    บันทึกแล้วมีผลทันทีทุกเครื่อง POS (checkout อ่านค่าจาก settings ทุกครั้ง ไม่ต้องรีสตาร์ท)
 // ⭐️ Part 2 — แผงตั้งค่าอัตราแต้มสะสม + ส่วนลด default ของแต่ละกลุ่ม (ADMIN + MANAGER)
 //   บันทึกแล้วมีผลทันทีทุกเครื่อง POS (checkout อ่านค่าจาก settings ต่อรายการ ไม่ต้อง restart)
 import { useState, useEffect } from 'react';

@@ -1,3 +1,5 @@
+// 📄 components/layout/NavItem.tsx — ปุ่มลิงก์เมนูย่อย (ไฮไลต์ตอน active) ใช้ซ้ำใน Sidebar + BottomNav
+//    export NavItem (แนวตั้ง sidebar) และ MobNavItem (แท็บล่างจอ) — จัดสไตล์ active/default ที่เดียว
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 

@@ -1,3 +1,5 @@
+// 📄 components/layout/MobileMenuDrawer.tsx — ลิ้นชักเมนู (mobile) ที่เลื่อนออกมาเมื่อกดปุ่ม Menu
+//    ทำอะไร: แสดงลิงก์ครบทุกกลุ่มตาม role (ที่แถบล่างใส่ไม่หมด) + ปุ่มออกจากระบบ
 import { X, LogOut, ClipboardList } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { STAFF_ITEMS, STORE_ITEMS_DRAWER, SYSTEM_ITEMS, MEMBER_ITEMS } from './navConfig';

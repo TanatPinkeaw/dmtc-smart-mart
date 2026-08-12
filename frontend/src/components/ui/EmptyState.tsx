@@ -1,3 +1,5 @@
+// 📄 components/ui/EmptyState.tsx — กล่องแสดง "ไม่มีข้อมูล" (ไอคอน + ข้อความ) ใช้ตอนลิสต์ว่าง
+//    เช่น ตะกร้าว่าง/ไม่พบสินค้า — แทนพื้นที่ว่างเปล่าที่ผู้ใช้ไม่รู้ว่าเกิดอะไร
 import type { ReactNode } from 'react';
 
 interface EmptyStateProps {

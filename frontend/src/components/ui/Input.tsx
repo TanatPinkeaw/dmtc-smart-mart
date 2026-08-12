@@ -1,3 +1,4 @@
+// 📄 components/ui/Input.tsx — ช่องกรอกข้อความมาตรฐาน (รองรับ error message ใต้ช่อง) ใช้ซ้ำทั้งฟอร์ม
 import type { InputHTMLAttributes } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {

@@ -1,3 +1,5 @@
+// 📄 components/layout/Sidebar.tsx — เมนูด้านซ้าย (desktop) แสดงลิงก์ตาม role ของผู้ใช้
+//    ทำอะไร: รวมกลุ่มลิงก์จาก navConfig (MEMBER/STAFF/STORE/SYSTEM) โชว์เฉพาะที่ role มีสิทธิ์ + ปุ่มออกจากระบบ
 import { Bell, Store, ClipboardList, LogOut, Home } from 'lucide-react';
 import { NavItem } from './NavItem';
 import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS } from './navConfig';

@@ -1,3 +1,4 @@
+// 📄 components/ui/Modal.tsx — กล่อง popup กลางจอมาตรฐาน (มีปุ่มปิด/กดพื้นหลังปิด) ใช้ครอบเนื้อหา modal ต่างๆ
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';

@@ -1,3 +1,5 @@
+// 📄 components/ui/Button.tsx — ปุ่มมาตรฐานของแอป (variant: primary/secondary/danger/ghost, ขนาด sm/md/lg,
+//    มี loading spinner ในตัว) ใช้ซ้ำแทนการเขียน <button> ใหม่ทุกที่ ให้หน้าตาปุ่มเหมือนกันทั้งระบบ
 import { Loader2 } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 

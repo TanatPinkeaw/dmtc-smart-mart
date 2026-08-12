@@ -1,3 +1,5 @@
+// 📄 components/common/PhotoLightbox.tsx — เปิดดูรูปใหญ่แบบ modal เต็มจอ (รูปเข้างาน/ปิดกะ/สลิป)
+//    ทำอะไร: คลิกรูปแล้วเด้ง modal แสดงรูปใหญ่ (ใช้ AuthImage โหลดรูปที่ต้อง auth) — แทน window.open ที่มือถือบล็อก
 // ⭐️ Lightbox แสดงรูปยืนยันสถานที่ (เข้า/ออกงาน, ปิดกะ ฯลฯ) แบบ modal ในหน้าเดียว
 //   แทนที่ openAuthImage (window.open blob) ที่มือถือหลายรุ่นบล็อก/เปิดแท็บเปล่า — ใช้ AuthImage
 //   เดิมที่มีอยู่แล้ว (จัดการ Cloudinary URL เต็ม vs /uploads path ที่ต้องแนบ JWT ผ่าน /media ให้เอง)

@@ -1,3 +1,6 @@
+// 📄 components/common/ErrorBoundary.tsx — กันจอขาวทั้งแอปเมื่อ component ใด throw ตอน render
+//    ทำอะไร: ถ้ามี error หลุดตอน render (เช่น undefined.property) จะจับไว้แล้วโชว์หน้า fallback +
+//    ปุ่มรีเฟรช แทนที่จะ unmount ทั้งแอปเป็นจอขาว — ห่อ <App/> ไว้ที่ main.tsx
 // ⭐️ Sprint 0 — B1: React Error Boundary. Class components ยังเป็นวิธีเดียวที่ React รองรับ
 // error boundary (ยังไม่มี hook equivalent ที่ทำงานเหมือนกันทุกกรณี) — ก่อนหน้านี้ error ที่ throw
 // ระหว่าง render (เช่น undefined.property, localStorage เพี้ยนแล้วโค้ดเก่าไม่ได้กัน) ทำให้ทั้งแอป

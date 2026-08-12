@@ -1,3 +1,5 @@
+// 📄 components/layout/MobileBottomNav.tsx — แถบเมนูล่างจอ (mobile) สำหรับ staff/cashier
+//    ทำอะไร: โชว์แท็บลัดตาม role (CASHIER→POS, staff→สรุปยอด, + เมนู/แจ้งเตือน/Home) + ปุ่มเปิด drawer
 import { Link } from 'react-router-dom';
 import { Bell, Store, Menu, User, Home, ShoppingBag, LayoutDashboard } from 'lucide-react';
 import { MobNavItem } from './NavItem';

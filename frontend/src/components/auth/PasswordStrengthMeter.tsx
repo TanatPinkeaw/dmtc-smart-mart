@@ -1,3 +1,5 @@
+// 📄 components/auth/PasswordStrengthMeter.tsx — แถบสี + ข้อความบอกความแข็งแรงของรหัสผ่านที่กำลังพิมพ์
+//    ทำอะไร: รับ password → เรียก validatePasswordStrength แล้วโชว์ระดับ (อ่อน/พอใช้/ดี/แข็งแรง) + สิ่งที่ต้องแก้
 import { validatePasswordStrength } from '../../validators/passwordValidator';
 
 interface PasswordStrengthMeterProps {

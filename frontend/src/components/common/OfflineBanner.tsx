@@ -1,3 +1,5 @@
+// 📄 components/common/OfflineBanner.tsx — แถบเตือนตอนไม่มีเน็ต / มีบิลค้างรอซิงค์ (ใช้ในหน้า POS)
+//    แถบแดง = ออฟไลน์, แถบเหลือง = มีบิลค้าง pendingCount ใบรอ sync ขึ้น server
 // ⭐️ Sprint 2 — B6: Offline Handling — Banner component to show when offline
 // ⭐️ Update — POS ออฟไลน์: เพิ่ม pendingCount ให้เห็นด้วยว่ามีบิลค้างซิงค์กี่ใบ ไม่ว่าจะยังออฟไลน์อยู่
 //   หรือกลับมาออนไลน์แล้วแต่ sync ยังไม่เสร็จ (แถบเหลือง เตือนเบากว่าแถบแดง "ไม่มีเน็ต")

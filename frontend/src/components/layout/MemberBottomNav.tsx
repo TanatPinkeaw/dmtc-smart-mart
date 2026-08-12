@@ -1,3 +1,5 @@
+// 📄 components/layout/MemberBottomNav.tsx — แถบเมนูล่างจอสำหรับ "สมาชิก" (ร้านค้า/บัตรสมาชิก)
+//    แยกจาก MobileBottomNav ของ staff — เมนูสมาชิกมีแค่ 2 อย่าง (สั่งจอง + บัตรสมาชิก/แต้ม)
 import { NavLink } from 'react-router-dom';
 import { Store, IdCard } from 'lucide-react';
 

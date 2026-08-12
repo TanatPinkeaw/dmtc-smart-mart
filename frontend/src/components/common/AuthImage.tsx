@@ -1,3 +1,6 @@
+// 📄 components/common/AuthImage.tsx — แสดงรูปที่ต้องล็อกอินก่อนถึงจะดูได้ (สลิป/รูปเข้างาน)
+//    ทำอะไร: โหลดรูปผ่าน api (แนบ cookie อัตโนมัติ) เป็น blob แล้วแปลงเป็น object URL มาแสดง — เพราะ
+//    <img src> ธรรมดาไม่แนบ auth = โดน 401; รูป Cloudinary (URL เต็ม) แสดงตรงได้ ไม่ต้องผ่าน api
 import { useEffect, useState } from 'react';
 import api from '../../api';
 

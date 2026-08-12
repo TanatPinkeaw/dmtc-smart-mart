@@ -1,3 +1,5 @@
+// 📄 components/layout/navConfig.ts — รายการเมนู (label/icon/ลิงก์) แยกตามกลุ่มสิทธิ์ ใช้ร่วม Sidebar+Drawer
+//    export MEMBER_ITEMS/STAFF_ITEMS/STORE_ITEMS_*/SYSTEM_ITEMS — แก้เมนูที่เดียว มีผลทั้ง sidebar และ drawer
 import {
   LayoutDashboard, Boxes, Settings, CalendarClock, BarChart3,
   ClipboardCheck, ShoppingBag, PiggyBank, Database, FileSpreadsheet,

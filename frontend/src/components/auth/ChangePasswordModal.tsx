@@ -1,3 +1,5 @@
+// 📄 components/auth/ChangePasswordModal.tsx — กล่องเปลี่ยนรหัสผ่าน (บังคับตอนใช้รหัสชั่วคราวครั้งแรก)
+//    ทำอะไร: ฟอร์มกรอกรหัสเดิม+รหัสใหม่ (มีแถบวัดความแข็งแรง) แล้วยิง PUT /users/:id/change-password
 import { useState } from 'react';
 import Swal from '../../swal';
 import api from '../../api';
