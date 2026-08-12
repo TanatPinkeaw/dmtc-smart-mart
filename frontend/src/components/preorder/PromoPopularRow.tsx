@@ -1,6 +1,22 @@
 import { PackagePlus } from 'lucide-react';
+import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money';
 
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
+
+// ⭐️ ราคา + ราคาขีดฆ่า ใช้ helper กลางเดียวกับ ProductGrid/addToCart (best ของ โปร กับ ใกล้หมดอายุ)
+// กันโชว์ราคาเต็มทั้งที่ badge บอกลด (ราคาลดจริงตอนคิดเงินอยู่แล้ว — นี่แค่ให้ display ตรงกัน)
+function PriceLine({ p }: { p: any }) {
+  const pct = itemLevelDiscountPercent(p);
+  if (pct > 0) {
+    return (
+      <p className="text-xs font-bold text-brand flex items-baseline gap-1">
+        ฿{effectiveUnitPrice(p).toFixed(2)}
+        <span className="text-[8px] text-gray-400 line-through font-normal">฿{Number(p.price).toFixed(2)}</span>
+      </p>
+    );
+  }
+  return <p className="text-xs font-bold text-brand">฿{Number(p.price).toFixed(2)}</p>;
+}
 
 interface PromoPopularRowProps {
   selectedCategory: number | 'ALL';
@@ -37,12 +53,12 @@ export function PromoPopularRow({ selectedCategory, productSearch, storePromos, 
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {highlights.promo.map(p => (
                   <div key={`promo-${p.id}`} onClick={() => onAddToCart(p)} className="shrink-0 w-28 bg-white border border-amber-200 rounded-3xl p-2 shadow-md cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all duration-150 relative">
-                    <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{(p as any).promo_active ? (p as any).promo_percent : ((p as any).discount_percent || 40)}%</span>
+                    <span className="absolute top-1 left-1 z-10 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">-{itemLevelDiscountPercent(p)}%</span>
                     <div className="w-full aspect-square bg-brand-bg rounded-lg mb-1 flex items-center justify-center overflow-hidden">
                       {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-brand-mid opacity-50" />}
                     </div>
                     <p className="text-[11px] font-medium text-gray-800 line-clamp-1">{p.name}</p>
-                    <p className="text-xs font-bold text-brand">฿{Number(p.price).toFixed(2)}</p>
+                    <PriceLine p={p} />
                   </div>
                 ))}
               </div>
@@ -59,7 +75,7 @@ export function PromoPopularRow({ selectedCategory, productSearch, storePromos, 
                       {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={22} className="text-brand-mid opacity-50" />}
                     </div>
                     <p className="text-[11px] font-medium text-gray-800 line-clamp-1">{p.name}</p>
-                    <p className="text-xs font-bold text-brand">฿{Number(p.price).toFixed(2)}</p>
+                    <PriceLine p={p} />
                   </div>
                 ))}
               </div>
