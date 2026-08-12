@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/getCurrentUser.ts — อ่านข้อมูลผู้ใช้ที่ล็อกอินอยู่จาก localStorage อย่างปลอดภัย
+// ทำอะไร: getCurrentUser() คืน object user (id/role/full_name...) หรือ null ถ้ายังไม่ล็อกอิน/ข้อมูลเสีย
+//   (ห่อ JSON.parse ด้วย try/catch กันจอขาว); getCurrentUserOrRedirect() เด้งไป /login ให้เลยถ้าไม่มี user
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 0 — B2: safe wrapper around localStorage.getItem('user') + JSON.parse.
 // Every page in this app used to do `JSON.parse(localStorage.getItem('user') || '{}')` directly,
 // with no try/catch. If that value is ever corrupted (manual edit, half-written write, browser

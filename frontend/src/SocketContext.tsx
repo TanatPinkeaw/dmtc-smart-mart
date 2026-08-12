@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 SocketContext.tsx — เชื่อมต่อ Socket.io (realtime) แล้วแชร์ให้ทุกหน้าผ่าน React Context
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: เปิด/ปิดการเชื่อมต่อ socket ตามสถานะ login (มี localStorage.user = ต่อ, logout = ตัด) แล้วให้
+//   หน้าอื่นเรียก useSocket() มา listen event realtime (สต๊อกอัปเดต, ออเดอร์ใหม่, สถานะกะ ฯลฯ)
+// จุดสำคัญ: ต่อตรงไป API_ORIGIN (Render) เพราะ Vercel proxy ไม่รองรับ WebSocket; แนบ socket-token
+//   อายุสั้น (ขอจาก /auth/socket-token) แทน cookie เพราะ Safari/LINE ITP บล็อก cookie ตอน handshake
+// ═══════════════════════════════════════════════════════════════════════════════════
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_ORIGIN } from './config'; // ⭐️ DEPLOY FIX — URL จาก env แทนฮาร์ดโค้ด

@@ -1,3 +1,14 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 api.ts — ตัวกลางยิง HTTP ไป backend (axios instance) + จัดการ auth/error อัตโนมัติ
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: สร้าง axios instance ที่ทุกหน้าใช้ยิง API (แนบ cookie + CSRF header ให้เอง) และดัก response:
+//   • 401 → พยายาม refresh token อัตโนมัติ (หรือ LIFF re-login สำหรับ bearer mode) แล้ว retry ให้
+//   • 429 (ยิงบ่อยเกิน) → เด้ง popup + broadcast ให้หน้า login นับถอยหลัง
+//   • session ตายจริง → forceLogout() ล้าง state + เด้ง /login (มี flag กันลูป ping-pong ในแอป LINE)
+//   • offline → เก็บ POST/PUT/DELETE เข้าคิว (requestQueue) ส่งซ้ำเมื่อเน็ตกลับ
+// จุดสำคัญ: token เป็น httpOnly cookie (อ่านจาก JS ไม่ได้) — CSRF/bearer เก็บในตัวแปร JS; setCsrfToken/
+//   setBearerToken ให้หน้า login เรียกหลังล็อกอินสำเร็จ
+// ═══════════════════════════════════════════════════════════════════════════════════
 import axios from 'axios';
 import Swal from './swal';
 import { saveRequestToQueue, getQueue, removeFromQueue, incrementRetries } from './utils/requestQueue';

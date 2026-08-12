@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/money.ts — คำนวณเงินแบบหน่วยสตางค์ (integer) + ราคาต่อชิ้นหลังส่วนลด (ฝั่ง frontend)
+// ทำอะไร: toSatang/fromSatang/lineTotalSatang กันเลขบาททศนิยมเพี้ยน (คู่แฝดของ backend/utils/money.js);
+//   effectiveUnitPrice()/itemLevelDiscountPercent() คิดราคาหลังส่วนลดระดับสินค้า (โปร/ใกล้หมดอายุ) ให้
+//   "ตรงกับสูตร backend เป๊ะ" — ใช้ที่เดียวทั้งการ์ดสินค้า POS/พรีออเดอร์ + ตอน addToCart (โชว์=คิดเงินตรงกัน)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 1 — B3: shared integer-satang money helpers (frontend mirror of backend/src/utils/money.js).
 //
 // Context: the DB stores money as exact DECIMAL(10,2) baht — the float-drift bug (0.1+0.2 style)

@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/liff.ts — ตัวช่วยใช้งาน LIFF (LINE Front-end Framework) ตอนเปิดเว็บในแอป LINE
+// ทำอะไร: ensureLiffInit() init LIFF ครั้งเดียว (กันเรียกซ้ำตอนสลับหน้า), looksLikeLineInApp() เช็คว่า
+//   เปิดในแอป LINE ไหม, getLiffTargetPath()/getLiffExtraParams() ดึง deep-link (?path=) ที่ Rich Menu ส่งมา
+// ใช้โดย: Login.tsx (auto-login), Register.tsx (สมัคร/ผูกบัญชี), api.ts (LIFF re-login ตอน 401)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ LIFF (LINE Front-end Framework) helper — ใช้ npm package @line/liff (ติดตั้งแล้ว)
 // LIFF ID อ่านจาก env (VITE_LIFF_ID) — single source of truth เดียวทั้งแอป (Login.tsx auto-login
 // และ Register.tsx เดิมเคยมี LIFF_ID ของตัวเองแยกต่างหาก คนละ id กัน — รวมเหลือ id เดียวแล้ว)

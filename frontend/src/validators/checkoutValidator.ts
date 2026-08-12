@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 validators/checkoutValidator.ts — ตรวจข้อมูลตะกร้า/การชำระเงินก่อนยิง checkout (ฝั่ง frontend)
+// ทำอะไร: เช็ค payload checkout (cashier_id, items, payment_method, amount_received ฯลฯ) ให้ถูกรูปก่อน
+//   ยิง API — กันส่งข้อมูลผิดไป backend + ปิดปุ่มชำระเงินถ้ายังไม่ครบ (สำเนา logic ของ backend validator)
+// จุดสำคัญ: เป็นแค่ด่านแรกช่วย UX — backend validate ซ้ำเสมอเป็น authority
+// ═══════════════════════════════════════════════════════════════════════════════════
 import Joi from 'joi';
 
 // ⭐️ F5 — duplicated from backend/src/validators/index.js (checkoutValidator), kept in sync manually.

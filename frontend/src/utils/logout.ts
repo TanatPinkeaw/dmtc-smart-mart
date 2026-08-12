@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/logout.ts — ออกจากระบบให้ครบทุกขั้นตอน (จุดเดียวที่ทุกหน้าเรียก)
+// ทำอะไร: performLogout() ยิง POST /auth/logout (ให้ backend เพิกถอน token + ล้าง cookie) แล้วล้าง
+//   localStorage.user + csrf + bearer token ฝั่ง client — ต้องเรียกตัวนี้เสมอ อย่าล้าง localStorage เอง
+//   (ไม่งั้น session ฝั่ง server ยังไม่ถูกเพิกถอน = token ที่หลุดยังใช้ได้)
+// ═══════════════════════════════════════════════════════════════════════════════════
 import api, { setCsrfToken, setBearerToken } from '../api';
 
 // 🐛 FIX (session bug) — หลายหน้า (Shift.tsx, Dashboard.tsx) เคย "ออกจากระบบ" ด้วย

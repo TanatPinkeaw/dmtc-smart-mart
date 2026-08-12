@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 config.ts — ค่าตั้งค่าฝั่ง frontend: URL ของ backend (REST + Socket.io)
+// ทำอะไร: อ่าน VITE_API_URL จาก env แล้ว export API_ORIGIN (โดเมน backend สำหรับ Socket.io ต่อตรง),
+//   API_BASE_URL (prod ใช้ '/api' ผ่าน Vercel proxy กัน cookie โดน ITP; dev ยิงตรง localhost:3000)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ DEPLOY FIX (Phase 2) — เดิม URL backend ฮาร์ดโค้ด 'http://localhost:3000' ทั้ง api.ts + SocketContext
 // พอ deploy จริงจะยิงไป localhost ของเครื่องผู้ใช้เอง (พัง) รวมมาไว้ที่เดียว อ่านจาก env
 // ตั้งค่าใน frontend/.env.production เช่น VITE_API_URL=https://coop.dmtc.ac.th

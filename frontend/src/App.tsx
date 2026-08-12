@@ -1,3 +1,12 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 App.tsx — โครงหลักของเว็บ (frontend): กำหนดทุกเส้นทาง (route) + ยามเช็คสิทธิ์เข้าหน้า
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: ใช้ react-router ประกาศว่า URL ไหนแสดงหน้าไหน (/pos, /pre-order, /dashboard ฯลฯ) และห่อ
+//   แต่ละหน้าด้วย "ยาม" (guard) ตามสิทธิ์: RequireCashier/RequireStaff/RequireManager/RequireAdmin/
+//   RequireMember/RequireAuth — ถ้า role ไม่ถึงจะเด้งออก (กันพิมพ์ URL ตรงเข้าหน้าที่ไม่มีสิทธิ์)
+// จุดสำคัญ: guard เช็คจาก localStorage.user (role) เป็นการกันชั้น UI — ความปลอดภัยจริงอยู่ที่ backend
+//   (requireRole) เสมอ; หน้าที่ต้อง login ห่อด้วย Layout (มี sidebar/nav) ผ่าน DefaultRoute
+// ═══════════════════════════════════════════════════════════════════════════════════
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';

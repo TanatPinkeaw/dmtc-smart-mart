@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/syncOfflineSales.ts — ส่งบิลขายออฟไลน์ที่ค้างขึ้น server เมื่อเน็ตกลับมา
+// ทำอะไร: อ่านบิลค้างจาก offlineSalesDb (IndexedDB) แล้วยิง /api/sales/sync-offline ทีละบิล ลบตัวที่สำเร็จ
+//   / มาร์ก error ตัวที่พลาด แล้วคืนสรุป (attempted/synced/failed) — POS.tsx เรียกตอน useOnlineStatus กลับ online
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ POS ออฟไลน์ — ซิงค์คิวบิลขายที่ค้างอยู่ใน IndexedDB ขึ้น /api/sales/sync-offline เป็น batch
 // เดียว เรียกตอนกลับมาออนไลน์ (POS.tsx ฟัง useOnlineStatus() แล้วเรียกให้)
 import api from '../api';

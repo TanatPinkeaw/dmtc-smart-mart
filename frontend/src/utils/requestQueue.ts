@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/requestQueue.ts — คิวเก็บ request (POST/PUT/DELETE) ตอนออฟไลน์ (localStorage)
+// ทำอะไร: เก็บ request ที่ยิงไม่ได้ตอนไม่มีเน็ตไว้ใน localStorage แล้วส่งซ้ำเมื่อเน็ตกลับ (api.ts เรียกใช้)
+//   — สำหรับ mutation ทั่วไป (บิลขาย POS ใช้ offlineSalesDb.ts แยกต่างหากเพราะต้อง batch + dedup เฉพาะ)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 2 — B6: Offline Handling — Queue for storing pending requests
 interface QueuedRequest {
   method: string;

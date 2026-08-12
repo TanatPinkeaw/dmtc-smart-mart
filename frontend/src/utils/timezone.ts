@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/timezone.ts — helper แปลง/แสดงวันเวลาเป็นเวลาไทย (Asia/Bangkok) ฝั่ง frontend
+// ทำอะไร: formatBangkokTime() ฯลฯ แปลง Date/string เป็นข้อความวันเวลาไทย (DD/MM/YYYY HH:mm:ss)
+//   ใช้แสดงผลบนจอให้ตรงเวลาไทยเสมอ ไม่ว่าเครื่องผู้ใช้จะตั้ง timezone อะไร
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 2 — B8: Thailand Timezone Utilities
 export const THAILAND_TZ = 'Asia/Bangkok';
 

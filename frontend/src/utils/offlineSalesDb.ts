@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 utils/offlineSalesDb.ts — ที่เก็บบิลขายตอนออฟไลน์ (IndexedDB) ของหน้า POS
+// ทำอะไร: เซฟ/อ่าน/ลบบิลขายที่เกิดตอนเน็ตหลุดไว้ในเบราว์เซอร์ (IndexedDB) — export saveOfflineSale,
+//   getAllOfflineSales, removeOfflineSale, getOfflineSalesCount ฯลฯ ให้ POS.tsx + syncOfflineSales.ts ใช้
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ POS ออฟไลน์ — เก็บบิลขายที่เกิดขึ้นตอนไม่มีเน็ตไว้ใน IndexedDB (ไม่ใช่ localStorage เหมือน
 // requestQueue.ts เดิม เพราะ IndexedDB รองรับข้อมูลจำนวนมาก/โครงสร้างซับซ้อนกว่า และไม่เสี่ยงชนกับ
 // requestQueue ทั่วไปที่ retry แบบ generic — บิลขายต้องการ batch sync ที่ endpoint เฉพาะ

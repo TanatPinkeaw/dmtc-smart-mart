@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 hooks/useOnlineStatus.ts — React hook บอกสถานะออนไลน์/ออฟไลน์ของเบราว์เซอร์
+// ทำอะไร: คืน true/false ว่าตอนนี้มีเน็ตไหม (ฟัง event online/offline ของ browser) — POS ใช้ตัดสินว่า
+//   จะขายออนไลน์หรือเก็บบิลออฟไลน์ + ตอนกลับ online ค่อย sync
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Sprint 2 — B6: Offline Handling — Hook to track online/offline status
 import { useEffect, useState } from 'react';
 
