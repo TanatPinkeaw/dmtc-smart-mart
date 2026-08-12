@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 controllers/reportController.js — logic ของทุกหน้ารายงาน/สรุปยอด/ส่งออกไฟล์
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: รวม handler ของ endpoint /api/reports/* ทั้งหมด (~26 ตัว) เช่น dashboard, weekly-sales,
+//   hourly-sales (Peak Hours), profit-summary, payroll, export CSV/Excel, สรุปบัญชีสหกรณ์ — ดู routes/reportRoutes.js
+// จุดสำคัญ: created_at/completed_at เป็น TIMESTAMP + pool ตั้ง tz +07:00 → ใช้คอลัมน์/CURDATE ตรงๆ
+//   "ห้าม" ใส่ CONVERT_TZ ซ้ำ (จะบวก 7 ชม.เกิน เพี้ยนวัน/ชั่วโมง — เคยเป็นบั๊กมาแล้ว)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase A (refactor) — ย้าย report endpoints ออกจาก server.js (ที่โตเป็น ~6000 บรรทัด) มาเป็น
 // โมดูลตามโดเมน ให้หาโค้ด/ดูแลง่ายขึ้น — ย้ายทีละ batch เล็ก ไม่เปลี่ยนพฤติกรรม/ไม่เปลี่ยน path ใดๆ
 // (mount ที่ /api/reports ใน server.js) แต่ละ handler ยกมาจาก server.js ตรงๆ dependency require จาก

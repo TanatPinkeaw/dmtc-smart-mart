@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 routes/reportRoutes.js — จับคู่ URL /api/reports/* เข้ากับ handler ใน reportController + สิทธิ์
+// ทำอะไร: ประกาศว่าแต่ละ path (/weekly-sales, /hourly-sales, /payroll, /export/sales-csv ฯลฯ) เรียก
+//   handler ตัวไหน + ต้องเป็น role ไหน (requireRole) — logic จริงอยู่ใน reportController.js
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase A (refactor) — router รวม report endpoints (mount ที่ /api/reports ใน server.js)
 // ย้ายออกจาก server.js ทีละ batch เล็ก ไม่เปลี่ยน path/พฤติกรรม — endpoint เดิม /api/reports/xxx
 // ยังตอบเหมือนเดิมทุกอย่าง (เพราะ mount prefix /api/reports + path ในนี้เป็น /xxx)

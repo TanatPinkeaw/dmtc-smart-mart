@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 routes/memberRoutes.js — จับคู่ URL /api/members/* เข้ากับ handler + rate limit/validate/สิทธิ์
+// ทำอะไร: check-line (public), register-line (public + จำกัดอัตรา + validate), lookup/:id (staff เท่านั้น)
+//   → เรียก handler ใน memberController; requireRole/validateBody เขียนซ้ำในนี้เพราะของ server.js เรียกข้ามไฟล์ไม่ได้
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Route สำหรับสมัครสมาชิกผ่าน LINE LIFF — mount ที่ /api/members ใน server.js
 // ทั้งสอง endpoint อยู่ใน PUBLIC_PATHS (เรียกก่อน login เสมอ, LIFF ยังไม่มี JWT ของระบบนี้)
 const express = require('express');

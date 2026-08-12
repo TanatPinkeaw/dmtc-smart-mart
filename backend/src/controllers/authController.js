@@ -1,3 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 controllers/authController.js — logic การล็อกอินผ่าน LINE (LIFF auto-login)
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: handler ของ POST /api/auth/line-login — รับ line_user_id + LIFF id_token จาก frontend
+//   ยืนยันตัวตนกับ LINE แล้วออก JWT/cookie ให้ (ผูก line_user_id → user ในระบบ) — ดู routes/authRoutes.js
+// จุดสำคัญ: ถ้าตั้ง LINE_LIFF_CHANNEL_ID จะ verify id_token กับ LINE ก่อน (ปลอดภัย); ส่ง access_token
+//   กลับทาง body ด้วยเป็น bearer fallback (เฉพาะเส้น LINE — กัน cookie โดน ITP บล็อกในแอป LINE)
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ LINE Auto-Login — POST /api/auth/line-login
 // ผู้ใช้เปิดเว็บผ่าน LINE Rich Menu (LIFF) แล้วล็อกอินให้อัตโนมัติโดยไม่ต้องกรอกรหัสผ่าน
 //
