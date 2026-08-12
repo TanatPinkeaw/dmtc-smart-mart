@@ -876,21 +876,28 @@ app.delete('/api/categories/:id', requireRole('ADMIN', 'MANAGER'), async (req, r
 // =========================================
 
 // ⭐️ Sprint 2 — Expiry Discount: Helper function to calculate product expiry status
+// ⭐️ คืน "วันปฏิทินไทย" (YYYY-MM-DD) ของ Date/ค่าวันที่ใดๆ — กัน 2 ปัญหาพร้อมกัน: (1) TZ ของ Node
+// process (cloud ปกติรัน UTC) (2) mysql2 แปลง DATE column เป็น Date object โดย shift ตาม pool
+// timezone (+07:00) ทำให้ new Date()+setHours date-math เพี้ยน. Intl แปลงเป็นวันปฏิทินโซนกรุงเทพจาก
+// "instant" ที่ถูกต้องเสมอ ไม่ว่าค่าจะมาเป็น Date object หรือ string
+function toBangkokDateStr(dateLike) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(dateLike));
+}
+// จำนวนวันเต็มระหว่าง 2 วันปฏิทินไทย (b - a) — เทียบเป็น UTC midnight ของแต่ละวันปฏิทิน ไม่มีเรื่องเวลา/tz
+function daysBetweenBangkok(aStr, bStr) {
+  return Math.round((Date.parse(bStr + 'T00:00:00Z') - Date.parse(aStr + 'T00:00:00Z')) / 86400000);
+}
+
 function getProductExpiry(product) {
   if (!product.expiry_date) return { status: 'no_expiry' };
 
-  // 🐛 FIX (root cause) — เดิมใช้ new Date() + setHours(0,0,0,0) (local) = เวลา/วันที่ของ Node
-  // process เอง ไม่ใช่เวลาไทย ถ้า server รันที่ UTC (ปกติของ cloud) ช่วงเที่ยงคืน–06:59 น. เวลาไทย
-  // (=UTC 17:00-23:59 ของเมื่อวาน) "วันนี้" ที่คำนวณได้จะช้ากว่าความจริง 1 วัน → daysLeft เพี้ยน
-  // (สินค้าที่ควรขึ้น "ใกล้หมดอายุ" แล้วยังไม่ขึ้น หรือ badge กับราคาส่วนลดไม่ตรงกัน เพราะจุดอื่นที่ใช้
-  // SQL CURDATE() คิดถูกอยู่แล้ว แต่จุดนี้คิดช้ากว่า 1 วัน) — ใช้เทคนิคเดียวกับที่ verify แล้วว่าไม่ขึ้น
-  // กับ TZ ของ process เลย (บวก 7 ชม.เข้า UTC timestamp ตรงๆ แล้วอ่านด้วย UTC getters)
-  const nowTH = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const today = new Date(Date.UTC(nowTH.getUTCFullYear(), nowTH.getUTCMonth(), nowTH.getUTCDate()));
-  const expiry = new Date(product.expiry_date);
-  expiry.setUTCHours(0, 0, 0, 0);
-
-  const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+  // 🐛 FIX (root cause) — เดิมใช้ new Date(expiry_date) + set*Hours(0,0,0,0) แล้ว date-math ซึ่งเพี้ยน
+  // เพราะ mysql2 แปลง DATE column เป็น Date object ที่ shift ตาม pool tz (+07:00) — เทียบวันปฏิทินไทย
+  // ตรงๆ ด้วย Intl แทน (ไม่ขึ้นกับทั้ง TZ ของ process และวิธี parse ของ mysql2) ให้ตรงกับ SQL CURDATE()
+  // ที่ badge ใน /api/products ใช้ (แหล่งเดียวกัน = ป้ายกับผลลัพธ์ตรงกันเสมอ)
+  const daysLeft = daysBetweenBangkok(toBangkokDateStr(new Date()), toBangkokDateStr(product.expiry_date));
 
   if (daysLeft < 0) return { status: 'expired', daysLeft };
   if (daysLeft === 0) return { status: 'expires_today', daysLeft: 0 };
@@ -902,9 +909,11 @@ function getProductExpiry(product) {
 function isProductPromoActive(product) {
   const pct = Number(product.promo_percent) || 0;
   if (pct <= 0 || !product.promo_start || !product.promo_end) return false;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const s = new Date(product.promo_start); s.setHours(0, 0, 0, 0);
-  const e = new Date(product.promo_end); e.setHours(0, 0, 0, 0);
+  // 🐛 FIX (root cause เดียวกับ getProductExpiry) — เดิม new Date()+setHours เพี้ยนเพราะ mysql2 shift
+  // DATE column ตาม pool tz — เทียบวันปฏิทินไทยแบบ string ตรงๆ (โซนกรุงเทพ) แทน
+  const today = toBangkokDateStr(new Date());
+  const s = toBangkokDateStr(product.promo_start);
+  const e = toBangkokDateStr(product.promo_end);
   return today >= s && today <= e;
 }
 
@@ -991,12 +1000,17 @@ app.get('/api/products', async (req, res) => {
     const [rows] = await pool.query(query, params);
 
     // ⭐️ Enrich with expiry and discount info
+    // 🐛 FIX (root cause ของ "badge ขึ้น 40% OFF แต่ราคาไม่ลด") — เดิมส่วนลดคิดจาก JS getProductExpiry(p)
+    // ที่ new Date(p.expiry_date) ให้ผลเพี้ยน เพราะ mysql2 แปลง DATE column เป็น Date object โดย shift
+    // ตาม pool timezone (+07:00) แล้ว JS date math คลาด → applyDiscount=false ทั้งที่ badge (จาก SQL)
+    // ขึ้น near_expiry. ใช้ expiry_status จาก SQL (คำนวณด้วย CURDATE ล้วนๆ ไม่มี JS date parsing) เป็น
+    // แหล่งเดียวกับ badge → ป้ายกับราคาตรงกันเสมอ 100%
     const enrichedProducts = rows.map(p => {
-      const expiry = getProductExpiry(p);
-      const discount = expiry.applyDiscount ? Math.round(p.price * p.discount_percent / 100) : 0;
+      const isNearExpiry = p.expiry_status === 'near_expiry';
+      const discount = isNearExpiry ? Math.round(p.price * p.discount_percent / 100) : 0;
       return {
         ...p,
-        days_left: expiry.daysLeft,
+        days_left: getProductExpiry(p).daysLeft,
         discount_amount: discount,
         price_after_discount: p.price - discount
       };
