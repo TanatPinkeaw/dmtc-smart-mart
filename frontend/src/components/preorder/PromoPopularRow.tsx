@@ -1,3 +1,6 @@
+// 📄 components/preorder/PromoPopularRow.tsx — แถวไฮไลต์ด้านบนหน้าสั่งจอง (สินค้ามีโปร + ยอดนิยม)
+//    ทำอะไร: เลื่อนแนวนอนโชว์สินค้าใกล้หมดอายุ/โปร (ราคาหลังลดผ่าน effectiveUnitPrice) + สินค้าขายดี +
+//    แบนเนอร์โปรร้าน — โชว์เฉพาะตอน browse ปกติ (ไม่ค้นหา/ไม่กรองหมวด)
 import { PackagePlus } from 'lucide-react';
 import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money';
 

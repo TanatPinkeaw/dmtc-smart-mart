@@ -1,3 +1,5 @@
+// 📄 components/dashboard/DetailModal.tsx — popup แสดงรายละเอียดเจาะลึกของการ์ดสรุปบน Dashboard
+//    ทำอะไร: กดการ์ดสรุปแล้วเด้ง modal โชว์รายการเต็ม (เช่น รายบิล/รายพนักงาน) — หน้าตาล้วน
 import { X } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 

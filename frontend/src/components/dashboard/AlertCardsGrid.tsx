@@ -1,3 +1,5 @@
+// 📄 components/dashboard/AlertCardsGrid.tsx — การ์ดเตือนบน Dashboard (สต๊อกใกล้หมด/หมดอายุ/กะผิดปกติ)
+//    ทำอะไร: รับลิสต์ปัญหา แล้วโชว์เป็นการ์ดเตือนให้ผู้จัดการเห็นเร็ว (หน้าตาล้วน)
 import { AlertTriangle, XCircle, Clock } from 'lucide-react';
 
 interface AlertCardsGridProps {

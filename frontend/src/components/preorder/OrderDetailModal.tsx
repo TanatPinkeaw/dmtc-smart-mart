@@ -1,3 +1,5 @@
+// 📄 components/preorder/OrderDetailModal.tsx — popup รายละเอียดออเดอร์จอง 1 ใบ (จากประวัติ)
+//    ทำอะไร: โชว์รายการสินค้า/ยอด/สถานะ/สลิป + ปุ่มดูใบเสร็จ (ถ้าจบแล้ว) — ส่วนส่งสลิปใหม่ใช้ UploadSlipModal
 import { useState } from 'react';
 import { X, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

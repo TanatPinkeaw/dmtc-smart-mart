@@ -1,3 +1,5 @@
+// 📄 components/preorder/MyOrdersModal.tsx — popup ประวัติการสั่งจองของสมาชิก (กด "ประวัติของฉัน")
+//    ทำอะไร: ลิสต์ออเดอร์ของตัวเอง + สถานะ (badge) + กดดูรายละเอียด/ส่งสลิปใหม่/ยกเลิก
 import { X, RotateCw } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 

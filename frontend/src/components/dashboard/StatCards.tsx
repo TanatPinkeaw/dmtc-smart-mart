@@ -1,3 +1,5 @@
+// 📄 components/dashboard/StatCards.tsx — แถวการ์ดตัวเลขสรุป (ยอดขาย/บิล/เงินสด/QR) บน Dashboard
+//    ทำอะไร: รับตัวเลขสรุปมาโชว์เป็นการ์ดสีตามประเภท — หน้าตาล้วน
 import { TrendingUp, Receipt, Banknote, CreditCard, Package } from 'lucide-react';
 
 const card = "relative overflow-hidden bg-white border border-brand-border rounded-3xl shadow-md";

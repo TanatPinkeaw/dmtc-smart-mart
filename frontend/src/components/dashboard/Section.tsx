@@ -1,3 +1,4 @@
+// 📄 components/dashboard/Section.tsx — กล่องหัวข้อพับเก็บ/กางได้ (collapsible) ใช้จัดกลุ่มส่วนต่างๆ ใน Dashboard
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 

@@ -1,3 +1,6 @@
+// 📄 components/pos/ProductGrid.tsx — ตารางสินค้าฝั่งซ้ายหน้า POS (แคชเชียร์) — เลือกหมวด/ค้นหา/กดเพิ่มลงตะกร้า
+//    ทำอะไร: โชว์การ์ดสินค้า + badge ใกล้หมดอายุ/โปร + ราคาหลังลด (ราคาที่คิดจริง) + ช่องแก้ราคา (override) —
+//    สินค้าหมดอายุกดไม่ได้ ; เป็นหน้าตาล้วน logic อยู่ pages/POS.tsx
 import { Search, PackagePlus } from 'lucide-react';
 import { EmptyState } from '../ui/EmptyState';
 

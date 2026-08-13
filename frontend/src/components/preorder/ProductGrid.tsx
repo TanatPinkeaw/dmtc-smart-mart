@@ -1,3 +1,5 @@
+// 📄 components/preorder/ProductGrid.tsx — ตารางสินค้าหน้าสั่งจอง (สมาชิก) เลือกหมวด/ค้นหา/เพิ่มลงตะกร้า
+//    ทำอะไร: การ์ดสินค้า + badge/ราคาหลังลด (โปร/ใกล้หมดอายุ ผ่าน effectiveUnitPrice ตรงกับ POS+backend)
 import { PackagePlus, PackageSearch } from 'lucide-react';
 import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money';
 

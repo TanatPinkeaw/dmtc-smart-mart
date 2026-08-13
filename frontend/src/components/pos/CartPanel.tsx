@@ -1,3 +1,6 @@
+// 📄 components/pos/CartPanel.tsx — แผงตะกร้า+ชำระเงินฝั่งขวาของหน้า POS (แคชเชียร์)
+//    ทำอะไร: แสดงรายการในตะกร้า, ค้นหา/ผูกสมาชิก, ใส่โปรโมชั่น, แลกแต้ม, เลือกเงินสด/QR (สร้าง PromptPay QR),
+//    สรุปยอด แล้วปุ่มชำระเงิน — เป็น "หน้าตา" ล้วนๆ (รับ props + callback) logic จริงอยู่ที่ pages/POS.tsx
 import { ShoppingCart, Plus, Minus, X, CheckCircle, UserPlus, Gift, ChevronUp, ChevronDown } from 'lucide-react';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';

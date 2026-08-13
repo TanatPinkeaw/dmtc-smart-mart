@@ -1,3 +1,5 @@
+// 📄 components/dashboard/AdminDashboardHero.tsx — ส่วนหัวหน้า Dashboard (การ์ดสรุป + กราฟยอดขาย)
+//    ทำอะไร: โชว์ตัวเลขสรุปวันนี้ + กราฟ (recharts) — หน้าตาล้วน รับข้อมูลจาก pages/Dashboard.tsx
 import type { ReactNode } from 'react';
 import { ArrowUpRight, ArrowDownRight, TrendingUp, ShoppingBag, Package, XCircle } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';

@@ -1,3 +1,10 @@
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 📄 components/Layout.tsx — โครงหน้าเว็บของทุกหน้าที่ล็อกอินแล้ว (sidebar + bottom nav + แถวเตือน)
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ทำอะไร: ห่อเนื้อหาแต่ละหน้า (<Outlet/>) ด้วย Sidebar (desktop) / MobileBottomNav+Drawer (mobile) ตาม role,
+//   จัดการ badge แจ้งเตือน (socket realtime), แถบเตือนสลิปไม่ผ่านด้านบน, และบังคับเปลี่ยนรหัส (ChangePasswordModal)
+// จุดสำคัญ: หน้าที่ต้อง login ทั้งหมดถูก render ข้างใน Layout นี้ (ดู App.tsx) — nav อยู่ที่นี่ที่เดียว
+// ═══════════════════════════════════════════════════════════════════════════════════
 // ✅ CHANGED: sidebar design, bottom nav, profile modal → DMTC Mart theme
 // 🔒 UNCHANGED: fetchNotificationsAndBadge, socket listeners, handleUpdateProfile, handleLogoutClick, handleOpenNotifications, isStaff logic, all navigation routes
 

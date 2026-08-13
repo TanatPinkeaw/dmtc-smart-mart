@@ -1,3 +1,5 @@
+// 📄 components/dashboard/CloseShiftModal.tsx — popup ปิดกะการขาย (แคชเชียร์นับเงิน+ถ่ายรูปยืนยัน)
+//    ทำอะไร: กรอกเงินสดจริงในลิ้นชัก + ถ่ายรูป แล้วส่งปิดกะ (ระบบเทียบกับยอดที่ควรมี = เงินขาด/เกิน)
 import { Camera, X } from 'lucide-react';
 
 const inputCls = "w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";

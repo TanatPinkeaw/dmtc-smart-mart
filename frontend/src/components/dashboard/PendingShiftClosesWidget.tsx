@@ -1,3 +1,5 @@
+// 📄 components/dashboard/PendingShiftClosesWidget.tsx — วิดเจ็ตกะที่รอผู้จัดการอนุมัติปิด (Dashboard)
+//    ทำอะไร: ลิสต์กะสถานะ PENDING_APPROVAL (เงินขาด/เกินเกินเกณฑ์) + ปุ่มอนุมัติ/ปฏิเสธการปิดกะ
 import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '../../api';

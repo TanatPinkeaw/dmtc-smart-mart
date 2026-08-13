@@ -1,3 +1,5 @@
+// 📄 components/pos/ReceiptModal.tsx — popup ใบเสร็จหลังขายสำเร็จ (POS)
+//    ทำอะไร: โชว์ ReceiptSlip + ปุ่มพิมพ์/เปิดหน้าเต็ม /receipt — เด้งขึ้นทันทีหลัง checkout ผ่าน
 import { CheckCircle, X, Printer, Maximize2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../ui/Modal';

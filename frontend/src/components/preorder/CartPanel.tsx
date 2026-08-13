@@ -1,3 +1,6 @@
+// 📄 components/preorder/CartPanel.tsx — แผงตะกร้า+ชำระเงินของหน้าสั่งจอง (สมาชิกสั่งเอง)
+//    ทำอะไร: รายการตะกร้า, กรอกเบอร์สะสมแต้ม, แลกแต้ม, เลือกเงินสด/QR (PromptPay) + แนบสลิป, สรุปยอด, ยืนยันจอง —
+//    หน้าตาล้วน logic อยู่ pages/PreOrder.tsx ; ต่างจาก POS ตรงต้องแนบสลิปตอนจ่าย QR
 import { ShoppingCart, Plus, Minus, X, CheckCircle, Upload, ChevronUp, ChevronDown } from 'lucide-react';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';

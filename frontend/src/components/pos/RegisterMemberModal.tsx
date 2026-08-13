@@ -1,3 +1,5 @@
+// 📄 components/pos/RegisterMemberModal.tsx — popup สมัครสมาชิกใหม่จากหน้า POS (แคชเชียร์กรอกให้ลูกค้า)
+//    ทำอะไร: ฟอร์มกรอกรหัสนักศึกษา/ชื่อ/เบอร์ แล้วสมัคร — สมัครเสร็จดึงเข้าบิลให้อัตโนมัติ (หน้าตาล้วน)
 import { UserPlus, X } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';

@@ -1,3 +1,5 @@
+// 📄 components/pos/ReceiptSlip.tsx — หน้าตาใบเสร็จ (ตัวสลิปจริง) ใช้ทั้งใน ReceiptModal และหน้า /receipt
+//    ทำอะไร: จัดวางข้อมูลบิล (สินค้า/ยอด/ทอน/ร้าน) เป็นสลิป — ใช้ forwardRef ให้แคปเป็นรูป/พิมพ์ได้
 import { forwardRef } from 'react';
 import { CloudOff } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
