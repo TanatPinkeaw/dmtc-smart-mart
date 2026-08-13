@@ -1,3 +1,6 @@
+// 📄 pages/Login.tsx — หน้าเข้าสู่ระบบ (รหัสผ่าน + LINE auto-login)
+//    ทำอะไร: ล็อกอินด้วยรหัสนักศึกษา/รหัสผ่าน; ถ้าเปิดในแอป LINE จะ auto-login ผ่าน LIFF ให้เอง (ไม่เจอ =
+//    เด้งไปสมัคร /register); มี rate-limit นับถอยหลัง + loop-breaker กัน ping-pong ตอน ITP บล็อก cookie
 // ✅ CHANGED: visual refresh from Figma Make reference (School Co-op POS UI Design/LoginScreen.tsx)
 //   — gradient button + loading spinner, rounder card/inputs (3xl/2xl), bolder heading, softer shadow
 // ✅ CHANGED: post-login now always lands on /home (hub page) for every role — replaced the old

@@ -1,3 +1,6 @@
+// 📄 pages/OrderManagement.tsx — หน้าจัดการออเดอร์จอง (staff): ตรวจสลิป/อนุมัติ/เตรียม/ให้รับของ
+//    ทำอะไร: ลิสต์ออเดอร์พรีออเดอร์แยกตามสถานะ + ตรวจสลิป (ผ่าน/ไม่ผ่าน) + เลื่อนสถานะจนจบ (COMPLETED)
+//    + realtime เด้งออเดอร์ใหม่/สลิปใหม่ ; เป็นคู่ฝั่ง staff ของหน้า PreOrder (ลูกค้า)
 import { useState, useEffect } from 'react';
 import { PackageSearch, CheckCircle, Clock, Eye, AlertCircle, X, Search, User, Phone, Wallet } from 'lucide-react';
 import api from '../api';

@@ -1,3 +1,6 @@
+// 📄 pages/PreOrder.tsx — หน้าสั่งจองสินค้า (สมาชิกสั่งเองผ่านเว็บ/LINE)
+//    ทำอะไร: เลือกสินค้า, ใส่เบอร์สะสมแต้ม/แลกแต้ม, จ่าย QR แนบสลิป หรือเงินสดรับที่ร้าน, สร้างออเดอร์ (POST /orders),
+//    ดูประวัติออเดอร์ตัวเอง; realtime อัปเดตสถานะ; ราคา/ส่วนลด backend คำนวณใหม่เสมอ (frontend แค่ preview)
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ShoppingCart, ShoppingBag, Search } from 'lucide-react';

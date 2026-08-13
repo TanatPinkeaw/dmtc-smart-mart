@@ -1,3 +1,5 @@
+// 📄 pages/Notifications.tsx — หน้ารวมการแจ้งเตือนของผู้ใช้ (ออเดอร์/สลิป/สต๊อก ฯลฯ)
+//    ทำอะไร: ดึงรายการแจ้งเตือนมาแสดง + กรอง + การ์ดสลิปไม่ผ่านมีปุ่มส่งสลิปใหม่ (UploadSlipModal)
 // ✅ CHANGED: colors, layout → DMTC Mart theme
 // 🔒 UNCHANGED: fetchNotifications, filteredNotis, all state/logic
 

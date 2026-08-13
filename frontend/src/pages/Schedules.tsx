@@ -1,3 +1,5 @@
+// 📄 pages/Schedules.tsx — หน้าตารางกะการทำงาน (ปฏิทิน)
+//    ทำอะไร: ADMIN/MANAGER กำหนด/แก้/ลบกะพนักงานในปฏิทิน + ตั้งวันหยุด; CASHIER ดูได้อย่างเดียว (canManage=false)
 // ✅ CHANGED: colors → DMTC Mart theme
 // 🔒 UNCHANGED: fetchAll, handleSave, handleAddHoliday, openPopover, popover logic, all state
 

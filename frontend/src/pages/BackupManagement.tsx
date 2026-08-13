@@ -1,3 +1,5 @@
+// 📄 pages/BackupManagement.tsx — หน้าสำรอง/กู้คืนฐานข้อมูล (ADMIN)
+//    ทำอะไร: ลิสต์ backup + ปุ่มสร้าง backup ใหม่ + กู้คืนจากไฟล์ที่เลือก (เรียก /api/admin/backups*)
 // ✅ CHANGED: JSX only — pink theme (match rest of app), Thai labels, mobile card + desktop table
 // 🔒 UNCHANGED: loadBackups, handleCreateBackup, handleRestore, getStatusColor, all state/API calls
 import { useState, useEffect } from 'react';

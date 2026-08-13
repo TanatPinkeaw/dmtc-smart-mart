@@ -1,3 +1,5 @@
+// 📄 pages/ResetPassword.tsx — หน้าตั้งรหัสผ่านใหม่ (มาจากลิงก์/โทเคนหลังยืนยันตัวตน)
+//    ทำอะไร: กรอกรหัสใหม่ (มีแถบวัดความแข็งแรง) แล้วยิงตั้งรหัสใหม่ → เด้งไป login
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';

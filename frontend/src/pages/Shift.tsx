@@ -1,3 +1,6 @@
+// 📄 pages/Shift.tsx — หน้าจัดการกะ/เข้า-ออกงาน (จุดเดียวครบ 4 สถานะ)
+//    ทำอะไร: แสดงสถานะที่ตรงกับผู้ใช้ตอนนี้ — CASHIER เปิดกะ/ปิดกะ (นับเงิน+ถ่ายรูป), ADMIN/MANAGER
+//    ลงชื่อเข้างาน/ออกงาน; รวมมาจากเดิมที่กระจายอยู่หลายหน้า
 // ✅ CHANGED: consolidated check-in AND check-out (ADMIN attendance + CASHIER shift open/close) into
 //   this single page — check-out used to live on Dashboard.tsx (ADMIN "ลงชื่อออกงาน" button +
 //   CASHIER "ปิดกะการขาย" → CloseShiftModal), scattered across two pages. Now /shift alone shows

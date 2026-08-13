@@ -1,3 +1,5 @@
+// 📄 pages/VendorSales.tsx — หน้า "ยอดฝากขายของฉัน" (เจ้าของสินค้าฝากขายดูยอด+ส่วนที่ได้รับ)
+//    ทำอะไร: ดึงยอดขายสินค้าที่ตัวเองฝากขาย + ส่วนแบ่ง GP/ยอดที่ต้องได้คืน (self-scoped; ADMIN ดูของทุกคนได้)
 // ✅ CHANGED: colors, layout, stat cards → DMTC Mart theme
 // 🔒 UNCHANGED: fetchData, socket listeners, all interfaces/types/state
 

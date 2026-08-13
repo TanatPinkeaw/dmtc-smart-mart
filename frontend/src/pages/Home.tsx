@@ -1,3 +1,6 @@
+// 📄 pages/Home.tsx — หน้ากลางหลัง login (ทุก role เข้าก่อนเสมอ) เลือกโมดูลที่จะใช้
+//    ทำอะไร: โชว์การ์ดสรุปยอดสั้นๆ (staff) + การ์ดโมดูลตาม role (POS/สั่งจอง/สรุปยอด/ตารางกะ ฯลฯ); การ์ด
+//    POS ล็อกถ้ายังไม่เปิดกะ (workLocked)
 // ✅ NEW: หน้ากลางหลัง login — ทุก role (ADMIN/CASHIER/MEMBER) เข้าที่นี่ก่อนเสมอ (แทน choice
 //   modal เดิมใน Login.tsx) แสดงสรุปยอดสั้นๆ (staff เท่านั้น) + การ์ดโมดูลตาม role กดเข้าใช้งาน
 // อ้างอิงดีไซน์จาก Figma Make reference (School Co-op POS UI Design/src/screens) ปรับให้ต่อ API จริง

@@ -1,3 +1,5 @@
+// 📄 pages/Inventory.tsx — หน้าคลังสินค้า: รับสินค้าเข้าสต๊อก (ADMIN/MANAGER)
+//    ทำอะไร: เลือกสินค้า+จำนวน+ทุนต่อหน่วย → บันทึกใบรับเข้า (POST /purchases) เพิ่มสต๊อก; realtime อัปเดตสต๊อก
 // ✅ CHANGED: colors, layout → DMTC Mart theme
 // 🔒 UNCHANGED: all state, handlers (addToReceiveList, updateQuantity, updateUnitCost, handleSubmitPurchase, fetchProducts, socket logic)
 

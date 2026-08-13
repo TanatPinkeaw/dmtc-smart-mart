@@ -1,3 +1,7 @@
+// 📄 pages/Settings.tsx — หน้าตั้งค่า/จัดการข้อมูลหลัก (ADMIN/MANAGER) — ไฟล์ใหญ่ หลายแท็บ
+//    ทำอะไร: จัดการสินค้า/หมวดหมู่/ซัพพลายเออร์/พนักงาน+สิทธิ์/โปรโมชั่น/ประวัติขาย+export/ตั้งค่าร้าน/
+//    อัตราแต้ม/กลุ่มสมาชิก + เครื่องมือรีเซ็ตข้อมูล; มี import/export CSV+Excel ต่อ entity
+//    จุดสำคัญ: รหัสสมาชิกที่ผูก LINE แล้วล็อกแก้ไม่ได้ (ต้องปลดผูกก่อน); โปรที่เคยใช้แล้วลบไม่ได้ (ปิดใช้แทน)
 import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound, RotateCcw, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import Swal from '../swal';

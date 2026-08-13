@@ -1,3 +1,6 @@
+// 📄 pages/Register.tsx — หน้าสมัคร/ผูกบัญชีสมาชิกผ่าน LINE (LIFF endpoint) + แสดงบัตรสมาชิก
+//    ทำอะไร: เปิดจาก LINE Rich Menu → เช็คว่าผูกบัญชีแล้วยัง; ยังไม่ผูก = ฟอร์มสมัคร; ผูกแล้ว = โชว์บัตรสมาชิก
+//    (QR รหัสนักศึกษา + แต้ม auto-refresh); ถ้ามี session อยู่แล้วโชว์การ์ด "เป็นสมาชิกอยู่แล้ว"
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';

@@ -1,3 +1,7 @@
+// 📄 pages/POS.tsx — หน้าขายหน้าร้าน (แคชเชียร์) — หน้าหลักที่สุดของระบบ
+//    ทำอะไร: เลือกสินค้าใส่ตะกร้า, ผูกสมาชิก/โปร/แลกแต้ม/แลกของรางวัล, รับเงินสด/QR, checkout, ออกใบเสร็จ;
+//    ขายออฟไลน์ได้ (เก็บ IndexedDB แล้ว sync); รวม logic ทั้งหมด (ProductGrid+CartPanel เป็นแค่หน้าตา)
+//    จุดสำคัญ: มี shift-gate ตอน mount (ไม่เปิดกะ = เด้งไป /shift); ราคา/ส่วนลด backend คำนวณใหม่เสมอ
 // ✅ CHANGED: colors, layout → DMTC Mart theme (#F12B6B primary)
 // 🔒 UNCHANGED: all handlers (handleCheckout, handleSearchMember, handleRegister, handleApplyPromo, handleCloseShift, finishAndLogout), socket listeners, all state, filteredProducts, price calculations
 

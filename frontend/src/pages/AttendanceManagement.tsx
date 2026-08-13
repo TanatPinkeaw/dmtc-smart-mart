@@ -1,3 +1,5 @@
+// 📄 pages/AttendanceManagement.tsx — หน้าจัดการเวลาเข้า-ออกงานพนักงาน (ADMIN/MANAGER)
+//    ทำอะไร: ดู/แก้/ลบบันทึกเข้า-ออกงาน + สั่ง auto check-out คนที่ลืมออกงาน + กรองตามช่วง/คน
 // ✅ CHANGED: colors → DMTC Mart theme
 // 🔒 UNCHANGED: fetchRecords, handleDelete, handleSaveEdit, handleRunAutoCheckout, all filtering logic
 

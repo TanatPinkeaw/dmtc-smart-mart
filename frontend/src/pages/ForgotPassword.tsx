@@ -1,3 +1,4 @@
+// 📄 pages/ForgotPassword.tsx — หน้าลืมรหัสผ่าน (ยืนยันตัวตนด้วยเบอร์โทร แล้วไปตั้งรหัสใหม่)
 // ✅ CHANGED: visual refresh to match Home/Login design language (rounded-3xl card, gradient
 //   button + loading spinner, bolder heading)
 // 🔒 UNCHANGED: handleSubmit, API call, all state

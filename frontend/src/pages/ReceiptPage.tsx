@@ -1,3 +1,5 @@
+// 📄 pages/ReceiptPage.tsx — หน้าใบเสร็จเต็มจอ (route /receipt) พิมพ์/ดาวน์โหลดเป็นรูปได้
+//    ทำอะไร: แสดง ReceiptSlip จากข้อมูลบิลที่ส่งมา (location.state) + ปุ่มพิมพ์/ดาวน์โหลด PNG (html-to-image)
 import { useRef, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toPng } from 'html-to-image';
