@@ -35,6 +35,34 @@ console.log('✓ All required environment variables loaded');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
 
+// ⭐️ Task 2 (secret hardening) — REQUIRED เช็คแค่ "มีค่า" ยังปล่อยให้เผลอ deploy ด้วย placeholder จาก
+// .env.example ได้ (เช่น 'your-secret-key-here-...') ซึ่งใครก็เดา = ปลอม JWT เป็น ADMIN ได้. บน
+// production จึงห้าม secret เป็น placeholder เด็ดขาด — เจอ = exit(1) (fail closed) ; ส่วนสั้นเกินไป
+// (< 32 ตัว) แต่ไม่ใช่ placeholder แค่ "เตือน" ไม่ล้ม กันเผลอ knock prod ที่ใช้ค่าสั้นๆ แต่จริงลง
+// dev ปล่อยผ่านหมด (ใช้ค่าตัวอย่างรันเครื่องตัวเองได้). วิธีสร้างค่าจริง: openssl rand -hex 32
+// (ดู docs/ROTATE-SECRETS.md)
+if (IS_PRODUCTION) {
+  const JWT_PLACEHOLDERS = [
+    'your-secret-key-here-change-on-deployment-min-32-chars',
+    'your-super-secret-jwt-key-change-this-in-production',
+  ];
+  const SETUP_PLACEHOLDERS = [
+    'dev-setup-key-change-on-production',
+    'your-setup-key-change-this-in-production',
+  ];
+  if (JWT_PLACEHOLDERS.includes(process.env.JWT_SECRET)) {
+    console.error('❌ config.js: JWT_SECRET ยังเป็นค่า placeholder จาก .env.example บน production — ใครก็เดาได้ = ปลอม token เป็น ADMIN ได้ ต้องหมุนเป็นค่าสุ่มจริง (openssl rand -hex 32) ดู docs/ROTATE-SECRETS.md');
+    process.exit(1);
+  }
+  if (process.env.SETUP_KEY && SETUP_PLACEHOLDERS.includes(process.env.SETUP_KEY)) {
+    console.error('❌ config.js: SETUP_KEY ยังเป็นค่า placeholder จาก .env.example บน production — สร้าง admin/ล้างข้อมูลเองได้ ต้องหมุน (openssl rand -hex 16) หรือเว้นว่างเพื่อปิด bootstrap endpoint');
+    process.exit(1);
+  }
+  if (process.env.JWT_SECRET.length < 32) {
+    console.error(`⚠️⚠️⚠️ [BOOT WARNING] JWT_SECRET ยาวแค่ ${process.env.JWT_SECRET.length} ตัวบน production — สั้นเกินไป เดา/brute-force ง่ายขึ้น ควรใช้ openssl rand -hex 32 (64 ตัว) ⚠️⚠️⚠️`);
+  }
+}
+
 // ⭐️ Security remediation — production (Render → Aiven) ต้องเข้ารหัสเสมอ ห้ามบูทแบบ plaintext เงียบๆ
 if (IS_PRODUCTION && process.env.DB_SSL !== 'true') {
   console.error('❌ config.js: NODE_ENV=production ต้องตั้ง DB_SSL=true (เข้ารหัสการเชื่อมต่อไป Aiven/MySQL เสมอ)');
