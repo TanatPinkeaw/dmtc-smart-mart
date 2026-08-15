@@ -667,6 +667,8 @@ app.use('/api/reports', require('./src/routes/reportRoutes'));
 // ⭐️ Phase B (refactor) — /api/settings/* (store/receipt/loyalty) ย้ายมาที่ settingsRoutes.js แล้ว
 // (path เดิมไม่เปลี่ยน) ; member-groups/promotions ฯลฯ ที่ยังไม่ย้ายยังอยู่ใน server.js ด้านล่าง
 app.use('/api/settings', require('./src/routes/settingsRoutes'));
+app.use('/api/promotions', require('./src/routes/promotionsRoutes'));
+app.use('/api/member-groups', require('./src/routes/memberGroupsRoutes'));
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
 // ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่
@@ -726,55 +728,10 @@ async function notifyIfLowStock(conn, io, productId, stockBefore, stockAfter) {
   return null;
 }
 
-// ⭐️ คำนวณส่วนลดของโปรโมชั่น รองรับ PERCENT/FIXED/BOGO (BOGO ต้องมี items ของตะกร้าเพื่อเช็คจำนวนจริง)
-// queryFn คือ conn.query หรือ pool.query แล้วแต่บริบท (ใน transaction หรือ preview เฉยๆ)
-async function calculatePromotionDiscount(queryFn, promo, totalAmount, items) {
-  if (promo.discount_type === 'PERCENT') {
-    return Math.min((totalAmount * Number(promo.discount_value)) / 100, totalAmount);
-  }
-  if (promo.discount_type === 'FIXED') {
-    return Math.min(Number(promo.discount_value), totalAmount);
-  }
-  if (promo.discount_type === 'BOGO') {
-    if (!promo.buy_product_id || !promo.buy_qty || !promo.free_product_id || !promo.free_qty || !items) return 0;
-
-    const sameProduct = Number(promo.buy_product_id) === Number(promo.free_product_id);
-    const buyQty = items.filter(i => Number(i.product_id) === Number(promo.buy_product_id)).reduce((sum, i) => sum + Number(i.quantity), 0);
-    const freeQtyInCart = items.filter(i => Number(i.product_id) === Number(promo.free_product_id)).reduce((sum, i) => sum + Number(i.quantity), 0);
-
-    let freeUnitsGranted;
-    if (sameProduct) {
-      // ซื้อ X แถม Y ของชิ้นเดียวกัน (เช่น ซื้อ1แถม1 = ต้องมีในตะกร้าครบ buy_qty+free_qty ต่อ 1 เซ็ต)
-      const setSize = Number(promo.buy_qty) + Number(promo.free_qty);
-      const sets = Math.floor(buyQty / setSize);
-      freeUnitsGranted = sets * Number(promo.free_qty);
-    } else {
-      // ซื้อสินค้า A ครบ แถมสินค้า B (คนละตัว) — B ต้องมีในตะกร้าด้วย
-      if (buyQty < promo.buy_qty || freeQtyInCart === 0) return 0;
-      const freeSets = Math.floor(buyQty / Number(promo.buy_qty));
-      freeUnitsGranted = Math.min(freeSets * Number(promo.free_qty), freeQtyInCart);
-    }
-    if (freeUnitsGranted <= 0) return 0;
-
-    const [freeProductRows] = await queryFn('SELECT price FROM products WHERE id = ?', [promo.free_product_id]);
-    if (freeProductRows.length === 0) return 0;
-    return Math.min(freeUnitsGranted * Number(freeProductRows[0].price), totalAmount);
-  }
-  return 0;
-}
-
-// ⭐️ เช็คสิทธิ์การใช้โปรโมชั่น (usage_limit รวม + usage_limit_per_user) คืน error message หรือ null ถ้าใช้ได้
-async function checkPromotionUsageLimit(queryFn, promo, memberId) {
-  if (promo.usage_limit != null && promo.usage_count >= promo.usage_limit) {
-    return "โปรโมชั่นนี้ถูกใช้ครบจำนวนสิทธิ์แล้ว";
-  }
-  if (promo.usage_limit_per_user != null) {
-    if (!memberId) return "โปรโมชั่นนี้จำกัดสิทธิ์ต่อคน กรุณาระบุสมาชิกก่อนใช้สิทธิ์";
-    const [rows] = await queryFn('SELECT COUNT(*) as cnt FROM promotion_usages WHERE promotion_id = ? AND member_id = ?', [promo.id, memberId]);
-    if (rows[0].cnt >= promo.usage_limit_per_user) return "คุณใช้สิทธิ์โปรโมชั่นนี้ครบจำนวนแล้ว";
-  }
-  return null;
-}
+// ⭐️ Phase B (refactor) — calculatePromotionDiscount + checkPromotionUsageLimit ย้ายไป
+// src/services/promotionEngine.js แล้ว (ใช้ร่วมกับ promotionsController) require กลับมาที่นี่เพื่อให้
+// checkout/sync-offline ที่ยังอยู่ใน server.js เรียกใช้ได้เหมือนเดิม สูตร/พฤติกรรมไม่เปลี่ยน
+const { calculatePromotionDiscount, checkPromotionUsageLimit } = require('./src/services/promotionEngine');
 
 // =========================================
 // ตั้งค่าเหตุการณ์ (Events) ของ Socket.io
@@ -3607,89 +3564,8 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
 // =========================================
 // ⭐️ MEMBER GROUPS (Part 3) — กลุ่มสมาชิก + rule ส่วนลดรายหมวดหมู่ (ADMIN+MANAGER)
 // =========================================
-app.get('/api/member-groups', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  try {
-    const [groups] = await pool.query('SELECT * FROM member_groups ORDER BY id');
-    const [rules] = await pool.query(
-      `SELECT r.id, r.group_id, r.category_id, r.discount_percent, c.name AS category_name
-       FROM group_discount_rules r LEFT JOIN categories c ON r.category_id = c.id ORDER BY r.group_id, c.name`
-    );
-    const byGroup = new Map(groups.map(g => [g.id, { ...g, rules: [] }]));
-    for (const r of rules) byGroup.get(r.group_id)?.rules.push(r);
-    res.json([...byGroup.values()]);
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.post('/api/member-groups', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  const { name, code, default_discount_percent, description } = req.body;
-  if (!name || !code) return res.status(400).json({ error: 'ต้องระบุชื่อและรหัสกลุ่ม' });
-  try {
-    const [result] = await pool.query(
-      'INSERT INTO member_groups (name, code, default_discount_percent, description) VALUES (?, ?, ?, ?)',
-      [name, String(code).toUpperCase().trim(), Number(default_discount_percent) || 0, description || null]
-    );
-    res.status(201).json({ id: result.insertId, message: 'เพิ่มกลุ่มสมาชิกสำเร็จ' });
-  } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'รหัสกลุ่มนี้ซ้ำกับที่มีอยู่แล้ว' });
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.put('/api/member-groups/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  const { name, default_discount_percent, description } = req.body;
-  try {
-    await pool.query(
-      'UPDATE member_groups SET name = ?, default_discount_percent = ?, description = ? WHERE id = ?',
-      [name, Number(default_discount_percent) || 0, description || null, req.params.id]
-    );
-    res.json({ message: 'อัปเดตกลุ่มสมาชิกสำเร็จ' });
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.delete('/api/member-groups/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  try {
-    // users.group_id ON DELETE SET NULL, rules ON DELETE CASCADE — ลบได้ปลอดภัย
-    await pool.query('DELETE FROM member_groups WHERE id = ?', [req.params.id]);
-    res.json({ message: 'ลบกลุ่มสมาชิกสำเร็จ' });
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-// ⭐️ เพิ่ม/อัปเดต rule รายหมวดหมู่ (upsert ด้วย UNIQUE (group_id, category_id))
-app.post('/api/member-groups/:id/rules', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  const { category_id, discount_percent } = req.body;
-  if (!category_id) return res.status(400).json({ error: 'ต้องเลือกหมวดหมู่' });
-  try {
-    await pool.query(
-      `INSERT INTO group_discount_rules (group_id, category_id, discount_percent) VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE discount_percent = VALUES(discount_percent)`,
-      [req.params.id, category_id, Number(discount_percent) || 0]
-    );
-    res.status(201).json({ message: 'บันทึกส่วนลดรายหมวดหมู่สำเร็จ' });
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.delete('/api/member-groups/:id/rules/:ruleId', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  try {
-    await pool.query('DELETE FROM group_discount_rules WHERE id = ? AND group_id = ?', [req.params.ruleId, req.params.id]);
-    res.json({ message: 'ลบส่วนลดรายหมวดหมู่สำเร็จ' });
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
+// ⭐️ Phase B (refactor) — /api/member-groups/* (CRUD กลุ่ม + rule) ย้ายไป memberGroupsRoutes.js +
+// memberGroupsController.js แล้ว (mount ด้านบน) ; PUT /api/users/:id/group ด้านล่างยังเป็น users domain
 
 // ⭐️ ผูกสมาชิกเข้ากลุ่ม — endpoint แยกต่างหาก (ADMIN+MANAGER) ไม่ปน role-editing ที่เป็น ADMIN-only
 app.put('/api/users/:id/group', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
@@ -3789,127 +3665,8 @@ app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN', 'MANAGER'), 
 // 8. PROMOTIONS (ระบบโปรโมชั่นและส่วนลด)
 // =========================================
 
-app.get('/api/promotions', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM promotions WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURDATE())');
-    res.json(rows);
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-// ⭐️ Phase 2 — โปรโมชั่นที่กำลัง active พร้อมข้อความอ่านง่าย (รวมชื่อสินค้าสำหรับ BOGO) — ไว้โชว์แบนเนอร์
-app.get('/api/promotions/active', async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT p.id, p.name, p.discount_type, p.discount_value, p.end_date, p.buy_qty, p.free_qty,
-             bp.name AS buy_product_name, fp.name AS free_product_name
-      FROM promotions p
-      LEFT JOIN products bp ON p.buy_product_id = bp.id
-      LEFT JOIN products fp ON p.free_product_id = fp.id
-      WHERE p.is_active = TRUE
-        AND (p.start_date IS NULL OR p.start_date <= CURDATE())
-        AND (p.end_date IS NULL OR p.end_date >= CURDATE())
-      ORDER BY p.end_date ASC
-    `);
-    const items = rows.map(r => {
-      let label;
-      if (r.discount_type === 'PERCENT') label = `ลด ${Number(r.discount_value)}% ทั้งบิล`;
-      else if (r.discount_type === 'FIXED') label = `ลด ฿${Number(r.discount_value)} ทั้งบิล`;
-      else if (r.discount_type === 'BOGO') label = `ซื้อ ${r.buy_product_name || 'สินค้า'} ${r.buy_qty || 1} แถม ${r.free_product_name || 'สินค้า'} ${r.free_qty || 1}`;
-      else label = r.name;
-      return { id: r.id, name: r.name, type: r.discount_type, label, end_date: r.end_date };
-    });
-    res.json(items);
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.post('/api/promotions', requireRole('ADMIN', 'MANAGER'), validateRequest(promotionValidator), async (req, res) => {
-  const {
-    name, discount_type, discount_value, start_date, end_date,
-    buy_product_id, buy_qty, free_product_id, free_qty,
-    usage_limit, usage_limit_per_user
-  } = req.body;
-
-  // ⭐️ BOGO/ซื้อครบแถม ต้องระบุ buy_product_id, buy_qty, free_product_id, free_qty ให้ครบ
-  if (discount_type === 'BOGO' && (!buy_product_id || !buy_qty || !free_product_id || !free_qty)) {
-    return res.status(400).json({ error: "โปรโมชั่นแบบซื้อครบแถม ต้องระบุสินค้าที่ต้องซื้อ, จำนวนที่ต้องซื้อ, สินค้าที่แถม, จำนวนที่แถม ให้ครบ" });
-  }
-
-  try {
-    const [result] = await pool.query(
-      `INSERT INTO promotions
-        (name, discount_type, discount_value, start_date, end_date, buy_product_id, buy_qty, free_product_id, free_qty, usage_limit, usage_limit_per_user)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, discount_type, discount_value || 0, start_date || null, end_date || null,
-       buy_product_id || null, buy_qty || null, free_product_id || null, free_qty || null,
-       usage_limit || null, usage_limit_per_user || null]
-    );
-    res.status(201).json({ id: result.insertId, message: "สร้างโปรโมชั่นสำเร็จ" });
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-// ⭐️ ลบโปรโมชั่น — promotion_usages.promotion_id ไม่มี ON DELETE clause (default RESTRICT ของ MySQL)
-// ถ้าโปรโมชั่นเคยถูกใช้จริงมาก่อน (มีแถวใน promotion_usages) hard DELETE จะถูก DB ปฏิเสธ (จงใจ กัน
-// ประวัติการใช้โปรโมชั่นหาย) แทนที่จะโชว์ error ดิบๆ ให้ผู้ใช้ กรณีนี้ fallback ไปปิดใช้งาน (is_active=0)
-// แทน — ยังหายไปจากรายการที่แคชเชียร์เลือกได้ (ตรงกับสิ่งที่แอดมินต้องการ "ลบ") แต่ประวัติ/รายงานเก่ายังอ้างอิงได้
-// (sales.promotion_id เป็น ON DELETE SET NULL อยู่แล้ว ไม่ติดปัญหานี้)
-app.delete('/api/promotions/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  try {
-    const [existing] = await pool.query('SELECT id FROM promotions WHERE id = ?', [req.params.id]);
-    if (existing.length === 0) return res.status(404).json({ error: 'ไม่พบโปรโมชั่นนี้' });
-
-    try {
-      await pool.query('DELETE FROM promotions WHERE id = ?', [req.params.id]);
-      return res.json({ message: 'ลบโปรโมชั่นสำเร็จ' });
-    } catch (deleteErr) {
-      if (deleteErr.code !== 'ER_ROW_IS_REFERENCED_2' && deleteErr.code !== 'ER_ROW_IS_REFERENCED') throw deleteErr;
-      await pool.query('UPDATE promotions SET is_active = FALSE WHERE id = ?', [req.params.id]);
-      return res.json({ message: 'โปรโมชั่นนี้เคยถูกใช้งานแล้ว ลบถาวรไม่ได้ (กันประวัติการใช้งานหาย) ปิดใช้งานให้แทน' });
-    }
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-// ⭐️ Sprint 1 — C1 audit finding: ไม่มี guard เลย — endpoint นี้มีแค่ POS.tsx (staff-only page) เรียกใช้
-// ล็อกให้ตรงกับผู้ใช้จริงเพื่อความสม่ำเสมอ (severity ต่ำ เพราะ response แค่ preview ไม่ใช่ยอดที่เชื่อถือได้
-// จริง — /api/sales/checkout คำนวณส่วนลดใหม่เองเสมอ ไม่เชื่อค่าจาก client)
-app.post('/api/promotions/verify', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
-  const { promotion_id, grand_total, items, member_id } = req.body;
-  try {
-    const [promos] = await pool.query('SELECT * FROM promotions WHERE id = ? AND is_active = TRUE', [promotion_id]);
-    if (promos.length === 0) return res.status(404).json({ error: "ไม่พบโปรโมชั่น หรือโปรโมชั่นหมดอายุแล้ว" });
-
-    const promo = promos[0];
-
-    const limitError = await checkPromotionUsageLimit(pool.query.bind(pool), promo, member_id || null);
-    if (limitError) return res.status(400).json({ error: limitError });
-
-    const discount_amount = await calculatePromotionDiscount(pool.query.bind(pool), promo, grand_total, items);
-    if (promo.discount_type === 'BOGO' && discount_amount === 0) {
-      return res.status(400).json({ error: "ตะกร้าไม่ตรงเงื่อนไขโปรโมชั่นนี้ (ซื้อไม่ครบจำนวน หรือไม่มีสินค้าที่แถมในตะกร้า)" });
-    }
-    const net_total = grand_total - discount_amount;
-
-    res.json({ discount_amount, net_total, promo_name: promo.name });
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
+// ⭐️ Phase B (refactor) — /api/promotions/* (list/active/create/delete/verify) ย้ายไป
+// promotionsRoutes.js + promotionsController.js แล้ว (mount ด้านบน) พฤติกรรม/path เดิมทุกอย่าง
 
 // =========================================
 // 9. SUPPLIERS & PURCHASES (รับของเข้า)
