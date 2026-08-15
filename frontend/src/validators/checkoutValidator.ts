@@ -6,10 +6,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════════
 import Joi from 'joi';
 
-// ⭐️ F5 — duplicated from backend/src/validators/index.js (checkoutValidator), kept in sync manually.
+// ⭐️ F5 — duplicated from backend/src/validators/index.js (checkoutValidator), kept in sync manually
+// (frontend/backend deploy คนละ root จึง import ไฟล์ข้ามกันไม่ได้ — ต้อง duplicate).
 // Real POST /api/sales/checkout body: cashier_id, member_id, promotion_id, redeem_points,
 // payment_method (CASH/QR/MIXED — NOT BANK_TRANSFER/CARD), amount_received, items[].
-// If backend/src/validators/index.js's checkoutValidator ever changes, mirror the change here too.
+// ⚠️ ถ้าแก้กฎตรงนี้ ต้อง mirror ที่ backend/src/validators/index.js ด้วย —
+//    backend/tests/checkoutContract.test.js จะ fail ใน CI ถ้าสองฝั่งหลุด sync (จับให้อัตโนมัติ)
 export const checkoutValidator = Joi.object({
   cashier_id: Joi.number().integer().positive().required(),
   member_id: Joi.number().integer().positive().allow(null).optional(),

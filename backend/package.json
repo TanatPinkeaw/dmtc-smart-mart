@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node tests/smokeTest.js",
+    "test:contract": "node tests/checkoutContract.test.js",
     "dev": "nodemon server.js",
     "line:richmenu": "node src/scripts/setup-richmenu.js"
   },
