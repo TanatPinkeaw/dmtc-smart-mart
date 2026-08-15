@@ -664,6 +664,9 @@ app.use('/api/auth', require('./src/routes/authRoutes'));
 // mount ที่ /api/reports (path เดิมไม่เปลี่ยน) — endpoint ที่ยังไม่ย้ายยังนิยามตรงใน server.js ด้านล่าง
 // router match เฉพาะ path ที่ย้ายมาแล้วเท่านั้น จึงไม่ชนกับ /api/reports/* ที่ยังอยู่ใน server.js
 app.use('/api/reports', require('./src/routes/reportRoutes'));
+// ⭐️ Phase B (refactor) — /api/settings/* (store/receipt/loyalty) ย้ายมาที่ settingsRoutes.js แล้ว
+// (path เดิมไม่เปลี่ยน) ; member-groups/promotions ฯลฯ ที่ยังไม่ย้ายยังอยู่ใน server.js ด้านล่าง
+app.use('/api/settings', require('./src/routes/settingsRoutes'));
 
 // ⭐️ Security remediation — block everything except password-change/logout until user sets a real password
 // ⭐️ Security fix — เพิ่ม /api/auth/csrf-token เข้า exempt list ด้วย: user ที่ต้องเปลี่ยนรหัสผ่านอยู่
@@ -3598,86 +3601,8 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
 // 10. SETTINGS (ตั้งค่าร้านค้า)
 // =========================================
 
-app.get('/api/settings/store', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM settings WHERE id = 1');
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.put('/api/settings/store', requireRole('ADMIN', 'MANAGER'), validateRequest(storeSettingsValidator), async (req, res) => {
-  const { store_name, tax_id, address, receipt_footer } = req.body;
-  try {
-    await pool.query(
-      'UPDATE settings SET store_name = ?, tax_id = ?, address = ?, receipt_footer = ? WHERE id = 1',
-      [store_name, tax_id, address, receipt_footer]
-    );
-    res.json({ message: "อัปเดตข้อมูลร้านค้าสำเร็จ" });
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.get('/api/settings/receipt', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT receipt_footer FROM settings WHERE id = 1');
-    res.json({ receipt_footer: rows[0].receipt_footer });
-  } catch (error) {
-    console.error('[500]', error.message);
-
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-// =========================================
-// ⭐️ LOYALTY & DISCOUNT SETTINGS (Part 2) — อัตราแต้ม + ส่วนลด default ของกลุ่ม (ADMIN+MANAGER)
-// =========================================
-// ⭐️ อ่านอัตราแต้มสะสม (POS/PreOrder ใช้ตอน mount เพื่อคำนวณ preview ให้ตรงกับ backend)
-//   เปิดให้ทุก role ที่ล็อกอิน เพราะ CASHIER ก็ต้องรู้อัตราตอนคิดเงิน
-app.get('/api/settings/loyalty', async (req, res) => {
-  try {
-    const [[s]] = await pool.query('SELECT points_earn_amount_per_point, points_redeem_value_per_point FROM settings WHERE id = 1');
-    const [groups] = await pool.query('SELECT id, name, code, default_discount_percent FROM member_groups ORDER BY id');
-    res.json({
-      points_earn_amount_per_point: Number(s?.points_earn_amount_per_point) || 20,
-      points_redeem_value_per_point: Number(s?.points_redeem_value_per_point) || 1,
-      groups,
-    });
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
-
-app.put('/api/settings/loyalty', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
-  const { points_earn_amount_per_point, points_redeem_value_per_point } = req.body;
-  const earn = Number(points_earn_amount_per_point);
-  const redeem = Number(points_redeem_value_per_point);
-  if (!Number.isFinite(earn) || earn <= 0) return res.status(400).json({ error: 'จำนวนบาทต่อ 1 แต้ม ต้องเป็นตัวเลขมากกว่า 0' });
-  if (!Number.isFinite(redeem) || redeem <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้ม ต้องเป็นตัวเลขมากกว่า 0' });
-  // 🐛 FIX — column เก็บได้ 4 ตำแหน่งทศนิยม (DECIMAL(10,4)) ค่าที่ละเอียดกว่านั้นจะถูกปัดเหลือ 0 แบบ
-  // เงียบๆ ตอน UPDATE (ไม่มี error ใดๆ) ทำให้แอดมินคิดว่าบันทึกค่าหนึ่งไปแต่ระบบใช้จริงเป็นอีกค่า
-  // (ตกไปใช้ default 1 บาท/แต้มแทน เพราะ 0 ไม่ผ่านเช็ค >0 ใน getLoyaltyRates) — ปัดเองตรงนี้ก่อน แล้ว
-  // เช็คว่าปัดแล้วยังไม่เป็น 0 ถ้าเป็น 0 คือค่าที่กรอกมาละเอียดเกินกว่าระบบรองรับ ให้ error ชัดเจนแทน
-  const redeemRounded = Math.round(redeem * 10000) / 10000;
-  if (redeemRounded <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้มละเอียดเกินไป (รองรับสูงสุด 4 ตำแหน่งทศนิยม เช่น 0.0001)' });
-  try {
-    await pool.query(
-      'UPDATE settings SET points_earn_amount_per_point = ?, points_redeem_value_per_point = ? WHERE id = 1',
-      [Math.round(earn), redeemRounded]
-    );
-    res.json({ message: 'อัปเดตอัตราแต้มสะสมสำเร็จ' });
-  } catch (error) {
-    console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
-});
+// ⭐️ Phase B (refactor) — /api/settings/* (store/receipt/loyalty) ย้ายไป src/routes/settingsRoutes.js
+// + src/controllers/settingsController.js แล้ว (mount ใน section app.use ด้านบน) พฤติกรรม/path เดิมทุกอย่าง
 
 // =========================================
 // ⭐️ MEMBER GROUPS (Part 3) — กลุ่มสมาชิก + rule ส่วนลดรายหมวดหมู่ (ADMIN+MANAGER)
