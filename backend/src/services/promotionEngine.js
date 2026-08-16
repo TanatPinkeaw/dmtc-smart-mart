@@ -9,12 +9,16 @@
 //   promotionsController (verify) ต้องใช้ตัวเดียวกัน — กันคำนวณส่วนลดเพี้ยนไปคนละแบบ 2 ที่
 // ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase B (refactor) — ยกมาจาก server.js เป๊ะ ไม่เปลี่ยนสูตร/พฤติกรรม
+const { toSatang, fromSatang } = require('../utils/money');
 
 // ⭐️ คำนวณส่วนลดของโปรโมชั่น รองรับ PERCENT/FIXED/BOGO (BOGO ต้องมี items ของตะกร้าเพื่อเช็คจำนวนจริง)
 // queryFn คือ conn.query หรือ pool.query แล้วแต่บริบท (ใน transaction หรือ preview เฉยๆ)
 async function calculatePromotionDiscount(queryFn, promo, totalAmount, items) {
   if (promo.discount_type === 'PERCENT') {
-    return Math.min((totalAmount * Number(promo.discount_value)) / 100, totalAmount);
+    // 🐛 FIX — คิดในหน่วยสตางค์ กัน float noise (เช่น 99.99 * 10/100 = 9.999...) — ปัดแบบเดียวกับ
+    // รูปแบบเงินอื่นๆ ในระบบ (toSatang/fromSatang)
+    const discSatang = Math.round(toSatang(totalAmount) * Number(promo.discount_value) / 100);
+    return Math.min(fromSatang(discSatang), totalAmount);
   }
   if (promo.discount_type === 'FIXED') {
     return Math.min(Number(promo.discount_value), totalAmount);
@@ -40,9 +44,22 @@ async function calculatePromotionDiscount(queryFn, promo, totalAmount, items) {
     }
     if (freeUnitsGranted <= 0) return 0;
 
-    const [freeProductRows] = await queryFn('SELECT price FROM products WHERE id = ?', [promo.free_product_id]);
+    // 🐛 FIX — เดิมคิดมูลค่า free สินค้าจากราคาเต็ม ไม่หักส่วนลดระดับสินค้า (โปร/ใกล้หมดอายุ) ที่สินค้า
+    // นั้นได้อยู่ → มูลค่า BOGO สูงเกินจริง. คิดราคาหลังหัก BEST discount (สูตรเดียวกับตอนคิดเงิน ปัดบาท)
+    const [freeProductRows] = await queryFn(
+      `SELECT price,
+              GREATEST(
+                CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
+                       AND CURDATE() BETWEEN promo_start AND promo_end THEN promo_percent ELSE 0 END,
+                CASE WHEN expiry_date IS NOT NULL AND DATEDIFF(DATE(expiry_date), CURDATE()) = 1
+                       THEN COALESCE(discount_percent,0) ELSE 0 END
+              ) AS best_discount_percent
+       FROM products WHERE id = ?`, [promo.free_product_id]);
     if (freeProductRows.length === 0) return 0;
-    return Math.min(freeUnitsGranted * Number(freeProductRows[0].price), totalAmount);
+    let unitValue = Number(freeProductRows[0].price);
+    const bestPct = Number(freeProductRows[0].best_discount_percent) || 0;
+    if (bestPct > 0) unitValue -= Math.round(unitValue * bestPct / 100);
+    return Math.min(freeUnitsGranted * unitValue, totalAmount);
   }
   return 0;
 }

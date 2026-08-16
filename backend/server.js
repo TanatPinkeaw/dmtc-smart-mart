@@ -2055,7 +2055,10 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
 // 2. SHIFT MANAGEMENT (ระบบจัดการกะการขาย)
 // =========================================
 app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
-  const { cashier_id, opening_cash, cash_breakdown, open_photo } = req.body;
+  const { cashier_id: bodyCashierId, opening_cash, cash_breakdown, open_photo } = req.body;
+  // 🐛 FIX — ไม่เชื่อ cashier_id จาก body (cashier เปิดกะให้คนอื่นได้) — CASHIER ใช้ตัวตนจาก JWT
+  // เสมอ; ADMIN ยังเปิดให้ cashier คนอื่นได้ตามปกติ (จัดการกะ)
+  const cashier_id = req.user.role === 'ADMIN' ? bodyCashierId : req.user.id;
   if (!cashier_id || opening_cash === undefined) {
     return res.status(400).json({ error: "กรุณาระบุรหัสแคชเชียร์และเงินตั้งต้น" });
   }
@@ -2139,12 +2142,16 @@ app.get('/api/shifts/current', requireRole('CASHIER', 'ADMIN'), async (req, res)
 app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(shiftCloseValidator), async (req, res) => {
   // ⭐️ Sprint 2 — D1: Dual-Control Shift Close: Cashier initiates close request (status → PENDING_CLOSE)
   // Manager must approve via PUT /api/shifts/:id/approve before shift is fully closed
-  const { cashier_id, actual_cash, note, cash_breakdown, close_photo, discrepancy_category } = req.body;
+  const { cashier_id: bodyCashierId, actual_cash, note, cash_breakdown, close_photo, discrepancy_category } = req.body;
+  // 🐛 FIX — ไม่เชื่อ cashier_id จาก body: CASHIER ปิดได้เฉพาะกะตัวเอง (JWT); ADMIN ปิดให้คนอื่นได้
+  const cashier_id = req.user.role === 'ADMIN' ? bodyCashierId : req.user.id;
+  if (!cashier_id) return res.status(400).json({ error: "กรุณาระบุรหัสแคชเชียร์" });
   if (!close_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนปิดกะ" });
 
   try {
+    // 🐛 FIX — เลือกกะที่เปิดล่าสุด (เดิมไม่มี ORDER BY — ถ้ามีกะ OPEN ค้างข้ามวันหลายใบ จะปิดผิดใบ)
     const [shifts] = await pool.query(
-      "SELECT id, opening_cash, opened_at FROM shifts WHERE cashier_id = ? AND status = 'OPEN'",
+      "SELECT id, opening_cash, opened_at FROM shifts WHERE cashier_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1",
       [cashier_id]
     );
 
@@ -2655,7 +2662,9 @@ async function runAutoCheckoutStale(io) {
   );
   for (const sh of staleShifts) {
     const [salesRows] = await pool.query(
-      `SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE cashier_id = (SELECT cashier_id FROM shifts WHERE id = ?) AND payment_method = 'CASH' AND created_at >= ?`,
+      // 🐛 FIX — filter status='COMPLETED' ด้วย (เดิมนับ VOIDED/HOLD เข้าเงินสดคาดการณ์) ให้ตรงกับ
+      // สูตรปิดกะปกติ (manual close) ที่ filter ไว้แล้ว
+      `SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE cashier_id = (SELECT cashier_id FROM shifts WHERE id = ?) AND payment_method = 'CASH' AND status = 'COMPLETED' AND created_at >= ?`,
       [sh.id, sh.opened_at]
     );
     const expectedCash = Number(sh.opening_cash) + Number(salesRows[0].total);
@@ -2801,7 +2810,10 @@ async function writePointTxn(conn, userId, type, points, refSaleId, refOrderId, 
 //   = เงินไม่มีเจ้าของ ตามไม่ได้ — งานคืนเงิน/ยกเลิกบิลของ ADMIN ยังทำได้ที่หน้าตั้งค่า (ประวัติขาย)
 app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validateRequest(checkoutValidator), async (req, res) => {
   // ⭐️ เพิ่มการรับค่า member_id, promotion_id, redeem_points เข้ามาด้วย
-  const { cashier_id, member_id, promotion_id, redeem_points, payment_method, amount_received, items } = req.body;
+  const { member_id, promotion_id, redeem_points, payment_method, amount_received, items } = req.body;
+  // 🐛 FIX — cashier_id ต้องมาจาก JWT (req.user.id) ห้ามเชื่อจาก body: เดิม cashier ส่ง id คนอื่นได้
+  // → บิลเข้ากะ/ชื่อคนอื่น (แอบอ้างหรือโยนความผิดตอนเงินไม่ตรง) — sync-offline ทำถูกแล้ว ตัวนี้ทำตาม
+  const cashier_id = req.user.id;
   if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าสินค้าว่างเปล่า" });
 
   const conn = await pool.getConnection();
@@ -3304,8 +3316,8 @@ app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res
   try {
     await conn.beginTransaction();
 
-    // ⭐️ ใช้ status ตรวจสอบอย่างเดียว
-    const [sales] = await conn.query('SELECT member_id, total_amount, status FROM sales WHERE id = ? FOR UPDATE', [saleId]);
+    // ⭐️ ใช้ status ตรวจสอบอย่างเดียว (points_redeemed ไว้คืนแต้มที่แลกใช้ตอน void)
+    const [sales] = await conn.query('SELECT member_id, total_amount, status, points_redeemed FROM sales WHERE id = ? FOR UPDATE', [saleId]);
     if (sales.length === 0) throw new Error("ไม่พบข้อมูลบิลนี้");
 
     const sale = sales[0];
@@ -3328,9 +3340,24 @@ app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res
     }
 
     // คืนแต้ม (หารด้วยอัตราที่ตั้งไว้ ให้ตรงกับตอนได้แต้มใน checkout) + เขียน ledger
-    // หมายเหตุ: จุดนี้ claw-back เฉพาะแต้ม "ที่ได้จากการซื้อ" เท่านั้น (พฤติกรรมเดิม) ยังไม่คืนแต้ม
-    //   ที่ลูกค้าแลกเป็นส่วนลด/แลกของรางวัลไปในบิลนั้น — เป็นช่องว่างเดิมก่อนหน้า ไม่ได้ขยายในงานนี้
+    // 🐛 FIX — เดิมคืนแค่แต้มสะสมที่ได้จากการซื้อ ไม่คืนแต้มที่ลูกค้า "แลกใช้" ในบิลนี้ (แลกเป็นส่วนลด
+    // + ของรางวัล) → ลูกค้าเสียแต้มทั้งที่บิลถูก void. คืนให้ครบ: points_redeemed + แต้มของรางวัล
     if (sale.member_id) {
+      const redeemed = Number(sale.points_redeemed) || 0;
+      if (redeemed > 0) {
+        await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [redeemed, sale.member_id]);
+        await writePointTxn(conn, sale.member_id, 'ADJUST', redeemed, saleId, null, req.user.id, 'คืนแต้มที่แลกใช้จากการยกเลิกบิล (void)');
+      }
+      const [rewardItems] = await conn.query(
+        `SELECT si.quantity, p.points_required FROM sale_items si JOIN products p ON p.id = si.product_id WHERE si.sale_id = ? AND p.is_reward_item = 1`,
+        [saleId]
+      );
+      let rewardRefund = 0;
+      for (const ri of rewardItems) rewardRefund += Number(ri.points_required || 0) * ri.quantity;
+      if (rewardRefund > 0) {
+        await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [rewardRefund, sale.member_id]);
+        await writePointTxn(conn, sale.member_id, 'ADJUST', rewardRefund, saleId, null, req.user.id, 'คืนแต้มของรางวัลจากการยกเลิกบิล (void)');
+      }
       const { earnPer } = await getLoyaltyRates(conn);
       const points = Math.floor(sale.total_amount / earnPer);
       if (points > 0) {
@@ -4049,11 +4076,15 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
       throw new Error(`ออเดอร์นี้อยู่ในความรับผิดชอบของ ${assignee[0]?.full_name || 'พนักงานท่านอื่น'} แล้ว`);
     }
 
-    // ⭐️ กันยกเลิกซ้ำ (ป้องกันคืนแต้มซ้ำสองรอบถ้ากดยกเลิกออเดอร์ที่ถูกยกเลิกไปแล้ว)
-    if (status === 'CANCELLED' && order.status === 'CANCELLED') {
+    // 🐛 FIX — guard transition ของสถานะออเดอร์ (เดิมมีแค่กัน CANCELLED ซ้ำ): สถานะ terminal
+    // (COMPLETED/CANCELLED) เปลี่ยนต่อไม่ได้ — กัน COMPLETED ซ้ำ (ได้แต้มซ้ำ), CANCELLED → COMPLETED
+    // (ได้แต้มจากออเดอร์ที่ยกเลิก), CANCELLED หลังรับของแล้ว (คืนสต๊อก/แต้มทั้งที่ของออกไปแล้ว) ฯลฯ
+    if (order.status === 'CANCELLED') {
       throw new Error("ออเดอร์นี้ถูกยกเลิกไปแล้ว");
     }
-
+    if (order.status === 'COMPLETED') {
+      throw new Error("ออเดอร์นี้เสร็จสมบูรณ์แล้ว ไม่สามารถเปลี่ยนสถานะได้");
+    }
     // ⭐️ ห้ามยกเลิกออเดอร์ที่เริ่มเตรียมของ/พร้อมให้รับแล้ว (กันเตรียมของไปแล้วโดนยกเลิกทีหลัง)
     if (status === 'CANCELLED' && ['PREPARING', 'READY'].includes(order.status)) {
       throw new Error("ไม่สามารถยกเลิกได้ เนื่องจากเริ่มเตรียมสินค้าไปแล้ว");
@@ -4083,14 +4114,17 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
       cancelMsg = `ออเดอร์ #${orderId} ถูกยกเลิกแล้ว สาเหตุ: ${reject_reason || 'สลิปไม่ถูกต้อง'}`;
       await conn.query('INSERT INTO notifications (user_id, message) VALUES (?, ?)', [order.user_id, cancelMsg]);
 
-      const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
-      for (const item of items) {
-        await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
+      // 🐛 FIX — คืนสต๊อก/แต้มเฉพาะที่ยังไม่ได้คืน: ถ้าเคย SLIP_REJECTED (คืนสต๊อกไปแล้วตอน reject)
+      // หรือ REFUND_REQUESTED (คืนแต้มไปแล้ว) ห้ามคืนซ้ำ ไม่งั้นสต๊อก/แต้มเกินจริง
+      if (order.status !== 'SLIP_REJECTED') {
+        const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
+        for (const item of items) {
+          await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
+        }
+        stockChanged = true;
       }
-      stockChanged = true;
-
       // ⭐️ คืนแต้มที่เคยแลกไปตอนสั่งจอง (ถ้ามี) เพราะบิลนี้ไม่สำเร็จแล้ว
-      if (order.points_redeemed > 0) {
+      if (order.points_redeemed > 0 && order.status !== 'REFUND_REQUESTED') {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.points_redeemed, order.user_id]);
         await writePointTxn(conn, order.user_id, 'ADJUST', order.points_redeemed, null, orderId, req.user.id, 'คืนแต้มจากการยกเลิกออเดอร์');
       }
@@ -4116,11 +4150,23 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     }
 
     // ⭐️ ขอคืนเงิน (โอนมาแล้วแต่ไม่เอาแล้ว) — แจ้งลูกค้าให้นำสลิปมาที่ร้าน + คืนแต้ม
+    // 🐛 FIX — กันคืนแต้มซ้ำถ้ากด REFUND_REQUESTED ซ้ำ (ต้องมาจากสถานะที่ยังไม่ได้คืน)
     if (status === 'REFUND_REQUESTED') {
-      if (order.points_redeemed > 0) {
+      if (order.points_redeemed > 0 && order.status !== 'REFUND_REQUESTED') {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.points_redeemed, order.user_id]);
         await writePointTxn(conn, order.user_id, 'ADJUST', order.points_redeemed, null, orderId, req.user.id, 'คืนแต้มจากการขอคืนเงิน');
       }
+    }
+
+    // 🐛 FIX — SLIP_REJECTED คืนสต๊อกไปตอน reject แล้ว ถ้า accept ผ่านหน้าร้าน (โดยไม่ต้องอัปสลิปใหม่)
+    // ต้องตัดสต๊อกกลับคืน ไม่งั้นสินค้าหลุดออกโดยไม่หักสต๊อก (ขายเกินได้)
+    if (order.status === 'SLIP_REJECTED' && status === 'PREPARING') {
+      const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
+      for (const item of items) {
+        const [res] = await conn.query('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?', [item.quantity, item.product_id, item.quantity]);
+        if (res.affectedRows === 0) throw new Error(`สต๊อกสินค้าไม่พอสำหรับออเดอร์ #${orderId} กรุณาติดต่อลูกค้า`);
+      }
+      stockChanged = true;
     }
 
     // ถ้าออเดอร์เสร็จสมบูรณ์ (ลูกค้ามารับของแล้ว) ให้เพิ่มแต้มสะสม (สต๊อกตัดไปแล้วตั้งแต่ตอนจอง)
@@ -4134,7 +4180,8 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
 
     // ⭐️ F3 — จุดที่ "ตรวจสลิปผ่าน" จริงๆ คือ PENDING_VERIFY → PREPARING (ไม่ใช่ตอน COMPLETED ซึ่งคือลูกค้ามารับของ
     // แก้จาก Task 4 เดิมที่ผูก slip_verification_status='VERIFIED' ไว้ผิดจุดที่ COMPLETED)
-    if (order.status === 'PENDING_VERIFY' && status === 'PREPARING') {
+    // 🐛 FIX — SLIP_REJECTED → PREPARING (accept หน้าร้าน) ก็ต้อง mark VERIFIED ด้วย เดิมหลุด (ยังค้าง REJECTED)
+    if (['PENDING_VERIFY', 'SLIP_REJECTED'].includes(order.status) && status === 'PREPARING') {
       await conn.query(
         `UPDATE orders SET slip_verification_status = 'VERIFIED', slip_verified_by = ?, slip_verified_at = NOW() WHERE id = ?`,
         [req.user.id, orderId]
@@ -4371,14 +4418,43 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'
     const base = `${Date.now()}_${req.user.id}`;
     const slipUrl = await saveImage(req.file.buffer, 'slips', base, ext);
 
-    // อัปเดต slip + reset สถานะเป็น PENDING_VERIFY ถ้าเดิมเป็น SLIP_REJECTED
-    const statusUpdate = order.status === 'SLIP_REJECTED' ? ', status = \'PENDING_VERIFY\'' : '';
-    const [result] = await pool.query(
-      `UPDATE orders SET slip_image = ?${statusUpdate} WHERE id = ? AND user_id = ?`,
-      [slipUrl, id, req.user.id]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(400).json({ error: 'Failed to save payment slip to order' });
+    // 🐛 FIX — เดิมอัปเดตตรงๆ ไม่มี transaction: ตอน SLIP_REJECTED คืนสต๊อกไปแล้ว พอลูกค้าส่งสลิปใหม่
+    // (สถานะกลับ PENDING_VERIFY) ไม่มีใครตัดสต๊อกคืน → พอออเดอร์เดินต่อถึง COMPLETED สินค้าหลุดออก
+    // โดยไม่หักสต๊อก (ขายเกินได้). ทำใน transaction + ล็อกแถว FOR UPDATE กันส่งซ้ำ/ตัดสต๊อกซ้ำ
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [lockedOrders] = await conn.query(
+        'SELECT id, status FROM orders WHERE id = ? AND user_id = ? FOR UPDATE',
+        [id, req.user.id]
+      );
+      if (lockedOrders.length === 0) throw new Error('Order not found or does not belong to you');
+      const locked = lockedOrders[0];
+      if (!['PENDING_VERIFY', 'SLIP_REJECTED'].includes(locked.status)) {
+        throw new Error(`Order must be in PENDING_VERIFY or SLIP_REJECTED status to upload slip. Current status: ${locked.status}`);
+      }
+
+      const wasRejected = locked.status === 'SLIP_REJECTED';
+      const statusUpdate = wasRejected ? ', status = \'PENDING_VERIFY\'' : '';
+      const [result] = await conn.query(
+        `UPDATE orders SET slip_image = ?${statusUpdate} WHERE id = ? AND user_id = ?`,
+        [slipUrl, id, req.user.id]
+      );
+      if (result.affectedRows === 0) throw new Error('Failed to save payment slip to order');
+
+      if (wasRejected) {
+        const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id]);
+        for (const item of items) {
+          const [res] = await conn.query('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?', [item.quantity, item.product_id, item.quantity]);
+          if (res.affectedRows === 0) throw new Error(`สต๊อกสินค้าไม่พอสำหรับออเดอร์ #${id} กรุณาติดต่อพนักงาน`);
+        }
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
     }
 
     // ⭐️ แจ้ง ADMIN/CASHIER ว่ามีสลิปเข้ามา
