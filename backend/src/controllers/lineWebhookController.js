@@ -44,6 +44,8 @@ const ORDER_STATUS_LABEL = {
   READY: 'พร้อมให้รับสินค้า',
   PENDING: 'รอดำเนินการ',
   PENDING_APPROVAL: 'รออนุมัติ',
+  // 🐛 FIX — เดิมไม่มี label → โชว์โค้ดดิบ "REFUND_REQUESTED" ให้ลูกค้าในแชท LINE
+  REFUND_REQUESTED: 'กำลังดำเนินการคืนเงิน',
 };
 
 function text(t) {

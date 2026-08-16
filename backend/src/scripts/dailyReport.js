@@ -54,13 +54,19 @@ async function generateDailyReportData(targetDateStr) {
             sh.discrepancy_flag, sh.discrepancy_category, sh.status,
             // 🐛 FIX (root cause) — closed_at เป็น TIMESTAMP + pool ตั้ง SET time_zone='+07:00' ทุก
             // connection แล้ว MySQL คืนเป็นเวลาไทยตั้งแต่อ่านแล้ว CONVERT_TZ เดิมแปลงซ้ำ บวก 7 ชม.เกิน
-            DATE_FORMAT(sh.closed_at, '%Y-%m-%d %H:%i:%s') as closed_at_bkk
+            // 🐛 FIX — enum เดิมเป็น 'PENDING_APPROVAL' ที่ไม่มีจริง (จริงคือ PENDING_CLOSE) → กะที่รอ
+            // อนุมัติไม่เคยโชว์ในรายงาน + PENDING_CLOSE ยังไม่มี closed_at (ตั้งตอน approve) จึงนับวัน
+            // ตาม opened_at และใช้ COALESCE สำหรับเรียง/แสดง
+            DATE_FORMAT(COALESCE(sh.closed_at, sh.opened_at), '%Y-%m-%d %H:%i:%s') as closed_at_bkk
      FROM shifts sh
      JOIN users u ON u.id = sh.cashier_id
-     WHERE sh.status IN ('CLOSED', 'PENDING_APPROVAL')
-       AND sh.closed_at >= ? AND sh.closed_at < ?
-     ORDER BY sh.closed_at ASC`,
-    [reportDateUTC, nextDateUTC]
+     WHERE sh.status IN ('CLOSED', 'PENDING_CLOSE')
+       AND (
+         (sh.status = 'CLOSED' AND sh.closed_at >= ? AND sh.closed_at < ?)
+         OR (sh.status = 'PENDING_CLOSE' AND sh.opened_at >= ? AND sh.opened_at < ?)
+       )
+     ORDER BY COALESCE(sh.closed_at, sh.opened_at) ASC`,
+    [reportDateUTC, nextDateUTC, reportDateUTC, nextDateUTC]
   );
 
   const [salesRows] = await pool.query(
@@ -121,9 +127,9 @@ function buildReportHtml(data) {
             ${Number(s.difference) > 0 ? '+' : ''}${Number(s.difference).toFixed(2)}
           </td>
           <td style="padding:6px 10px;border-bottom:1px solid #eee;">${s.discrepancy_category || (Number(s.discrepancy_flag) === 1 ? '(ไม่ระบุ)' : '-')}</td>
-          <td style="padding:6px 10px;border-bottom:1px solid #eee;">${s.status === 'PENDING_APPROVAL' ? '⚠️ รออนุมัติ' : 'ปิดแล้ว'}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #eee;">${s.status === 'PENDING_CLOSE' ? '⚠️ รออนุมัติ' : 'ปิดแล้ว'}</td>
         </tr>`).join('')
-    : `<tr><td colspan="6" style="padding:12px;text-align:center;color:#999;">ไม่มีกะที่ปิดในวันนี้</td></tr>`;
+    : `<tr><td colspan="6" style="padding:12px;text-align:center;color:#999;">ไม่มีกะที่ปิด/รออนุมัติในวันนี้</td></tr>`;
 
   return `
   <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222;">
@@ -137,7 +143,7 @@ function buildReportHtml(data) {
       <tr><td style="padding:4px 0 4px 16px;color:#999;font-size:13px;">• โอน/QR</td><td style="text-align:right;font-size:13px;">${baht(data.qr_sales)}</td></tr>
       ${Number(data.other_sales) !== 0 ? `<tr><td style="padding:4px 0 4px 16px;color:#999;font-size:13px;">• อื่นๆ</td><td style="text-align:right;font-size:13px;">${baht(data.other_sales)}</td></tr>` : ''}
       <tr><td style="padding:4px 0;color:#666;">บิลที่ถูก void</td><td style="text-align:right;">${data.void_count} บิล (${baht(data.void_total)})</td></tr>
-      <tr><td style="padding:8px 0 4px;color:#666;border-top:1px solid #eee;">กะที่ปิดวันนี้</td><td style="text-align:right;font-weight:bold;border-top:1px solid #eee;">${data.shift_count} กะ</td></tr>
+      <tr><td style="padding:8px 0 4px;color:#666;border-top:1px solid #eee;">กะที่ปิด/รออนุมัติวันนี้</td><td style="text-align:right;font-weight:bold;border-top:1px solid #eee;">${data.shift_count} กะ</td></tr>
       <tr><td style="padding:4px 0;color:${data.discrepancy_count > 0 ? '#DC2626' : '#666'};">กะที่มีส่วนต่างเกินเกณฑ์ (&gt;100 บาท)</td><td style="text-align:right;font-weight:bold;color:${data.discrepancy_count > 0 ? '#DC2626' : '#666'};">${data.discrepancy_count} กะ</td></tr>
       <tr><td style="padding:4px 0;color:#666;">ผลรวมส่วนต่างเงินสดทั้งหมด (absolute)</td><td style="text-align:right;">${baht(data.total_variance)}</td></tr>
     </table>
