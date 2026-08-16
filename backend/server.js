@@ -102,6 +102,19 @@ const forgotPasswordLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// ⭐️ Security remediation — POST /api/users/register เป็น public ที่เขียน DB ได้ ไม่มี rate limit
+// ใครก็ยิงสร้างบัญชีปลอมถล่มได้ (แล้ว default password = เบอร์โทร ทำให้แย่ง student_id/เบอร์ของคนอื่น
+// ก่อนเจ้าของตัวจริงสมัครได้). จำกัดต่อ IP แบบหลวมๆ — endpoint นี้ POS ใช้สมัครสมาชิกหน้าร้าน (ดู
+// pages/POS.tsx) จึงต้องเผื่อพอให้ร้านเดียวสมัครได้หลายคน แต่ยังกันยิงถล่ม
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: IS_PRODUCTION ? 60 : 200,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  message: { error: 'ลงทะเบียนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ⭐️ Security remediation — /api/auth/refresh ไม่เคยมี rate limit เลย token หลุดโดนใครยิงซ้ำได้ไม่จำกัด
 // จำกัดหลวมๆ (คนละสิทธิ์ต่างจาก login limiter) เพราะ client ปกติเรียกเป็นระยะตาม access token หมดอายุ
 const refreshLimiter = rateLimit({
@@ -1438,7 +1451,7 @@ app.get('/api/users/me', async (req, res) => {
   }
 });
 
-app.post('/api/users/register', validateRequest(userRegisterValidator), async (req, res) => {
+app.post('/api/users/register', registerLimiter, validateRequest(userRegisterValidator), async (req, res) => {
   const { student_id, full_name, phone_number } = req.body;
   if (!student_id || !full_name || !phone_number) {
     return res.status(400).json({ error: "กรุณากรอกข้อมูลให้ครบถ้วน" });
@@ -1670,6 +1683,9 @@ app.post('/api/users/:id/profile-photo', uploadLimiter, profilePhotoUpload.singl
   if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
 
   try {
+    // 🐛 FIX — ตรวจว่าเป็นรูปจริง (sharp parse) + ขนาดสมเหตุผล เหมือนรูปสลิป/เข้างาน (Sprint 2 B9) —
+    // เดิม MIME มาจาก client ประกาศเอง ปลอมได้ เก็บไฟล์ที่ไม่ใช่รูปจริงได้
+    await validateImageDimensions(req.file.buffer, 200, 200, 4000, 4000);
     const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
     const photoUrl = await saveImage(req.file.buffer, 'profile-photos', `user_${userId}_${Date.now()}`, ext);
     await pool.query('UPDATE users SET profile_image_url = ? WHERE id = ?', [photoUrl, userId]);
