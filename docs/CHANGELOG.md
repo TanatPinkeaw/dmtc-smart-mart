@@ -44,9 +44,7 @@
 
 ---
 
-## [2026-08-16] — feat: staff สั่งจองสินค้าได้ + นโยบายแต้ม MEMBER-only + realtime สลิป (ยังไม่ push)
-
-> ⚠️ ยังไม่ถูก commit/push — เก็บเป็นรายการรอสรุปตอนขึ้นจริง (เพิ่ม commit hash หลัง push)
+## [2026-08-16] — feat: staff สั่งจองสินค้าได้ + นโยบายแต้ม MEMBER-only + realtime สลิป (commit `354dbb3`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
