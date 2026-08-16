@@ -49,9 +49,16 @@ export function itemLevelDiscountPercent(product: any): number {
   return Math.max(nearExpiryPct, promoPct);
 }
 
+// 🐛 FIX (Sprint 2 — ราคา POS กับหน้าจองไม่ตรงกัน) — เดิมปัดส่วนลดที่ตำแหน่ง "สตางค์"
+// (Math.round(toSatang(price) * pct / 100)) แต่ backend (checkout + /api/orders + /api/products
+// enrichment) คิดส่วนลดเป็น "บาทเต็ม" (Math.round(price * pct / 100)) แล้วหักออกจากราคา → ราคา
+// ที่โชว์บนการ์ดหน้าจอง ≠ ราคาที่ backend คิดจริงตอนจ่ายเงิน เช่น 19.90 ลด 50%: เดิมโชว์ 9.95
+// แต่ backend คิด 9.90. แก้ให้คิด discount เป็นบาทเต็มด้วย Math.round ตัวเดียวกับ backend แล้วค่อย
+// หักใน satang space กัน float noise — หน้าจอง/POS/backend โชว์ตรงกันหมด (ดู test:price contract)
 export function effectiveUnitPrice(product: any): number {
   const price = Number(product?.price) || 0;
   const pct = itemLevelDiscountPercent(product);
   if (pct <= 0) return price;
-  return fromSatang(toSatang(price) - Math.round(toSatang(price) * pct / 100));
+  const discountBaht = Math.round(price * pct / 100);
+  return fromSatang(toSatang(price) - discountBaht * 100);
 }

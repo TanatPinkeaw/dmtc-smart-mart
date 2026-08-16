@@ -3,6 +3,7 @@
 //    สินค้าหมดอายุกดไม่ได้ ; เป็นหน้าตาล้วน logic อยู่ pages/POS.tsx
 import { Search, PackagePlus } from 'lucide-react';
 import { EmptyState } from '../ui/EmptyState';
+import { effectiveUnitPrice } from '../../utils/money'; // 🐛 FIX — ใช้ helper กลางเดียวกับหน้าจอง กันราคา 2 หน้าไม่ตรงกัน
 
 interface Category { id: number; name: string; }
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
@@ -63,12 +64,14 @@ export function ProductGrid({
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredProducts.map(p => {
               const pWithExpiry = p as any;
+              // 🐛 FIX — เดิมคำนวณราคา inline (ใกล้หมดอายุใช้ price_after_discount จาก backend, โปรคิดแบบ
+              // float ไม่ปัด) ทำให้ราคาไม่ตรงกับหน้าจอง/backend — เปลี่ยนเป็น helper กลาง (money.ts) ตัวเดียว
               const showDiscount = pWithExpiry.expiry_status === 'near_expiry';
               const overridePrice = priceOverride[p.id];
               // ⭐️ Phase 1 — โปรช่วงวันที่ (ใช้เมื่อไม่มีลดใกล้หมดอายุ; ถ้ามีทั้งคู่ server จะเลือกอันดีสุดตอนคิดเงินเอง)
               const promoActive = !showDiscount && !!pWithExpiry.promo_active;
               const promoPct = Number(pWithExpiry.promo_percent) || 0;
-              const finalPrice = overridePrice ?? (showDiscount ? pWithExpiry.price_after_discount : (promoActive ? Number(p.price) * (1 - promoPct / 100) : p.price));
+              const finalPrice = overridePrice ?? effectiveUnitPrice(pWithExpiry);
               const isExpired = pWithExpiry.expiry_status === 'expired';
 
               return (
@@ -140,7 +143,7 @@ export function ProductGrid({
                         value={overridePrice ?? ''}
                         onChange={(e) => onPriceOverrideChange(p.id, parseFloat(e.target.value) || 0)}
                         className="w-full px-2 py-1 border rounded text-sm"
-                        placeholder={Number(pWithExpiry.price_after_discount).toFixed(2)}
+                        placeholder={effectiveUnitPrice(pWithExpiry).toFixed(2)}
                         step="0.01"
                       />
                     </div>

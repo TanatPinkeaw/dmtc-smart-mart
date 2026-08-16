@@ -3852,7 +3852,7 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
     // คำนวณราคา + เช็คสต๊อกพอจริง (ล็อกแถวสินค้ากันขายเกินตอนมีหลายคนจองพร้อมกัน)
     for (const item of items) {
       const [rows] = await conn.query(`
-        SELECT id, name, price, stock, category_id,
+        SELECT id, name, price, stock, category_id, expiry_date,
                GREATEST(
                  CASE WHEN promo_percent > 0 AND promo_start IS NOT NULL AND promo_end IS NOT NULL
                         AND CURDATE() BETWEEN promo_start AND promo_end
@@ -3863,6 +3863,11 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
                ) AS best_discount_percent
         FROM products WHERE id = ? FOR UPDATE`, [item.product_id]);
       if (rows.length === 0) throw new Error(`ไม่พบสินค้า ID ${item.product_id}`);
+      // 🐛 FIX — เดิมสั่งจองสินค้าหมดอายุได้ (หน้าจองโชว์ badge ไม่ได้ + backend ไม่ block) — เพิ่ม
+      // ชั้นป้องกันเดียวกับ POST /api/sales/checkout (สินค้าหมดอายุขายไม่ได้) กันสั่งแล้วค้างออเดอร์
+      if (getProductExpiry(rows[0]).status === 'expired') {
+        throw new Error(`ไม่สามารถสั่งสินค้าที่หมดอายุแล้ว: ${rows[0].name}`);
+      }
       if (rows[0].stock < item.quantity) {
         throw new Error(`สต๊อกไม่พอสำหรับ "${rows[0].name}" (เหลือ ${rows[0].stock}, ต้องการ ${item.quantity})`);
       }

@@ -72,4 +72,6 @@ jobs:
       # ⭐️ contract test — กัน checkoutValidator ฝั่ง frontend/backend หลุด sync (ไม่ต้องใช้ DB)
       #    รันก่อน smokeTest เพราะเร็วกว่า + ไม่พึ่ง DB ; repo checkout มี frontend/ ครบตอน CI จึงอ่านเทียบได้
       - run: node tests/checkoutContract.test.js
+      # ⭐️ price contract — กันสูตรราคาหลังส่วนลด (ปัดบาท) frontend/backend หลุด sync (ไม่ต้องใช้ DB)
+      - run: node tests/priceContract.test.js
       - run: node tests/smokeTest.js

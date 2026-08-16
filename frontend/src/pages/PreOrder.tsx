@@ -276,6 +276,12 @@ export default function PreOrder() {
   }, [cart.length]);
 
   const addToCart = (product: Product) => {
+    // 🐛 FIX — เดิมหน้าจองเพิ่มสินค้าหมดอายุเข้าตะกร้าได้ (backend reject ตอนสั่งทีหลัง) — block
+    // ตั้งแต่หน้านี้เหมือน POS.tsx
+    if ((product as any).expiry_status === 'expired') {
+      Swal.fire({ icon: 'error', title: 'สินค้าหมดอายุ', text: 'ไม่สามารถเพิ่มสินค้าที่หมดอายุแล้ว' });
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {

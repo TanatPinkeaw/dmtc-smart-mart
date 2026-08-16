@@ -51,12 +51,16 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
           // การ์ด = ราคาที่คิดจริง = ที่ backend หัก ตรงกันทั้งหมด
           const discountPct = itemLevelDiscountPercent(pAny);
           const nearExpiry = pAny.expiry_status === 'near_expiry';
+          // 🐛 FIX — เดิมหน้าจองไม่โชว์/ไม่ block สินค้าหมดอายุ (ต่างจาก POS) ลูกค้าสั่งได้แล้วโดน
+          // reject ตอนจ่าย — เพิ่ม badge + ปิดการสั่งให้เหมือน POS
+          const isExpired = pAny.expiry_status === 'expired';
+          const expiresToday = pAny.expiry_status === 'expires_today';
           const finalPrice = effectiveUnitPrice(pAny);
           return (
           // ⭐️ FIX: เปลี่ยนการ์ดให้เหมือนหน้า POS ทั้งหมด — ขนาด/ระยะห่างเท่ากัน + มีปุ่ม "เพิ่มลงตะกร้า"
           // ชัดเจนแทนการต้องแตะทั้งการ์ด (ปุ่มมี stopPropagation กัน addToCart ยิงซ้อน 2 ครั้งตอนกดปุ่ม)
-          <div key={product.id} onClick={() => onAddToCart(product)} className={`relative overflow-hidden bg-white border rounded-3xl p-3 shadow-md transition-all duration-150 flex flex-col items-center cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95 h-full ${nearExpiry ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500' : 'border-brand-border hover:border-brand-mid'}`}>
-            {!nearExpiry && <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />}
+          <div key={product.id} onClick={() => !isExpired && onAddToCart(product)} className={`relative overflow-hidden bg-white border rounded-3xl p-3 shadow-md transition-all duration-150 flex flex-col items-center h-full ${isExpired ? 'opacity-50 cursor-not-allowed border-red-300' : nearExpiry ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95' : 'border-brand-border hover:border-brand-mid cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95'}`}>
+            {!nearExpiry && !isExpired && <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />}
             <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2 flex items-center justify-center overflow-hidden">
               {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-brand-mid opacity-50" />}
             </div>
@@ -66,6 +70,16 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
             {nearExpiry && (
               <div className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
                 🎁 ใกล้หมดอายุ - {pAny.discount_percent}% OFF
+              </div>
+            )}
+            {isExpired && (
+              <div className="bg-red-200 text-red-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
+                ❌ หมดอายุ
+              </div>
+            )}
+            {expiresToday && (
+              <div className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs mb-1 w-full text-center">
+                ⚠️ หมดอายุวันนี้
               </div>
             )}
 
@@ -84,10 +98,11 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
             </div>
 
             <button
-              onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
-              className="w-full py-1.5 rounded-lg text-xs font-medium bg-brand text-white hover:bg-brand-dark active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1"
+              onClick={(e) => { e.stopPropagation(); if (!isExpired) onAddToCart(product); }}
+              disabled={isExpired}
+              className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${isExpired ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-dark active:scale-95'}`}
             >
-              เพิ่มลงตะกร้า
+              {isExpired ? 'ไม่สามารถขายได้' : 'เพิ่มลงตะกร้า'}
             </button>
           </div>
           );
