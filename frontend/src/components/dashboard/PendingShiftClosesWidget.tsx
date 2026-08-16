@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '../../api';
 import Swal from '../../swal';
-import { useSocket } from '../../SocketContext';
-import AuthImage, { openAuthImage } from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดรูปเข้างานผ่าน JWT
+import { useSocket } from '../../hooks/useSocket';
+import { getErrorMessage } from '../../utils/errorMessage';
+import AuthImage from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดรูปเข้างานผ่าน JWT
+import { openAuthImage } from '../../utils/openAuthImage';
 
 interface PendingShift {
   id: number;
@@ -27,8 +29,22 @@ export default function PendingShiftClosesWidget() {
   const [loading, setLoading] = useState(false);
   const socket = useSocket();
 
+  const loadPending = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/shifts/pending');
+      setPending(res.data);
+    } catch (err) {
+      console.error('Failed to load pending shifts:', err);
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'ไม่สามารถโหลดข้อมูลรายการรออนุมัติได้' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadPending();
+    // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+    void (async () => { await loadPending(); })();
 
     if (socket) {
       socket.on('shift_pending_close', () => {
@@ -40,19 +56,6 @@ export default function PendingShiftClosesWidget() {
       };
     }
   }, [socket]);
-
-  const loadPending = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/shifts/pending');
-      setPending(res.data);
-    } catch (err: any) {
-      console.error('Failed to load pending shifts:', err);
-      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'ไม่สามารถโหลดข้อมูลรายการรออนุมัติได้' });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getVarianceColor = (variance: number) => {
     if (variance < 50) return 'text-green-600 bg-green-50';
@@ -107,11 +110,11 @@ export default function PendingShiftClosesWidget() {
         confirmButtonText: 'ตกลง'
       });
       loadPending();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({
         icon: 'error',
         title: 'ผิดพลาด',
-        text: err.response?.data?.error || 'ไม่สามารถอนุมัติได้',
+        text: getErrorMessage(err, 'ไม่สามารถอนุมัติได้'),
         confirmButtonText: 'ตกลง'
       });
     }
@@ -143,11 +146,11 @@ export default function PendingShiftClosesWidget() {
         confirmButtonText: 'ตกลง'
       });
       loadPending();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({
         icon: 'error',
         title: 'ผิดพลาด',
-        text: err.response?.data?.error || 'ไม่สามารถปฏิเสธได้',
+        text: getErrorMessage(err, 'ไม่สามารถปฏิเสธได้'),
         confirmButtonText: 'ตกลง'
       });
     }

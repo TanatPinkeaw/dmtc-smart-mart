@@ -26,15 +26,15 @@ function toDateStr(d) {
 }
 
 // Get yesterday's date in Bangkok timezone
-function getYesterdayBangkok() {
-  const now = new Date();
+// ⭐️ รับ now เป็น param ได้ (default = ตอนนี้) — ให้เทสหน่วยส่งวันที่จำลองได้โดยไม่ต้อง mock Date
+function getYesterdayBangkok(now = new Date()) {
   const bangkokTime = new Date(now.toLocaleString('en-US', { timeZone: TZ_BANGKOK }));
   const yesterday = new Date(bangkokTime.getFullYear(), bangkokTime.getMonth(), bangkokTime.getDate());
   yesterday.setDate(yesterday.getDate() - 1);
   return yesterday;
 }
 
-// Pulls shifts closed + sales completed within [targetDateStr 00:00 UTC, +1 day 00:00 UTC).
+// Pulls shifts closed + sales completed within [targetDateStr 00:00:00 Thai, next day 00:00:00 Thai).
 // Defaults to "yesterday" (Bangkok time), matching the 6am-before-open use case.
 async function generateDailyReportData(targetDateStr) {
   let dateStr = targetDateStr;
@@ -42,11 +42,16 @@ async function generateDailyReportData(targetDateStr) {
     dateStr = toDateStr(getYesterdayBangkok());
   }
 
-  // Convert Bangkok date to UTC range for database query
-  const reportDateUTC = new Date(dateStr + 'T00:00:00Z');
-  const nextDateUTC = new Date(dateStr);
-  nextDateUTC.setDate(nextDateUTC.getDate() + 1);
-  const nextDateUTCStr = nextDateUTC.toISOString();
+  // 🐛 FIX (root cause) — เดิมส่ง JS Date เป็น param แล้ว mysql2 (sql-escaper) แปลงตาม timezone config
+  // ของ pool ('+07:00') → new Date('YYYY-MM-DDT00:00:00Z') กลายเป็น '... 07:00:00' ซึ่ง MySQL อ่านใน
+  // session tz (+07:00) ได้หน้าต่าง [07:00 ของวัน, 07:00 ของวันถัดไป) = เที่ยงคืนไทยเพี้ยนไป 7 ชม.
+  // (ยอดช่วง 00:00–07:00 ของวันรายงานหาย, ของวันถัดไปช่วงเดียวกันถูกนับเข้ามา) — ส่ง string เวลาไทย
+  // ตรงๆ [วัน 00:00:00, วันถัดไป 00:00:00) ให้ตรงกับ session tz +07:00 (pattern เดียวกับ
+  // DATE(created_at)=CURDATE() ที่ใช้ในรายงานอื่น)
+  const startDateStr = `${dateStr} 00:00:00`;
+  const nextDate = new Date(dateStr + 'T00:00:00Z');
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+  const endDateStr = `${nextDate.toISOString().slice(0, 10)} 00:00:00`;
 
   const [shifts] = await pool.query(
     `SELECT sh.id, sh.cashier_id, u.full_name AS cashier_name,
@@ -66,7 +71,7 @@ async function generateDailyReportData(targetDateStr) {
          OR (sh.status = 'PENDING_CLOSE' AND sh.opened_at >= ? AND sh.opened_at < ?)
        )
      ORDER BY COALESCE(sh.closed_at, sh.opened_at) ASC`,
-    [reportDateUTC, nextDateUTC, reportDateUTC, nextDateUTC]
+    [startDateStr, endDateStr, startDateStr, endDateStr]
   );
 
   const [salesRows] = await pool.query(
@@ -78,14 +83,14 @@ async function generateDailyReportData(targetDateStr) {
        COALESCE(SUM(CASE WHEN payment_method NOT IN ('CASH','QR') THEN total_amount ELSE 0 END), 0) AS other_sales
      FROM sales
      WHERE status = 'COMPLETED' AND created_at >= ? AND created_at < ?`,
-    [reportDateUTC, nextDateUTC]
+    [startDateStr, endDateStr]
   );
 
   const [voidRows] = await pool.query(
     `SELECT COUNT(*) AS void_count, COALESCE(SUM(total_amount), 0) AS void_total
      FROM sales
      WHERE status = 'VOIDED' AND created_at >= ? AND created_at < ?`,
-    [reportDateUTC, nextDateUTC]
+    [startDateStr, endDateStr]
   );
 
   const sales = salesRows[0];
@@ -182,4 +187,4 @@ async function sendDailyReport(targetDateStr) {
   return { sent, data };
 }
 
-module.exports = { generateDailyReportData, buildReportHtml, sendDailyReport };
+module.exports = { generateDailyReportData, buildReportHtml, sendDailyReport, getYesterdayBangkok, toDateStr };

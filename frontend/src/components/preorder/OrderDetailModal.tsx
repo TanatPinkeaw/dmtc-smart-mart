@@ -22,13 +22,30 @@ function getSlipImagePath(createdAt: string, filename: string): string {
   return `/uploads/slips/${year}-${month}-${day}/${filename}`;
 }
 
+interface OrderItem { id: number; product_name: string; quantity: number; subtotal: number | string; }
+
+interface OrderDetail {
+  id: number;
+  status: string;
+  created_at: string;
+  payment_method?: string;
+  slip_image?: string | null;
+  items?: OrderItem[];
+  points_discount?: number | string;
+  points_redeemed?: number | string;
+  total_amount?: number | string;
+  reject_reason?: string | null;
+}
+
+interface StoreInfoLite { [key: string]: unknown; }
+
 interface OrderDetailModalProps {
-  selectedOrder: any;
-  storeInfo?: any;
+  selectedOrder: OrderDetail;
+  storeInfo?: StoreInfoLite;
   refundReason: string;
   onRefundReasonChange: (value: string) => void;
   onClose: () => void;
-  onCancelOrder: (order: any, reason: string) => void;
+  onCancelOrder: (order: OrderDetail, reason: string) => void;
   // ⭐️ Phase 3 — ล็อกปุ่ม "ยกเลิกออเดอร์" ระหว่าง request ยังไม่จบ กัน double-submit
   cancelling: boolean;
   fetchMyOrders: () => Promise<void>;
@@ -41,14 +58,14 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
 
   const viewOrderReceipt = () => {
     const o = selectedOrder;
-    const subtotal = (o.items || []).reduce((s: number, i: any) => s + Number(i.subtotal), 0);
+    const subtotal = (o.items || []).reduce((s: number, i: OrderItem) => s + Number(i.subtotal), 0);
     const receiptData = {
       sale_id: `P${o.id}`,
       created_at: o.created_at,
       cashier_name: 'สั่งจองล่วงหน้า',
       member_name: null,
       payment_method: o.payment_method || 'QR',
-      items: (o.items || []).map((item: any) => ({
+      items: (o.items || []).map((item: OrderItem) => ({
         name: item.product_name,
         quantity: item.quantity,
         price: item.quantity > 0 ? Number(item.subtotal) / item.quantity : 0,
@@ -149,7 +166,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
                   await fetchMyOrders();
                   onClose();
                   Swal.fire({ icon: 'success', title: 'อัปโหลดสลิปสำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
-                } catch (err: any) {
+                } catch (err) {
                   Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
                 } finally {
                   setUploading(false);
@@ -183,7 +200,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
                   await fetchMyOrders();
                   onClose();
                   Swal.fire({ icon: 'success', title: 'ส่งสลิปใหม่สำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
-                } catch (err: any) {
+                } catch (err) {
                   Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
                 } finally {
                   setUploading(false);
@@ -210,7 +227,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
               <span className="text-lg">📦</span> รายการสินค้า ({selectedOrder.items?.length})
             </h3>
             <div className="space-y-2">
-              {selectedOrder.items?.map((item: any) => (
+              {selectedOrder.items?.map((item: OrderItem) => (
                 <div key={item.id} className="flex justify-between items-center gap-3 py-2.5 px-3 bg-white rounded-lg border border-gray-100">
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-800 font-medium text-sm truncate">{item.product_name}</p>

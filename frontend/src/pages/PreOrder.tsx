@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ShoppingCart, ShoppingBag, Search } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { toSatang, fromSatang, lineTotalSatang, effectiveUnitPrice } from '../utils/money'; // ⭐️ Sprint 1 — B3
@@ -19,7 +19,24 @@ import { OrderDetailModal } from '../components/preorder/OrderDetailModal';
 import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
 
 interface Category { id: number; name: string; }
-interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
+interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; expiry_status?: string; promo_active?: boolean; }
+interface StorePromo { id: number; label: string; }
+// ⭐️ /users/verify-phone คืนแค่ matched + member_name (กันข้อมูลรั่ว) — field อื่น (full_name/points)
+// ไม่มีใน response จริง การประกาศไว้แค่ทำให้หลงคิดว่ามี ให้ประกาศตาม response จริง
+interface PhoneVerified { member_name?: string; }
+interface PreOrderItem { id: number; product_name: string; quantity: number; subtotal: number | string; }
+interface PreOrderRow {
+  id: number;
+  status: string;
+  created_at: string;
+  payment_method?: string;
+  slip_image?: string | null;
+  items?: PreOrderItem[];
+  points_discount?: number | string;
+  points_redeemed?: number | string;
+  total_amount?: number | string;
+  reject_reason?: string | null;
+}
 interface CartItem extends Product { quantity: number; }
 
 // ⭐️ ข้อความแจ้งเตือนฝั่งลูกค้าให้เป็นกันเอง แทนการโชว์รหัสสถานะดิบ (PREPARING ฯลฯ)
@@ -38,7 +55,7 @@ export default function PreOrder() {
   const socket = useSocket();
   const [products, setProducts] = useState<Product[]>([]);
   const [highlights, setHighlights] = useState<{ popular: Product[]; promo: Product[] }>({ popular: [], promo: [] });
-  const [storePromos, setStorePromos] = useState<any[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
+  const [storePromos, setStorePromos] = useState<StorePromo[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | 'ALL'>('ALL');
   const [productSearch, setProductSearch] = useState('');
@@ -69,23 +86,23 @@ export default function PreOrder() {
   const [redeemRate, setRedeemRate] = useState(1);
   const [myPoints, setMyPoints] = useState(0);
   const [redeemPoints, setRedeemPoints] = useState<number | ''>('');
-  const [phoneVerified, setPhoneVerified] = useState<any>(null); // ผลตรวจเบอร์ (แสดงชื่อ+แต้มยืนยัน)
+  const [phoneVerified, setPhoneVerified] = useState<PhoneVerified | null>(null); // ผลตรวจเบอร์ (แสดงชื่อ+แต้มยืนยัน)
   const [verifying, setVerifying] = useState(false);
 
   const PROMPTPAY_ID = import.meta.env.VITE_PROMPTPAY_ID || '';
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
   const [showMyOrders, setShowMyOrders] = useState(false);
-  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [myOrders, setMyOrders] = useState<PreOrderRow[]>([]);
   // ⭐️ Phase 3 — แยก loading/error ของประวัติออเดอร์ออกจากกัน: เดิม fetchMyOrders พังแล้วเงียบ
   // (console.error เฉยๆ) ทำให้ myOrders ค้างค่าเดิม (ว่างเปล่าถ้ายังไม่เคยโหลดสำเร็จ) หน้า modal
   // จะโชว์ "ยังไม่มีประวัติการสั่งจอง" ทั้งที่จริงๆ แค่โหลดไม่สำเร็จ — คนละความหมายกันสิ้นเชิง
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null); // ✅ CHANGED: modal order detail
+  const [selectedOrder, setSelectedOrder] = useState<PreOrderRow | null>(null); // ✅ CHANGED: modal order detail
   // ⭐️ ออเดอร์ที่กำลังจะส่งสลิปใหม่ (เปิดจากการ์ดประวัติออเดอร์ตรงๆ)
-  const [slipOrder, setSlipOrder] = useState<any>(null);
-  const [storeInfo, setStoreInfo] = useState<any>(null);
+  const [slipOrder, setSlipOrder] = useState<PreOrderRow | null>(null);
+  const [storeInfo, setStoreInfo] = useState<Record<string, unknown> | null>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
   // ⭐️ Phase 3 — กันกดปุ่ม "ยกเลิกออเดอร์" ซ้ำระหว่างที่ request แรกยังไม่จบ (double-submit)
   const [cancelling, setCancelling] = useState(false);
@@ -118,6 +135,7 @@ export default function PreOrder() {
     if (addId && products.length === 0) return;
 
     if (view === 'orders') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- deep-link effect: ต้อง sync state ตาม URL params ตอน mount (ตั้งใจ — มี side effect fetchMyOrders/addToCart ด้วย)
       setShowMyOrders(true);
       fetchMyOrders();
       if (filter === 'slip') setOrderFilter('slip');
@@ -135,8 +153,8 @@ export default function PreOrder() {
     ? [...myOrders].sort((a, b) => (a.status === 'SLIP_REJECTED' ? 0 : 1) - (b.status === 'SLIP_REJECTED' ? 0 : 1))
     : myOrders;
 
-  // ⭐️ (product as any).promo_active มาจาก backend (/api/products คำนวณ WHERE ช่วงวันที่ promo ให้แล้ว)
-  const visibleProducts = promoOnlyFilter ? products.filter(p => (p as any).promo_active) : products;
+  // ⭐️ product.promo_active มาจาก backend (/api/products คำนวณ WHERE ช่วงวันที่ promo ให้แล้ว)
+  const visibleProducts = promoOnlyFilter ? products.filter(p => p.promo_active) : products;
 
   useEffect(() => {
     api.get('/settings/store').then(res => setStoreInfo(res.data)).catch(() => {});
@@ -265,7 +283,7 @@ export default function PreOrder() {
         setPhoneVerified(null);
         Swal.fire({ icon: 'error', title: 'ไม่พบสมาชิก', text: 'ไม่พบเบอร์นี้ในระบบ (แต้มจะสะสมให้เมื่อเบอร์ตรงกับบัญชีสมาชิก)' });
       }
-    } catch (e: any) {
+    } catch (e) {
       setPhoneVerified(null);
       Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(e) });
     } finally { setVerifying(false); }
@@ -276,20 +294,22 @@ export default function PreOrder() {
     try {
       const res = await api.get('/users/me');
       setMyPoints(res.data.points || 0);
-    } catch (e) {
+    } catch {
       setMyPoints(0);
     }
   };
 
   // ⭐️ ล้างแต้มที่แลกไว้ถ้าตะกร้าว่าง (กันเผลอแลกแต้มค้างจากตะกร้ารอบก่อน)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset สถานะที่ผูกกับตะกร้าเมื่อตะกร้าว่าง (ตั้งใจ sync ตามสัญญา UI)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset สถานะที่ผูกกับตะกร้าเมื่อตะกร้าว่าง (ตั้งใจ sync ตามสัญญา UI)
     if (cart.length === 0 && redeemPoints) setRedeemPoints('');
   }, [cart.length]);
 
   const addToCart = (product: Product) => {
     // 🐛 FIX — เดิมหน้าจองเพิ่มสินค้าหมดอายุเข้าตะกร้าได้ (backend reject ตอนสั่งทีหลัง) — block
     // ตั้งแต่หน้านี้เหมือน POS.tsx
-    if ((product as any).expiry_status === 'expired') {
+    if (product.expiry_status === 'expired') {
       Swal.fire({ icon: 'error', title: 'สินค้าหมดอายุ', text: 'ไม่สามารถเพิ่มสินค้าที่หมดอายุแล้ว' });
       return;
     }
@@ -367,8 +387,8 @@ export default function PreOrder() {
       });
 
       Swal.fire('Success', `Payment slip uploaded (${slipDimensions?.width}×${slipDimensions?.height})`, 'success');
-    } catch (err: any) {
-      Swal.fire('Upload Failed', err.response?.data?.error || 'Unknown error', 'error');
+    } catch (err) {
+      Swal.fire('Upload Failed', getErrorMessage(err, 'Unknown error'), 'error');
       throw err; // Re-throw to handle in handleCheckout
     }
   };
@@ -419,7 +439,7 @@ export default function PreOrder() {
             showCancelButton: true,
             cancelButtonText: 'ทีหลัง',
           }).then((result) => {
-            if (result.isConfirmed) setSlipOrder({ id: orderId });
+            if (result.isConfirmed) setSlipOrder({ id: orderId } as PreOrderRow);
           });
           return;
         }
@@ -432,7 +452,7 @@ export default function PreOrder() {
           + (paymentMethod === 'QR' ? 'สลิปอัปโหลดสำเร็จ กรุณารอพนักงานตรวจสอบสักครู่นะครับ' : 'กรุณานำเงินสดมาชำระที่หน้าร้านได้เลยครับ')
           + (pointsDiscount > 0 ? ` (ใช้แต้มลดไปแล้ว ${pointsDiscount} บาท)` : '')
       });
-    } catch (error: any) {
+    } catch (error) {
       // ⭐️ Phase 2 — ใช้ getErrorMessage เหมือนจุดอื่นในไฟล์นี้ (handleVerifyPhone/handleCancelMyOrder)
       // เดิมอ่าน error.response?.data?.error ตรงๆ พลาดเคส "เน็ตหลุด/เชื่อมเซิร์ฟเวอร์ไม่ได้" (ไม่มี
       // response เลย) ไปเห็นแค่ fallback ทั่วไปที่ไม่บอกสาเหตุจริง ระหว่างขั้นตอนสำคัญที่สุดของ flow
@@ -466,14 +486,14 @@ export default function PreOrder() {
     try {
       const res = await api.get(`/orders?t=${Date.now()}`);
       setMyOrders(res.data);
-      const found = (res.data || []).find((o: any) => Number(o.id) === Number(orderId));
+      const found = (res.data || []).find((o: PreOrderRow) => Number(o.id) === Number(orderId));
       if (found) { setSelectedOrder(found); setRefundReason(''); }
       else setShowMyOrders(true);
     } catch (err) { console.error(err); setShowMyOrders(true); }
   };
 
   // ✅ CHANGED: accept refund reason from modal input
-  const handleCancelMyOrder = async (order: any, reason: string) => {
+  const handleCancelMyOrder = async (order: PreOrderRow, reason: string) => {
     if (!reason.trim()) {
       Swal.fire({ icon: 'warning', title: 'ต้องระบุเหตุผล', text: 'กรุณาใส่เหตุผลการยกเลิกออเดอร์' });
       return;
@@ -488,7 +508,7 @@ export default function PreOrder() {
       setRefundReason(''); // ✅ CHANGED: reset input
       fetchMyOrders();
       fetchProducts();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
     } finally {
       setCancelling(false);
@@ -646,7 +666,7 @@ export default function PreOrder() {
       {selectedOrder && (
         <OrderDetailModal
           selectedOrder={selectedOrder}
-          storeInfo={storeInfo}
+          storeInfo={storeInfo ?? undefined}
           refundReason={refundReason}
           onRefundReasonChange={setRefundReason}
           onClose={() => setSelectedOrder(null)}

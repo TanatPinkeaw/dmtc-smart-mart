@@ -6,6 +6,14 @@ import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money'
 interface Category { id: number; name: string; }
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
 
+// ⭐️ field ส่วนลด/ใกล้หมดอายุที่ backend เติมมา (ไม่จำเป็นทุกการ์ด) — แทน `as any` เดิม
+interface ProductWithPromo extends Product {
+  expiry_status?: string;
+  promo_active?: boolean;
+  promo_percent?: number | string;
+  discount_percent?: number | string;
+}
+
 interface ProductGridProps {
   categories: Category[];
   selectedCategory: number | 'ALL';
@@ -45,7 +53,7 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
       ) : (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {filtered.map((product) => {
-          const pAny = product as any;
+          const pAny = product as ProductWithPromo;
           // 🐛 FIX — เดิม preorder โชว์เฉพาะส่วนลดโปรช่วงวันที่ (promo_active) ไม่โชว์ "ใกล้หมดอายุ" เลย
           // ต่างจาก POS. ใช้ helper กลางเดียวกับตอน addToCart (best ของ โปร กับ ใกล้หมดอายุ) ให้ราคาบน
           // การ์ด = ราคาที่คิดจริง = ที่ backend หัก ตรงกันทั้งหมด

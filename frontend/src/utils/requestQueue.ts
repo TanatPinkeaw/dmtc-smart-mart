@@ -7,14 +7,15 @@
 interface QueuedRequest {
   method: string;
   url: string;
-  data: any;
+  data: unknown;
   headers: Record<string, string>;
   timestamp: number;
   retries: number;
 }
 
 const QUEUE_KEY = 'pending_requests';
-const MAX_RETRIES = 3;
+// ⭐️ จำนวนครั้งที่ยิงซ้ำได้สูงสุด (api.ts ใช้ตัดสินใจว่าเมื่อไหร่จะ "ล้มเหลวถาวร" แล้วตัดออกจากคิว)
+export const MAX_RETRIES = 3;
 
 export function getQueue(): QueuedRequest[] {
   try {
@@ -29,7 +30,7 @@ export function getQueue(): QueuedRequest[] {
 export function saveRequestToQueue(
   method: string,
   url: string,
-  data: any,
+  data: unknown,
   headers: Record<string, string>
 ): void {
   const queue = getQueue();

@@ -3,11 +3,11 @@
 import { AlertTriangle, XCircle, Clock } from 'lucide-react';
 
 interface AlertCardsGridProps {
-  lowStock: any[];
-  voidSummary: any;
-  shiftAnomalies: any[];
-  openShifts: any[];
-  pendingApprovalShifts: any[];
+  lowStock: { id: number; name: string; stock: number }[];
+  voidSummary: { void_count?: number; void_amount?: number } | null;
+  shiftAnomalies: unknown[];
+  openShifts: unknown[];
+  pendingApprovalShifts: unknown[];
   onOpenDetail: (type: string, title: string) => void;
 }
 

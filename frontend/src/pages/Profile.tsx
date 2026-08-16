@@ -31,7 +31,7 @@ export default function Profile() {
       await api.put(`/users/${user.id}/profile`, { full_name: user.full_name, phone_number: phoneNumber || null });
       localStorage.setItem('user', JSON.stringify({ ...user, phone_number: phoneNumber }));
       Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ!', showConfirmButton: false, timer: 1500 });
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
+    } catch (error) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
     finally { setSaving(false); }
   };
 
@@ -46,7 +46,7 @@ export default function Profile() {
       //   ไม่งั้นรูปในเมนูจะยังเป็นรูปเก่าจนกว่าจะรีเฟรชหน้า (pattern เดียวกับ 'tokenChanged' ใน Login.tsx)
       window.dispatchEvent(new Event('profilePhotoChanged'));
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เปลี่ยนรูปโปรไฟล์แล้ว', showConfirmButton: false, timer: 1500 });
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'อัปโหลดรูปไม่สำเร็จ', text: getErrorMessage(error) }); }
+    } catch (error) { Swal.fire({ icon: 'error', title: 'อัปโหลดรูปไม่สำเร็จ', text: getErrorMessage(error) }); }
     finally { setPhotoUploading(false); }
   };
 

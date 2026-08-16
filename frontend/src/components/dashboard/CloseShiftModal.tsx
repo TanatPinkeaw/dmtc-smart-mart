@@ -6,6 +6,18 @@ const inputCls = "w-full px-3 py-2 bg-brand-bg border border-brand-border rounde
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
+// สรุปยอดหลังปิดกะ — backend POST /shifts/close คืน summary มาแสดงใน popup
+// (field บางตัว backend อาจไม่ส่งตอนกะยังไม่ปิดจริง เช่น ส่วนต่างเกิน 100 บาท)
+export interface ShiftSummary {
+  bill_count?: number;
+  total_sales?: number;
+  cash_sales?: number;
+  qr_sales?: number;
+  expected_cash?: number;
+  actual_cash?: number;
+  difference?: number;
+}
+
 interface CloseShiftModalProps {
   denomCounts: Record<number, number | ''>;
   onDenomChange: (denom: number, value: number | '') => void;
@@ -17,7 +29,7 @@ interface CloseShiftModalProps {
   onPhotoSelected: (file: File) => void;
   closeLoading: boolean;
   actualCash: number;
-  shiftSummary: any;
+  shiftSummary: ShiftSummary | null;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   // ⭐️ เดิมชื่อ onLogout (ปิดกะเสร็จแล้วบังคับออกจากระบบ) — ตอนนี้แค่จบ flow กลับหน้าหลัก

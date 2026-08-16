@@ -8,11 +8,21 @@ import { effectiveUnitPrice } from '../../utils/money'; // 🐛 FIX — ใช�
 interface Category { id: number; name: string; }
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
 
+interface StorePromo { id: number; label: string; }
+
+// ⭐️ field ส่วนลด/ใกล้หมดอายุที่ backend เติมมา (ไม่จำเป็นทุกการ์ด) — แทน `as any` เดิม
+interface ProductWithExpiry extends Product {
+  expiry_status?: string;
+  promo_active?: boolean;
+  promo_percent?: number | string;
+  discount_percent?: number | string;
+}
+
 interface ProductGridProps {
   categories: Category[];
   selectedCategory: number | 'ALL';
   onSelectCategory: (id: number | 'ALL') => void;
-  storePromos: any[];
+  storePromos: StorePromo[];
   productSearchQuery: string;
   onSearchChange: (value: string) => void;
   filteredProducts: Product[];
@@ -63,7 +73,7 @@ export function ProductGrid({
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredProducts.map(p => {
-              const pWithExpiry = p as any;
+              const pWithExpiry = p as ProductWithExpiry;
               // 🐛 FIX — เดิมคำนวณราคา inline (ใกล้หมดอายุใช้ price_after_discount จาก backend, โปรคิดแบบ
               // float ไม่ปัด) ทำให้ราคาไม่ตรงกับหน้าจอง/backend — เปลี่ยนเป็น helper กลาง (money.ts) ตัวเดียว
               const showDiscount = pWithExpiry.expiry_status === 'near_expiry';

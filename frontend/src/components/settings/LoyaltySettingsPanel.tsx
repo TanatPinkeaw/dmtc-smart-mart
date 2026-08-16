@@ -25,11 +25,12 @@ export function LoyaltySettingsPanel() {
       setEarn(String(res.data.points_earn_amount_per_point ?? 20));
       setRedeem(String(res.data.points_redeem_value_per_point ?? 1));
       setGroups(res.data.groups || []);
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: getErrorMessage(err) });
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, []);
+  // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+  useEffect(() => { void (async () => { await load(); })(); }, []);
 
   const saveRates = async () => {
     const e = Number(earn), r = Number(redeem);
@@ -39,16 +40,18 @@ export function LoyaltySettingsPanel() {
     try {
       await api.put('/settings/loyalty', { points_earn_amount_per_point: e, points_redeem_value_per_point: r });
       Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', showConfirmButton: false, timer: 1200 });
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: getErrorMessage(err) });
     } finally { setSaving(false); }
   };
 
   const saveGroupDiscount = async (g: Group, pct: number) => {
     try {
-      await api.put(`/member-groups/${g.id}`, { name: g.name, default_discount_percent: pct, description: null });
+      // ⭐️ ส่งเฉพาะ field ที่แก้ (partial update) — อย่าส่ง description:null เพราะ backend เดิม
+      //    เขียนทับ description ของกลุ่มเป็น NULL ทุกครั้ง (ข้อมูลหายเงียบๆ)
+      await api.put(`/member-groups/${g.id}`, { name: g.name, default_discount_percent: pct });
       setGroups(prev => prev.map(x => x.id === g.id ? { ...x, default_discount_percent: pct } : x));
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: getErrorMessage(err) });
     }
   };

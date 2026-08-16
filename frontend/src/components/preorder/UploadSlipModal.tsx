@@ -37,7 +37,7 @@ export function UploadSlipModal({ orderId, rejectReason, onClose, onUploaded }: 
       if (onUploaded) await onUploaded();
       onClose();
       Swal.fire({ icon: 'success', title: 'ส่งสลิปใหม่สำเร็จ', text: 'รอพนักงานตรวจสอบสักครู่', showConfirmButton: false, timer: 2000 });
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
     } finally {
       setUploading(false);

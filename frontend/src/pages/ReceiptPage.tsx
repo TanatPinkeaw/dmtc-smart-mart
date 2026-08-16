@@ -4,7 +4,7 @@ import { useRef, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toPng } from 'html-to-image';
 import { Printer, Download, ArrowLeft } from 'lucide-react';
-import { ReceiptSlip } from '../components/pos/ReceiptSlip';
+import { ReceiptSlip, type ReceiptData, type StoreInfo } from '../components/pos/ReceiptSlip';
 import { Button } from '../components/ui/Button';
 import { getCurrentUser } from '../utils/getCurrentUser';
 
@@ -18,7 +18,7 @@ export default function ReceiptPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const state = location.state as { receiptData: any; storeInfo: any } | null;
+  const state = location.state as { receiptData: ReceiptData; storeInfo?: StoreInfo | null } | null;
 
   const handleSave = useCallback(async () => {
     if (!receiptRef.current || loading) return;

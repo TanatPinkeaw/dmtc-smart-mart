@@ -40,10 +40,10 @@ export function validatePasswordStrength(password: string): PasswordStrengthResu
   else errors.push('มีตัวเลขอย่างน้อย 1 ตัว (0-9)');
 
   // Special chars (bonus)
-  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score++;
+  if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) score++;
 
-  // Determine strength
-  let strength: 'weak' | 'fair' | 'good' | 'strong' = 'weak';
+  // Determine strength (score >= 0 เสมอ — if/else-if/else ครอบครบทุกค่า)
+  let strength: 'weak' | 'fair' | 'good' | 'strong';
   if (score <= 2) strength = 'weak';
   else if (score <= 4) strength = 'fair';
   else if (score <= 6) strength = 'good';

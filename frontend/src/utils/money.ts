@@ -43,7 +43,16 @@ export function sumBahtAsSatang(bahtValues: (number | string)[]): number {
 // ใช้ที่เดียวทั้งการ์ดสินค้า (โชว์ราคา) และตอน addToCart (ราคาที่คิดจริง) กันโชว์กับคิดเงินไม่ตรงกัน
 // หมายเหตุ: ส่วนลดกลุ่มสมาชิก/แลกแต้ม/โปรทั้งบิล ไม่รวมในนี้ (backend คิดแยกตอน checkout) — นี่แค่
 // ส่วนลด "ระดับสินค้า" ที่ทุกคนเห็นเท่ากันบนการ์ด
-export function itemLevelDiscountPercent(product: any): number {
+// รูปร่างขั้นต่ำของ product ที่ฟังก์ชันส่วนลดระดับสินค้าอ่าน (หน้าตาคล้าย Product ที่ backend ส่งมา)
+export interface PriceableProduct {
+  price?: number | string;
+  expiry_status?: string;
+  discount_percent?: number | string;
+  promo_active?: boolean;
+  promo_percent?: number | string;
+}
+
+export function itemLevelDiscountPercent(product: PriceableProduct | null | undefined): number {
   const nearExpiryPct = product?.expiry_status === 'near_expiry' ? (Number(product?.discount_percent) || 0) : 0;
   const promoPct = product?.promo_active ? (Number(product?.promo_percent) || 0) : 0;
   return Math.max(nearExpiryPct, promoPct);
@@ -55,7 +64,7 @@ export function itemLevelDiscountPercent(product: any): number {
 // ที่โชว์บนการ์ดหน้าจอง ≠ ราคาที่ backend คิดจริงตอนจ่ายเงิน เช่น 19.90 ลด 50%: เดิมโชว์ 9.95
 // แต่ backend คิด 9.90. แก้ให้คิด discount เป็นบาทเต็มด้วย Math.round ตัวเดียวกับ backend แล้วค่อย
 // หักใน satang space กัน float noise — หน้าจอง/POS/backend โชว์ตรงกันหมด (ดู test:price contract)
-export function effectiveUnitPrice(product: any): number {
+export function effectiveUnitPrice(product: PriceableProduct | null | undefined): number {
   const price = Number(product?.price) || 0;
   const pct = itemLevelDiscountPercent(product);
   if (pct <= 0) return price;

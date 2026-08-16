@@ -8,13 +8,17 @@ interface DetailModalData {
   title: string;
 }
 
+interface LowStockItem { id: number; name: string; barcode?: string; stock: number; }
+interface ShiftRow { id: number; cashier_name: string; difference?: number | string; opened_at?: string; closed_at?: string; note?: string; }
+interface VoidSummary { void_count?: number; void_amount?: number; }
+
 interface DetailModalProps {
   detailModal: DetailModalData;
-  lowStock: any[];
-  voidSummary: any;
-  shiftAnomalies: any[];
-  openShifts: any[];
-  pendingApprovalShifts: any[];
+  lowStock: LowStockItem[];
+  voidSummary: VoidSummary | null;
+  shiftAnomalies: ShiftRow[];
+  openShifts: ShiftRow[];
+  pendingApprovalShifts: ShiftRow[];
   onApproveShift: (shiftId: number) => void;
   onClose: () => void;
 }
@@ -32,7 +36,7 @@ export function DetailModal({
         </div>
         <div className="overflow-y-auto max-h-[60dvh] p-4 space-y-2">
           {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีสินค้าสต๊อกใกล้หมด</p> :
-            lowStock.map((p: any) => (
+            lowStock.map((p: LowStockItem) => (
               <div key={p.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-100 rounded-xl">
                 <div><p className="text-sm font-semibold text-gray-900">{p.name}</p><p className="text-xs text-gray-400">{p.barcode || '-'}</p></div>
                 <span className={`font-bold text-lg ${p.stock === 0 ? 'text-red-600' : 'text-orange-500'}`}>{p.stock} <span className="text-xs font-normal text-gray-400">ชิ้น</span></span>
@@ -46,26 +50,26 @@ export function DetailModal({
             </div>
           )}
           {detailModal.type === 'anomalies' && (shiftAnomalies.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะที่ผิดปกติ</p> :
-            shiftAnomalies.map((s: any) => (
+            shiftAnomalies.map((s: ShiftRow) => (
               <div key={s.id} className="flex justify-between items-center p-3 bg-purple-50 border border-purple-100 rounded-xl">
-                <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">{formatBangkokTime(s.closed_at)}</p></div>
+                <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">{formatBangkokTime(s.closed_at ?? '')}</p></div>
                 <span className={`font-bold text-lg ${Number(s.difference) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{Number(s.difference) > 0 ? '+' : ''}{Number(s.difference).toFixed(2)}</span>
               </div>
             )))}
           {detailModal.type === 'openshifts' && (openShifts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะที่ค้างอยู่</p> :
-            openShifts.map((s: any) => (
+            openShifts.map((s: ShiftRow) => (
               <div key={s.id} className="flex justify-between items-center p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">เปิดกะ {formatBangkokTime(s.opened_at)}</p></div>
+                <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">เปิดกะ {formatBangkokTime(s.opened_at ?? '')}</p></div>
                 <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">เปิดอยู่</span>
               </div>
             )))}
           {detailModal.type === 'pending_approval' && (pendingApprovalShifts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะรออนุมัติ</p> :
-            pendingApprovalShifts.map((s: any) => (
+            pendingApprovalShifts.map((s: ShiftRow) => (
               <div key={s.id} className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p>
-                    <p className="text-xs text-gray-400">เปิดกะ {new Date(s.opened_at).toLocaleString('th-TH')}</p>
+                    <p className="text-xs text-gray-400">เปิดกะ {new Date(s.opened_at ?? '').toLocaleString('th-TH')}</p>
                     {s.note && <p className="text-xs text-gray-500 mt-1">หมายเหตุแคชเชียร์: {s.note}</p>}
                   </div>
                   <span className="font-bold text-lg text-amber-600 shrink-0">

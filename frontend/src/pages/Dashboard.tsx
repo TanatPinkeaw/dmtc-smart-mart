@@ -13,7 +13,8 @@ import { LayoutDashboard, TrendingUp, ArrowLeft, Users, PiggyBank, Store, Shoppi
 import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
+import { getLocalDate } from '../utils/localDate';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
@@ -36,30 +37,42 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 };
 const orderStatusLabel = (status: string) => ORDER_STATUS_LABELS[status] || status;
 
+// ── Types (state ที่เคยเป็น any — shape ตาม endpoint ที่ดึง + การใช้งานจริง) ──────
+interface DashRow { [key: string]: unknown; }
+interface LowStockRow { id: number; name: string; barcode?: string; stock: number; }
+interface ShiftRow { id: number; cashier_name: string; difference?: number | string; opened_at?: string; closed_at?: string; note?: string; }
+interface ComparisonRow { pct_vs_yesterday?: number | null; pct_vs_last_week?: number | null; yesterday?: number | string | null; }
+interface HourlyRow { hour: number | string; total: number | string; }
+interface CashierRow { shift_id: number; cashier_name: string; bill_count: number; opened_at: string; shift_status: string; total_sales: number | string; }
+interface VendorRow { vendor_id: number; vendor_name: string; total_items_sold: number; coop_gp_earnings: number | string; vendor_earnings: number | string; }
+interface PendingOrderRow { status: string; count: number; total: number | string; }
+interface DeadStockRow { id: number; name: string; stock: number; }
+interface AttendanceRow { user_id: number; full_name: string; late_minutes?: number | null; }
+
 export default function Dashboard() {
-  const [summary, setSummary] = useState<any>(null);
-  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [summary, setSummary] = useState<{ total_sales?: number | string; total_bills?: number | string } | null>(null);
+  const [topProducts, setTopProducts] = useState<{ name: string; total_quantity?: number | string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lowStock, setLowStock] = useState<any[]>([]);
-  const [voidSummary, setVoidSummary] = useState<any>(null);
-  const [shiftAnomalies, setShiftAnomalies] = useState<any[]>([]);
-  const [pendingApprovalShifts, setPendingApprovalShifts] = useState<any[]>([]); // ⭐️ F2
-  const [comparison, setComparison] = useState<any>(null);
-  const [hourly, setHourly] = useState<any[]>([]);
+  const [lowStock, setLowStock] = useState<LowStockRow[]>([]);
+  const [voidSummary, setVoidSummary] = useState<{ void_count?: number; void_amount?: number } | null>(null);
+  const [shiftAnomalies, setShiftAnomalies] = useState<ShiftRow[]>([]);
+  const [pendingApprovalShifts, setPendingApprovalShifts] = useState<ShiftRow[]>([]); // ⭐️ F2
+  const [comparison, setComparison] = useState<ComparisonRow | null>(null);
+  const [hourly, setHourly] = useState<HourlyRow[]>([]);
   // ⭐️ Peak Hours Analytics — period toggle (วันนี้/7วัน/30วัน) + ชั่วโมงพีคไฮไลต์ในกราฟ
   const [hourlyPeriod, setHourlyPeriod] = useState<'today' | '7d' | '30d'>('today');
   const [peakHour, setPeakHour] = useState<number | null>(null);
   const [hourlyLoading, setHourlyLoading] = useState(false);
-  const [byCashier, setByCashier] = useState<any[]>([]);
-  const [openShifts, setOpenShifts] = useState<any[]>([]);
-  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
-  const [channel, setChannel] = useState<any>(null);
-  const [grossProfit, setGrossProfit] = useState<any>(null);
-  const [deadStock, setDeadStock] = useState<any[]>([]);
-  const [vendorSummary, setVendorSummary] = useState<any[]>([]);
-  const [attendanceReport, setAttendanceReport] = useState<any[]>([]);
-  const [weeklySales, setWeeklySales] = useState<any[]>([]); // ⭐️ Design-ref — กราฟยอดขายรายสัปดาห์
-  const [recentOrders, setRecentOrders] = useState<any[]>([]); // ⭐️ Design-ref — feed ออเดอร์ล่าสุด
+  const [byCashier, setByCashier] = useState<CashierRow[]>([]);
+  const [openShifts, setOpenShifts] = useState<ShiftRow[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrderRow[]>([]);
+  const [channel, setChannel] = useState<DashRow | null>(null);
+  const [grossProfit, setGrossProfit] = useState<DashRow | null>(null);
+  const [deadStock, setDeadStock] = useState<DeadStockRow[]>([]);
+  const [vendorSummary, setVendorSummary] = useState<VendorRow[]>([]);
+  const [attendanceReport, setAttendanceReport] = useState<AttendanceRow[]>([]);
+  const [weeklySales, setWeeklySales] = useState<{ day: string; total: number }[]>([]); // ⭐️ Design-ref — กราฟยอดขายรายสัปดาห์
+  const [recentOrders, setRecentOrders] = useState<{ id: number; source?: string; cashier_name?: string; created_at?: string; status?: string; total_amount?: number | string }[]>([]); // ⭐️ Design-ref — feed ออเดอร์ล่าสุด
   const [openInsights, setOpenInsights] = useState(true);
   const [openDetails, setOpenDetails] = useState(false);
   const [detailModal, setDetailModal] = useState<{ type: string; title: string } | null>(null);
@@ -93,7 +106,7 @@ export default function Dashboard() {
       const res = await api.get(`/reports/hourly-sales?period=${period}`);
       setHourly(res.data.hourly || []);
       setPeakHour(res.data.peak_hour ?? null);
-    } catch (e) { /* เงียบไว้เหมือน get() generic — ไม่ critical พอจะ block หน้าอื่น */ }
+    } catch { /* เงียบไว้เหมือน get() generic — ไม่ critical พอจะ block หน้าอื่น */ }
     finally { setHourlyLoading(false); }
   };
   const handleHourlyPeriodChange = (period: 'today' | '7d' | '30d') => {
@@ -101,23 +114,12 @@ export default function Dashboard() {
     fetchHourlySales(period);
   };
 
-  useEffect(() => {
-    // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
-    // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
-    // (เดิมมี logic เด้ง CASHIER ที่อยู่ "โหมดซื้อของ" ไป /pre-order — ถอดออกแล้วพร้อมกับการเลิกใช้
-    //  session_mode ทั้งระบบ; staff ไม่มีโหมดซื้อของอีกต่อไป)
-    fetchDashboardData();
-    if (!socket) return;
-    socket.on('dashboard_updated', () => { fetchDashboardData(); });
-    return () => { socket.off('dashboard_updated'); };
-  }, [navigate, socket]);
-
   const fetchDashboardData = async () => {
     try {
       const [dashRes, topRes] = await Promise.all([api.get('/reports/dashboard'), api.get('/reports/top-selling')]);
       setSummary(dashRes.data.summary); setTopProducts(topRes.data);
       if (!isManagerOrAdmin) { setLoading(false); return; }
-      const get = (url: string, setter: (d: any) => void) => api.get(url).then(r => setter(r.data)).catch(() => {});
+      const get = <T,>(url: string, setter: (d: T) => void) => api.get(url).then(r => setter(r.data as T)).catch(() => {});
       await Promise.all([
         get('/inventory/low-stock', setLowStock), get('/reports/void-summary', setVoidSummary),
         get('/reports/shift-anomalies', setShiftAnomalies), get('/reports/sales-comparison', setComparison),
@@ -126,11 +128,25 @@ export default function Dashboard() {
         get('/reports/open-shifts', setOpenShifts), get('/reports/pending-orders', setPendingOrders),
         get('/reports/sales-channel', setChannel), get('/reports/gross-profit', setGrossProfit),
         get('/reports/dead-stock', setDeadStock), get('/reports/vendor-summary', setVendorSummary),
-        get(`/reports/attendance?month=${new Date().toISOString().slice(0, 7)}`, setAttendanceReport),
+        // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ตอน 00:00–07:00 ไทยจะ
+        // ส่งเดือนก่อนหน้าไป (รายงานโชว์เดือนผิด) — ใช้ getLocalDate() แทน
+        get(`/reports/attendance?month=${getLocalDate().slice(0, 7)}`, setAttendanceReport),
         get('/reports/weekly-sales', setWeeklySales), get('/sales/history', setRecentOrders),
       ]);
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
+    // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
+    // (เดิมมี logic เด้ง CASHIER ที่อยู่ "โหมดซื้อของ" ไป /pre-order — ถอดออกแล้วพร้อมกับการเลิกใช้
+    //  session_mode ทั้งระบบ; staff ไม่มีโหมดซื้อของอีกต่อไป)
+    // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+    void (async () => { await fetchDashboardData(); })();
+    if (!socket) return;
+    socket.on('dashboard_updated', () => { fetchDashboardData(); });
+    return () => { socket.off('dashboard_updated'); };
+  }, [navigate, socket]);
 
   // ⭐️ handleLogout เดิมถูกลบทิ้ง — ไม่มีใครเรียกแล้วหลังย้ายปุ่มลงชื่อออกงาน/ปิดกะไป Shift.tsx
   //   (ออกจากระบบใช้ปุ่มใน Layout sidebar/เมนู ซึ่งเรียก performLogout ให้ถูกต้องอยู่แล้ว)
@@ -173,7 +189,7 @@ export default function Dashboard() {
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'อนุมัติปิดกะสำเร็จ', showConfirmButton: false, timer: 2500 });
       setDetailModal(null);
       fetchDashboardData();
-    } catch (error: any) {
+    } catch (error) {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) });
     }
   };

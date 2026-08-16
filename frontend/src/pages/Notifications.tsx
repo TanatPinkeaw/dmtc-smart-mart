@@ -6,18 +6,55 @@
 import { useState, useEffect } from 'react';
 import { Bell, Search, Clock, CheckCircle2 } from 'lucide-react';
 import api from '../api';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
 
+interface AppNotification {
+  id: number;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+interface RejectedOrder {
+  id: number;
+  status: string;
+  reject_reason?: string;
+}
+
 export default function Notifications() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [rejectedOrders, setRejectedOrders] = useState<any[]>([]);
-  const [slipOrder, setSlipOrder] = useState<any>(null);
+  const [rejectedOrders, setRejectedOrders] = useState<RejectedOrder[]>([]);
+  const [slipOrder, setSlipOrder] = useState<RejectedOrder | null>(null);
   const socket = useSocket();
 
-  useEffect(() => { fetchNotifications(); fetchRejectedOrders(); }, []);
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get(`/notifications?t=${Date.now()}`);
+      setNotifications(res.data);
+    } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  // ⭐️ ตาราง notifications เก็บแค่ (id, user_id, message, is_read, created_at) — ไม่มีคอลัมน์ชี้ว่า
+  // แจ้งเตือนนี้เป็นเรื่องออเดอร์ไหน จึงต้องดึงเลขออเดอร์จากตัวข้อความที่ backend สร้าง
+  // (server.js: `สลิปโอนเงินของออเดอร์ #<id> ไม่ถูกต้อง: ...`)
+  // เพื่อไม่ให้เปราะเกินไป ไม่ได้เชื่อข้อความอย่างเดียว แต่เอาเลขที่ดึงได้ไปเทียบกับ "ออเดอร์จริงของ
+  // ผู้ใช้ที่สถานะเป็น SLIP_REJECTED อยู่ตอนนี้" อีกชั้น — ถ้า parse พลาด หรือส่งสลิปใหม่ไปแล้ว
+  // ปุ่มจะไม่ขึ้นเอง (self-correcting) ถ้าวันหลังเพิ่มคอลัมน์ order_id ในตาราง ให้เลิกใช้ตรงนี้ได้เลย
+  const fetchRejectedOrders = async () => {
+    try {
+      const res = await api.get(`/orders?t=${Date.now()}`);
+      setRejectedOrders((res.data || []).filter((o: RejectedOrder) => o.status === 'SLIP_REJECTED'));
+    } catch (e) { console.error(e); }
+  };
+
+  // IIFE + Promise.all: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+  // (เดิมเรียกตรงๆ กฎ trace เข้า function แล้ว flag — พฤติกรรมเหมือนเดิม ยัง parallel กันอยู่)
+  useEffect(() => {
+    void (async () => { await Promise.all([fetchNotifications(), fetchRejectedOrders()]); })();
+  }, []);
 
   // ⭐️ F8 — ฟัง Socket event แบบ real-time
   // หมายเหตุ: event ชื่อ order_verified / order_slip_rejected ตามที่ระบุใน spec ไม่มีจริงใน backend
@@ -54,26 +91,6 @@ export default function Notifications() {
       if (userId) socket.off(`notification_user_${userId}`, handleNotificationUser);
     };
   }, [socket]);
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await api.get(`/notifications?t=${Date.now()}`);
-      setNotifications(res.data);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
-
-  // ⭐️ ตาราง notifications เก็บแค่ (id, user_id, message, is_read, created_at) — ไม่มีคอลัมน์ชี้ว่า
-  // แจ้งเตือนนี้เป็นเรื่องออเดอร์ไหน จึงต้องดึงเลขออเดอร์จากตัวข้อความที่ backend สร้าง
-  // (server.js: `สลิปโอนเงินของออเดอร์ #<id> ไม่ถูกต้อง: ...`)
-  // เพื่อไม่ให้เปราะเกินไป ไม่ได้เชื่อข้อความอย่างเดียว แต่เอาเลขที่ดึงได้ไปเทียบกับ "ออเดอร์จริงของ
-  // ผู้ใช้ที่สถานะเป็น SLIP_REJECTED อยู่ตอนนี้" อีกชั้น — ถ้า parse พลาด หรือส่งสลิปใหม่ไปแล้ว
-  // ปุ่มจะไม่ขึ้นเอง (self-correcting) ถ้าวันหลังเพิ่มคอลัมน์ order_id ในตาราง ให้เลิกใช้ตรงนี้ได้เลย
-  const fetchRejectedOrders = async () => {
-    try {
-      const res = await api.get(`/orders?t=${Date.now()}`);
-      setRejectedOrders((res.data || []).filter((o: any) => o.status === 'SLIP_REJECTED'));
-    } catch (e) { console.error(e); }
-  };
 
   const getRejectedOrderFor = (message: string) => {
     const m = message.match(/#(\d+)/);

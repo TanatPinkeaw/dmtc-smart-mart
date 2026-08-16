@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run check:strict && tsc -b && vite build",
+    "typecheck": "tsc -b --noEmit",
+    "check:strict": "node scripts/check-strict.js",
     "lint": "eslint .",
+    "test": "node --test src/utils/queueProcessor.test.ts src/utils/rewardCart.test.ts src/utils/offlinePayload.test.ts src/utils/offlineSalesDb.test.ts src/utils/offlineSync.test.ts src/utils/requestQueue.test.ts src/utils/queueLabels.test.ts src/utils/queueDrainContract.test.ts scripts/check-strict.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

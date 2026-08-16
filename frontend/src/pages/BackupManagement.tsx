@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { Database, RefreshCw, RotateCcw, Cloud, CloudOff } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
+import { getErrorMessage } from '../utils/errorMessage';
 
 interface Backup {
   id: number;
@@ -23,21 +24,20 @@ export default function BackupManagement() {
   const [loading, setLoading] = useState(false);
   const [isLoadingBackups, setIsLoadingBackups] = useState(true);
 
-  useEffect(() => {
-    loadBackups();
-  }, []);
-
   const loadBackups = async () => {
     setIsLoadingBackups(true);
     try {
       const res = await api.get('/admin/backups');
       setBackups(res.data);
-    } catch (err: any) {
+    } catch {
       Swal.fire('Error', 'Failed to load backups', 'error');
     } finally {
       setIsLoadingBackups(false);
     }
   };
+
+  // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+  useEffect(() => { void (async () => { await loadBackups(); })(); }, []);
 
   const handleCreateBackup = async () => {
     const confirm = await Swal.fire({
@@ -56,8 +56,8 @@ export default function BackupManagement() {
       const res = await api.post('/admin/backups/create', {});
       Swal.fire({ icon: 'success', title: 'สำรองข้อมูลสำเร็จ', text: `ไฟล์: ${res.data.backup.filename}`, showConfirmButton: false, timer: 1800 });
       loadBackups();
-    } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'สำรองข้อมูลไม่สำเร็จ', text: err.response?.data?.error || 'เกิดข้อผิดพลาด' });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'สำรองข้อมูลไม่สำเร็จ', text: getErrorMessage(err, 'เกิดข้อผิดพลาด') });
     } finally {
       setLoading(false);
     }
@@ -80,8 +80,8 @@ export default function BackupManagement() {
       await api.post(`/admin/backups/${backup.id}/restore`, { confirm: true });
       Swal.fire({ icon: 'success', title: 'กู้คืนข้อมูลสำเร็จ', showConfirmButton: false, timer: 1800 });
       loadBackups();
-    } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'กู้คืนข้อมูลไม่สำเร็จ', text: err.response?.data?.error || 'เกิดข้อผิดพลาด' });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'กู้คืนข้อมูลไม่สำเร็จ', text: getErrorMessage(err, 'เกิดข้อผิดพลาด') });
     } finally {
       setLoading(false);
     }

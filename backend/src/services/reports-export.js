@@ -21,6 +21,15 @@
 
 const LOW_STOCK_THRESHOLD = 10; // ⭐️ matches server.js's LOW_STOCK_THRESHOLD / /api/inventory/low-stock
 
+// ⭐️ "ตอนนี้" ตามเวลาไทย (YYYY-MM-DD HH:mm:ss) — เดิม new Date().toISOString().slice(0,19) เป็นเวลา
+// UTC ใส่ในไฟล์ Excel จะเพี้ยนช้ากว่าจริง 7 ชม. (server cloud รันโซน UTC)
+function bangkokNowStr() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date()).replace(', ', ' ');
+}
+
 async function fetchLineItems(pool, startDate, endDate) {
   const hasRange = !!(startDate && endDate);
   const params = [];
@@ -251,7 +260,7 @@ async function buildWorkbook({ storeName, startDate, endDate, kpis, inventory, r
   summary.getCell('A3').value = 'ช่วงวันที่:';
   summary.getCell('B3').value = rangeLabel;
   summary.getCell('A4').value = 'วันที่สร้างรายงาน:';
-  summary.getCell('B4').value = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  summary.getCell('B4').value = bangkokNowStr(); // ⭐️ FIX — เดิมเป็นเวลา UTC (เพี้ยนช้ากว่าจริง 7 ชม.)
 
   let r = 6;
   summary.getCell(`A${r}`).value = 'ตัวชี้วัดหลัก (KPI)';
@@ -377,7 +386,7 @@ async function buildAccountingWorkbook({ storeName, startDate, endDate, kpis, ca
   summary.getCell('A3').value = 'ช่วงวันที่:';
   summary.getCell('B3').value = rangeLabel;
   summary.getCell('A4').value = 'วันที่สร้างรายงาน:';
-  summary.getCell('B4').value = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  summary.getCell('B4').value = bangkokNowStr(); // ⭐️ FIX — เดิมเป็นเวลา UTC (เพี้ยนช้ากว่าจริง 7 ชม.)
 
   let r = 6;
   summary.getCell(`A${r}`).value = 'ตัวชี้วัดหลัก';

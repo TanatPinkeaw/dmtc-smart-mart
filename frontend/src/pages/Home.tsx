@@ -18,6 +18,12 @@ import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
 interface DashboardSummary { total_sales: number; total_bills: number; }
 interface MyHours { total_hours: number; hourly_rate: number; calculated_pay: number; }
 interface ActivePromo { id: number; name: string; label: string; end_date: string | null; }
+interface OpenOrder {
+  id: number;
+  status: string;
+  total_amount: number;
+  reject_reason?: string | null;
+}
 interface HighlightProduct {
   id: number; name: string; price: string | number; image_url: string | null;
   category_name: string | null; promo_percent: number | null;
@@ -75,8 +81,8 @@ export default function Home() {
   // ⭐️ Member home — โปรทั้งหมด (สไลด์แนวนอน), สินค้าขายดี, ออเดอร์ที่ยังค้าง
   const [promos, setPromos] = useState<ActivePromo[]>([]);
   const [bestSellers, setBestSellers] = useState<HighlightProduct[]>([]);
-  const [openOrder, setOpenOrder] = useState<any>(null);
-  const [slipOrder, setSlipOrder] = useState<any>(null);
+  const [openOrder, setOpenOrder] = useState<OpenOrder | null>(null);
+  const [slipOrder, setSlipOrder] = useState<OpenOrder | null>(null);
   // แยก loading ต่อ section เพื่อให้ skeleton หายทีละส่วนตามที่โหลดเสร็จ ไม่ต้องรอพร้อมกันทั้งหน้า
   const [loadingPromos, setLoadingPromos] = useState(!isStaff);
   const [loadingBest, setLoadingBest] = useState(!isStaff);
@@ -110,7 +116,7 @@ export default function Home() {
       api.get('/orders')
         .then(res => {
           // ออเดอร์ที่ยังค้าง เอาอันล่าสุดมาโชว์ใบเดียว (backend ส่ง created_at DESC มาแล้ว)
-          const open = (res.data || []).find((o: any) => OPEN_ORDER_STATUS[o.status]);
+          const open = (res.data || []).find((o: OpenOrder) => OPEN_ORDER_STATUS[o.status]);
           setOpenOrder(open || null);
         })
         .catch(() => {})
@@ -480,7 +486,7 @@ export default function Home() {
           onClose={() => setSlipOrder(null)}
           onUploaded={async () => {
             const res = await api.get('/orders').catch(() => null);
-            if (res) setOpenOrder((res.data || []).find((o: any) => OPEN_ORDER_STATUS[o.status]) || null);
+            if (res) setOpenOrder((res.data || []).find((o: OpenOrder) => OPEN_ORDER_STATUS[o.status]) || null);
           }}
         />
       )}

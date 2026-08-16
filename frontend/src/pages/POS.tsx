@@ -11,11 +11,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { validateCheckout, type CheckoutPayload } from '../validators/checkoutValidator'; // ⭐️ F5
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { toSatang, fromSatang, lineTotalSatang } from '../utils/money'; // ⭐️ Sprint 1 — B3
+import { addRewardToCart as addRewardLineToCart, computeRewardPointsUsed, availableForCashDiscount } from '../utils/rewardCart'; // ⭐️ Part 5 — ลอจิกแลกของรางวัล (pure — เทสต์ได้)
 import { useOnlineStatus } from '../hooks/useOnlineStatus'; // ⭐️ Sprint 2 — B6
 import OfflineBanner from '../components/common/OfflineBanner'; // ⭐️ Sprint 2 — B6
 import { saveOfflineSale, getOfflineSalesCount, type OfflineSale } from '../utils/offlineSalesDb'; // ⭐️ POS ออฟไลน์
@@ -24,16 +25,22 @@ import { ProductGrid } from '../components/pos/ProductGrid';
 import { CartPanel } from '../components/pos/CartPanel';
 import { RegisterMemberModal } from '../components/pos/RegisterMemberModal';
 import { ReceiptModal } from '../components/pos/ReceiptModal';
+import type { ReceiptData, StoreInfo } from '../components/pos/ReceiptSlip';
 import { RewardModal } from '../components/pos/RewardModal';
 
 interface Category { id: number; name: string; }
-interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
+interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; expiry_status?: string; }
 // ⭐️ redeem_reward: บรรทัดของรางวัล (ราคา 0, จ่ายด้วยแต้ม) points_required เก็บไว้โชว์
 interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
 
 // ⭐️ POS ออฟไลน์ — cache รายการสินค้าล่าสุดที่โหลดสำเร็จไว้ใน localStorage กันหน้าจอ product grid
 // ว่างเปล่าตอนไม่มีเน็ต (ไม่ใช่ authoritative — แค่ preview ราคา/สต๊อกล่าสุดที่รู้ ค่าจริงยึดตาม server เสมอ)
 const PRODUCTS_CACHE_KEY = 'dmtc_cached_products';
+
+// ── Types (state ที่เคยเป็น any — shape ตามที่ component ใช้จริง) ──────────────
+interface PosMember { id: number; full_name: string; points?: number | string; }
+interface StorePromo { id: number; label: string; }
+interface PromoOption { id: number; name: string; discount_type?: string; discount_value?: number | string; }
 
 export default function POS() {
   const socket = useSocket();
@@ -52,19 +59,19 @@ export default function POS() {
   // ⭐️ FIX: ปุ่ม/โมดัลปิดกะเดิมอยู่ในนี้ด้วย ซ้ำกับ Dashboard.tsx ที่มีฟีเจอร์ปิดกะสมบูรณ์อยู่แล้ว
   // ตามคำขอผู้ใช้ — ย้ายให้เหลือจุดเดียวที่ Dashboard เท่านั้น (state/handler/modal ที่เกี่ยวข้องถูกลบออกทั้งหมด)
   const [searchMemberQuery, setSearchMemberQuery] = useState('');
-  const [currentMember, setCurrentMember] = useState<any>(null);
+  const [currentMember, setCurrentMember] = useState<PosMember | null>(null);
   const [memberLoading, setMemberLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [regForm, setRegForm] = useState({ student_id: '', full_name: '', phone_number: '' });
   const [regLoading, setRegLoading] = useState(false);
-  const [promotions, setPromotions] = useState<any[]>([]);
-  const [storePromos, setStorePromos] = useState<any[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
+  const [promotions, setPromotions] = useState<PromoOption[]>([]);
+  const [storePromos, setStorePromos] = useState<StorePromo[]>([]); // ⭐️ Phase 2 — โปรร้าน (ลดทั้งบิล/BOGO) โชว์แบนเนอร์
   const [selectedPromoId, setSelectedPromoId] = useState<number | ''>('');
   const [appliedPromo, setAppliedPromo] = useState<{ id: number; name: string; discount_amount: number } | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState<number | ''>('');
-  const [receiptData, setReceiptData] = useState<any>(null);
-  const [storeInfo, setStoreInfo] = useState<any>(null);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [priceOverride, setPriceOverride] = useState<{[key: number]: number}>({});  // ⭐️ Sprint 2 — Expiry Discount
   // ⭐️ Part 2 — อัตราแลกแต้มเป็นส่วนลด (1 แต้ม = redeemRate บาท) ดึงจาก settings ตอน mount
   const [redeemRate, setRedeemRate] = useState(1);
@@ -108,15 +115,47 @@ export default function POS() {
       Swal.fire({ icon: 'success', title: 'สมัครสมาชิกสำเร็จ!', text: 'ดึงข้อมูลเข้าบิลให้อัตโนมัติ' });
       setShowRegisterModal(false); setCurrentMember(res.data.user);
       setRegForm({ student_id: '', full_name: '', phone_number: '' });
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
+    } catch (error) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
     finally { setRegLoading(false); }
+  };
+
+  const fetchStoreInfo = async () => { try { const res = await api.get('/settings/store'); setStoreInfo(res.data); } catch { /* ดึงข้อมูลร้านไม่ได้ — ใช้ค่าเริ่มต้น */ } };
+  // ⭐️ อัตราแลกแต้ม — ให้ preview ฝั่ง client ตรงกับที่ backend คำนวณ (server ยังเป็น authority)
+  const fetchLoyaltyRate = async () => { try { const res = await api.get('/settings/loyalty'); setRedeemRate(Number(res.data?.points_redeem_value_per_point) || 1); } catch { /* ดึงอัตราแลกแต้มไม่ได้ — ใช้ค่าเริ่มต้น 1 */ } };
+  const fetchPromotions = async () => {
+    try { const res = await api.get('/promotions'); setPromotions(res.data); } catch { /* ดึงโปรโมชั่นไม่ได้ — ไม่โชว์ */ }
+    try { const r = await api.get('/promotions/active'); setStorePromos(r.data || []); } catch { /* ดึงโปรร้านไม่ได้ — ไม่โชว์ */ }
+  };
+
+  const fetchCategories = async () => { try { const res = await api.get('/categories'); setCategories(res.data); } catch { /* ดึงหมวดหมู่ไม่ได้ — ใช้ของเดิม */ } };
+  // ⭐️ POS ออฟไลน์ — โหลดสินค้าจาก cache ใน localStorage แทน (เงียบถ้า cache เสีย/parse ไม่ได้ —
+  //   ปล่อย products state เดิมไว้ ดีกว่าล้างเป็นค่าว่างเปล่า)
+  const loadProductsFromCache = () => {
+    try {
+      const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
+      if (cached) setProducts(JSON.parse(cached));
+    } catch { /* cache เสีย/parse ไม่ได้ — ไม่ทำอะไร */ }
+  };
+
+  const fetchProducts = async () => {
+    // ⭐️ ไม่มีเน็ต — ไม่ต้องยิง API เลย (ยิงไปก็พังแน่นอน) อ่านจาก cache ตรงๆ
+    if (!isOnline) { loadProductsFromCache(); return; }
+    try {
+      const res = await api.get('/products');
+      setProducts(res.data);
+      localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(res.data)); // ⭐️ อัปเดต cache ทุกครั้งที่โหลดสำเร็จ
+    } catch {
+      // ⭐️ isOnline=true แต่ยิง API พัง (server ล่ม/timeout) — fallback ไป cache เหมือนกัน
+      loadProductsFromCache();
+    }
   };
 
   useEffect(() => {
     // ⭐️ Security remediation — token ย้ายไป httpOnly cookie อ่านจาก JS ไม่ได้แล้ว
     // getCurrentUserOrRedirect() ข้างบนเด้งไป /login ให้แล้วถ้าไม่มี user session
     // (เดิมมี logic เด้งออก /pre-order ถ้าอยู่ "โหมดซื้อของ" — ถอดออกพร้อมการเลิกใช้ session_mode)
-    fetchCategories(); fetchProducts(); fetchPromotions(); fetchStoreInfo(); fetchLoyaltyRate();
+    // IIFE + Promise.all: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+    void (async () => { await Promise.all([fetchCategories(), fetchProducts(), fetchPromotions(), fetchStoreInfo(), fetchLoyaltyRate()]); })();
     // ⭐️ POS ออฟไลน์ — เช็คคิวค้างตอน mount ด้วย เผื่อรีเฟรชหน้าหลังขายออฟไลน์ไปแล้วแต่ยังไม่ทันซิงค์
     getOfflineSalesCount().then(setPendingOfflineCount).catch(() => {});
   }, [navigate]);
@@ -139,18 +178,10 @@ export default function POS() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
 
-  const fetchStoreInfo = async () => { try { const res = await api.get('/settings/store'); setStoreInfo(res.data); } catch (e) {} };
-  // ⭐️ อัตราแลกแต้ม — ให้ preview ฝั่ง client ตรงกับที่ backend คำนวณ (server ยังเป็น authority)
-  const fetchLoyaltyRate = async () => { try { const res = await api.get('/settings/loyalty'); setRedeemRate(Number(res.data?.points_redeem_value_per_point) || 1); } catch (e) {} };
-  const fetchPromotions = async () => {
-    try { const res = await api.get('/promotions'); setPromotions(res.data); } catch (e) {}
-    try { const r = await api.get('/promotions/active'); setStorePromos(r.data || []); } catch (e) {}
-  };
-
   useEffect(() => {
     if (!socket) return;
     socket.on('connect', () => {});
-    socket.on('stock_updated', (data) => {
+    socket.on('stock_updated', () => {
       fetchProducts();
       Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'สต๊อกอัปเดตแล้ว!', showConfirmButton: false, timer: 2000, timerProgressBar: true });
     });
@@ -171,7 +202,7 @@ export default function POS() {
       fetchProducts();
     });
     // ⭐️ Sprint 2 — D1: Listen for shift approval/rejection
-    socket.on('shift_approved', (data) => {
+    socket.on('shift_approved', () => {
       Swal.fire({
         icon: 'success',
         title: 'คำขอปิดกะได้รับการอนุมัติ',
@@ -196,35 +227,12 @@ export default function POS() {
     };
   }, [socket]);
 
-  const fetchCategories = async () => { try { const res = await api.get('/categories'); setCategories(res.data); } catch (e) {} };
-  // ⭐️ POS ออฟไลน์ — โหลดสินค้าจาก cache ใน localStorage แทน (เงียบถ้า cache เสีย/parse ไม่ได้ —
-  //   ปล่อย products state เดิมไว้ ดีกว่าล้างเป็นค่าว่างเปล่า)
-  const loadProductsFromCache = () => {
-    try {
-      const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
-      if (cached) setProducts(JSON.parse(cached));
-    } catch (e) { /* cache เสีย/parse ไม่ได้ — ไม่ทำอะไร */ }
-  };
-
-  const fetchProducts = async () => {
-    // ⭐️ ไม่มีเน็ต — ไม่ต้องยิง API เลย (ยิงไปก็พังแน่นอน) อ่านจาก cache ตรงๆ
-    if (!isOnline) { loadProductsFromCache(); return; }
-    try {
-      const res = await api.get('/products');
-      setProducts(res.data);
-      localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(res.data)); // ⭐️ อัปเดต cache ทุกครั้งที่โหลดสำเร็จ
-    } catch (e) {
-      // ⭐️ isOnline=true แต่ยิง API พัง (server ล่ม/timeout) — fallback ไป cache เหมือนกัน
-      loadProductsFromCache();
-    }
-  };
-
   const filteredProducts = (selectedCategory === 'ALL' ? products : products.filter(p => p.category_id === selectedCategory))
     .filter(p => p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) || (p.barcode && p.barcode.includes(productSearchQuery)));
 
   const addToCart = (product: Product, customPrice?: number) => {
     // ⭐️ Sprint 2: Check if product is expired
-    if ((product as any).expiry_status === 'expired') {
+    if (product.expiry_status === 'expired') {
       Swal.fire({ icon: 'error', title: 'สินค้าหมดอายุ', text: 'ไม่สามารถเพิ่มสินค้าที่หมดอายุแล้ว' });
       return;
     }
@@ -256,11 +264,12 @@ export default function POS() {
   };
 
   // ⭐️ Part 5 — เพิ่มของรางวัลลงตะกร้า (ราคา 0, ธง redeem_reward) กันเพิ่มซ้ำเกิน 1
-  const addRewardToCart = (r: { id: number; name: string; image_url: string | null; points_required: number }) => {
-    setCart(prev => {
-      if (prev.find(i => i.id === r.id && i.redeem_reward)) return prev; // มีอยู่แล้ว
-      return [...prev, { id: r.id, name: r.name, image_url: r.image_url || '', price: 0, barcode: '', category_id: null, quantity: 1, redeem_reward: true, points_required: r.points_required }];
-    });
+  //   ลอจิก (กันซ้ำ + คำนวณแต้มที่ใช้/เหลือ) อยู่ใน utils/rewardCart.ts — มีเทส regression ครอบ
+  const handleAddReward = (r: { id: number; name: string; image_url: string | null; points_required: number }) => {
+    setCart(prev => addRewardLineToCart(prev, r, (reward) => ({
+      id: reward.id, name: reward.name, image_url: reward.image_url || '', price: 0, barcode: '', category_id: null,
+      quantity: 1, redeem_reward: true, points_required: reward.points_required,
+    })));
   };
 
   // ⭐️ Sprint 1 — B3: คำนวณยอดเงินทั้งหมดในหน่วยสตางค์ (integer) กัน float drift สะสมข้ามหลายรายการ
@@ -270,15 +279,17 @@ export default function POS() {
   const netTotalSatang = Math.max(0, grandTotalSatang - toSatang(appliedPromo?.discount_amount || 0));
   const netTotal = fromSatang(netTotalSatang);
   // ⭐️ แต้มที่ต้องใช้แลกของรางวัลในบิลนี้ (หักจากแต้มที่ใช้แลกส่วนลดเงินสดได้)
-  const rewardPointsUsed = cart.reduce((t, i) => t + (i.redeem_reward ? (Number(i.points_required) || 0) * i.quantity : 0), 0);
-  const availableForCash = currentMember ? Math.max(0, currentMember.points - rewardPointsUsed) : 0;
+  const rewardPointsUsed = computeRewardPointsUsed(cart);
+  const availableForCash = currentMember ? availableForCashDiscount(Number(currentMember.points) || 0, rewardPointsUsed) : 0;
   // ⭐️ แลกส่วนลดเงินสด: 1 แต้ม = redeemRate บาท → จำนวนแต้มสูงสุด = floor(ยอด / redeemRate)
   const maxRedeemable = currentMember ? Math.min(availableForCash, Math.floor(netTotal / redeemRate)) : 0;
   const redeemPointsUsed = currentMember && redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
   const pointsDiscount = fromSatang(toSatang(redeemPointsUsed * redeemRate)); // มูลค่าส่วนลด (บาท)
   const finalTotal = fromSatang(Math.max(0, netTotalSatang - toSatang(pointsDiscount)));
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset สถานะที่ผูกกับตะกร้าเมื่อตะกร้าว่าง (ตั้งใจ sync ตามสัญญา UI)
   useEffect(() => { if (cart.length === 0 && appliedPromo) setAppliedPromo(null); if (cart.length === 0 && redeemPoints) setRedeemPoints(''); }, [cart.length]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- เคลียร์แต้มที่เลือกเมื่อลบสมาชิก (กันแต้มค้างจากสมาชิกเก่า)
   useEffect(() => { if (!currentMember && redeemPoints) setRedeemPoints(''); }, [currentMember]);
 
   const handleApplyPromo = async () => {
@@ -289,7 +300,7 @@ export default function POS() {
       const res = await api.post('/promotions/verify', { promotion_id: selectedPromoId, grand_total: grandTotal, items: cart.map(i => ({ product_id: i.id, quantity: i.quantity })), member_id: currentMember?.id || null });
       setAppliedPromo({ id: Number(selectedPromoId), name: res.data.promo_name, discount_amount: Number(res.data.discount_amount) });
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `ใช้โปรโมชั่น "${res.data.promo_name}" แล้ว`, showConfirmButton: false, timer: 1500 });
-    } catch (error: any) { setAppliedPromo(null); Swal.fire({ icon: 'error', title: 'ใช้โปรโมชั่นไม่ได้', text: getErrorMessage(error) }); }
+    } catch (error) { setAppliedPromo(null); Swal.fire({ icon: 'error', title: 'ใช้โปรโมชั่นไม่ได้', text: getErrorMessage(error) }); }
     finally { setPromoLoading(false); }
   };
   const handleRemovePromo = () => { setAppliedPromo(null); setSelectedPromoId(''); };
@@ -353,7 +364,6 @@ export default function POS() {
         total_amount: finalTotal,
         amount_received: amountReceivedNum,
         change_amount: Math.max(0, amountReceivedNum - finalTotal),
-        earn_points: 0,
         payment_method: paymentMethod,
         items: cart.map(i => ({ name: i.name, price: Number(i.price), quantity: i.quantity })),
         cashier_name: user.full_name,
@@ -363,7 +373,7 @@ export default function POS() {
         offline: true,
       });
       setCart([]); setAmountReceived(''); setIsCartOpen(false);
-    } catch (err) {
+    } catch {
       Swal.fire({ icon: 'error', title: 'บันทึกบิลออฟไลน์ไม่สำเร็จ', text: 'กรุณาลองใหม่อีกครั้ง' });
     } finally {
       setLoading(false);
@@ -415,13 +425,15 @@ export default function POS() {
       // 🐛 FIX — refetch สต๊อกเอง ไม่พึ่ง socket 'stock_updated' อย่างเดียว (socket หลุด/ช้า =
       // เลขสต๊อกค้างจน reload — หน้าจอง refetch เองอยู่แล้ว)
       fetchProducts();
-    } catch (error: any) {
-      if (error.code === 'ECONNABORTED') {
+    } catch (error) {
+      // catch param เป็น unknown (TS strict) — cast เป็นรูปร่างที่อ่านจริง (axios error)
+      const e = error as { code?: string; response?: { status?: number; data?: { issues?: Array<{ product_id: number; product_name: string; requested: number; available: number }> } } };
+      if (e.code === 'ECONNABORTED') {
         Swal.fire({ icon: 'error', title: 'หมดเวลา', text: 'การส่งข้อมูลใช้เวลานานเกินไป (30 วินาที) — กรุณาลองใหม่' });
       }
       // ⭐️ Sprint 2 — B7: Handle 400 with stock issues
-      else if (error.response?.status === 400 && error.response?.data?.issues) {
-        const issues = error.response.data.issues as Array<{ product_id: number; product_name: string; requested: number; available: number }>;
+      else if (e.response?.status === 400 && e.response?.data?.issues) {
+        const issues = e.response.data.issues;
         Swal.fire({
           icon: 'warning',
           title: 'สต๊อกไม่เพียงพอสำหรับบางรายการ',
@@ -447,7 +459,7 @@ export default function POS() {
         });
       }
       // ⭐️ Sprint 2 — B7: Handle 409 race condition
-      else if (error.response?.status === 409) {
+      else if (e.response?.status === 409) {
         Swal.fire({
           icon: 'error',
           title: 'ขัดแย้ง',
@@ -589,9 +601,11 @@ export default function POS() {
 
       {showRewardModal && currentMember && (
         <RewardModal
-          memberPoints={currentMember.points || 0}
+          // ⭐️ ส่งแต้มที่เหลือ (หักของรางวัลในตะกร้าแล้ว) — ของที่รวมกันแล้วเกินแต้มจะโดน disable
+          //   กัน cashier เพิ่มของรางวัลจน checkout พังด้วย "แต้มไม่พอ" (backend เช็คซ้ำอีกชั้น)
+          memberPoints={availableForCash}
           onClose={() => setShowRewardModal(false)}
-          onRedeem={addRewardToCart}
+          onRedeem={handleAddReward}
         />
       )}
 

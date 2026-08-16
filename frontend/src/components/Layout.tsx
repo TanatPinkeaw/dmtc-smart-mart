@@ -14,7 +14,8 @@ import Swal from '../swal';
 import { BRAND } from '../theme';
 import api from '../api';
 import { performLogout } from '../utils/logout';
-import { SocketProvider, useSocket } from '../SocketContext';
+import { SocketProvider } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { getCurrentUser, getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { Sidebar } from './layout/Sidebar';
@@ -30,11 +31,14 @@ function LayoutInner() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [notifications, setNotifications] = useState<any[]>([]);
+  // รูปร่างขั้นต่ำของข้อมูลจาก API (field ที่ Layout อ่านจริง) — field อื่นเป็น unknown
+  interface NotificationAlert { id: number; is_read?: boolean; [key: string]: unknown; }
+  interface OrderAlert { id: number; status?: string; reject_reason?: string | null; [key: string]: unknown; }
+  const [notifications, setNotifications] = useState<NotificationAlert[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
   // ⭐️ ออเดอร์ที่สลิปไม่ผ่าน (ฝั่งลูกค้า) — ใช้โชว์แถบเตือนด้านบน + เปิดโมดัลส่งสลิปใหม่
-  const [rejectedOrders, setRejectedOrders] = useState<any[]>([]);
-  const [slipOrder, setSlipOrder] = useState<any>(null);
+  const [rejectedOrders, setRejectedOrders] = useState<OrderAlert[]>([]);
+  const [slipOrder, setSlipOrder] = useState<OrderAlert | null>(null);
   // ⭐️ Security remediation — บังคับเปลี่ยนรหัสผ่านชั่วคราวก่อนใช้งานหน้าอื่น (ปิด modal เองไม่ได้ ดู ChangePasswordModal forceChange)
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(!!user.must_change_password);
   // ⭐️ FIX: bottom nav มือถือเดิมมีแค่ POS/ออเดอร์/(ตั้งค่าเฉพาะ ADMIN) — ขาดหน้า Dashboard, Schedules,
@@ -80,13 +84,18 @@ function LayoutInner() {
     if (isStaff) { setRejectedOrders([]); return; }
     try {
       const res = await api.get(`/orders?t=${Date.now()}`);
-      setRejectedOrders((res.data || []).filter((o: any) => o.status === 'SLIP_REJECTED'));
+      setRejectedOrders((res.data || []).filter((o: OrderAlert) => o.status === 'SLIP_REJECTED'));
     } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
     if (!user.id || !socket) return;
+    // fetch ทั้งคู่ setState หลัง await (ไม่ใช่ sync setState — ไม่มี cascading render) และต้องอยู่
+    // component scope เพราะ socket handlers ข้างล่างก็เรียกใช้ (ฟังก์ชันใหม่ทุก render → ใส่ deps =
+    // subscribe/off ทุก render — เดิม [user.id, socket] จึงถูกต้อง)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchNotificationsAndBadge();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRejectedOrders();
     // ⭐️ สถานะออเดอร์เปลี่ยน (รวมตอนโดน reject สลิป / ตอนส่งสลิปใหม่แล้วกลับเป็น PENDING_VERIFY)
     // ให้แถบเตือนด้านบนอัปเดตตามทันที ไม่ต้องรีเฟรชหน้า

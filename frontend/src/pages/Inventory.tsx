@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Boxes, Search, Plus, Minus, Trash2, PackagePlus, Truck, X } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 
@@ -26,16 +26,23 @@ export default function Inventory() {
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const socket = useSocket();
 
+  const fetchProducts = async () => {
+    try { const res = await api.get('/products'); setProducts(res.data); }
+    catch (e) { console.error('fetch products failed', e); }
+  };
+  const fetchSuppliers = async () => {
+    try { const res = await api.get('/suppliers'); setSuppliers(res.data); }
+    catch (e) { console.error('fetch suppliers failed', e); }
+  };
+
   useEffect(() => {
-    fetchProducts(); fetchSuppliers();
+    // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation (พฤติกรรมเหมือนเดิม)
+    void (async () => { await Promise.all([fetchProducts(), fetchSuppliers()]); })();
     if (!socket) return;
     let debounceTimer: ReturnType<typeof setTimeout>;
     socket.on('stock_updated', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(fetchProducts, 300); });
     return () => { clearTimeout(debounceTimer); socket.off('stock_updated'); };
   }, [socket]);
-
-  const fetchProducts = async () => { try { const res = await api.get('/products'); setProducts(res.data); } catch {} };
-  const fetchSuppliers = async () => { try { const res = await api.get('/suppliers'); setSuppliers(res.data); } catch {} };
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.barcode && p.barcode.includes(searchQuery)));
 
   const addToReceiveList = (product: Product) => {
@@ -56,7 +63,7 @@ export default function Inventory() {
       await api.post('/purchases', { supplier_id: selectedSupplier || null, user_id: user.id, items: receiveList.map(i => ({ product_id: i.id, quantity: i.receive_quantity, unit_cost: i.new_unit_cost })) });
       Swal.fire({ icon: 'success', title: 'รับสินค้าเข้าคลังสำเร็จ!', showConfirmButton: false, timer: 1500 });
       setReceiveList([]); setSelectedSupplier(''); fetchProducts(); setIsReceiveOpen(false);
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
   };
 

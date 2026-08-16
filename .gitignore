@@ -17,3 +17,6 @@ build/
 # ไฟล์ระบบ (Mac / Windows)
 .DS_Store
 Thumbs.db
+
+# ไฟล์ tooling (Freebuff agent — project id metadata)
+.freebuff/

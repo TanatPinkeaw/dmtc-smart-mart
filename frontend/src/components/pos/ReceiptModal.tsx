@@ -4,11 +4,11 @@ import { CheckCircle, X, Printer, Maximize2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { ReceiptSlip } from './ReceiptSlip';
+import { ReceiptSlip, type ReceiptData, type StoreInfo } from './ReceiptSlip';
 
 interface ReceiptModalProps {
-  receiptData: any;
-  storeInfo: any;
+  receiptData: ReceiptData;
+  storeInfo?: StoreInfo | null;
   onClose: () => void;
 }
 

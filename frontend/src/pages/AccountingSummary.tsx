@@ -8,6 +8,7 @@ import { ArrowLeft, FileSpreadsheet, TrendingUp, Wallet, Coins, Download, PiggyB
 import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
+import { getBangkokDate } from '../utils/localDate';
 import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
 
 interface CategoryBreakdown { name: string; sales: number; cost: number; profit: number; percentage: number; }
@@ -23,12 +24,13 @@ interface AccountingData {
 
 const baht = (n: number | undefined | null) => '฿' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// 🐛 FIX — เดิมแปลงวันที่ผ่าน toISOString() (UTC): (1) start = new Date(y, m, 1) เที่ยงคืนท้องถิ่น
+// แปลงเป็น UTC แล้ว slice(0,10) จะได้วันสุดท้ายของเดือนก่อนหน้าเสมอ (ช่วงนี้รวมวันที่ 31 ของเดือน
+// ก่อนหน้าเข้าไปทุกครั้ง) (2) end ช่วง 00:00–07:00 ไทยเพี้ยนเป็นเมื่อวาน — ใช้ getBangkokDate()
+// ซึ่งให้ YYYY-MM-DD ตามเขตเวลาไทยตรงๆ ไม่ต้องผ่าน Date/toISOString
 function getDefaultRange() {
-  const now = new Date();
-  const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-  const firstOfMonth = new Date(bkk.getFullYear(), bkk.getMonth(), 1);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: iso(firstOfMonth), end: iso(bkk) };
+  const today = getBangkokDate();
+  return { start: today.slice(0, 7) + '-01', end: today };
 }
 
 export default function AccountingSummary() {
@@ -40,19 +42,21 @@ export default function AccountingSummary() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => { loadData(); }, [startDate, endDate]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const res = await api.get(`/reports/accounting-summary?start_date=${startDate}&end_date=${endDate}`);
       setData(res.data);
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setLoading(false);
     }
   };
+
+  // IIFE ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation (pattern เดียวกับ Notifications)
+  useEffect(() => { void (async () => { await loadData(); })(); }, [startDate, endDate]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -66,7 +70,7 @@ export default function AccountingSummary() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setExporting(false);

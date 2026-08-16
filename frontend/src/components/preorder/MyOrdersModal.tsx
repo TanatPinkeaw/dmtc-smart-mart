@@ -24,16 +24,27 @@ const STATUS_LABEL: Record<string, string> = {
   REFUND_REQUESTED: '💰 รอคืนเงิน',
 };
 
+interface MyOrderItem { id: number; quantity: number; product_name: string; subtotal: number | string; }
+interface MyOrder {
+  id: number;
+  status: string;
+  created_at: string;
+  items?: MyOrderItem[];
+  points_discount?: number | string;
+  points_redeemed?: number | string;
+  total_amount?: number | string;
+}
+
 interface MyOrdersModalProps {
-  myOrders: any[];
+  myOrders: MyOrder[];
   // ⭐️ Phase 3 — แยก "กำลังโหลด" / "โหลดไม่สำเร็จ" ออกจาก "ไม่มีประวัติจริงๆ" ให้ชัดเจน
   loading: boolean;
   error: boolean;
   onRetry: () => void;
   onClose: () => void;
-  onSelectOrder: (order: any) => void;
+  onSelectOrder: (order: MyOrder) => void;
   /** ⭐️ ทางลัดส่งสลิปใหม่จากการ์ดเลย ไม่ต้องเข้าไปในหน้ารายละเอียดออเดอร์ก่อน */
-  onResubmitSlip: (order: any) => void;
+  onResubmitSlip: (order: MyOrder) => void;
 }
 
 export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSelectOrder, onResubmitSlip }: MyOrdersModalProps) {
@@ -77,7 +88,7 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
                 </div>
 
                 <div className="text-sm text-gray-600 mb-3 space-y-1.5 bg-gray-50 p-2.5 rounded-lg">
-                  {order.items?.map((item: any) => (
+                  {order.items?.map((item: MyOrderItem) => (
                     <div key={item.id} className="flex justify-between text-xs md:text-sm">
                       <span className="text-gray-700">{item.quantity}x {item.product_name}</span>
                       <span className="font-semibold text-gray-800">฿{Number(item.subtotal).toFixed(2)}</span>

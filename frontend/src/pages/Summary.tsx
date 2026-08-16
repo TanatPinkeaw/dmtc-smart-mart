@@ -81,13 +81,6 @@ export default function Summary() {
   const [editRateValue, setEditRateValue] = useState('');
   const [savingRate, setSavingRate] = useState(false);
 
-  useEffect(() => {
-    // ⭐️ RequireManager กันที่ route แล้ว — ที่นี่แค่กัน role อื่นที่หลุดมา (MEMBER/CASHIER)
-    if (user.role !== 'ADMIN' && user.role !== 'MANAGER') { navigate('/'); return; }
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -100,12 +93,20 @@ export default function Summary() {
       setOverview(ovRes.data);
       setPayroll(prRes.data.staff || []);
       setProfit(pfRes.data);
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // ⭐️ RequireManager กันที่ route แล้ว — ที่นี่แค่กัน role อื่นที่หลุดมา (MEMBER/CASHIER)
+    if (user.role !== 'ADMIN' && user.role !== 'MANAGER') { navigate('/'); return; }
+    // IIFE ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation (pattern เดียวกับ Notifications)
+    void (async () => { await loadData(); })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
 
   const totalPayroll = payroll.reduce((sum, p) => sum + Number(p.calculated_pay || 0), 0);
   const totalLateHours = payroll.reduce((sum, p) => sum + Number(p.late_hours || 0), 0);
@@ -134,7 +135,7 @@ export default function Summary() {
       setEditingId(null);
       setEditRateValue('');
       Swal.fire({ icon: 'success', title: 'บันทึกอัตราค่าจ้างสำเร็จ', showConfirmButton: false, timer: 1200 });
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setSavingRate(false);

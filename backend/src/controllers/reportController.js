@@ -15,6 +15,16 @@ const { toSatang, fromSatang } = require('../utils/money');
 const { sendDailyReport } = require('../scripts/dailyReport'); // ⭐️ Sprint 1 — D4
 const reportsExport = require('../services/reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
+// ⭐️ "วัน/เดือนตามเวลาไทย" — server cloud มักรันโซน UTC เดิม new Date().toISOString().slice() จะได้
+// วัน/เดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default ของ payroll/my-hours/monthly-overview + label รายงาน
+// รายวันจะเพี้ยนเป็นเมื่อวาน/เดือนก่อนหน้า — pattern เดียวกับ toBangkokDateStr ใน server.js
+const TZ_BANGKOK = 'Asia/Bangkok';
+function bangkokDateStr(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ_BANGKOK, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
+
 // GET /api/reports/weekly-sales — ยอดขายรวม (POS + พรีออเดอร์) รายวัน ย้อนหลัง 7 วัน
 async function weeklySales(req, res) {
   try {
@@ -180,7 +190,7 @@ async function dashboard(req, res) {
     `);
 
     res.json({
-      date: new Date().toISOString().split('T')[0],
+      date: bangkokDateStr(), // ⭐️ FIX — เดิมเป็นวันแบบ UTC (label กับข้อมูลที่ query ด้วย CURDATE() ไม่ตรงกันช่วง 00:00–07:00 ไทย)
       summary: rows[0]
     });
   } catch (error) {
@@ -572,7 +582,9 @@ async function vendorSummary(req, res) {
 // GET /api/reports/payroll — ค่าจ้างพนักงานทั้งหมดตามเดือน (ชั่วโมงทำงาน × อัตราค่าจ้าง, ADMIN เท่านั้น)
 async function payroll(req, res) {
   try {
-    const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default
+    // จะเป็นเดือนก่อนหน้า (รายงานโชว์เดือนผิด) — ใช้ bangkokDateStr() (เดือนตามเวลาไทย)
+    const month = req.query.month || bangkokDateStr().slice(0, 7); // 'YYYY-MM'
 
     // พนักงานทั้งหมด (CASHIER + MANAGER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
     // ⭐️ Update — เพิ่ม MANAGER (ผู้ใช้ attendance clock-in/out ตัวจริงตอนนี้แทน ADMIN) คง ADMIN ไว้
@@ -659,7 +671,9 @@ async function payroll(req, res) {
 // GET /api/reports/my-hours — เวอร์ชัน self-service ของ payroll (ดูได้แค่ของตัวเอง, ไม่ต้องเป็น ADMIN)
 async function myHours(req, res) {
   try {
-    const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default
+    // จะเป็นเดือนก่อนหน้า (รายงานโชว์เดือนผิด) — ใช้ bangkokDateStr() (เดือนตามเวลาไทย)
+    const month = req.query.month || bangkokDateStr().slice(0, 7); // 'YYYY-MM'
     const userId = req.user.id;
 
     const [users] = await pool.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
@@ -701,7 +715,9 @@ async function myHours(req, res) {
 // GET /api/reports/monthly-overview — ยอดขาย/สมาชิก/สต๊อกใกล้หมด/ออเดอร์ค้าง/บิลยกเลิก ของเดือนที่เลือก
 async function monthlyOverview(req, res) {
   try {
-    const month = req.query.month || new Date().toISOString().slice(0, 7);
+    // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default
+    // จะเป็นเดือนก่อนหน้า (รายงานโชว์เดือนผิด) — ใช้ bangkokDateStr() (เดือนตามเวลาไทย)
+    const month = req.query.month || bangkokDateStr().slice(0, 7);
 
     // ยอดขายรวมเดือนนี้ (sales หน้าร้าน + orders จองที่มารับแล้ว)
     const [salesRows] = await pool.query(

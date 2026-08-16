@@ -6,12 +6,12 @@
 // จุดสำคัญ: ต่อตรงไป API_ORIGIN (Render) เพราะ Vercel proxy ไม่รองรับ WebSocket; แนบ socket-token
 //   อายุสั้น (ขอจาก /auth/socket-token) แทน cookie เพราะ Safari/LINE ITP บล็อก cookie ตอน handshake
 // ═══════════════════════════════════════════════════════════════════════════════════
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_ORIGIN } from './config'; // ⭐️ DEPLOY FIX — URL จาก env แทนฮาร์ดโค้ด
 import api from './api';
+import { SocketContext } from './hooks/socketContext';
 
-const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -118,6 +118,3 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useSocket() {
-  return useContext(SocketContext);
-}

@@ -47,6 +47,9 @@ const IS_PRODUCTION = config.IS_PRODUCTION;
 // ⭐️ Update — ดึงออกไป src/utils/authTokens.js แล้ว (memberController.js ใหม่ต้องออก token/cookie
 // แบบเดียวกันสำหรับสมัครผ่าน LINE ก็เลยแชร์ logic เดียวกันแทน copy-paste) ดูคำอธิบายเต็มที่ไฟล์นั้น
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken, setAuthCookies, clearAuthCookies } = require('./src/utils/authTokens');
+// ⭐️ จัดการ request ซ้ำ (idempotency-key) ที่ชน UNIQUE constraint ฝั่ง DB หลัง server restart — ดู utils/idempotency.js
+const { isIdempotentDuplicate, respondIdempotentDuplicate } = require('./src/utils/idempotency');
+const { evaluateRewardItem, checkItemStock, settleRewardPoints } = require('./src/utils/rewardRedemption'); // ⭐️ Part 5 — ลอจิกแลกของรางวัล (pure — เทสได้)
 
 // ⭐️ อ่าน cookie จาก request header เอง (ไม่พึ่ง cookie-parser เพราะไม่ได้ติดตั้งไว้ใน dependencies)
 function parseCookies(req) {
@@ -538,14 +541,19 @@ const PUBLIC_PATHS = [
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
 
-// ⭐️ BUGFIX — public เฉพาะ "GET" (browse ไม่ต้อง login) เท่านั้น
+// ⭐️ BUGFIX — public เฉพาะ "GET" สำหรับ path ที่ตั้งใจให้ browse ไม่ต้อง login
 // เดิม '/api/products' + '/api/categories' อยู่ใน PUBLIC_PATHS แล้วเช็คด้วย startsWith โดยไม่ดู method
 // ทำให้ POST/PUT/DELETE ก็ match public → ข้าม auth → req.user ว่าง → requireRole ตอบ 403 เสมอ
-// (admin เพิ่ม/แก้/ลบ สินค้า+หมวดหมู่ ไม่ได้เลย) แยกออกมาให้ public เฉพาะ GET
-const PUBLIC_GET_PREFIXES = [
+// (admin เพิ่ม/แก้/ลบ สินค้า+หมวดหมู่ ไม่ได้เลย) — แก้รอบแรกเป็น "GET + startsWith" แต่ยังพลาดอีกชั้น:
+// GET /api/products/export, /api/categories/export, /api/products/rewards ก็ match prefix ด้วย
+// → ข้าม auth เหมือนกัน → requireRole ของ endpoint เหล่านั้นตอบ 403 เสมอ (ปุ่ม Export ในหน้า
+// Settings + หน้าแลกของรางวัล POS พังถาวรทุกคน) แก้เป็น exact-path match: public เฉพาะ path ที่ตั้งใจ
+// browse เท่านั้น ส่วน export/rewards ต้องผ่าน auth + requireRole ตามปกติ
+const PUBLIC_GET_PATHS = new Set([
   '/api/products',
+  '/api/products/highlights', // หน้าสินค้าเด่น (Home/PreOrder) — ข้อมูลสินค้าล้วน ไม่ลับ เปิด browse ได้
   '/api/categories',
-];
+]);
 
 // ป้องกัน endpoint bootstrap ทั้ง 3 ตัว ด้วย key ลับใน .env
 // เรียกใช้แบบ: GET /api/init-db (header X-Setup-Key: xxxxx)
@@ -579,8 +587,9 @@ async function isTokenRevoked(payload) {
 
 function authenticateToken(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
-  // browse สินค้า/หมวดหมู่ = public เฉพาะ GET; POST/PUT/DELETE ต้องผ่าน auth + requireRole ตามปกติ
-  if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
+  // browse สินค้า/หมวดหมู่ = public เฉพาะ GET ที่ระบุใน PUBLIC_GET_PATHS (exact path — ดู comment ข้างบน;
+  // path ย่อย เช่น /export /rewards ต้องผ่าน auth + requireRole ตามปกติ); POST/PUT/DELETE ไม่ match
+  if (req.method === 'GET' && PUBLIC_GET_PATHS.has(req.path)) return next();
 
   // ⭐️ Security remediation — access token อยู่ใน httpOnly cookie เป็นหลัก เก็บ header ไว้เป็น
   // fallback เฉยๆ (เผื่อ non-browser client/debug ไม่กระทบความปลอดภัย เพราะ verify+revoke check เดียวกัน)
@@ -647,7 +656,7 @@ const CSRF_EXEMPT_PATHS = PUBLIC_PATHS;
 function requireCsrf(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (CSRF_EXEMPT_PATHS.some(p => req.path.startsWith(p))) return next();
-  if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
+  if (req.method === 'GET' && PUBLIC_GET_PATHS.has(req.path)) return next();
 
   const headerToken = req.headers['x-csrf-token'];
   if (!req.user?.csrf || !headerToken || req.user.csrf !== headerToken) {
@@ -800,10 +809,18 @@ app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) =>
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "กรุณาระบุชื่อหมวดหมู่" });
 
+  // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างหมวดหมู่ซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
+  const idempotencyKey = req.headers['idempotency-key'];
   try {
-    const [result] = await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
+    const [result] = await pool.query('INSERT INTO categories (name, idempotency_key) VALUES (?, ?)', [name, idempotencyKey || null]);
     res.status(201).json({ id: result.insertId, name });
   } catch (error) {
+    // 🐛 FIX — retry หลัง server restart: row เดิมยังอยู่ใน DB (UNIQUE idempotency_key) → ตอบ "สำเร็จซ้ำ" แทน error
+    if (isIdempotentDuplicate(error)) {
+      const [rows] = await pool.query('SELECT id FROM categories WHERE idempotency_key = ?', [idempotencyKey]);
+      if (rows.length > 0) return res.status(201).json({ id: rows[0].id, name, message: 'เพิ่มหมวดหมู่สำเร็จ (request ซ้ำ — ไม่ได้สร้างซ้ำ)', duplicated: true });
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
     console.error('[500]', error.message);
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
@@ -2107,6 +2124,14 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
   } catch (error) {
     console.error('[500]', error.message);
 
+    // 🐛 FIX — retry หลัง server restart: แคช idempotency หาย แต่กะเคยเปิดแล้ว (UNIQUE shifts.idempotency_key)
+    // → ตอบ "สำเร็จซ้ำ" พร้อม shift_id เดิม แทน error 500 (กันเปิดกะซ้ำ)
+    if (isIdempotentDuplicate(error)) {
+      const [existingShifts] = await pool.query('SELECT id FROM shifts WHERE idempotency_key = ?', [idempotencyKey || null]);
+      if (existingShifts.length > 0) return res.status(201).json({ shift_id: existingShifts[0].id, message: 'เปิดกะการขายสำเร็จ (request ซ้ำ — ไม่ได้เปิดซ้ำ)', duplicated: true, opened_at: formatBangkokTime(new Date()) });
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
+
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
@@ -2766,21 +2791,33 @@ app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, 
 app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => {
   const { slip_image } = req.body;
   if (!slip_image) return res.status(400).json({ error: "กรุณาแนบสลิปใหม่" });
+  const conn = await pool.getConnection();
   try {
-    const [orders] = await pool.query('SELECT user_id FROM orders WHERE id = ? AND status = ?', [req.params.id, 'SLIP_REJECTED']);
-    if (orders.length === 0) return res.status(404).json({ error: "ไม่พบออเดอร์หรือสถานะไม่ถูกต้อง" });
-    if (orders[0].user_id !== req.user.id) return res.status(403).json({ error: "ไม่มีสิทธิ์แก้ไขออเดอร์นี้" });
+    await conn.beginTransaction();
+    const [orders] = await conn.query('SELECT * FROM orders WHERE id = ? AND status = ? FOR UPDATE', [req.params.id, 'SLIP_REJECTED']);
+    if (orders.length === 0) { await conn.rollback(); return res.status(404).json({ error: "ไม่พบออเดอร์หรือสถานะไม่ถูกต้อง" }); }
+    if (orders[0].user_id !== req.user.id) { await conn.rollback(); return res.status(403).json({ error: "ไม่มีสิทธิ์แก้ไขออเดอร์นี้" }); }
+    // 🐛 FIX — สต๊อกถูกคืนกลับตอนโดน SLIP_REJECTED แล้ว การส่งสลิปใหม่ต้องตัดสต๊อกกลับคืนทันที
+    // ไม่งั้นออเดอร์กลับเป็น PENDING_VERIFY แล้วพนักงานกด PREPARING ต่อจะไม่มีการหักสต๊อกอีก
+    // (branch ใน PUT /orders/:id/status เช็ค order.status === 'SLIP_REJECTED' ซึ่งผ่านไปแล้ว) = ของออกโดยไม่หักสต๊อก
+    const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [req.params.id]);
+    for (const item of items) {
+      const [res] = await conn.query('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?', [item.quantity, item.product_id, item.quantity]);
+      if (res.affectedRows === 0) throw new Error(`สต๊อกสินค้าไม่พอสำหรับออเดอร์ #${req.params.id} กรุณาติดต่อลูกค้า`);
+    }
     // ⭐️ Task 4 — reset สถานะตรวจสลิปกลับเป็น PENDING ตอนลูกค้าส่งสลิปใหม่
-    await pool.query("UPDATE orders SET slip_image = ?, slip_file_path = ?, slip_verification_status = 'PENDING', status = 'PENDING_VERIFY', reject_reason = NULL WHERE id = ?", [slip_image, slip_image, req.params.id]);
+    await conn.query("UPDATE orders SET slip_image = ?, slip_file_path = ?, slip_verification_status = 'PENDING', status = 'PENDING_VERIFY', reject_reason = NULL WHERE id = ?", [slip_image, slip_image, req.params.id]);
+    await conn.commit();
     req.io.emit('new_order_received', { message: `ลูกค้าส่งสลิปใหม่ ออเดอร์ #${req.params.id}`, order_id: req.params.id });
     req.io.emit('order_status_changed', { order_id: req.params.id, status: 'PENDING_VERIFY' });
     req.io.emit('payment_slip_received', { order_id: req.params.id, message: `ออเดอร์ #${req.params.id} ส่งสลิปใหม่ รอตรวจสอบ` });
     res.json({ message: "ส่งสลิปใหม่สำเร็จ รอพนักงานตรวจสอบ" });
   } catch (error) {
+    await conn.rollback();
     console.error('[500]', error.message);
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
-  }
+  } finally { conn.release(); }
 });
 
 // ⭐️ อ่านอัตราแต้มสะสมจากตาราง settings (ปรับได้จากหน้า Pricing & Loyalty โดยไม่ต้อง restart)
@@ -2865,13 +2902,10 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
 
       const product = productRows[0];
       // ⭐️ Sprint 2 — B7: Collect insufficient stock issues instead of throwing
-      if (product.stock < item.quantity) {
-        stockIssues.push({
-          product_id: item.product_id,
-          product_name: product.name,
-          requested: item.quantity,
-          available: product.stock
-        });
+      //   (ลอจิกอยู่ใน utils/rewardRedemption.js — มีเทส regression ครอบกรณีของรางวัลหมดสต๊อก)
+      const stockIssue = checkItemStock({ product, quantity: item.quantity, productId: item.product_id });
+      if (stockIssue) {
+        stockIssues.push(stockIssue);
         continue; // Skip this item but continue checking others
       }
 
@@ -2882,12 +2916,12 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
       }
 
       // ⭐️ Part 5 — สินค้าแลกของรางวัล: ราคาเงินสด = 0, จ่ายด้วยแต้ม, ไม่คิดส่วนลด/ไม่ได้แต้มสะสม
+      //   (เช็คสมาชิก + is_reward_item + คำนวณแต้มที่ต้องใช้ อยู่ใน utils/rewardRedemption.js —
+      //   มีเทส regression ครอบกรณีส่ง redeem_reward กับสินค้าธรรมดา / ไม่ได้เลือกสมาชิก)
       if (item.redeem_reward) {
-        if (!member_id) throw new Error('ต้องเลือกสมาชิกก่อนแลกของรางวัล');
-        if (!product.is_reward_item) throw new Error(`สินค้านี้ไม่ใช่ของรางวัล: ${product.name}`);
-        const need = (Number(product.points_required) || 0) * item.quantity;
-        rewardPointsNeeded += need;
-        processedItems.push({ product_id: item.product_id, quantity: item.quantity, unit_price: 0, subtotal: 0, stock_before: product.stock, redeemed_with_points: true, reward_points: need });
+        const reward = evaluateRewardItem({ item, product, memberId: member_id });
+        rewardPointsNeeded += reward.need;
+        processedItems.push(reward.processedItem);
         continue;
       }
 
@@ -2957,24 +2991,21 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     if (member_id && (redeem_points > 0 || rewardPointsNeeded > 0)) {
       const [memberRows] = await conn.query('SELECT points FROM users WHERE id = ? FOR UPDATE', [member_id]);
       if (memberRows.length === 0) throw new Error('ไม่พบข้อมูลสมาชิก');
-      let availablePoints = memberRows[0].points;
-
-      // ของรางวัลก่อน — ต้องมีแต้มครบเต็มจำนวน ไม่งั้นยกเลิกทั้งบิล
-      if (rewardPointsNeeded > 0) {
-        if (availablePoints < rewardPointsNeeded) throw new Error('แต้มสะสมไม่พอสำหรับแลกของรางวัล');
-        rewardPoints = rewardPointsNeeded;
-        availablePoints -= rewardPoints;
-      }
-
-      // แลกเป็นส่วนลดเงินสดจากแต้มที่เหลือ — cap ด้วย (แต้มเหลือ) และ (ยอดบิล/อัตราแลก)
-      if (redeem_points > 0) {
-        const maxByBill = Math.floor(netTotal / redeemRate);
-        pointsRedeemed = Math.min(Number(redeem_points), availablePoints, maxByBill);
-        if (pointsRedeemed < 0) pointsRedeemed = 0;
-        pointsDiscount = fromSatang(toSatang(pointsRedeemed * redeemRate)); // ปัดเป็นสตางค์
-        netTotalSatang -= toSatang(pointsDiscount);
-        netTotal = fromSatang(netTotalSatang);
-      }
+      // ⭐️ ลอจิกคิดแต้ม (ของรางวัลก่อน → เหลือค่อยแลกส่วนลดเงินสด กันใช้แต้มซ้ำ) อยู่ใน
+      //   utils/rewardRedemption.js — pure function มีเทส regression ครอบกรณีแต้มไม่พอ/
+      //   ใช้แต้มซ้ำ/ปัดสตางค์ (ลอจิกเดิมย้ายมาตรงนี้เป๊ะ ไม่เปลี่ยนพฤติกรรม)
+      const settled = settleRewardPoints({
+        memberPoints: memberRows[0].points,
+        rewardPointsNeeded,
+        redeemPoints: redeem_points,
+        redeemRate,
+        netTotalSatang,
+      });
+      pointsRedeemed = settled.pointsRedeemed;
+      pointsDiscount = settled.pointsDiscount;
+      rewardPoints = settled.rewardPoints;
+      netTotalSatang = settled.netTotalSatang;
+      netTotal = fromSatang(netTotalSatang);
     }
 
     // 2. ตรวจสอบเงินทอน (เทียบกับยอดสุทธิหลังหักส่วนลด+แต้ม) — ⭐️ B3: เทียบ/คำนวณในหน่วยสตางค์
@@ -3098,6 +3129,35 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     await conn.rollback();
     console.error('[500]', error.message);
 
+    // 🐛 FIX — retry หลัง server restart: แคช idempotency ในหน่วยความจำหาย แต่บิลเคย commit แล้ว
+    // (UNIQUE sales.idempotency_key) → ตอบ "สำเร็จ" พร้อมใบเสร็จจริง แทน error 500 — กัน client
+    // เข้าใจผิดว่าขายไม่สำเร็จแล้วขายซ้ำ (ของเดิมตอบ 500 → queue retry → ทิ้ง + แจ้งเตือนผู้ใช้)
+    if (isIdempotentDuplicate(error)) {
+      const [existingSales] = await conn.query('SELECT * FROM sales WHERE idempotency_key = ?', [idempotencyKey || null]);
+      if (existingSales.length > 0) {
+        const r = existingSales[0];
+        return res.status(200).json({
+          message: 'ทำรายการสำเร็จ (บิลนี้เคยบันทึกแล้ว — request ซ้ำ ไม่ได้ขายซ้ำ)',
+          duplicated: true,
+          receipt: {
+            sale_id: r.id,
+            subtotal: fromSatang(toSatang(r.total_amount) + toSatang(r.discount_amount) + toSatang(r.group_discount_amount) + toSatang(r.points_discount)),
+            discount_amount: Number(r.discount_amount),
+            group_discount_amount: Number(r.group_discount_amount),
+            points_redeemed: Number(r.points_redeemed),
+            points_discount: Number(r.points_discount),
+            reward_points_used: 0,
+            total_amount: Number(r.total_amount),
+            amount_received: Number(r.amount_received),
+            change_amount: Number(r.change_amount),
+            earned_points: 0,
+            payment_method: r.payment_method
+          }
+        });
+      }
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
+
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
     conn.release();
@@ -3176,8 +3236,11 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, val
           continue;
         }
         const product = productRows[0];
-        if (product.stock < item.quantity) {
-          stockIssues.push({ product_id: item.product_id, product_name: product.name, requested: item.quantity, available: product.stock });
+        // ⭐️ เช็คสต๊อกใช้ util เดียวกับ checkout (utils/rewardRedemption.js) — พฤติกรรมเหมือนเดิม
+        //   (SELECT FOR UPDATE ด้านบนล็อกแถวไว้ทั้ง transaction กัน race ระหว่างเช็คกับตัด)
+        const stockIssue = checkItemStock({ product, quantity: item.quantity, productId: item.product_id });
+        if (stockIssue) {
+          stockIssues.push(stockIssue);
           continue;
         }
         processedItems.push({
@@ -3730,10 +3793,19 @@ app.get('/api/suppliers', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req
 
 app.post('/api/suppliers', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { name, contact_info } = req.body;
+
+  // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างซัพพลายเออร์ซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
+  const idempotencyKey = req.headers['idempotency-key'];
   try {
-    const [result] = await pool.query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact_info]);
+    const [result] = await pool.query('INSERT INTO suppliers (name, contact_info, idempotency_key) VALUES (?, ?, ?)', [name, contact_info, idempotencyKey || null]);
     res.status(201).json({ id: result.insertId, message: "เพิ่มซัพพลายเออร์สำเร็จ" });
   } catch (error) {
+    // 🐛 FIX — retry หลัง server restart: row เดิมยังอยู่ใน DB (UNIQUE idempotency_key) → ตอบ "สำเร็จซ้ำ" แทน error
+    if (isIdempotentDuplicate(error)) {
+      const [rows] = await pool.query('SELECT id FROM suppliers WHERE idempotency_key = ?', [idempotencyKey]);
+      if (rows.length > 0) return res.status(201).json({ id: rows[0].id, message: 'เพิ่มซัพพลายเออร์สำเร็จ (request ซ้ำ — ไม่ได้สร้างซ้ำ)', duplicated: true });
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
     console.error('[500]', error.message);
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
@@ -3857,6 +3929,15 @@ app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
   } catch (error) {
     await conn.rollback();
     console.error('[500]', error.message);
+
+    // 🐛 FIX — retry หลัง server restart: แคช idempotency หาย แต่บิลรับของเคยบันทึกแล้ว
+    // (UNIQUE purchases.idempotency_key) → ตอบ "สำเร็จซ้ำ" พร้อม purchase_id เดิม แทน error 500
+    // (กันรับสินค้า/บวกสต๊อกซ้ำ — สำคัญสุดเพราะ transaction นี้บวก stock+ต้นทุนถัวเฉลี่ย)
+    if (isIdempotentDuplicate(error)) {
+      const [existingPurchases] = await conn.query('SELECT id FROM purchases WHERE idempotency_key = ?', [idempotencyKey || null]);
+      if (existingPurchases.length > 0) return res.status(201).json({ message: 'บันทึกการรับสินค้าเข้าคลังสำเร็จ (request ซ้ำ — ไม่ได้รับซ้ำ)', purchase_id: existingPurchases[0].id, duplicated: true });
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
@@ -4013,6 +4094,14 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
   } catch (error) {
     await conn.rollback();
     console.error('[500]', error.message);
+
+    // 🐛 FIX — retry หลัง server restart: แคช idempotency หาย แต่ออเดอร์เคยสร้างแล้ว (UNIQUE orders.idempotency_key)
+    // → ตอบ "สำเร็จซ้ำ" พร้อม order_id เดิม แทน error 500 (กันสั่งจองซ้ำ)
+    if (isIdempotentDuplicate(error)) {
+      const [existingOrders] = await conn.query('SELECT id FROM orders WHERE idempotency_key = ?', [idempotencyKey || null]);
+      if (existingOrders.length > 0) return res.status(201).json({ message: 'สั่งจองสินค้าสำเร็จ (request ซ้ำ — ไม่ได้สั่งซ้ำ)', order_id: existingOrders[0].id, duplicated: true });
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   } finally {
@@ -4174,9 +4263,10 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
       }
     }
 
-    // 🐛 FIX — SLIP_REJECTED คืนสต๊อกไปตอน reject แล้ว ถ้า accept ผ่านหน้าร้าน (โดยไม่ต้องอัปสลิปใหม่)
-    // ต้องตัดสต๊อกกลับคืน ไม่งั้นสินค้าหลุดออกโดยไม่หักสต๊อก (ขายเกินได้)
-    if (order.status === 'SLIP_REJECTED' && status === 'PREPARING') {
+    // 🐛 FIX — SLIP_REJECTED คืนสต๊อกไปตอน reject แล้ว ถ้าออกจากสถานะนี้กลับสู่สถานะที่ต้องขายของ
+    // (ตรวจสลิปใหม่ = PENDING_VERIFY หรือ accept ผ่านหน้าร้าน = PREPARING ตรงๆ) ต้องตัดสต๊อกกลับคืน
+    // ไม่งั้นสินค้าหลุดออกโดยไม่หักสต๊อก (ขายเกินได้) — PENDING_VERIFY เคยหลุดเพราะ branch เช็คแค่ PREPARING
+    if (order.status === 'SLIP_REJECTED' && ['PENDING_VERIFY', 'PREPARING'].includes(status)) {
       const [items] = await conn.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
       for (const item of items) {
         const [res] = await conn.query('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?', [item.quantity, item.product_id, item.quantity]);
@@ -4517,19 +4607,44 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), upload
     // ตรวจ dimensions จาก buffer (รูปปิดกะ min 800×600)
     const dimensions = await validateImageDimensions(req.file.buffer, 800, 600, 10000, 10000);
 
+    // 🐛 FIX — เช็ค ownership ก่อนอัปโหลด (เดิมอัปโหลดก่อนแล้วค่อย UPDATE) กันไฟล์孤儿เมื่อกะไม่ใช่
+    // ของเรา/ไม่มีอยู่จริง: CASHIER ใช้ได้เฉพาะกะของตัวเอง (cashier_id จาก JWT — ไม่เชื่อจาก body),
+    // ADMIN อัปโหลดให้กะใครก็ได้ (จัดการกะ) — ตาราง shifts ใช้ cashier_id ไม่ใช่ user_id
+    const isAdmin = req.user.role === 'ADMIN';
+    const [shiftRows] = await pool.query(
+      isAdmin
+        ? 'SELECT id FROM shifts WHERE id = ?'
+        : 'SELECT id FROM shifts WHERE id = ? AND cashier_id = ?',
+      isAdmin ? [id] : [id, req.user.id]
+    );
+    if (shiftRows.length === 0) {
+      return res.status(404).json({ error: isAdmin ? 'ไม่พบกะนี้' : 'ไม่พบกะนี้ หรือคุณไม่มีสิทธิ์อัปโหลดรูปให้กะนี้' });
+    }
+
     // ⭐️ อัปโหลดขึ้น Cloudinary (หรือดิสก์ถ้า dev) → เก็บ URL/พาธเต็มลง close_photo
     const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
     const base = `${Date.now()}_${req.user.id}`;
     const photoUrl = await saveImage(req.file.buffer, 'shift-photos/close', base, ext);
 
+    // 🐛 FIX — เดิมใช้ `WHERE id = ? AND user_id = ?` แต่ตาราง shifts ไม่มีคอลัมน์ user_id
+    // (เป็น cashier_id) → SQL error ทุกครั้ง (ER_BAD_FIELD_ERROR) + 400 พร้อมข้อความ error ดิบรั่ว
+    // อัปเดตด้วย cashier_id + ล็อก scope ตามสิทธิ์อีกชั้น (เผื่อกะถูกลบ/เปลี่ยนเจ้าของระหว่างเช็ค)
     await pool.query(
-      'UPDATE shifts SET close_photo = ? WHERE id = ? AND user_id = ?',
-      [photoUrl, id, req.user.id]
+      isAdmin
+        ? 'UPDATE shifts SET close_photo = ? WHERE id = ?'
+        : 'UPDATE shifts SET close_photo = ? WHERE id = ? AND cashier_id = ?',
+      isAdmin ? [photoUrl, id] : [photoUrl, id, req.user.id]
     );
 
     res.json({ success: true, path: photoUrl, dimensions });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    // 🐛 FIX — กัน error ดิบ (SQL/Cloudinary message) รั่วไปให้ client: เก็บรายละเอียดไว้ใน log
+    // เฉพาะ error ตรวจขนาดรูป (ตั้งใจให้ผู้ใช้เห็น) ถึงจะส่งข้อความจริงกลับไป
+    console.error('[500]', err.message);
+    if (err.message && err.message.startsWith('Image validation failed:')) {
+      return res.status(400).json({ error: err.message.replace(/^Image validation failed:\s*/, '') });
+    }
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }
 });
 
@@ -5161,6 +5276,9 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 
   // ⭐️ Cron: ตัดออกงาน/ปิดกะอัตโนมัติทุกเที่ยงคืน (ข้อ 12 — ลืมออกงาน/ลืมปิดกะข้ามวัน)
+  // ⭐️ ตัดออกงาน/ปิดกะที่ค้างข้ามวัน ทุกวัน 07:05 น. เวลาไทย (00:05 UTC — process รันโซน UTC)
+  // เกณฑ์เป็นวันไทยล้วน (DATE(check_in/opened_at) < CURDATE() ซึ่ง CURDATE() = session tz +07:00)
+  // → ยิงกี่โมงหลังเที่ยงคืนไทยก็ได้ผลเหมือนกัน 07:05 เช้าก่อนร้านเปิดจึงปลอดภัย ไม่ต้องปรับ
   cron.schedule('5 0 * * *', async () => {
     try {
       const result = await runAutoCheckoutStale(io);
@@ -5168,16 +5286,21 @@ server.listen(PORT, '0.0.0.0', () => {
     } catch (e) { console.error('❌ auto-checkout cron ล้มเหลว:', e.message); }
   });
 
-  // ⭐️ Sprint 1 — D4: รายงานสรุปยอดประจำวันทุกวันตี 6 (ก่อนร้านเปิด) — ส่งอีเมลถึง ADMIN_EMAIL
-  cron.schedule('0 6 * * *', async () => {
-    console.log('⏰ เริ่มสร้าง/ส่งรายงานสรุปยอดประจำวัน (ตี 6)...');
+  // ⭐️ Sprint 1 — D4: รายงานสรุปยอดประจำวัน ทุกวัน 06:00 น. เวลาไทย (23:00 UTC วันก่อน — เพราะไทย = UTC+7
+  // และ process รันโซน UTC: เดิมเผลอเขียน '0 6 * * *' = 06:00 UTC = บ่ายโมงไทย รายงานไปถึงหลังร้านเปิดแล้ว
+  // — เปรียบเทียบกับ cron ตัวอื่นในไฟล์นี้ (backup 19:00 UTC = ตี 2 ไทย, low-stock 10:00 UTC = 17:00 ไทย)
+  // ที่แปลงเวลาไทย→UTC ไว้ชัดเจน) ก่อนร้านเปิด ส่งอีเมลถึง ADMIN_EMAIL — sendDailyReport() ไม่ส่ง param
+  // = รายงาน "เมื่อวาน" ตามเวลาไทยเสมอ (getYesterdayBangkok) ถูกต้องไม่ว่า cron จะยิงกี่โมง
+  cron.schedule('0 23 * * *', async () => {
+    console.log('⏰ เริ่มสร้าง/ส่งรายงานสรุปยอดประจำวัน (06:00 น. ไทย)...');
     try {
       const result = await sendDailyReport();
       console.log(`📧 รายงานประจำวัน ${result.data.date}: ${result.sent ? 'ส่งอีเมลสำเร็จ' : 'สร้างรายงานแล้วแต่ไม่ได้ส่ง (เช็ค ADMIN_EMAIL/SMTP)'}`);
     } catch (e) { console.error('❌ daily report cron ล้มเหลว:', e.message); }
   });
 
-  // ⭐️ Sprint 2 — Expiry Discount: Check for expired products hourly and notify cashiers
+  // ⭐️ Sprint 2 — Expiry Discount: เช็คสินค้าหมดอายุ ทุกชั่วโมง (0 * * * * = top-of-hour เดียวกันทั้ง
+  // UTC/ไทย ไม่มีเวลาตายตัว ไม่ต้องแปลงโซน) แจ้งเตือน cashiers ผ่าน socket (products_expired)
   cron.schedule('0 * * * *', async () => {
     try {
       const [expiredToday] = await pool.query(`
@@ -5197,7 +5320,9 @@ server.listen(PORT, '0.0.0.0', () => {
     } catch (e) { console.error('❌ expired products cron ล้มเหลว:', e.message); }
   });
 
-  // ⭐️ Security remediation — ล้าง revoked_tokens ที่หมดอายุแล้วทุกวัน (กันตารางโตไม่จำกัด)
+  // ⭐️ Security remediation — ล้าง revoked_tokens ที่หมดอายุแล้วทุกวัน 02:30 น. เวลาไทย (19:30 UTC —
+  // process รันโซน UTC) กันตารางโตไม่จำกัด — เปรียบเทียบ expires_at (FROM_UNIXTIME = เวลาไทย session tz)
+  // กับ NOW() (เวลาไทยเหมือนกัน) ยิงกี่โมงก็ได้ผลถูกต้อง
   cron.schedule('30 19 * * *', async () => {
     try {
       const [result] = await pool.query('DELETE FROM revoked_tokens WHERE expires_at < NOW()');

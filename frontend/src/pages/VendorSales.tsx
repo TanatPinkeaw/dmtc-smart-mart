@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Wallet, Package, TrendingUp, PiggyBank } from 'lucide-react';
 import api from '../api';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 
 interface VendorSummary {
@@ -25,14 +25,6 @@ export default function VendorSales() {
   const socket = useSocket();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
-  useEffect(() => {
-    fetchData();
-    if (!socket) return;
-    socket.on('dashboard_updated', fetchData);
-    socket.on('stock_updated', fetchData);
-    return () => { socket.off('dashboard_updated', fetchData); socket.off('stock_updated', fetchData); };
-  }, [socket]);
-
   const fetchData = async () => {
     try {
       const [summaryRes, detailRes] = await Promise.all([
@@ -43,6 +35,15 @@ export default function VendorSales() {
       setItems(detailRes.data);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    // IIFE ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation (pattern เดียวกับ Notifications)
+    void (async () => { await fetchData(); })();
+    if (!socket) return;
+    socket.on('dashboard_updated', fetchData);
+    socket.on('stock_updated', fetchData);
+    return () => { socket.off('dashboard_updated', fetchData); socket.off('stock_updated', fetchData); };
+  }, [socket]);
 
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 

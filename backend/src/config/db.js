@@ -625,11 +625,16 @@ const initDB = async () => {
     }
 
     // ⭐️ Sprint 2 — B6: Idempotency — add idempotency_key columns to financial endpoints
+    // ⭐️ Update — ขยายไปยังตารางที่ offline queue เก็บ mutation ได้ (สร้างหมวด/ซัพพลายเออร์/โปรซ้ำได้
+    // ถ้า retry) — ดู utils/idempotency.js สำหรับการจัดการ ER_DUP_ENTRY หลัง server restart
     for (const [table, columns] of [
       ['sales', 'idempotency_key'],
       ['orders', 'idempotency_key'],
       ['shifts', 'idempotency_key'],
       ['purchases', 'idempotency_key'],
+      ['categories', 'idempotency_key'],
+      ['suppliers', 'idempotency_key'],
+      ['promotions', 'idempotency_key'],
     ]) {
       try {
         await connection.query(`ALTER TABLE ${table} ADD COLUMN ${columns} VARCHAR(255) UNIQUE NULL`);

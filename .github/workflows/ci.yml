@@ -75,3 +75,21 @@ jobs:
       # ⭐️ price contract — กันสูตรราคาหลังส่วนลด (ปัดบาท) frontend/backend หลุด sync (ไม่ต้องใช้ DB)
       - run: node tests/priceContract.test.js
       - run: node tests/smokeTest.js
+
+  # ⭐️ หน่วยเทสทั้ง 8 ชุด (contract/price/cron/daily/member-groups/reward/sync-offline/richmenu) —
+  # ไม่ต้องใช้ DB เลย (ทุกชุดเป็น unit/contract ล้วน) แยก job ไว้รันคู่ขนานกับ smoke test ที่ต้อง MySQL
+  # รันผ่าน custom runner (scripts/run-all-tests.js) ที่ครอบทั้งสไตล์ node:test และ custom harness เดิม
+  backend-unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run test:unit

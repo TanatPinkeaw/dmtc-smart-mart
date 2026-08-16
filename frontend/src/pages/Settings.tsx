@@ -6,16 +6,68 @@ import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound, RotateCcw, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import Swal from '../swal';
 import api from '../api';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { getLocalDate } from '../utils/localDate'; // ⭐️ วันนี้ตามเวลาท้องถิ่น (ย้าย helper ไป utils กลาง)
 import { LoyaltySettingsPanel } from '../components/settings/LoyaltySettingsPanel';
 import { MemberGroupsPanel } from '../components/settings/MemberGroupsPanel';
 
-const getLocalDate = () => {
-  const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-  return new Date(Date.now() - tzoffset).toISOString().split('T')[0];
-};
+// ── Types (state ที่เคยเป็น any — shape ตาม backend + การใช้งานจริงในหน้านี้) ──────
+interface SettingsUser {
+  id: number;
+  username: string;
+  full_name: string;
+  role: string;
+  student_id?: string | null;
+  phone_number?: string | null;
+  points?: number;
+  is_active?: boolean | number;
+  line_user_id?: string | null;
+  group_id?: number | null;
+}
+interface SettingsCategory { id: number; name: string; }
+interface SettingsSupplier { id: number; name: string; contact_info?: string; }
+interface SettingsProduct {
+  id: number;
+  name: string;
+  barcode?: string;
+  price?: number | string;
+  cost?: number | string;
+  stock?: number;
+  image_url?: string;
+  category_id?: number | null;
+  vendor_id?: number | null;
+  gp_rate?: number | string;
+  promo_percent?: number | string;
+  promo_start?: string | null;
+  promo_end?: string | null;
+  expiry_date?: string | null;
+  discount_percent?: number | string;
+  is_reward_item?: boolean;
+  points_required?: number | string;
+  is_active?: boolean;
+}
+interface SettingsPromotion {
+  id: number;
+  name: string;
+  discount_type?: string;
+  discount_value?: number | string;
+  start_date?: string;
+  end_date?: string;
+  buy_product_id?: number | null;
+  buy_qty?: number;
+  free_product_id?: number | null;
+  free_qty?: number;
+  usage_limit?: number | string;
+  usage_limit_per_user?: number | string;
+  usage_count?: number;
+  is_active?: boolean | number;
+}
+interface PasswordReset { id: number; full_name?: string; student_id?: string; phone_number?: string | null; expires_at?: string; reset_token?: string; }
+interface MemberGroup { id: number; name: string; default_discount_percent: number | string; }
+interface SaleRow { id: number; source?: string; total_amount?: number; payment_method?: string; created_at?: string; cashier_name?: string; member_name?: string | null; promo_name?: string | null; status?: string; }
+interface BillItem { product_name: string; quantity: number; subtotal: number; }
 
 export default function Settings() {
   const socket = useSocket();
@@ -28,13 +80,13 @@ export default function Settings() {
   const [activeModal, setActiveModal] = useState<'ADD_PRODUCT' | 'EDIT_PRODUCT' | 'ADD_CATEGORY' | 'ADD_SUPPLIER' | 'ADD_USER' | 'EDIT_USER' | 'ADD_PROMOTION' | null>(null);
 
   const [storeInfo, setStoreInfo] = useState({ store_name: '', tax_id: '', address: '', receipt_footer: '' });
-  const [salesHistory, setSalesHistory] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [promotions, setPromotions] = useState<any[]>([]);
-  const [passwordResets, setPasswordResets] = useState<any[]>([]); // ⭐️ FIX — คิวคำขอรีเซ็ตรหัสผ่าน
+  const [salesHistory, setSalesHistory] = useState<SaleRow[]>([]);
+  const [users, setUsers] = useState<SettingsUser[]>([]);
+  const [categories, setCategories] = useState<SettingsCategory[]>([]);
+  const [suppliers, setSuppliers] = useState<SettingsSupplier[]>([]);
+  const [products, setProducts] = useState<SettingsProduct[]>([]);
+  const [promotions, setPromotions] = useState<SettingsPromotion[]>([]);
+  const [passwordResets, setPasswordResets] = useState<PasswordReset[]>([]); // ⭐️ FIX — คิวคำขอรีเซ็ตรหัสผ่าน
 
   // ⭐️ 3. เพิ่ม State สำหรับช่องค้นหาทุกๆ แท็บ
   const [searchProduct, setSearchProduct] = useState('');
@@ -45,14 +97,14 @@ export default function Settings() {
   const [vendorSearch, setVendorSearch] = useState(''); // ค้นหาเจ้าของผลงานตอนเพิ่มสินค้า
 
   const [newUser, setNewUser] = useState({ username: '', password: '', full_name: '', role: 'CASHIER' });
-  const [editingUser, setEditingUser] = useState<any>(null); // สำหรับแก้ไขสิทธิ์พนักงาน
-  const [memberGroups, setMemberGroups] = useState<any[]>([]); // ⭐️ Part 3 — กลุ่มสมาชิก (ใช้กำหนดกลุ่มให้ผู้ใช้)
+  const [editingUser, setEditingUser] = useState<SettingsUser | null>(null); // สำหรับแก้ไขสิทธิ์พนักงาน
+  const [memberGroups, setMemberGroups] = useState<MemberGroup[]>([]); // ⭐️ Part 3 — กลุ่มสมาชิก (ใช้กำหนดกลุ่มให้ผู้ใช้)
 
   const [newCategory, setNewCategory] = useState('');
   const [newSupplier, setNewSupplier] = useState({ name: '', contact_info: '' });
   
-  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40, is_reward_item: false, points_required: '' });
-  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [newProduct, setNewProduct] = useState({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: '40', is_reward_item: false, points_required: '' });
+  const [editingProduct, setEditingProduct] = useState<SettingsProduct | null>(null);
 
   const [newPromotion, setNewPromotion] = useState({
     name: '', discount_type: 'PERCENT', discount_value: '', start_date: '', end_date: '',
@@ -64,9 +116,9 @@ export default function Settings() {
   const [endDate, setEndDate] = useState(getLocalDate());
   const [exporting, setExporting] = useState<'excel' | 'csv' | null>(null);
   const [exportingExecutive, setExportingExecutive] = useState<'excel' | 'csv' | null>(null);
-  const [viewingBillItems, setViewingBillItems] = useState<any[] | null>(null);
-  const [viewingBillInfo, setViewingBillInfo] = useState<any | null>(null);
-  const [vendors, setVendors] = useState<any[]>([]);
+  const [viewingBillItems, setViewingBillItems] = useState<BillItem[] | null>(null);
+  const [viewingBillInfo, setViewingBillInfo] = useState<SaleRow | null>(null);
+  const [vendors, setVendors] = useState<SettingsUser[]>([]);
 
   const currentUser = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   // ⭐️ MANAGER เห็นแท็บได้แค่ที่เกี่ยวกับหน้าร้าน — พนักงาน/สิทธิ์, กลุ่มสมาชิก(กฎรายหมวดหมู่), รีเซ็ตรหัสผ่าน สงวนไว้ ADMIN เท่านั้น
@@ -75,19 +127,95 @@ export default function Settings() {
 
   // ⭐️ กันเผื่อ activeTab หลุดไปเป็นแท็บ ADMIN-only ได้ (เช่น state ค้างจากรีเฟรช) — เด้งกลับ STORE ให้ MANAGER
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- guard ปรับแท็บให้ตรงสิทธิ์ (ตั้งใจ sync — ต้องรีเซ็ตทันที)
     if (!isAdmin && (ADMIN_ONLY_TABS as readonly string[]).includes(activeTab)) setActiveTab('STORE');
   }, [isAdmin, activeTab]);
 
+  const fetchStoreSettings = async () => { const res = await api.get('/settings/store'); setStoreInfo(res.data); };
+  // ⭐️ Export ยอดขาย/รายได้ (รวมรายชิ้น+รายบิล+สรุปรายวันไฟล์เดียวเสมอ ดู server.js) เลือกได้แค่ format
+  const handleExportCsv = async (format: 'excel' | 'csv') => {
+    setExporting(format);
+    try {
+      const res = await api.get('/reports/export/sales-csv', {
+        params: { start_date: startDate, end_date: endDate, format },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales-export_${startDate}_ถึง_${endDate}.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);    } catch (err) { Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) }); } finally {
+      setExporting(null);
+    }
+  };
+  // ⭐️ Phase 4 Part 2 — Executive Summary export (KPI/top-products/category/inventory + full
+  // transaction detail). เดียวกับ handleExportCsv แค่ยิงคนละ endpoint กับคนละนามสกุลไฟล์
+  const handleExportExecutive = async (format: 'excel' | 'csv') => {
+    setExportingExecutive(format);
+    try {
+      const res = await api.get('/reports/executive-export', {
+        params: { startDate, endDate, format },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `executive-summary_${startDate}_ถึง_${endDate}.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);    } catch (err) { Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) }); } finally {
+      setExportingExecutive(null);
+    }
+  };
+  // ⭐️ FIX — โหลดคิวคำขอรีเซ็ตรหัสผ่าน
+  const fetchPasswordResets = async () => { const res = await api.get('/admin/password-resets'); setPasswordResets(res.data); };
+  const handleCopyResetLink = async (token: string) => {
+    const link = `${window.location.origin}/reset-password?token=${token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      Swal.fire({ icon: 'success', title: 'คัดลอกลิงก์แล้ว', text: 'นำไปส่งให้นักเรียนได้เลย (เช่น ทาง LINE)', showConfirmButton: false, timer: 1800 });
+    } catch {
+      Swal.fire({ icon: 'info', title: 'คัดลอกลิงก์อัตโนมัติไม่ได้', text: link });
+    }
+  };
+  const handleRejectPasswordReset = async (id: number) => {
+    const res = await Swal.fire({ title: 'ปฏิเสธคำขอนี้?', text: 'ลิงก์รีเซ็ตรหัสผ่านของคำขอนี้จะใช้งานไม่ได้ทันที', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ปฏิเสธ', cancelButtonText: 'ยกเลิก' });
+    if (!res.isConfirmed) return;
+    try {
+      await api.delete(`/admin/password-resets/${id}`);
+      fetchPasswordResets();
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
+    }
+  };
+  const fetchUsers = async () => { const res = await api.get('/users'); setUsers(res.data); };
+  const fetchCategories = async () => { const res = await api.get('/categories'); setCategories(res.data); };
+  const fetchSuppliers = async () => { const res = await api.get('/suppliers'); setSuppliers(res.data); };
+  const fetchProducts = async () => { const res = await api.get('/products'); setProducts(res.data); };
+  const fetchPromotions = async () => { const res = await api.get('/promotions'); setPromotions(res.data); };
+  const fetchSalesHistory = async () => { try { const res = await api.get(`/sales/history?start_date=${startDate}&end_date=${endDate}`); setSalesHistory(res.data); } catch (error) { console.error(error); } };
+  const fetchVendors = async () => { const res = await api.get('/users'); setVendors(res.data); };
+
+  // ⭐️ effect หลัก — โหลดข้อมูลตามแท็บ + ฟัง socket realtime (ย้ายมาหลัง fetch functions ให้
+  // react-hooks/immutability ไม่เห็นการอ้างอิงก่อนประกาศ — พฤติกรรมเหมือนเดิม)
   useEffect(() => {
-    fetchStoreSettings();
-    if (activeTab === 'HISTORY') fetchSalesHistory();
-    if (activeTab === 'USERS' && isAdmin) { fetchUsers(); api.get('/member-groups').then(r => setMemberGroups(r.data || [])).catch(() => {}); }
-    if (activeTab === 'CATEGORIES') fetchCategories();
-    if (activeTab === 'SUPPLIERS') fetchSuppliers();
-    if (activeTab === 'PRODUCTS') { fetchProducts(); fetchCategories(); }
-    if (activeTab === 'PROMOTIONS') { fetchPromotions(); fetchProducts(); }
-    if (activeTab === 'PASSWORD_RESETS' && isAdmin) fetchPasswordResets();
-    fetchVendors();
+    // IIFE + await: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+    // (กฎ trace เข้า function ที่ประกาศก่อน effect — ย้าย fetches ขึ้นมาเพื่อแก้ immutability แล้วต้อง wrap นี้ด้วย)
+    void (async () => {
+      await fetchStoreSettings();
+      if (activeTab === 'HISTORY') await fetchSalesHistory();
+      if (activeTab === 'USERS' && isAdmin) { await fetchUsers(); api.get('/member-groups').then(r => setMemberGroups(r.data || [])).catch(() => {}); }
+      if (activeTab === 'CATEGORIES') await fetchCategories();
+      if (activeTab === 'SUPPLIERS') await fetchSuppliers();
+      if (activeTab === 'PRODUCTS') { await fetchProducts(); await fetchCategories(); }
+      if (activeTab === 'PROMOTIONS') { await fetchPromotions(); await fetchProducts(); }
+      if (activeTab === 'PASSWORD_RESETS' && isAdmin) await fetchPasswordResets();
+      await fetchVendors();
+    })();
 
     if (!socket) return;
 
@@ -113,81 +241,6 @@ export default function Settings() {
     };
   }, [activeTab, socket, startDate, endDate]); // 👈 เพิ่ม dependencies ให้คร
 
-  const fetchStoreSettings = async () => { const res = await api.get('/settings/store'); setStoreInfo(res.data); };
-  // ⭐️ Export ยอดขาย/รายได้ (รวมรายชิ้น+รายบิล+สรุปรายวันไฟล์เดียวเสมอ ดู server.js) เลือกได้แค่ format
-  const handleExportCsv = async (format: 'excel' | 'csv') => {
-    setExporting(format);
-    try {
-      const res = await api.get('/reports/export/sales-csv', {
-        params: { start_date: startDate, end_date: endDate, format },
-        responseType: 'blob',
-      });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sales-export_${startDate}_ถึง_${endDate}.${format === 'excel' ? 'xlsx' : 'csv'}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
-    } finally {
-      setExporting(null);
-    }
-  };
-  // ⭐️ Phase 4 Part 2 — Executive Summary export (KPI/top-products/category/inventory + full
-  // transaction detail). เดียวกับ handleExportCsv แค่ยิงคนละ endpoint กับคนละนามสกุลไฟล์
-  const handleExportExecutive = async (format: 'excel' | 'csv') => {
-    setExportingExecutive(format);
-    try {
-      const res = await api.get('/reports/executive-export', {
-        params: { startDate, endDate, format },
-        responseType: 'blob',
-      });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `executive-summary_${startDate}_ถึง_${endDate}.${format === 'excel' ? 'xlsx' : 'csv'}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
-    } finally {
-      setExportingExecutive(null);
-    }
-  };
-  // ⭐️ FIX — โหลดคิวคำขอรีเซ็ตรหัสผ่าน
-  const fetchPasswordResets = async () => { const res = await api.get('/admin/password-resets'); setPasswordResets(res.data); };
-  const handleCopyResetLink = async (token: string) => {
-    const link = `${window.location.origin}/reset-password?token=${token}`;
-    try {
-      await navigator.clipboard.writeText(link);
-      Swal.fire({ icon: 'success', title: 'คัดลอกลิงก์แล้ว', text: 'นำไปส่งให้นักเรียนได้เลย (เช่น ทาง LINE)', showConfirmButton: false, timer: 1800 });
-    } catch {
-      Swal.fire({ icon: 'info', title: 'คัดลอกลิงก์อัตโนมัติไม่ได้', text: link });
-    }
-  };
-  const handleRejectPasswordReset = async (id: number) => {
-    const res = await Swal.fire({ title: 'ปฏิเสธคำขอนี้?', text: 'ลิงก์รีเซ็ตรหัสผ่านของคำขอนี้จะใช้งานไม่ได้ทันที', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ปฏิเสธ', cancelButtonText: 'ยกเลิก' });
-    if (!res.isConfirmed) return;
-    try {
-      await api.delete(`/admin/password-resets/${id}`);
-      fetchPasswordResets();
-    } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
-    }
-  };
-  const fetchUsers = async () => { const res = await api.get('/users'); setUsers(res.data); };
-  const fetchCategories = async () => { const res = await api.get('/categories'); setCategories(res.data); };
-  const fetchSuppliers = async () => { const res = await api.get('/suppliers'); setSuppliers(res.data); };
-  const fetchProducts = async () => { const res = await api.get('/products'); setProducts(res.data); };
-  const fetchPromotions = async () => { const res = await api.get('/promotions'); setPromotions(res.data); };
-  const fetchSalesHistory = async () => { try { const res = await api.get(`/sales/history?start_date=${startDate}&end_date=${endDate}`); setSalesHistory(res.data); } catch (error) { console.error(error); } };
-  const fetchVendors = async () => { const res = await api.get('/users'); setVendors(res.data); };
-
   // ================= ⭐️ ระบบกรองข้อมูล (ค้นหา) =================
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()) || (p.barcode && p.barcode.includes(searchProduct)));
   const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchCategory.toLowerCase()));
@@ -206,9 +259,9 @@ export default function Settings() {
   const filteredVendors = vendors.filter(v => v.full_name.toLowerCase().includes(vendorSearch.toLowerCase()) || v.username.includes(vendorSearch));
 
   // ================= ACTION FUNCTIONS =================
-  const handleViewBill = async (bill: any) => {
+  const handleViewBill = async (bill: SaleRow) => {
     try { const res = await api.get(`/sales/history/${bill.id}?source=${bill.source || 'POS'}`); setViewingBillItems(res.data); setViewingBillInfo(bill); }
-    catch (error) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'ไม่สามารถดึงข้อมูลบิลได้' }); }
+    catch { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'ไม่สามารถดึงข้อมูลบิลได้' }); }
   };
 
   const handleSaveStore = async (e: React.FormEvent) => {
@@ -224,14 +277,14 @@ export default function Settings() {
       await api.post(`/sales/${saleId}/void`, { user_role: currentUser.role });
       fetchSalesHistory(); if (viewingBillInfo?.id === saleId) setViewingBillInfo(null);
       Swal.fire({ icon: 'success', title: 'ยกเลิกบิลสำเร็จ', showConfirmButton: false, timer: 1500 });
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err) }); }
   };
 
-  const handleAddUser = async (e: React.FormEvent) => { e.preventDefault(); try { await api.post('/users', newUser); setNewUser({ username: '', password: '', full_name: '', role: 'CASHIER' }); fetchUsers(); setActiveModal(null); Swal.fire({ icon: 'success', title: 'เพิ่มพนักงานสำเร็จ', showConfirmButton: false, timer: 1500 }); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
   
   // ⭐️ ฟังก์ชันแก้ไขสิทธิ์ผู้ใช้งาน (คืนเป็น MEMBER ได้)
   const handleEditUserRole = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingUser) return; // กัน null — โมดัลแก้ไขเปิดเมื่อมี editingUser เสมอ
     try {
       await api.put(`/users/${editingUser.id}`, {
         full_name: editingUser.full_name,
@@ -244,13 +297,12 @@ export default function Settings() {
       // ⭐️ Part 3 — บันทึกกลุ่มสมาชิกด้วย (endpoint แยก ADMIN+MANAGER)
       await api.put(`/users/${editingUser.id}/group`, { group_id: editingUser.group_id || null });
       fetchUsers(); setActiveModal(null); setEditingUser(null);
-      Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
-    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });      } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
   // ⭐️ ปลดผูก LINE รายบุคคล (ต่างจาก unlink-all ในเครื่องมือรีเซ็ต demo) — ปลดแล้วแก้ไข student_id ได้
   // ต่อทันทีในโมดัลเดิม (เคลียร์ line_user_id ใน editingUser local state ไม่ต้องปิด/เปิดโมดัลใหม่)
-  const handleUnlinkLine = async (u: any) => {
+  const handleUnlinkLine = async (u: SettingsUser) => {
     const confirm = await Swal.fire({
       icon: 'warning', title: `ยกเลิกผูก LINE ของ "${u.full_name}"?`,
       text: 'สมาชิกจะต้องผูกบัญชี LINE ใหม่เองถึงจะ login/ดูบัตรสมาชิกผ่าน LINE ได้อีกครั้ง',
@@ -259,10 +311,9 @@ export default function Settings() {
     if (!confirm.isConfirmed) return;
     try {
       await api.put(`/users/${u.id}/unlink-line`);
-      setEditingUser((prev: any) => prev ? { ...prev, line_user_id: null } : prev);
+      setEditingUser((prev: SettingsUser | null) => prev ? { ...prev, line_user_id: null } : prev);
       fetchUsers();
-      Swal.fire({ icon: 'success', title: 'ปลดผูกบัญชี LINE แล้ว', showConfirmButton: false, timer: 1500 });
-    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      Swal.fire({ icon: 'success', title: 'ปลดผูกบัญชี LINE แล้ว', showConfirmButton: false, timer: 1500 });      } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
   const handleAddCategory = async (e: React.FormEvent) => { e.preventDefault(); await api.post('/categories', { name: newCategory }); setNewCategory(''); fetchCategories(); setActiveModal(null); Swal.fire({ icon: 'success', title: 'เพิ่มหมวดหมู่สำเร็จ', showConfirmButton: false, timer: 1500 }); };
@@ -283,55 +334,50 @@ export default function Settings() {
       setNewPromotion({ name: '', discount_type: 'PERCENT', discount_value: '', start_date: '', end_date: '', buy_product_id: '', buy_qty: '', free_product_id: '', free_qty: '', usage_limit: '', usage_limit_per_user: '' });
       fetchPromotions();
       setActiveModal(null);
-      Swal.fire({ icon: 'success', title: 'สร้างโปรโมชั่นสำเร็จ', showConfirmButton: false, timer: 1500 });
-    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      Swal.fire({ icon: 'success', title: 'สร้างโปรโมชั่นสำเร็จ', showConfirmButton: false, timer: 1500 });      } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await api.post('/products', { ...newProduct, category_id: newProduct.category_id ? Number(newProduct.category_id) : null, price: Number(newProduct.price), cost: Number(newProduct.cost) || 0, stock: Number(newProduct.stock) || 0, vendor_id: newProduct.vendor_id ? Number(newProduct.vendor_id) : null, gp_rate: newProduct.gp_rate ? Number(newProduct.gp_rate) : 0, promo_percent: Number(newProduct.promo_percent) || 0, promo_start: newProduct.promo_start || null, promo_end: newProduct.promo_end || null, expiry_date: newProduct.expiry_date || null, discount_percent: Number(newProduct.discount_percent) || 40, is_reward_item: !!newProduct.is_reward_item, points_required: Number(newProduct.points_required) || 0 });
-      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: 40, is_reward_item: false, points_required: '' });
+      setNewProduct({ barcode: '', name: '', category_id: '', price: '', cost: '', stock: '', image_url: '', vendor_id: '', gp_rate: '', promo_percent: '', promo_start: '', promo_end: '', expiry_date: '', discount_percent: '40', is_reward_item: false, points_required: '' });
       fetchProducts(); setActiveModal(null); setVendorSearch('');
-      Swal.fire({ icon: 'success', title: 'เพิ่มสินค้าสำเร็จ', showConfirmButton: false, timer: 1500 });
-    }
-    catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      Swal.fire({ icon: 'success', title: 'เพิ่มสินค้าสำเร็จ', showConfirmButton: false, timer: 1500 });    } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingProduct) return; // กัน null — โมดัลแก้ไขเปิดเมื่อมี editingProduct เสมอ
     try {
       await api.put(`/products/${editingProduct.id}`, { ...editingProduct, category_id: editingProduct.category_id ? Number(editingProduct.category_id) : null, price: Number(editingProduct.price), cost: Number(editingProduct.cost) || 0, vendor_id: editingProduct.vendor_id ? Number(editingProduct.vendor_id) : null, gp_rate: editingProduct.gp_rate ? Number(editingProduct.gp_rate) : 0, promo_percent: Number(editingProduct.promo_percent) || 0, promo_start: editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : null, promo_end: editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : null, expiry_date: editingProduct.expiry_date || null, discount_percent: Number(editingProduct.discount_percent) || 40, is_reward_item: !!editingProduct.is_reward_item, points_required: Number(editingProduct.points_required) || 0 });
       fetchProducts(); setActiveModal(null); setEditingProduct(null); setVendorSearch('');
-      Swal.fire({ icon: 'success', title: 'แก้ไขสินค้าสำเร็จ!', showConfirmButton: false, timer: 1500 });
-    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      Swal.fire({ icon: 'success', title: 'แก้ไขสินค้าสำเร็จ!', showConfirmButton: false, timer: 1500 });      } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
-  const handleDeleteCategory = async (id: number) => { const res = await Swal.fire({ title: 'ลบหมวดหมู่นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/categories/${id}`); fetchCategories(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
-  const handleDeleteProduct = async (id: number) => { const res = await Swal.fire({ title: 'ลบสินค้านี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/products/${id}`); fetchProducts(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+  const handleDeleteCategory = async (id: number) => { const res = await Swal.fire({ title: 'ลบหมวดหมู่นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/categories/${id}`); fetchCategories(); } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+  const handleDeleteProduct = async (id: number) => { const res = await Swal.fire({ title: 'ลบสินค้านี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/products/${id}`); fetchProducts(); } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
   // ⭐️ ถ้าโปรโมชั่นเคยถูกใช้จริงมาแล้ว backend จะปิดใช้งานแทนลบถาวร (กันประวัติการใช้งานหาย) — ข้อความ
   // ตอบกลับต่างกันตามเคส (ดู DELETE /api/promotions/:id) โชว์ข้อความจาก backend ตรงๆ ให้ผู้ใช้รู้ว่าเกิดอะไรขึ้น
-  const handleDeletePromotion = async (p: any) => {
+  const handleDeletePromotion = async (p: SettingsPromotion) => {
     const res = await Swal.fire({ title: `ลบโปรโมชั่น "${p.name}"?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' });
     if (!res.isConfirmed) return;
     try {
       const delRes = await api.delete(`/promotions/${p.id}`);
       fetchPromotions();
-      Swal.fire({ icon: 'success', title: delRes.data.message, showConfirmButton: false, timer: 1800 });
-    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      Swal.fire({ icon: 'success', title: delRes.data.message, showConfirmButton: false, timer: 1800 });      } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
   // ⭐️ ปุ่มลบราย user เป็น soft-delete (backend UPDATE is_active=FALSE ไม่ได้ลบจริง กันบิลเก่าพัง) —
   // ตั้งแต่เอา filter is_active ออก การ์ดจะไม่หายไปหลังกด ต้องบอกให้ชัดว่านี่คือ "ระงับการใช้งาน"
   // (การ์ดจะกลายเป็นสีเทา + badge ระงับแล้ว) ไม่ใช่ลบทิ้งถาวร
-  const handleDeleteUser = async (id: number) => { const res = await Swal.fire({ title: 'ระงับการใช้งานพนักงานคนนี้?', text: 'บัญชีจะถูกปิดการใช้งาน (ไม่ได้ลบถาวร) — ประวัติบิล/ยอดขายเดิมยังอยู่ครบ', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ระงับการใช้งาน', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/users/${id}`); Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ระงับการใช้งานแล้ว', showConfirmButton: false, timer: 2000 }); fetchUsers(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+  const handleDeleteUser = async (id: number) => { const res = await Swal.fire({ title: 'ระงับการใช้งานพนักงานคนนี้?', text: 'บัญชีจะถูกปิดการใช้งาน (ไม่ได้ลบถาวร) — ประวัติบิล/ยอดขายเดิมยังอยู่ครบ', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ระงับการใช้งาน', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/users/${id}`); Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ระงับการใช้งานแล้ว', showConfirmButton: false, timer: 2000 }); fetchUsers(); } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
 
   // ⭐️ ปลดระงับ (unsuspend) — คืน is_active ให้ user ที่เคยถูกระงับ
   const handleReactivateUser = async (id: number) => {
     try {
       await api.put(`/users/${id}/reactivate`);
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ปลดระงับแล้ว', showConfirmButton: false, timer: 2000 });
-      fetchUsers();
-    } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
+      fetchUsers();      } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); }
   };
 
   // ⭐️ Hard delete ราย user — ลบถาวรจริง ใช้ FK-cleanup เดียวกับ bulk delete ฝั่ง backend ถ้ามีประวัติ
@@ -357,7 +403,7 @@ export default function Settings() {
       }
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ลบบัญชีถาวรแล้ว', showConfirmButton: false, timer: 2500 });
       fetchUsers();
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) }); }
   };
 
   // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — ยิงไป /api/admin/reset/* (backend บล็อกบน production เอง
@@ -375,8 +421,7 @@ export default function Settings() {
     try {
       const r = await api.post(`/admin/reset/${endpoint}`);
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ดำเนินการสำเร็จ', showConfirmButton: false, timer: 2500 });
-      fetchUsers();
-    } catch (err: any) {
+      fetchUsers();      } catch (err) {
       Swal.fire({ icon: 'error', title: 'ทำรายการไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setResetLoading(null);
@@ -399,7 +444,7 @@ export default function Settings() {
     try {
       let r = await api.post('/admin/reset/members', {});
       if (r.data?.needsConfirmation) {
-        const names = (r.data.blockedMembers || []).map((m: any) => m.full_name).join(', ');
+        const names = (r.data.blockedMembers || []).map((m: SettingsUser) => m.full_name).join(', ');
         const choice = await Swal.fire({
           title: 'พบสมาชิกที่มีประวัติการทำงาน',
           html: `พบ ${r.data.blockedMembers?.length || 0} คนที่เคยเป็นพนักงานและมีประวัติการทำงาน (เข้า-ออกงาน/กะ/ตารางเวร) ติดอยู่:<br/><b>${names}</b><br/><br/>ต้องการลบประวัติการทำงานของพวกเขาไปด้วย หรือข้ามคนเหล่านี้ไว้ก่อน?`,
@@ -419,8 +464,7 @@ export default function Settings() {
         }
       }
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ดำเนินการสำเร็จ', showConfirmButton: false, timer: 3000 });
-      fetchUsers();
-    } catch (err: any) {
+      fetchUsers();      } catch (err) {
       Swal.fire({ icon: 'error', title: 'ทำรายการไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setResetLoading(null);
@@ -445,7 +489,7 @@ export default function Settings() {
     try {
       let r = await api.post('/admin/reset/products', {});
       if (r.data?.needsConfirmation) {
-        const names = (r.data.blockedProducts || []).map((p: any) => p.name).join(', ');
+        const names = (r.data.blockedProducts || []).map((p: SettingsProduct) => p.name).join(', ');
         const choice = await Swal.fire({
           title: 'พบสินค้าที่มีประวัติการขาย/สั่งจอง',
           html: `พบ ${r.data.blockedProducts?.length || 0} รายการที่มีประวัติการขาย/สั่งจอง/รับสินค้าจริงติดอยู่:<br/><b>${names}</b><br/><br/>ต้องการลบประวัติการขาย/ออเดอร์/ใบสั่งซื้อที่เกี่ยวข้องไปด้วย หรือข้ามสินค้าเหล่านี้ไว้ก่อน?`,
@@ -466,8 +510,7 @@ export default function Settings() {
       }
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: r.data?.message || 'ดำเนินการสำเร็จ', showConfirmButton: false, timer: 4000 });
       fetchProducts();
-      fetchCategories();
-    } catch (err: any) {
+      fetchCategories();      } catch (err) {
       Swal.fire({ icon: 'error', title: 'ทำรายการไม่สำเร็จ', text: getErrorMessage(err) });
     } finally {
       setResetLoading(null);
@@ -512,9 +555,9 @@ export default function Settings() {
       const toRemove = preview.data.to_deactivate || [];
 
       let html = '';
-      if (toCreate.length > 0) html += `<p class="font-bold text-green-700 mb-1">เพิ่มใหม่ ${toCreate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#f0fdf4;padding:8px;border-radius:8px;">${toCreate.map((u: any) => `+ ${u.full_name} (${u.username})`).join('\n')}</pre>`;
-      if (toReactivate.length > 0) html += `<p class="font-bold text-blue-700 mt-2 mb-1">เปิดใช้งานคืน ${toReactivate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#eff6ff;padding:8px;border-radius:8px;">${toReactivate.map((u: any) => `↺ ${u.student_id}`).join('\n')}</pre>`;
-      if (toRemove.length > 0) html += `<p class="font-bold text-red-700 mt-2 mb-1">ปิดการใช้งาน ${toRemove.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#fef2f2;padding:8px;border-radius:8px;">${toRemove.map((u: any) => `- ${u.full_name} (${u.username})`).join('\n')}</pre>`;
+      if (toCreate.length > 0) html += `<p class="font-bold text-green-700 mb-1">เพิ่มใหม่ ${toCreate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#f0fdf4;padding:8px;border-radius:8px;">${toCreate.map((u: SettingsUser) => `+ ${u.full_name} (${u.username})`).join('\n')}</pre>`;
+      if (toReactivate.length > 0) html += `<p class="font-bold text-blue-700 mt-2 mb-1">เปิดใช้งานคืน ${toReactivate.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#eff6ff;padding:8px;border-radius:8px;">${toReactivate.map((u: SettingsUser) => `↺ ${u.student_id}`).join('\n')}</pre>`;
+      if (toRemove.length > 0) html += `<p class="font-bold text-red-700 mt-2 mb-1">ปิดการใช้งาน ${toRemove.length} คน:</p><pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:100px;overflow-y:auto;background:#fef2f2;padding:8px;border-radius:8px;">${toRemove.map((u: SettingsUser) => `- ${u.full_name} (${u.username})`).join('\n')}</pre>`;
       if (toCreate.length === 0 && toReactivate.length === 0 && toRemove.length === 0) return Swal.fire({ icon: 'success', title: 'ข้อมูลตรงกันหมดแล้ว', text: 'ไม่มีการเปลี่ยนแปลง' });
 
       const confirm = await Swal.fire({
@@ -527,11 +570,11 @@ export default function Settings() {
       const result = await api.post('/users/sync-csv', { rows, dry_run: false });
       Swal.fire({ icon: 'success', title: result.data.message, showConfirmButton: false, timer: 2500 });
       fetchUsers();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) });
     }
   };
-  const handleDeleteSupplier = async (id: number) => { const res = await Swal.fire({ title: 'ลบซัพพลายเออร์นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/suppliers/${id}`); fetchSuppliers(); } catch (err: any) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
+  const handleDeleteSupplier = async (id: number) => { const res = await Swal.fire({ title: 'ลบซัพพลายเออร์นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/suppliers/${id}`); fetchSuppliers(); } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
 
   return (
     <div className="min-h-screen bg-brand-bg font-sans p-4 md:p-6 relative pb-20 md:pb-6">
@@ -572,11 +615,11 @@ export default function Settings() {
             <form onSubmit={handleSaveStore} className="space-y-4 animate-fade-in max-w-2xl">
               <h2 className="text-lg md:text-xl font-bold mb-4 flex items-center gap-2"><Store className="text-brand" /> ข้อมูลร้านค้า</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="ชื่อร้าน" value={storeInfo.store_name} onChange={(v: any) => setStoreInfo({ ...storeInfo, store_name: v })} />
-                <Input label="เลขผู้เสียภาษี" value={storeInfo.tax_id || ''} required={false} onChange={(v: any) => setStoreInfo({ ...storeInfo, tax_id: v })} />
+                <Input label="ชื่อร้าน" value={storeInfo.store_name} onChange={(v) => setStoreInfo({ ...storeInfo, store_name: v })} />
+                <Input label="เลขผู้เสียภาษี" value={storeInfo.tax_id || ''} required={false} onChange={(v) => setStoreInfo({ ...storeInfo, tax_id: v })} />
               </div>
-              <Input label="ที่อยู่" value={storeInfo.address || ''} required={false} onChange={(v: any) => setStoreInfo({ ...storeInfo, address: v })} />
-              <Input label="ข้อความท้ายใบเสร็จ" value={storeInfo.receipt_footer || ''} required={false} onChange={(v: any) => setStoreInfo({ ...storeInfo, receipt_footer: v })} />
+              <Input label="ที่อยู่" value={storeInfo.address || ''} required={false} onChange={(v) => setStoreInfo({ ...storeInfo, address: v })} />
+              <Input label="ข้อความท้ายใบเสร็จ" value={storeInfo.receipt_footer || ''} required={false} onChange={(v) => setStoreInfo({ ...storeInfo, receipt_footer: v })} />
               <button type="submit" className="w-full md:w-auto bg-gradient-to-br from-brand to-brand-dark text-white px-8 py-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 mt-4"><Save size={20} /> บันทึกข้อมูล</button>
             </form>
           )}
@@ -653,7 +696,7 @@ export default function Settings() {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-bold text-gray-800">#{bill.id}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{new Date(bill.created_at).toLocaleString('th-TH')}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{new Date(bill.created_at ?? '').toLocaleString('th-TH')}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         {bill.source === 'PREORDER' ? <span className="text-blue-600 font-bold text-[10px] bg-blue-50 px-2 py-0.5 rounded">จอง</span> : <span className="text-gray-500 font-bold text-[10px] bg-gray-100 px-2 py-0.5 rounded">หน้าร้าน</span>}
@@ -682,7 +725,7 @@ export default function Settings() {
                         <tr key={`${bill.source || 'POS'}-${bill.id}`} className="border-b hover:bg-brand-bg">
                           <td className="p-3 font-bold">#{bill.id}</td>
                           <td className="p-3">{bill.source === 'PREORDER' ? <span className="text-blue-600 font-bold text-xs bg-blue-50 px-2 py-1 rounded">จอง</span> : <span className="text-gray-500 font-bold text-xs bg-gray-100 px-2 py-1 rounded">หน้าร้าน</span>}</td>
-                          <td className="p-3 text-sm text-gray-600">{new Date(bill.created_at).toLocaleString('th-TH')}</td><td className="p-3 font-bold text-brand">฿{Number(bill.total_amount).toFixed(2)}</td><td className="p-3 text-sm text-gray-600">{bill.cashier_name}</td>
+                          <td className="p-3 text-sm text-gray-600">{new Date(bill.created_at ?? '').toLocaleString('th-TH')}</td><td className="p-3 font-bold text-brand">฿{Number(bill.total_amount).toFixed(2)}</td><td className="p-3 text-sm text-gray-600">{bill.cashier_name}</td>
                           <td className="p-3 text-center">{bill.status === 'VOIDED' ? <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-1 rounded">ยกเลิกแล้ว</span> : <span className="text-green-500 font-bold text-xs bg-green-50 px-2 py-1 rounded">สำเร็จ</span>}</td>
                           <td className="p-3 text-center flex justify-center gap-2">
                             <button onClick={() => handleViewBill(bill)} className="text-brand bg-brand-bg hover:bg-brand-border p-2 rounded-lg transition"><Eye size={18} /></button>
@@ -987,10 +1030,10 @@ export default function Settings() {
                         <Phone size={13} className="text-gray-400 shrink-0" /> {r.phone_number || '-'}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Clock size={13} className="text-gray-400 shrink-0" /> หมดอายุ {new Date(r.expires_at).toLocaleString('th-TH')}
+                        <Clock size={13} className="text-gray-400 shrink-0" /> หมดอายุ {new Date(r.expires_at ?? '').toLocaleString('th-TH')}
                       </div>
                       <div className="flex gap-2 mt-auto pt-2">
-                        <button onClick={() => handleCopyResetLink(r.reset_token)} className="flex-1 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm py-2 rounded-xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"><Copy size={15} /> คัดลอกลิงก์</button>
+                        <button onClick={() => handleCopyResetLink(r.reset_token ?? '')} className="flex-1 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm py-2 rounded-xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"><Copy size={15} /> คัดลอกลิงก์</button>
                         <button onClick={() => handleRejectPasswordReset(r.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-sm px-3 py-2 rounded-xl transition-colors duration-150" aria-label="ปิด"><X size={15} /></button>
                       </div>
                     </div>
@@ -1009,12 +1052,12 @@ export default function Settings() {
       {activeModal === 'EDIT_PRODUCT' && editingProduct && (
         <CustomModal title="แก้ไขข้อมูลสินค้า" onClose={() => { setActiveModal(null); setEditingProduct(null); setVendorSearch(''); }}>
           <form onSubmit={handleEditProduct} className="space-y-3 md:space-y-4">
-            <Input label="ชื่อสินค้า" value={editingProduct.name} onChange={(v: any) => setEditingProduct({ ...editingProduct, name: v })} />
-            <Input label="บาร์โค้ด (ถ้ามี)" value={editingProduct.barcode || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, barcode: v })} />
+            <Input label="ชื่อสินค้า" value={editingProduct.name} onChange={(v) => setEditingProduct({ ...editingProduct, name: v })} />
+            <Input label="บาร์โค้ด (ถ้ามี)" value={editingProduct.barcode || ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, barcode: v })} />
 
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">หมวดหมู่</label>
-              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingProduct.category_id || ''} onChange={e => setEditingProduct({ ...editingProduct, category_id: e.target.value })}>
+              <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingProduct.category_id || ''} onChange={e => setEditingProduct({ ...editingProduct, category_id: e.target.value ? Number(e.target.value) : null })}>
                 <option value="">-- ไม่ระบุ --</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -1034,30 +1077,30 @@ export default function Settings() {
                   <label className="block text-xs md:text-sm font-bold text-blue-800 mb-1">เลือกเจ้าของผลงาน</label>
                   <select className="w-full p-2.5 border border-blue-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     value={editingProduct.vendor_id || ''}
-                    onChange={e => setEditingProduct({ ...editingProduct, vendor_id: e.target.value })}>
+                    onChange={e => setEditingProduct({ ...editingProduct, vendor_id: e.target.value ? Number(e.target.value) : null })}>
                     <option value="">-- สินค้าของสหกรณ์ (ไม่หัก GP) --</option>
                     {filteredVendors.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.username})</option>)}
                   </select>
                 </div>
-                <Input label="GP ส่วนแบ่งสหกรณ์ (%)" type="number" value={editingProduct.gp_rate || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, gp_rate: v })} />
+                <Input label="GP ส่วนแบ่งสหกรณ์ (%)" type="number" value={editingProduct.gp_rate || ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, gp_rate: v })} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Input label="ต้นทุน/ชิ้น (฿)" type="number" value={editingProduct.cost ?? ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, cost: v })} />
-              <Input label="ราคาขาย (฿)" type="number" value={editingProduct.price} onChange={(v: any) => setEditingProduct({ ...editingProduct, price: v })} />
+              <Input label="ต้นทุน/ชิ้น (฿)" type="number" value={editingProduct.cost ?? ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, cost: v })} />
+              <Input label="ราคาขาย (฿)" type="number" value={editingProduct.price} onChange={(v) => setEditingProduct({ ...editingProduct, price: v })} />
             </div>
             <Input label="สต๊อกปัจจุบัน" type="number" value={editingProduct.stock} disabled={true} required={false} onChange={() => { }} />
 
-            <Input label="URL รูปภาพ (ถ้ามี)" value={editingProduct.image_url || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, image_url: v })} />
+            <Input label="URL รูปภาพ (ถ้ามี)" value={editingProduct.image_url || ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, image_url: v })} />
 
             {/* ⭐️ Phase 1 — โปรโมชั่นช่วงวันที่ (ลด % เฉพาะช่วง ใช้ทั้ง POS + จอง) */}
             <div className="bg-brand-bg border border-brand-mid rounded-xl p-3 space-y-3">
               <p className="text-xs font-bold text-brand">🏷️ โปรโมชั่นช่วงวันที่ (ลดเฉพาะช่วง)</p>
-              <Input label="ลดราคา % ช่วงโปร" type="number" min="0" max="100" value={editingProduct.promo_percent || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, promo_percent: v })} />
+              <Input label="ลดราคา % ช่วงโปร" type="number" min="0" max="100" value={editingProduct.promo_percent || ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, promo_percent: v })} />
               <div className="grid grid-cols-2 gap-3">
-                <Input label="เริ่มโปร" type="date" value={editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, promo_start: v })} />
-                <Input label="สิ้นสุดโปร" type="date" value={editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, promo_end: v })} />
+                <Input label="เริ่มโปร" type="date" value={editingProduct.promo_start ? String(editingProduct.promo_start).slice(0, 10) : ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, promo_start: v })} />
+                <Input label="สิ้นสุดโปร" type="date" value={editingProduct.promo_end ? String(editingProduct.promo_end).slice(0, 10) : ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, promo_end: v })} />
               </div>
               {editingProduct.vendor_id && <p className="text-[11px] text-amber-600">⚠️ สินค้าฝากขาย — ควรคุยกับเจ้าของสินค้าก่อนตั้งโปร (ส่วนลดหักตามสัดส่วน เจ้าของได้น้อยลงด้วย)</p>}
             </div>
@@ -1073,7 +1116,7 @@ export default function Settings() {
                 type="date"
                 value={editingProduct.expiry_date ? String(editingProduct.expiry_date).slice(0, 10) : ''}
                 required={false}
-                onChange={(v: any) => setEditingProduct({ ...editingProduct, expiry_date: v })}
+                onChange={(v) => setEditingProduct({ ...editingProduct, expiry_date: v })}
               />
               <Input
                 label="ลดราคา % (ใกล้หมดอายุ)"
@@ -1082,7 +1125,7 @@ export default function Settings() {
                 max="100"
                 value={editingProduct.discount_percent || 40}
                 required={false}
-                onChange={(v: any) => setEditingProduct({ ...editingProduct, discount_percent: v })}
+                onChange={(v) => setEditingProduct({ ...editingProduct, discount_percent: v })}
               />
             </div>
 
@@ -1093,7 +1136,7 @@ export default function Settings() {
                 🎁 ตั้งเป็นสินค้าแลกของรางวัล
               </label>
               {editingProduct.is_reward_item && (
-                <Input label="ใช้กี่แต้มในการแลก" type="number" min="0" value={editingProduct.points_required || ''} required={false} onChange={(v: any) => setEditingProduct({ ...editingProduct, points_required: v })} />
+                <Input label="ใช้กี่แต้มในการแลก" type="number" min="0" value={editingProduct.points_required || ''} required={false} onChange={(v) => setEditingProduct({ ...editingProduct, points_required: v })} />
               )}
             </div>
 
@@ -1106,7 +1149,7 @@ export default function Settings() {
       {activeModal === 'ADD_PRODUCT' && (
         <CustomModal title="เพิ่มสินค้าใหม่" onClose={() => { setActiveModal(null); setVendorSearch(''); }}>
           <form onSubmit={handleAddProduct} className="space-y-3 md:space-y-4">
-            <Input label="ชื่อสินค้า" value={newProduct.name} onChange={(v: any) => setNewProduct({ ...newProduct, name: v })} />
+            <Input label="ชื่อสินค้า" value={newProduct.name} onChange={(v) => setNewProduct({ ...newProduct, name: v })} />
             
             {/* ⭐️ ส่วนเพิ่มเจ้าของผลงาน พร้อมช่องค้นหา! */}
             <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl mt-3 space-y-3">
@@ -1127,26 +1170,26 @@ export default function Settings() {
                     {filteredVendors.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.username})</option>)}
                   </select>
                 </div>
-                <Input label="GP ส่วนแบ่งสหกรณ์ (%)" type="number" value={newProduct.gp_rate || ''} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, gp_rate: v })} />
+                <Input label="GP ส่วนแบ่งสหกรณ์ (%)" type="number" value={newProduct.gp_rate || ''} required={false} onChange={(v) => setNewProduct({ ...newProduct, gp_rate: v })} />
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <Input label="ต้นทุน/ชิ้น (฿)" type="number" value={newProduct.cost} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, cost: v })} />
-              <Input label="ราคาขาย (฿)" type="number" value={newProduct.price} onChange={(v: any) => setNewProduct({ ...newProduct, price: v })} />
+              <Input label="ต้นทุน/ชิ้น (฿)" type="number" value={newProduct.cost} required={false} onChange={(v) => setNewProduct({ ...newProduct, cost: v })} />
+              <Input label="ราคาขาย (฿)" type="number" value={newProduct.price} onChange={(v) => setNewProduct({ ...newProduct, price: v })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="สต๊อกตั้งต้น" type="number" value={newProduct.stock} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, stock: v })} />
+              <Input label="สต๊อกตั้งต้น" type="number" value={newProduct.stock} required={false} onChange={(v) => setNewProduct({ ...newProduct, stock: v })} />
             </div>
-            <Input label="URL รูปภาพ (ถ้ามี)" value={newProduct.image_url} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, image_url: v })} />
+            <Input label="URL รูปภาพ (ถ้ามี)" value={newProduct.image_url} required={false} onChange={(v) => setNewProduct({ ...newProduct, image_url: v })} />
 
             {/* ⭐️ Phase 1 — โปรโมชั่นช่วงวันที่ */}
             <div className="bg-brand-bg border border-brand-mid rounded-xl p-3 space-y-3">
               <p className="text-xs font-bold text-brand">🏷️ โปรโมชั่นช่วงวันที่ (ลดเฉพาะช่วง)</p>
-              <Input label="ลดราคา % ช่วงโปร" type="number" min="0" max="100" value={newProduct.promo_percent} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, promo_percent: v })} />
+              <Input label="ลดราคา % ช่วงโปร" type="number" min="0" max="100" value={newProduct.promo_percent} required={false} onChange={(v) => setNewProduct({ ...newProduct, promo_percent: v })} />
               <div className="grid grid-cols-2 gap-3">
-                <Input label="เริ่มโปร" type="date" value={newProduct.promo_start} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, promo_start: v })} />
-                <Input label="สิ้นสุดโปร" type="date" value={newProduct.promo_end} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, promo_end: v })} />
+                <Input label="เริ่มโปร" type="date" value={newProduct.promo_start} required={false} onChange={(v) => setNewProduct({ ...newProduct, promo_start: v })} />
+                <Input label="สิ้นสุดโปร" type="date" value={newProduct.promo_end} required={false} onChange={(v) => setNewProduct({ ...newProduct, promo_end: v })} />
               </div>
               {newProduct.vendor_id && <p className="text-[11px] text-amber-600">⚠️ สินค้าฝากขาย — ควรคุยกับเจ้าของสินค้าก่อนตั้งโปร (ส่วนลดหักตามสัดส่วน เจ้าของได้น้อยลงด้วย)</p>}
             </div>
@@ -1159,7 +1202,7 @@ export default function Settings() {
                 type="date"
                 value={newProduct.expiry_date ? String(newProduct.expiry_date).slice(0, 10) : ''}
                 required={false}
-                onChange={(v: any) => setNewProduct({ ...newProduct, expiry_date: v })}
+                onChange={(v) => setNewProduct({ ...newProduct, expiry_date: v })}
               />
               <Input
                 label="ลดราคา % (ใกล้หมดอายุ)"
@@ -1168,7 +1211,7 @@ export default function Settings() {
                 max="100"
                 value={newProduct.discount_percent || 40}
                 required={false}
-                onChange={(v: any) => setNewProduct({ ...newProduct, discount_percent: v })}
+                onChange={(v) => setNewProduct({ ...newProduct, discount_percent: v })}
               />
             </div>
 
@@ -1179,7 +1222,7 @@ export default function Settings() {
                 🎁 ตั้งเป็นสินค้าแลกของรางวัล
               </label>
               {newProduct.is_reward_item && (
-                <Input label="ใช้กี่แต้มในการแลก" type="number" min="0" value={newProduct.points_required || ''} required={false} onChange={(v: any) => setNewProduct({ ...newProduct, points_required: v })} />
+                <Input label="ใช้กี่แต้มในการแลก" type="number" min="0" value={newProduct.points_required || ''} required={false} onChange={(v) => setNewProduct({ ...newProduct, points_required: v })} />
               )}
             </div>
 
@@ -1197,9 +1240,9 @@ export default function Settings() {
               await api.put('/users/update-role', { student_id: newUser.username, role: newUser.role });
               setActiveModal(null); fetchUsers();
               Swal.fire({ icon: 'success', title: 'แต่งตั้งสำเร็จ!' });
-            } catch (err: any) { Swal.fire({ icon: 'error', text: err.response?.data?.error || 'ไม่พบรหัสนักศึกษานี้' }); }
+            } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err, 'ไม่พบรหัสนักศึกษานี้') }); }
           }} className="space-y-4">
-            <Input label="รหัสนักศึกษาที่ต้องการจัดการ" value={newUser.username} onChange={(v: any) => setNewUser({ ...newUser, username: v })} />
+            <Input label="รหัสนักศึกษาที่ต้องการจัดการ" value={newUser.username} onChange={(v) => setNewUser({ ...newUser, username: v })} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">เลือกบทบาท (Role)</label>
               <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
@@ -1218,13 +1261,13 @@ export default function Settings() {
       {activeModal === 'EDIT_USER' && editingUser && (
         <CustomModal title="แก้ไขข้อมูลผู้ใช้งาน" onClose={() => { setActiveModal(null); setEditingUser(null); }}>
           <form onSubmit={handleEditUserRole} className="space-y-4">
-            <Input label="ชื่อ-นามสกุล" value={editingUser.full_name} onChange={(v: any) => setEditingUser({ ...editingUser, full_name: v })} />
+            <Input label="ชื่อ-นามสกุล" value={editingUser.full_name} onChange={(v) => setEditingUser({ ...editingUser, full_name: v })} />
             <div>
               {/* ⭐️ ผูก LINE แล้ว = ล็อกรหัสนักศึกษา (สมัครผ่าน LIFF ผูก student_id คู่กับ line_user_id
                   ไว้แน่นตั้งแต่แรก แก้ตรงนี้จะทำให้บัตรสมาชิก/QR ที่แคชเชียร์สแกนไม่ตรงตัวจริงเจ้าของ LINE
                   อีกต่อไป — backend เองก็ล็อกด้วย ดู PUT /api/users/:id — ต้องปลดผูก LINE ก่อนถึงจะแก้ได้) */}
               <Input label="รหัสนักศึกษา" value={editingUser.student_id ?? editingUser.username}
-                onChange={(v: any) => setEditingUser({ ...editingUser, student_id: v })}
+                onChange={(v) => setEditingUser({ ...editingUser, student_id: v })}
                 disabled={!!editingUser.line_user_id} />
               {editingUser.line_user_id && (
                 <div className="flex items-center justify-between gap-2 mt-1.5">
@@ -1236,8 +1279,8 @@ export default function Settings() {
                 </div>
               )}
             </div>
-            <Input label="เบอร์โทรศัพท์" value={editingUser.phone_number || ''} onChange={(v: any) => setEditingUser({ ...editingUser, phone_number: v })} required={false} />
-            <Input label="แต้มสะสม" type="number" value={editingUser.points ?? 0} onChange={(v: any) => setEditingUser({ ...editingUser, points: v === '' ? 0 : Number(v) })} required={false} />
+            <Input label="เบอร์โทรศัพท์" value={editingUser.phone_number || ''} onChange={(v) => setEditingUser({ ...editingUser, phone_number: v })} required={false} />
+            <Input label="แต้มสะสม" type="number" value={editingUser.points ?? 0} onChange={(v) => setEditingUser({ ...editingUser, points: v === '' ? 0 : Number(v) })} required={false} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">เลือกบทบาทใหม่ (Role)</label>
               <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}>
@@ -1252,7 +1295,7 @@ export default function Settings() {
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">กลุ่มสมาชิก (ส่วนลดอัตโนมัติ)</label>
               <select className="w-full p-2.5 md:p-3 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm md:text-base font-medium" value={editingUser.group_id || ''} onChange={e => setEditingUser({ ...editingUser, group_id: e.target.value ? Number(e.target.value) : null })}>
                 <option value="">— ไม่กำหนดกลุ่ม —</option>
-                {memberGroups.map((g: any) => <option key={g.id} value={g.id}>{g.name} (ลด {Number(g.default_discount_percent)}%)</option>)}
+                {memberGroups.map((g: MemberGroup) => <option key={g.id} value={g.id}>{g.name} (ลด {Number(g.default_discount_percent)}%)</option>)}
               </select>
             </div>
             <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสิทธิ์</button>
@@ -1264,7 +1307,7 @@ export default function Settings() {
       {activeModal === 'ADD_PROMOTION' && (
         <CustomModal title="สร้างโปรโมชั่นใหม่" onClose={() => setActiveModal(null)}>
           <form onSubmit={handleAddPromotion} className="space-y-4">
-            <Input label="ชื่อโปรโมชั่น" value={newPromotion.name} onChange={(v:any) => setNewPromotion({...newPromotion, name: v})} />
+            <Input label="ชื่อโปรโมชั่น" value={newPromotion.name} onChange={(v) => setNewPromotion({...newPromotion, name: v})} />
             <div>
               <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">ประเภทส่วนลด</label>
               <select className="w-full p-2.5 border border-brand-border rounded-full outline-none focus:ring-2 focus:ring-brand text-sm font-medium" value={newPromotion.discount_type} onChange={e => setNewPromotion({...newPromotion, discount_type: e.target.value})}>
@@ -1275,7 +1318,7 @@ export default function Settings() {
             </div>
 
             {newPromotion.discount_type !== 'BOGO' ? (
-              <Input label="มูลค่าส่วนลด" type="number" value={newPromotion.discount_value} onChange={(v:any) => setNewPromotion({...newPromotion, discount_value: v})} />
+              <Input label="มูลค่าส่วนลด" type="number" value={newPromotion.discount_value} onChange={(v) => setNewPromotion({...newPromotion, discount_value: v})} />
             ) : (
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -1286,7 +1329,7 @@ export default function Settings() {
                       {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
-                  <Input label="ซื้อครบ (ชิ้น)" type="number" value={newPromotion.buy_qty} onChange={(v:any) => setNewPromotion({...newPromotion, buy_qty: v})} />
+                  <Input label="ซื้อครบ (ชิ้น)" type="number" value={newPromotion.buy_qty} onChange={(v) => setNewPromotion({...newPromotion, buy_qty: v})} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1296,22 +1339,22 @@ export default function Settings() {
                       {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
-                  <Input label="แถม (ชิ้น)" type="number" value={newPromotion.free_qty} onChange={(v:any) => setNewPromotion({...newPromotion, free_qty: v})} />
+                  <Input label="แถม (ชิ้น)" type="number" value={newPromotion.free_qty} onChange={(v) => setNewPromotion({...newPromotion, free_qty: v})} />
                 </div>
                 <p className="text-[11px] text-blue-700">* สินค้าที่แถมต้องอยู่ในตะกร้าจริง ระบบจะคิดส่วนลดเท่ากับราคาสินค้าที่แถมเท่านั้น</p>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <Input label="วันเริ่มต้น (เว้นได้)" type="date" required={false} value={newPromotion.start_date} onChange={(v:any) => setNewPromotion({...newPromotion, start_date: v})} />
-              <Input label="วันหมดเขต (เว้นได้)" type="date" required={false} value={newPromotion.end_date} onChange={(v:any) => setNewPromotion({...newPromotion, end_date: v})} />
+              <Input label="วันเริ่มต้น (เว้นได้)" type="date" required={false} value={newPromotion.start_date} onChange={(v) => setNewPromotion({...newPromotion, start_date: v})} />
+              <Input label="วันหมดเขต (เว้นได้)" type="date" required={false} value={newPromotion.end_date} onChange={(v) => setNewPromotion({...newPromotion, end_date: v})} />
             </div>
 
             <div className="pt-3 border-t border-brand-border">
               <p className="text-xs font-bold text-gray-600 mb-2">จำกัดสิทธิ์การใช้ (เว้นว่าง = ไม่จำกัด)</p>
               <div className="grid grid-cols-2 gap-3">
-                <Input label="ใช้ได้รวมกี่ครั้ง" type="number" required={false} value={newPromotion.usage_limit} onChange={(v:any) => setNewPromotion({...newPromotion, usage_limit: v})} />
-                <Input label="ใช้ได้กี่ครั้ง/คน" type="number" required={false} value={newPromotion.usage_limit_per_user} onChange={(v:any) => setNewPromotion({...newPromotion, usage_limit_per_user: v})} />
+                <Input label="ใช้ได้รวมกี่ครั้ง" type="number" required={false} value={newPromotion.usage_limit} onChange={(v) => setNewPromotion({...newPromotion, usage_limit: v})} />
+                <Input label="ใช้ได้กี่ครั้ง/คน" type="number" required={false} value={newPromotion.usage_limit_per_user} onChange={(v) => setNewPromotion({...newPromotion, usage_limit_per_user: v})} />
               </div>
             </div>
 
@@ -1323,7 +1366,7 @@ export default function Settings() {
       {/* Modals ยิบย่อยอื่นๆ */}
       {viewingBillItems && viewingBillInfo && (
         <CustomModal title={`บิล #${viewingBillInfo.id}`} onClose={() => { setViewingBillItems(null); setViewingBillInfo(null); }}>
-          <p className="text-gray-500 text-xs md:text-sm mb-4">{new Date(viewingBillInfo.created_at).toLocaleString('th-TH')}</p>
+          <p className="text-gray-500 text-xs md:text-sm mb-4">{new Date(viewingBillInfo.created_at ?? '').toLocaleString('th-TH')}</p>
           <div className="overflow-y-auto max-h-60 mb-4 border border-brand-border rounded-lg">
             <table className="w-full text-left text-xs md:text-sm">
               <thead className="bg-brand-bg text-gray-600 sticky top-0"><tr><th className="p-2 border-b">สินค้า</th><th className="p-2 border-b text-center">จำนวน</th><th className="p-2 border-b text-right">รวม</th></tr></thead>
@@ -1343,14 +1386,14 @@ export default function Settings() {
         </CustomModal>
       )}
       {activeModal === 'ADD_CATEGORY' && (<CustomModal title="เพิ่มหมวดหมู่" onClose={() => setActiveModal(null)}><form onSubmit={handleAddCategory} className="space-y-4"><Input label="ชื่อหมวดหมู่" value={newCategory} onChange={setNewCategory} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">เพิ่มหมวดหมู่</button></form></CustomModal>)}
-      {activeModal === 'ADD_SUPPLIER' && (<CustomModal title="เพิ่มตัวแทนจำหน่าย" onClose={() => setActiveModal(null)}><form onSubmit={handleAddSupplier} className="space-y-4"><Input label="ชื่อบริษัท / บุคคล" value={newSupplier.name} onChange={(v: any) => setNewSupplier({ ...newSupplier, name: v })} /><Input label="ข้อมูลติดต่อ" value={newSupplier.contact_info} required={false} onChange={(v: any) => setNewSupplier({ ...newSupplier, contact_info: v })} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกข้อมูล</button></form></CustomModal>)}
+      {activeModal === 'ADD_SUPPLIER' && (<CustomModal title="เพิ่มตัวแทนจำหน่าย" onClose={() => setActiveModal(null)}><form onSubmit={handleAddSupplier} className="space-y-4"><Input label="ชื่อบริษัท / บุคคล" value={newSupplier.name} onChange={(v) => setNewSupplier({ ...newSupplier, name: v })} /><Input label="ข้อมูลติดต่อ" value={newSupplier.contact_info} required={false} onChange={(v) => setNewSupplier({ ...newSupplier, contact_info: v })} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกข้อมูล</button></form></CustomModal>)}
       
       <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
     </div>
   );
 }
 
-const TabButton = ({ icon, label, isActive, onClick, badge }: any) => (
+const TabButton = ({ icon, label, isActive, onClick, badge }: { icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; badge?: React.ReactNode }) => (
   <button onClick={onClick} className={`shrink-0 snap-start flex items-center gap-2 px-4 py-3 md:p-4 rounded-full font-bold text-sm md:text-base transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${isActive ? 'bg-gradient-to-br from-brand to-brand-dark text-white shadow-md' : 'bg-white text-gray-600 hover:bg-brand-border border border-brand-border shadow-sm'}`}>
     {icon} <span className="whitespace-nowrap">{label}</span>
     {!!badge && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/25 text-white' : 'bg-brand-bg text-brand'}`}>{badge}</span>}
@@ -1373,10 +1416,7 @@ function ExportImportButtons({ entity, onImportDone, showImport = true }: { enti
       a.href = url;
       a.download = `${entity}-export.${format === 'excel' ? 'xlsx' : 'csv'}`;
       document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) });
-    } finally { setBusy(null); }
+      URL.revokeObjectURL(url);    } catch (err) { Swal.fire({ icon: 'error', title: 'Export ไม่สำเร็จ', text: getErrorMessage(err) }); } finally { setBusy(null); }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1392,7 +1432,7 @@ function ExportImportButtons({ entity, onImportDone, showImport = true }: { enti
       });
       Swal.fire({ icon: 'success', title: res.data.message, showConfirmButton: false, timer: 2500 });
       onImportDone();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'นำเข้าไม่สำเร็จ', text: getErrorMessage(err) });
     } finally { setBusy(null); }
   };
@@ -1418,14 +1458,23 @@ function ExportImportButtons({ entity, onImportDone, showImport = true }: { enti
   );
 }
 
-const Input = ({ label, value, onChange, type = "text", required = true, disabled = false }: any) => (
+const Input = ({ label, value, onChange, type = "text", required = true, disabled = false, min, max }: {
+  label: string;
+  value?: string | number;
+  onChange: (v: string) => void;
+  type?: string;
+  required?: boolean;
+  disabled?: boolean;
+  min?: string;
+  max?: string;
+}) => (
   <div>
     <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{label}</label>
-    <input type={type} required={required} disabled={disabled} value={value} onChange={e => onChange(e.target.value)} className={`w-full p-2.5 md:p-3 border border-brand-border rounded-full focus:ring-2 focus:ring-brand outline-none transition-colors duration-150 text-sm md:text-base font-medium ${disabled ? 'bg-brand-bg text-gray-400 cursor-not-allowed' : ''}`} />
+    <input type={type} required={required} disabled={disabled} min={min} max={max} value={value} onChange={e => onChange(e.target.value)} className={`w-full p-2.5 md:p-3 border border-brand-border rounded-full focus:ring-2 focus:ring-brand outline-none transition-colors duration-150 text-sm md:text-base font-medium ${disabled ? 'bg-brand-bg text-gray-400 cursor-not-allowed' : ''}`} />
   </div>
 );
 
-const CustomModal = ({ title, onClose, children }: any) => (
+const CustomModal = ({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-end md:items-center justify-center sm:p-4 animate-fade-in">
     <div className="bg-white rounded-t-3xl md:rounded-3xl shadow-lg w-full max-w-md overflow-hidden flex flex-col transform transition-all">
       <div className="px-5 py-4 flex justify-between items-center bg-gradient-to-r from-brand to-brand-dark rounded-t-3xl md:rounded-t-none shadow-sm">

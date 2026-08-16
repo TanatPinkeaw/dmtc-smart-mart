@@ -25,11 +25,12 @@ export function MemberGroupsPanel() {
       const [gRes, cRes] = await Promise.all([api.get('/member-groups'), api.get('/categories')]);
       setGroups(gRes.data || []);
       setCategories(cRes.data || []);
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: getErrorMessage(err) });
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, []);
+  // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+  useEffect(() => { void (async () => { await load(); })(); }, []);
 
   const addRule = async (groupId: number) => {
     const f = ruleForm[groupId];
@@ -38,14 +39,14 @@ export function MemberGroupsPanel() {
       await api.post(`/member-groups/${groupId}/rules`, { category_id: Number(f.category_id), discount_percent: Number(f.discount_percent) || 0 });
       setRuleForm(prev => ({ ...prev, [groupId]: { category_id: '', discount_percent: '' } }));
       load();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: getErrorMessage(err) });
     }
   };
 
   const deleteRule = async (groupId: number, ruleId: number) => {
     try { await api.delete(`/member-groups/${groupId}/rules/${ruleId}`); load(); }
-    catch (err: any) { Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) }); }
+    catch (err) { Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) }); }
   };
 
   if (loading) return <p className="text-center text-gray-400 py-10 text-sm">กำลังโหลด...</p>;

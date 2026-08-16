@@ -44,13 +44,13 @@ function SalesTooltip({ active, payload, label }: { active?: boolean; payload?: 
 }
 
 interface AdminDashboardHeroProps {
-  summary: any;
-  comparison: any;
+  summary: { total_sales?: number | string; total_bills?: number | string } | null;
+  comparison: { pct_vs_yesterday?: number | null; yesterday?: number | string | null } | null;
   lowStockCount: number;
-  voidSummary: any;
+  voidSummary: { void_count?: number; void_amount?: number } | null;
   weeklySales: { day: string; total: number }[];
-  topProducts: any[];
-  recentOrders: any[];
+  topProducts: { name: string; total_quantity?: number | string }[];
+  recentOrders: { id: number; source?: string; cashier_name?: string; created_at?: string; status?: string; total_amount?: number | string }[];
 }
 
 export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSummary, weeklySales, topProducts, recentOrders }: AdminDashboardHeroProps) {
@@ -143,7 +143,7 @@ export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSum
           <p className="text-center text-sm text-gray-400 py-8">ยังไม่มีออเดอร์วันนี้</p>
         ) : (
           <div className="divide-y divide-brand-border">
-            {recentOrders.slice(0, 6).map((o: any) => (
+            {recentOrders.slice(0, 6).map((o) => (
               <div key={`${o.source}-${o.id}`} className="flex items-center gap-3 py-3">
                 <div className="w-8 h-8 rounded-xl bg-brand-bg flex items-center justify-center shrink-0">
                   <span className="text-brand text-xs font-extrabold">{(o.cashier_name || '?').charAt(0)}</span>
@@ -152,7 +152,7 @@ export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSum
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-800 text-xs truncate">{o.cashier_name}</span>
                     <span className="text-gray-300 text-xs shrink-0">·</span>
-                    <span className="text-gray-400 text-xs font-medium shrink-0">{formatBangkokTime(o.created_at).slice(-5)}</span>
+                    <span className="text-gray-400 text-xs font-medium shrink-0">{formatBangkokTime(o.created_at ?? '').slice(-5)}</span>
                   </div>
                   <p className="text-xs text-gray-400 font-medium">
                     {o.source === 'PREORDER' ? 'สั่งจอง' : 'หน้าร้าน'}{o.status === 'VOIDED' ? ' · ยกเลิกแล้ว' : ''}

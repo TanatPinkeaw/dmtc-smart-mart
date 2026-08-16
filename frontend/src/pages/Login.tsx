@@ -13,6 +13,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
+import { type ErrorLike } from '../utils/errorMessage';
 import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath, getLiffExtraParams } from '../utils/liff';
 
 export default function Login() {
@@ -133,15 +134,16 @@ export default function Login() {
         const dest = targetPath === '/pre-order' ? preOrderDest
           : res.data.user.role === 'MEMBER' ? preOrderDest : '/home';
         navigate(dest, { replace: true });
-      } catch (err: any) {
+      } catch (err) {
         if (cancelled) return;
         // ⭐️ ยังไม่ผูกบัญชี (401/404) → พาไปสมัคร/ผูกบัญชีที่ /register แทนการโชว์ error
-        if (err?.response?.status === 401 || err?.response?.status === 404) {
+        const e = err as ErrorLike;
+        if (e?.response?.status === 401 || e?.response?.status === 404) {
           navigate('/register', { replace: true });
           return;
         }
         // error อื่นๆ (เน็ต/CORS/500) — log ไว้ debug แล้ว fallback ไปโชว์ฟอร์มล็อกอินปกติ
-        console.error('[LIFF auto-login] failed:', err?.response?.status, err?.message);
+        console.error('[LIFF auto-login] failed:', e?.response?.status, e?.message);
         setAutoChecking(false);
       }
     })();
@@ -168,9 +170,11 @@ export default function Login() {
       //   (เดิมมี logic ตั้ง session_mode work/shop ตามสถานะเข้างาน — ถอดออกแล้วพร้อมการเลิกใช้
       //    "โหมดซื้อของ" ของ staff ทั้งระบบ; staff จัดการงานผ่านเมนู staff, MEMBER ซื้อของผ่าน /pre-order)
       navigate('/home');
-    } catch (err: any) {
-      if (err.response?.status !== 429) {
-        setError(err.response?.data?.error || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
+    } catch (err) {
+      const e = err as ErrorLike;
+      if (e.response?.status !== 429) {
+        const backendMsg = e.response?.data?.error;
+        setError(typeof backendMsg === 'string' ? backendMsg : 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
       }
       setLoading(false);
     }

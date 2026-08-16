@@ -5,11 +5,29 @@ import { useState, useEffect } from 'react';
 import { PackageSearch, CheckCircle, Clock, Eye, AlertCircle, X, Search, User, Phone, Wallet } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
-import { useSocket } from '../SocketContext';
+import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
-import AuthImage, { openAuthImage } from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
+import AuthImage from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
+import { openAuthImage } from '../utils/openAuthImage';
+
+interface StaffOrderItem { id: number; product_name: string; quantity: number; price?: number | string; subtotal?: number | string; image_url?: string; }
+interface StaffOrder {
+  id: number;
+  status: string;
+  customer_name?: string;
+  phone_number?: string;
+  total_amount?: number | string;
+  created_at: string;
+  slip_image?: string | null;
+  payment_method?: string;
+  assigned_to?: number | null;
+  assigned_name?: string | null;
+  slip_verification_status?: string;
+  reject_reason?: string | null;
+  items?: StaffOrderItem[];
+}
 
 // ⭐️ Construct slip image path from created_at date + filename
 // รูปใหม่เก็บเป็น URL/พาธเต็ม (https://cloudinary... หรือ /uploads/...) → คืนตรงๆ
@@ -39,8 +57,8 @@ const STAFF_STATUS_LABEL: Record<string, string> = {
 export default function OrderManagement() {
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const socket = useSocket();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [orders, setOrders] = useState<StaffOrder[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<StaffOrder | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -50,11 +68,24 @@ export default function OrderManagement() {
 
   // ⭐️ F3 — แท็บ: รอดำเนินการ / รอตรวจสลิป / เสร็จสมบูรณ์
   const [activeTab, setActiveTab] = useState<'pending' | 'slips' | 'rejected' | 'completed'>('pending');
-  // ⭐️ F3 — หมายเหตุตอนตรวจสลิปผ่าน (บังคับ 5 ตัวอักษรขึ้นไป)
-  const [verifyNotes, setVerifyNotes] = useState('');
-
+  const fetchOrders = async () => {
+    try {
+      // ⭐️ เติม ?t=${Date.now()} เพื่อบังคับให้ดึงข้อมูลใหม่จาก Server 100% ไม่ใช่จากแคช
+      const res = await api.get(`/orders?t=${Date.now()}`);
+      setOrders(res.data);
+      
+      setSelectedOrder((prevSelected: StaffOrder | null) => {
+        if (!prevSelected) return null;
+        const updatedOrder = res.data.find((o: StaffOrder) => o.id === prevSelected.id);
+        return updatedOrder || null;
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
   useEffect(() => {
-    fetchOrders();
+    // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+    void (async () => { await fetchOrders(); })();
 
     if (!socket) return;
 
@@ -85,29 +116,14 @@ export default function OrderManagement() {
     return () => clearInterval(interval);
   }, []);
 
-  const fetchOrders = async () => {
-    try {
-      // ⭐️ เติม ?t=${Date.now()} เพื่อบังคับให้ดึงข้อมูลใหม่จาก Server 100% ไม่ใช่จากแคช
-      const res = await api.get(`/orders?t=${Date.now()}`);
-      setOrders(res.data);
-      
-      setSelectedOrder((prevSelected: any) => {
-        if (!prevSelected) return null;
-        const updatedOrder = res.data.find((o: any) => o.id === prevSelected.id);
-        return updatedOrder || null;
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  };
   const handleClaim = async (orderId: number) => {
     setClaiming(true);
     try {
       await api.post(`/orders/${orderId}/assign`);
       fetchOrders();
       // refresh selected order
-      setSelectedOrder((prev: any) => prev?.id === orderId ? { ...prev, assigned_to: user.id, assigned_name: user.full_name } : prev);
-    } catch (err: any) {
+      setSelectedOrder((prev: StaffOrder | null) => prev?.id === orderId ? { ...prev, assigned_to: user.id, assigned_name: user.full_name } : prev);
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'รับงานไม่ได้', text: getErrorMessage(err) });
     } finally { setClaiming(false); }
   };
@@ -141,9 +157,8 @@ export default function OrderManagement() {
       });
       setSelectedOrder(null);
       setRejectReason('');
-      setVerifyNotes('');
       fetchOrders(); // ⭐️ ดึงข้อมูลใหม่ทันที ไม่รอ socket round-trip (เดิมรอ socket เด้งกลับมาสั่ง fetch เอง ทำให้ต้องกด 2 รอบ)
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err) });
     } finally {
       setLoading(false);
@@ -458,7 +473,7 @@ export default function OrderManagement() {
             
             <div className="p-4 border-b border-brand-border flex justify-between items-center bg-brand-bg shrink-0">
               <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2">รายละเอียดออเดอร์ #{selectedOrder.id}</h2>
-              <button onClick={() => {setSelectedOrder(null); setRejectReason(''); setVerifyNotes('');}} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg" aria-label="ปิด"><X size={20}/></button>
+              <button onClick={() => {setSelectedOrder(null); setRejectReason('');}} className="p-1 hover:bg-brand-border text-gray-500 rounded-lg" aria-label="ปิด"><X size={20}/></button>
             </div>
 
             <div className="p-4 md:p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-6">
@@ -471,7 +486,7 @@ export default function OrderManagement() {
 
                 <h3 className="font-bold text-gray-700 mb-3">รายการสินค้า</h3>
                 <div className="space-y-3 mb-4">
-                  {selectedOrder.items.map((item: any) => (
+                  {(selectedOrder.items || []).map((item: StaffOrderItem) => (
                     <div key={item.id} className="flex justify-between items-center border-b border-brand-bg pb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-10 h-10 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
@@ -504,7 +519,7 @@ export default function OrderManagement() {
                         path={getSlipImagePath(selectedOrder.created_at, selectedOrder.slip_image)}
                         alt="Slip"
                         className="w-full h-full object-contain cursor-pointer"
-                        onClick={() => openAuthImage(getSlipImagePath(selectedOrder.created_at, selectedOrder.slip_image))}
+                        onClick={() => openAuthImage(getSlipImagePath(selectedOrder.created_at, selectedOrder.slip_image ?? ''))}
                         fallback={<p className="text-sm text-gray-400">โหลดรูปสลิปไม่ได้</p>}
                       />
                     ) : (

@@ -56,9 +56,16 @@ export async function validatePaymentSlip(file: File): Promise<FileValidationRes
  */
 export async function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => resolve({ width: img.width, height: img.height });
-    img.onerror = () => resolve(null);
-    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl); // ⭐️ revoke ทันทีที่อ่านเสร็จ กัน memory leak (รูปเดียวไม่ค้างใน memory)
+      resolve({ width: img.width, height: img.height });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+    img.src = objectUrl;
   });
 }

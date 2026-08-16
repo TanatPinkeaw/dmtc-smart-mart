@@ -9,6 +9,21 @@ import { EmptyState } from '../ui/EmptyState';
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
 interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
 
+interface Member {
+  student_id?: string;
+  full_name: string;
+  points?: number | string;
+  group_name?: string;
+  group_default_discount?: number | string;
+}
+
+interface Promotion {
+  id: number;
+  name: string;
+  discount_type?: string;
+  discount_value?: number | string;
+}
+
 interface CartPanelProps {
   isCartOpen: boolean;
   onCloseCart: () => void;
@@ -17,14 +32,14 @@ interface CartPanelProps {
   cart: CartItem[];
   products: Product[];
   onUpdateQuantity: (id: number, delta: number) => void;
-  currentMember: any;
+  currentMember: Member | null;
   onClearMember: () => void;
   searchMemberQuery: string;
   onSearchMemberQueryChange: (value: string) => void;
   memberLoading: boolean;
   onSearchMember: (e?: React.FormEvent) => void;
   onOpenRegisterModal: () => void;
-  promotions: any[];
+  promotions: Promotion[];
   selectedPromoId: number | '';
   onSelectPromoId: (id: number | '') => void;
   appliedPromo: { id: number; name: string; discount_amount: number } | null;
@@ -174,7 +189,7 @@ export function CartPanel({
                 (ลำดับ class ใน CSS ไม่ตรงกับลำดับใน className) เขียน class ใหม่ทั้งชุดแทนให้ rounded-lg ชัวร์ */}
             <select value={selectedPromoId} onChange={e => onSelectPromoId(e.target.value ? Number(e.target.value) : '')} className="flex-1 min-w-0 px-3 py-2.5 bg-white border border-brand-border rounded-lg text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150">
               <option value="">-- โปรโมชั่น (ถ้ามี) --</option>
-              {promotions.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.discount_type === 'PERCENT' ? `ลด ${p.discount_value}%` : `ลด ฿${p.discount_value}`})</option>)}
+              {promotions.map(p => <option key={p.id} value={p.id}>{p.name} ({p.discount_type === 'PERCENT' ? `ลด ${p.discount_value}%` : `ลด ฿${p.discount_value}`})</option>)}
             </select>
             <button onClick={onApplyPromo} disabled={!selectedPromoId || promoLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">{promoLoading ? '...' : 'ใช้โค้ด'}</button>
           </div>
@@ -186,7 +201,7 @@ export function CartPanel({
         )}
 
         {/* Redeem points */}
-        {currentMember && currentMember.points > 0 && (
+        {currentMember && Number(currentMember.points) > 0 && (
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             <Gift size={16} className="text-amber-500 shrink-0" />
             <span className="text-xs text-amber-700 shrink-0">แต้ม ({currentMember.points} 🌟):</span>

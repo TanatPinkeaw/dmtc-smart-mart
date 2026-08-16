@@ -7,6 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/member-groups) พฤติกรรม/path เดิม
 const pool = require('../config/db');
+const { buildGroupUpdateSql } = require('../utils/memberGroupUpdate');
 
 // GET /api/member-groups — กลุ่มทั้งหมดพร้อม rules (nest rules เข้าใต้แต่ละกลุ่ม)
 async function list(req, res) {
@@ -43,13 +44,14 @@ async function create(req, res) {
 }
 
 // PUT /api/member-groups/:id — แก้กลุ่ม (code แก้ไม่ได้ที่นี่ — ล็อกไว้)
+// ⭐️ Partial update: ส่งเฉพาะ field ที่ต้องการแก้ — field ที่ไม่ส่ง (undefined) คงค่าเดิมไว้
+//   (เดิมเขียนทับทุกคอลัมน์ด้วย `description || null` → client ที่ส่งแค่ % ส่วนลดทำให้ description หายเงียบๆ)
+//   ตั้งใจล้าง description ให้ส่ง null มาชัดๆ
 async function update(req, res) {
-  const { name, default_discount_percent, description } = req.body;
   try {
-    await pool.query(
-      'UPDATE member_groups SET name = ?, default_discount_percent = ?, description = ? WHERE id = ?',
-      [name, Number(default_discount_percent) || 0, description || null, req.params.id]
-    );
+    const upd = buildGroupUpdateSql(req.body, req.params.id);
+    if (!upd) return res.status(400).json({ error: 'ไม่มีข้อมูลที่ต้องการอัปเดต' });
+    await pool.query(upd.sql, upd.values);
     res.json({ message: 'อัปเดตกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);

@@ -6,7 +6,6 @@
 // ระหว่าง render (เช่น undefined.property, localStorage เพี้ยนแล้วโค้ดเก่าไม่ได้กัน) ทำให้ทั้งแอป
 // unmount กลายเป็นจอขาว ไม่มีทางกู้คืนนอกจากผู้ใช้เดารีเฟรชเอง
 import React, { type ReactNode } from 'react';
-import Swal from '../../swal';
 
 interface Props {
   children: ReactNode;

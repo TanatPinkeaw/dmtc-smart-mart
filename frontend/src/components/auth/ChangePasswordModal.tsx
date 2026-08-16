@@ -52,7 +52,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
       }
       Swal.fire('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว', 'success');
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       Swal.fire('ผิดพลาด', getErrorMessage(err), 'error');
     } finally {
       setLoading(false);

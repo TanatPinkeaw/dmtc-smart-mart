@@ -5,9 +5,16 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/smokeTest.js",
+    "test": "node tests/smokeTest.js && npm run test:unit",
+    "test:unit": "node scripts/run-all-tests.js",
     "test:contract": "node tests/checkoutContract.test.js",
     "test:price": "node tests/priceContract.test.js",
+    "test:cron": "node tests/cronTimezone.test.js",
+    "test:daily": "node tests/dailyReport.test.js",
+    "test:member-groups": "node tests/memberGroups.test.js",
+    "test:reward": "node tests/rewardRedemption.test.js",
+    "test:sync-offline": "node tests/syncOfflineContract.test.js",
+    "test:richmenu": "node src/scripts/setup-richmenu.test.js",
     "dev": "nodemon server.js",
     "line:richmenu": "node src/scripts/setup-richmenu.js"
   },

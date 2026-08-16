@@ -43,8 +43,11 @@ if (!fs.existsSync(moneyPath)) {
       if (src[i] === '{') depth++;
       else if (src[i] === '}') { depth--; if (depth === 0) break; }
     }
+    // 🐛 FIX — เดิม regex ตายตัว (product: any) พอ money.ts ถูก type ให้เป็น (product: PriceableProduct |
+    // null | undefined) ก็ strip ไม่โดน → new Function พัง (SyntaxError) — ทำให้ยืดหยุ่น: เอาอะไรก็ได้
+    // ระหว่างวงเล็บ + return type ทิ้ง แล้วเหลือแค่ชื่อ param
     return src.slice(m.index, i + 1)
-      .replace(/function (effectiveUnitPrice|itemLevelDiscountPercent)\(product: any\): number/, 'function $1(product)');
+      .replace(/function (effectiveUnitPrice|itemLevelDiscountPercent)\(product:[^)]*\)\s*:\s*number/, 'function $1(product)');
   }
 
   const fnSrc = [

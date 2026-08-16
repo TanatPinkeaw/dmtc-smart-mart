@@ -5,11 +5,20 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
 import api from '../api';
 import customSwal from '../swal';
+import { getErrorMessage } from '../utils/errorMessage';
 
 // ⭐️ ตรงกับ backend จริง: GET /api/auth/reset-token/:token, POST /api/auth/reset-password { reset_token, new_password }
 // เงื่อนไขรหัสผ่าน (ต้องตรงกับ regex ฝั่ง backend): 8+ ตัวอักษร, มีพิมพ์เล็ก, พิมพ์ใหญ่, ตัวเลข
 
 type TokenState = 'checking' | 'valid' | 'invalid';
+
+function CheckRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600' : 'text-gray-400'}`}>
+      {ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />} {label}
+    </div>
+  );
+}
 
 function passwordChecks(pw: string) {
   return {
@@ -25,13 +34,13 @@ export default function ResetPassword() {
   const token = searchParams.get('token') || '';
   const navigate = useNavigate();
 
-  const [tokenState, setTokenState] = useState<TokenState>('checking');
+  const [tokenState, setTokenState] = useState<TokenState>(() => (token ? 'checking' : 'invalid'));
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!token) { setTokenState('invalid'); return; }
+    if (!token) return;
     api.get(`/auth/reset-token/${token}`)
       .then(res => setTokenState(res.data?.valid ? 'valid' : 'invalid'))
       .catch(() => setTokenState('invalid'));
@@ -48,18 +57,12 @@ export default function ResetPassword() {
       await api.post('/auth/reset-password', { reset_token: token, new_password: password });
       await customSwal.fire({ icon: 'success', title: 'ตั้งรหัสผ่านใหม่สำเร็จ', text: 'กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่' });
       navigate('/login');
-    } catch (err: any) {
-      customSwal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.response?.data?.error || 'ไม่สามารถตั้งรหัสผ่านใหม่ได้' });
+    } catch (err) {
+      customSwal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(err, 'ไม่สามารถตั้งรหัสผ่านใหม่ได้') });
     } finally {
       setLoading(false);
     }
   };
-
-  const CheckRow = ({ ok, label }: { ok: boolean; label: string }) => (
-    <div className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600' : 'text-gray-400'}`}>
-      {ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />} {label}
-    </div>
-  );
 
   return (
     <div className="min-h-dvh bg-brand-bg flex flex-col items-center justify-center px-5 py-10">

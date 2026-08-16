@@ -4,9 +4,43 @@ import { forwardRef } from 'react';
 import { CloudOff } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 
+// ⭐️ รูปร่างข้อมูลบิล/ร้านที่ ReceiptSlip อ่าน — export ให้ ReceiptModal/ReceiptPage/POS ใช้ร่วมกัน
+// (เดิมเป็น any เต็มใบ ตอนนี้ type ครบตาม field ที่สลิปใช้จริง)
+export interface ReceiptItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface ReceiptData {
+  sale_id: string | number;
+  created_at: string | Date;
+  cashier_name: string;
+  member_name?: string | null;
+  items: ReceiptItem[];
+  subtotal: number | string;
+  discount_amount: number;
+  promo_name?: string | null;
+  points_discount: number;
+  points_redeemed: number;
+  total_amount: number | string;
+  amount_received: number | string;
+  change_amount: number | string;
+  earned_points?: number;
+  offline?: boolean;
+  payment_method: string;
+}
+
+export interface StoreInfo {
+  store_name?: string;
+  address?: string;
+  tax_id?: string;
+  receipt_footer?: string;
+}
+
 interface ReceiptSlipProps {
-  receiptData: any;
-  storeInfo: any;
+  receiptData: ReceiptData;
+  storeInfo?: StoreInfo | null;
 }
 
 const Dash = () => <div className="border-t border-dashed border-gray-400 my-2" />;
@@ -55,7 +89,7 @@ export const ReceiptSlip = forwardRef<HTMLDivElement, ReceiptSlipProps>(
 
         {/* Items */}
         <div className="space-y-1">
-          {r.items.map((item: any, idx: number) => (
+          {r.items.map((item: ReceiptItem, idx: number) => (
             <div key={idx} className="flex justify-between text-xs">
               <span className="flex-1 pr-2 truncate">{item.name} x{item.quantity}</span>
               <span className="whitespace-nowrap">฿{(item.price * item.quantity).toFixed(2)}</span>
@@ -89,7 +123,7 @@ export const ReceiptSlip = forwardRef<HTMLDivElement, ReceiptSlipProps>(
           <Row left="เงินทอน:" right={`฿${Number(r.change_amount).toFixed(2)}`} />
         </div>
 
-        {r.earned_points > 0 && (
+        {(r.earned_points ?? 0) > 0 && (
           <p className="text-center text-xs font-bold text-emerald-600 mt-3">+{r.earned_points} แต้มสะสม</p>
         )}
 

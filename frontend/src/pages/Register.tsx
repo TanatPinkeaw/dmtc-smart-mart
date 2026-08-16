@@ -7,6 +7,7 @@ import QRCode from 'react-qr-code';
 import { API_BASE_URL } from '../config';
 import { liff, ensureLiffInit } from '../utils/liff';
 import { getCurrentUser } from '../utils/getCurrentUser';
+import { type ErrorLike } from '../utils/errorMessage';
 import { performLogout } from '../utils/logout';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import { MemberBottomNav } from '../components/layout/MemberBottomNav';
@@ -76,9 +77,9 @@ export default function Register() {
       } else if (!isBackground) {
         setStage('form');
       }
-    } catch (err: any) {
+    } catch (err) {
       if (!isBackground) {
-        setErrorMsg(err?.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่ภายหลัง');
+        setErrorMsg((err as ErrorLike)?.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่ภายหลัง');
         setStage('error');
       }
       // ⭐️ background refresh ล้มเหลว (เช่นเน็ตสะดุด) — เงียบไว้ ปล่อยให้บัตรที่โชว์อยู่ค้างข้อมูลเดิม
@@ -104,8 +105,8 @@ export default function Register() {
       const profile = await liff.getProfile();
       setLineUserId(profile.userId);
       await refreshMemberStatus(profile.userId, false);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่ภายหลัง');
+    } catch (err) {
+      setErrorMsg((err as ErrorLike)?.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่ภายหลัง');
       setStage('error');
     }
   }, [refreshMemberStatus]);
@@ -200,18 +201,18 @@ export default function Register() {
 
       setStage('done');
       setTimeout(() => {
-        const liff = (window as any).liff;
-        if (liff?.closeWindow) liff.closeWindow();
+        const winLiff = (window as unknown as { liff?: { closeWindow?: () => void } }).liff;
+        if (winLiff?.closeWindow) winLiff.closeWindow();
       }, 2000);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่');
+    } catch (err) {
+      setErrorMsg((err as ErrorLike)?.message || 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่');
       setStage('form');
     }
   }
 
   function closeLiff() {
-    const liff = (window as any).liff;
-    if (liff?.closeWindow) liff.closeWindow();
+    const winLiff = (window as unknown as { liff?: { closeWindow?: () => void } }).liff;
+    if (winLiff?.closeWindow) winLiff.closeWindow();
   }
 
   return (

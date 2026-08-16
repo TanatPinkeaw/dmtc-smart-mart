@@ -17,9 +17,40 @@ import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { performLogout } from '../utils/logout'; // 🐛 FIX — ออกจากระบบต้องเพิกถอน session ฝั่ง backend ด้วย
-import { CloseShiftModal } from '../components/dashboard/CloseShiftModal';
+import { CloseShiftModal, type ShiftSummary } from '../components/dashboard/CloseShiftModal';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
+
+// ── Shared wrapper (module-level — เดิมนิยามใน component = สร้าง component ใหม่ทุก render)
+function ShiftCard({ fullName, onHome, onLogout, children }: {
+  fullName: string;
+  onHome: () => void;
+  onLogout: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-white border border-brand-border rounded-3xl shadow-sm overflow-hidden">
+        {/* Brand strip */}
+        <div className="bg-gradient-to-r from-brand to-brand-dark px-5 py-4 flex items-center gap-3">
+          <ShoppingBag size={22} className="text-white" />
+          <div>
+            <p className="text-white font-bold text-sm">DMTC Mart</p>
+            <p className="text-pink-200 text-xs">{fullName}</p>
+          </div>
+          {/* ⭐️ ทางกลับหน้า Home กลาง — หน้านี้ไม่มี Sidebar/bottom nav (standalone เหมือนหน้า login) */}
+          <button onClick={onHome} className="ml-auto p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="กลับหน้าหลัก">
+            <Home size={16} className="text-white" />
+          </button>
+          <button onClick={onLogout} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
+            <LogOut size={16} className="text-white" />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function Shift() {
   const [denomCounts, setDenomCounts] = useState<Record<number, number | ''>>({});
@@ -51,7 +82,7 @@ export default function Shift() {
   const [closeLoading, setCloseLoading] = useState(false);
   const [closePhoto, setClosePhoto] = useState<File | null>(null);
   const [closePhotoPreview, setClosePhotoPreview] = useState<string | null>(null);
-  const [shiftSummary, setShiftSummary] = useState<any>(null);
+  const [shiftSummary, setShiftSummary] = useState<ShiftSummary | null>(null);
 
   const openingCash = DENOMINATIONS.reduce((sum, d) => sum + d * (Number(denomCounts[d]) || 0), 0);
   const actualCash = openingCash; // เลขเดียวกัน ใช้ทั้งนับเงินเปิดกะและปิดกะ (denomCounts คนละรอบ)
@@ -74,15 +105,15 @@ export default function Shift() {
       try {
         const res = await api.get(`/shifts/current?cashier_id=${user.id}`);
         if (res.data?.id) { setHasOpenShift(true); setPageLoading(false); return; }
-      } catch {}
+      } catch { /* ไม่มีกะเปิดอยู่ → ไปเช็คกะล่าสุดต่อ */ }
       try {
         const lastRes = await api.get(`/shifts/last-closed?cashier_id=${user.id}`);
         if (lastRes.data) { setLastClosedCash(Number(lastRes.data.actual_cash)); if (lastRes.data.closing_cash_breakdown) setDenomCounts(lastRes.data.closing_cash_breakdown); }
-      } catch {}
+      } catch { /* ดึงกะล่าสุดไม่ได้ — คงเป็นกะแรก */ }
       setPageLoading(false);
     };
     checkCurrentShift();
-  }, [user.id, user.role]);
+  }, [user.id, user.role, isAdmin, isManager]);
 
   const handleManagerCheckIn = async () => {
     if (!checkInPhoto) return Swal.fire({ icon: 'warning', title: 'กรุณาถ่ายรูปยืนยันสถานที่ก่อน' });
@@ -92,7 +123,7 @@ export default function Shift() {
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/attendance/check-in', { check_in_photo: uploadRes.data.photo_url });
       navigate('/dashboard');
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckInLoading(false); }
   };
 
@@ -108,7 +139,7 @@ export default function Shift() {
       Swal.fire({ icon: 'success', title: 'ลงชื่อออกงานสำเร็จ', showConfirmButton: false, timer: 1500 });
       // ⭐️ ลงชื่อออกงานเสร็จแล้วไม่ต้องเตะออกจากระบบ (ตามคำขอผู้ใช้) — กลับหน้า Home ให้เลือกทำอย่างอื่นต่อได้
       setTimeout(() => navigate('/home'), 1500);
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setCheckOutLoading(false); }
   };
 
@@ -122,7 +153,7 @@ export default function Shift() {
       const uploadRes = await api.post('/attendance/upload-photo?type=clock-in', fd);
       await api.post('/shifts/open', { cashier_id: user.id, opening_cash: openingCash, cash_breakdown: denomCounts, open_photo: uploadRes.data.photo_url });
       navigate('/pos');
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setLoading(false); }
   };
 
@@ -153,7 +184,7 @@ export default function Shift() {
         return;
       }
       setShiftSummary(response.data.summary);
-    } catch (error: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
+    } catch (error) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) }); }
     finally { setCloseLoading(false); }
   };
 
@@ -167,33 +198,10 @@ export default function Shift() {
     </div>
   );
 
-  // ── Shared wrapper ────────────────────────────────────────────────────────────
-  const Card = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white border border-brand-border rounded-3xl shadow-sm overflow-hidden">
-        {/* Brand strip */}
-        <div className="bg-gradient-to-r from-brand to-brand-dark px-5 py-4 flex items-center gap-3">
-          <ShoppingBag size={22} className="text-white" />
-          <div>
-            <p className="text-white font-bold text-sm">DMTC Mart</p>
-            <p className="text-pink-200 text-xs">{user.full_name}</p>
-          </div>
-          {/* ⭐️ ทางกลับหน้า Home กลาง — หน้านี้ไม่มี Sidebar/bottom nav (standalone เหมือนหน้า login) */}
-          <button onClick={() => navigate('/home')} className="ml-auto p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="กลับหน้าหลัก">
-            <Home size={16} className="text-white" />
-          </button>
-          <button onClick={async () => { await performLogout(); navigate('/login'); }} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
-            <LogOut size={16} className="text-white" />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
-  );
 
   // ── MANAGER check-in ──────────────────────────────────────────────────────────
   if (isManager && needsCheckIn) return (
-    <Card>
+    <ShiftCard fullName={user.full_name} onHome={() => navigate('/home')} onLogout={async () => { await performLogout(); navigate('/login'); }}>
       <div className="text-center mb-5">
         <h2 className="text-lg font-bold text-gray-900">ลงชื่อเข้างาน</h2>
         <p className="text-xs text-gray-500 mt-1">ถ่ายรูปยืนยันว่าอยู่ที่สหกรณ์</p>
@@ -216,12 +224,12 @@ export default function Shift() {
           enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
       </button>
-    </Card>
+    </ShiftCard>
   );
 
   // ── MANAGER check-out (⭐️ เดิมเป็นสิทธิ์ ADMIN ย้ายมาให้ MANAGER ตามนโยบายใหม่) ─────────────
   if (isManager) return (
-    <Card>
+    <ShiftCard fullName={user.full_name} onHome={() => navigate('/home')} onLogout={async () => { await performLogout(); navigate('/login'); }}>
       <div className="text-center mb-5">
         <h2 className="text-lg font-bold text-gray-900">ลงชื่อออกงาน</h2>
         <p className="text-xs text-gray-500 mt-1">ถ่ายรูปยืนยันก่อนออกจากระบบ</p>
@@ -244,7 +252,7 @@ export default function Shift() {
           enabled:bg-gradient-to-br enabled:from-red-500 enabled:to-red-600 disabled:bg-brand-border disabled:opacity-70">
         {checkOutLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อออกงาน'}
       </button>
-    </Card>
+    </ShiftCard>
   );
 
   // ── CASHIER close shift (⭐️ NEW — เดิมอยู่ปุ่ม "ปิดกะการขาย" ในหน้า Dashboard) ────────────────
@@ -271,7 +279,7 @@ export default function Shift() {
 
   // ── Cashier open shift ────────────────────────────────────────────────────────
   return (
-    <Card>
+    <ShiftCard fullName={user.full_name} onHome={() => navigate('/home')} onLogout={async () => { await performLogout(); navigate('/login'); }}>
       <div className="text-center mb-4">
         <h2 className="text-lg font-bold text-gray-900">เปิดกะการขาย</h2>
         <p className="text-xs text-gray-500 mt-1">นับเงินทอนตั้งต้นแยกแบงก์/เหรียญ</p>
@@ -321,6 +329,6 @@ export default function Shift() {
           <Banknote size={16} /> {loading ? 'กำลังเปิดกะ...' : 'เริ่มขายสินค้า'}
         </button>
       </form>
-    </Card>
+    </ShiftCard>
   );
 }

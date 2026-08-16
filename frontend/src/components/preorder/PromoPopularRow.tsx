@@ -6,9 +6,19 @@ import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money'
 
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
 
+interface StorePromo { id: number; label: string; }
+
+// ⭐️ field ส่วนลด/ใกล้หมดอายุที่ backend เติมมา — แทน `any` ใน PriceLine เดิม
+interface ProductWithPromo extends Product {
+  expiry_status?: string;
+  promo_active?: boolean;
+  promo_percent?: number | string;
+  discount_percent?: number | string;
+}
+
 // ⭐️ ราคา + ราคาขีดฆ่า ใช้ helper กลางเดียวกับ ProductGrid/addToCart (best ของ โปร กับ ใกล้หมดอายุ)
 // กันโชว์ราคาเต็มทั้งที่ badge บอกลด (ราคาลดจริงตอนคิดเงินอยู่แล้ว — นี่แค่ให้ display ตรงกัน)
-function PriceLine({ p }: { p: any }) {
+function PriceLine({ p }: { p: ProductWithPromo }) {
   const pct = itemLevelDiscountPercent(p);
   if (pct > 0) {
     return (
@@ -24,7 +34,7 @@ function PriceLine({ p }: { p: any }) {
 interface PromoPopularRowProps {
   selectedCategory: number | 'ALL';
   productSearch: string;
-  storePromos: any[];
+  storePromos: StorePromo[];
   highlights: { popular: Product[]; promo: Product[] };
   onAddToCart: (product: Product) => void;
 }

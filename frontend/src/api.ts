@@ -9,9 +9,12 @@
 // จุดสำคัญ: token เป็น httpOnly cookie (อ่านจาก JS ไม่ได้) — CSRF/bearer เก็บในตัวแปร JS; setCsrfToken/
 //   setBearerToken ให้หน้า login เรียกหลังล็อกอินสำเร็จ
 // ═══════════════════════════════════════════════════════════════════════════════════
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import Swal from './swal';
-import { saveRequestToQueue, getQueue, removeFromQueue, incrementRetries } from './utils/requestQueue';
+import { saveRequestToQueue, getQueue, removeFromQueue, incrementRetries, MAX_RETRIES } from './utils/requestQueue';
+import { describeQueuedRequest } from './utils/queueLabels'; // ⭐️ ป้ายไทยสำหรับแจ้งเตือนรายการที่ล้มเหลวถาวร (แยกให้เทสต์ได้)
+// ⭐️ ลอจิกวนคิว (กัน infinite loop / ยิงซ้ำ) แยกเป็นโมดูล DI ให้เทสต์ได้ — ดู queueProcessor.test.ts
+import { processQueuedRequests } from './utils/queueProcessor';
 import { API_BASE_URL } from './config'; // ⭐️ DEPLOY FIX — URL จาก env แทนฮาร์ดโค้ด
 import { liff, ensureLiffInit } from './utils/liff';
 
@@ -24,7 +27,8 @@ axios.defaults.withCredentials = true;
 let rateLimitSwalOpen = false;
 
 // ⭐️ Sprint 2 — B5: Track refresh in-flight to prevent multiple refresh calls
-let refreshPromise: Promise<any> | null = null;
+// (type แคบพอสำหรับที่ใช้จริง: await แล้วอ่าน data.csrfToken เท่านั้น)
+let refreshPromise: Promise<{ data?: { csrfToken?: string } }> | null = null;
 
 // 🐛 FIX (production bug) — เดิมพอ refresh พังก็ยิง `window.location.href = '/login'` ตรงๆ ทันที
 // จากทุก request ที่ 401 พร้อมกัน (เช่นหน้า Dashboard ยิง 6 endpoint พร้อมกันตอน mount) — ถ้าเบราว์เซอร์
@@ -252,7 +256,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config as any;
+    // error.config = request config ของ axios ที่พัง (มี _retry ที่โค้ดนี้ตั้งเอง ตาม axios convention)
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // ⭐️ STRICT EXEMPTION — /auth/line-login (LINE auto-login) ต้องไม่โดน global handler ใดๆ ทั้งสิ้น
     //   (auto-refresh / forceLogout / redirect) เด็ดขาด — ปล่อยให้ catch ใน Login.tsx จัดการเอง
@@ -375,38 +380,27 @@ api.interceptors.response.use(
 );
 
 // ⭐️ Sprint 2 — B6: Listen for online event and retry queued requests
+// 🐛 FIX — ลอจิกวนคิว (กัน infinite loop / ยิง request ซ้ำ) ย้ายไป utils/queueProcessor.ts แล้ว
+// (แยก DI ให้เทสต์ได้ — ดู queueProcessor.test.ts) ตรงนี้เหลือแค่ wiring: storage จริง + ส่งผ่าน
+// axios + แจ้งเตือนผู้ใช้ด้วย Swal
 if (typeof window !== 'undefined') {
   window.addEventListener('online', async () => {
     console.log('[Queue] Connection restored, processing queued requests...');
     isProcessingQueue = true;
-    const queue = getQueue();
-
-    for (let i = 0; i < queue.length; i++) {
-      const req = queue[i];
-      if (req.retries >= 3) {
-        console.warn(`[Queue] Max retries exceeded for ${req.method} ${req.url}`);
-        removeFromQueue(i);
-        continue;
-      }
-
-      try {
-        const config = {
-          method: req.method,
-          url: req.url,
-          data: req.data,
-          headers: req.headers,
-        };
-        console.log(`[Queue] Retrying ${req.method} ${req.url} (attempt ${req.retries + 1})`);
-        await api.request(config);
-        console.log(`[Queue] Successfully sent ${req.method} ${req.url}`);
-        removeFromQueue(i);
-        i--; // Adjust index after removal
-      } catch (error: any) {
-        incrementRetries(i);
-        console.error(`[Queue] Retry failed for ${req.method} ${req.url}:`, error.message);
-      }
-    }
-
+    await processQueuedRequests(
+      { getQueue, removeFromQueue, incrementRetries },
+      (config) => api.request(config),
+      (permanentlyFailed) => {
+        const failedList = permanentlyFailed.map(r => `• ${describeQueuedRequest(r)}`).join('<br/>');
+        Swal.fire({
+          icon: 'warning',
+          title: 'มีรายการที่ส่งไม่สำเร็จ',
+          html: `รายการต่อไปนี้ถูกบันทึกไว้ตอนออฟไลน์ แต่ส่งไม่สำเร็จแม้จะลองซ้ำแล้ว:<br/><div class="text-left mt-2" style="max-height:180px;overflow-y:auto">${failedList}</div><br/>กรุณาตรวจสอบและทำรายการใหม่อีกครั้ง`,
+          confirmButtonText: 'รับทราบ',
+        });
+      },
+      MAX_RETRIES,
+    );
     isProcessingQueue = false;
     console.log('[Queue] Done processing queued requests');
   });

@@ -9,6 +9,8 @@
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/promotions) พฤติกรรม/path เดิม
 const pool = require('../config/db');
 const { calculatePromotionDiscount, checkPromotionUsageLimit } = require('../services/promotionEngine');
+// ⭐️ จัดการ request ซ้ำ (idempotency-key) ที่ชน UNIQUE constraint ฝั่ง DB หลัง server restart
+const { isIdempotentDuplicate } = require('../utils/idempotency');
 
 // GET /api/promotions — โปรที่ยัง active และยังไม่หมดอายุ (public — POS/frontend ใช้)
 async function list(req, res) {
@@ -63,17 +65,25 @@ async function create(req, res) {
     return res.status(400).json({ error: "โปรโมชั่นแบบซื้อครบแถม ต้องระบุสินค้าที่ต้องซื้อ, จำนวนที่ต้องซื้อ, สินค้าที่แถม, จำนวนที่แถม ให้ครบ" });
   }
 
+  // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างโปรซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
+  const idempotencyKey = req.headers['idempotency-key'];
   try {
     const [result] = await pool.query(
       `INSERT INTO promotions
-        (name, discount_type, discount_value, start_date, end_date, buy_product_id, buy_qty, free_product_id, free_qty, usage_limit, usage_limit_per_user)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, discount_type, discount_value, start_date, end_date, buy_product_id, buy_qty, free_product_id, free_qty, usage_limit, usage_limit_per_user, idempotency_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [name, discount_type, discount_value || 0, start_date || null, end_date || null,
        buy_product_id || null, buy_qty || null, free_product_id || null, free_qty || null,
-       usage_limit || null, usage_limit_per_user || null]
+       usage_limit || null, usage_limit_per_user || null, idempotencyKey || null]
     );
     res.status(201).json({ id: result.insertId, message: "สร้างโปรโมชั่นสำเร็จ" });
   } catch (error) {
+    // 🐛 FIX — retry หลัง server restart: row เดิมยังอยู่ใน DB (UNIQUE idempotency_key) → ตอบ "สำเร็จซ้ำ" แทน error
+    if (isIdempotentDuplicate(error)) {
+      const [rows] = await pool.query('SELECT id FROM promotions WHERE idempotency_key = ?', [idempotencyKey]);
+      if (rows.length > 0) return res.status(201).json({ id: rows[0].id, message: 'สร้างโปรโมชั่นสำเร็จ (request ซ้ำ — ไม่ได้สร้างซ้ำ)', duplicated: true });
+      return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
     console.error('[500]', error.message);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
   }

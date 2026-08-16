@@ -5,9 +5,23 @@ import { TrendingUp, Receipt, Banknote, CreditCard, Package } from 'lucide-react
 const card = "relative overflow-hidden bg-white border border-brand-border rounded-3xl shadow-md";
 const accentBar = <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />;
 
+interface SalesSummary {
+  total_sales?: number | string;
+  total_bills?: number | string;
+  cash_sales?: number | string;
+  qr_sales?: number | string;
+}
+
+interface TopProduct {
+  product_id?: number;
+  name: string;
+  total_quantity?: number | string;
+  total_revenue?: number | string;
+}
+
 interface StatCardsProps {
-  summary: any;
-  topProducts: any[];
+  summary: SalesSummary | null;
+  topProducts: TopProduct[];
 }
 
 export function StatCards({ summary, topProducts }: StatCardsProps) {
@@ -42,7 +56,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
             <p className="text-xl font-bold text-gray-900">฿{Number(summary?.cash_sales || 0).toLocaleString()}</p>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-400 rounded-full transition-all duration-500" style={{ width: summary?.total_sales ? `${(summary.cash_sales / summary.total_sales) * 100}%` : '0%' }} />
+            <div className="h-full bg-emerald-400 rounded-full transition-all duration-500" style={{ width: summary?.total_sales ? `${(Number(summary.cash_sales ?? 0) / Number(summary.total_sales ?? 0)) * 100}%` : '0%' }} />
           </div>
         </div>
 
@@ -54,7 +68,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
             <p className="text-xl font-bold text-gray-900">฿{Number(summary?.qr_sales || 0).toLocaleString()}</p>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-purple-400 rounded-full transition-all duration-500" style={{ width: summary?.total_sales ? `${(summary.qr_sales / summary.total_sales) * 100}%` : '0%' }} />
+            <div className="h-full bg-purple-400 rounded-full transition-all duration-500" style={{ width: summary?.total_sales ? `${(Number(summary.qr_sales ?? 0) / Number(summary.total_sales ?? 0)) * 100}%` : '0%' }} />
           </div>
         </div>
       </div>

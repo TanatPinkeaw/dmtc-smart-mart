@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { Gift, X } from 'lucide-react';
 import api from '../../api';
 import { getErrorMessage } from '../../utils/errorMessage';
+import { canAffordReward } from '../../utils/rewardCart'; // ⭐️ ลอจิกแต้มพอ/ไม่พอ (pure — เทสต์ได้)
 
 interface RewardProduct {
   id: number; name: string; price: string | number; image_url: string | null;
@@ -57,7 +58,7 @@ export function RewardModal({ memberPoints, onClose, onRedeem }: RewardModalProp
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {rewards.map(r => {
-                const canAfford = memberPoints >= r.points_required;
+                const canAfford = canAffordReward(memberPoints, r.points_required);
                 return (
                   <div key={r.id} className="bg-white border border-brand-border rounded-2xl overflow-hidden flex flex-col">
                     <div className="h-24 bg-brand-bg shrink-0">

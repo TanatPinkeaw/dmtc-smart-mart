@@ -21,7 +21,7 @@ interface CartPanelProps {
   finalTotal: number;
   phoneNumber: string;
   onPhoneNumberChange: (value: string) => void;
-  phoneVerified: any;
+  phoneVerified: { member_name?: string } | null;
   verifying: boolean;
   onVerifyPhone: () => void;
   myPoints: number;

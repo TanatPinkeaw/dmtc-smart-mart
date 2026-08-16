@@ -11,18 +11,30 @@ import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
 import AuthImage from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — เปิดรูปเข้า-ออกงานผ่าน JWT
 import PhotoLightbox from '../components/common/PhotoLightbox'; // ⭐️ mobile — แตะรูปดูแบบ modal ในหน้า แทนเปิดแท็บใหม่ (window.open blob ที่มือถือหลายรุ่นบล็อก)
+import { getLocalDate } from '../utils/localDate'; // ⭐️ วันนี้ตามเวลาท้องถิ่น (กันเพี้ยนจาก toISOString ที่เป็น UTC — ย้าย helper ไป utils กลาง)
+
+interface AttendanceRecord {
+  id: number;
+  full_name: string;
+  check_in?: string | null;
+  check_out?: string | null;
+  note?: string | null;
+  source?: string;
+  photo_path?: string | null;
+  check_in_photo?: string | null;
+  check_out_photo?: string | null;
+  role?: string;
+}
 
 export default function AttendanceManagement() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningAuto, setRunningAuto] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
+  const [editing, setEditing] = useState<AttendanceRecord | null>(null);
   const [editForm, setEditForm] = useState({ check_in: '', check_out: '', note: '' });
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [filterDate, setFilterDate] = useState(getLocalDate());
   const [filterUser, setFilterUser] = useState('');
   const [lightbox, setLightbox] = useState<{ path: string; title: string } | null>(null);
-
-  useEffect(() => { fetchRecords(); }, [filterDate]);
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -33,32 +45,36 @@ export default function AttendanceManagement() {
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
+  // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
+  useEffect(() => { void (async () => { await fetchRecords(); })(); }, [filterDate]);
+
   const filtered = records.filter(r => {
     const dateOk = !filterDate || (r.check_in && r.check_in.slice(0, 10) === filterDate);
     const nameOk = !filterUser || r.full_name?.includes(filterUser);
     return dateOk && nameOk;
   });
 
-  const toLocalInput = (v: string | null) => {
+  const toLocalInput = (v: string | null | undefined) => {
     if (!v) return '';
     const d = new Date(v);
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
 
-  const openEdit = (r: any) => {
+  const openEdit = (r: AttendanceRecord) => {
     setEditing(r);
     setEditForm({ check_in: toLocalInput(r.check_in), check_out: toLocalInput(r.check_out), note: r.note || '' });
   };
 
-  const handleDelete = async (r: any) => {
+  const handleDelete = async (r: AttendanceRecord) => {
     const confirm = await Swal.fire({ title: `ลบรายการของ ${r.full_name}?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก' });
     if (!confirm.isConfirmed) return;
     try { await api.delete(`/attendance/${r.id}?source=${r.source}`); fetchRecords(); }
-    catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editing) return; // กัน null — ฟอร์มแก้ไขเปิดเมื่อมี editing เสมอ
     try {
       await api.put(`/attendance/${editing.id}`, {
         check_in: editForm.check_in ? new Date(editForm.check_in).toISOString().slice(0, 19).replace('T', ' ') : undefined,
@@ -68,7 +84,7 @@ export default function AttendanceManagement() {
       });
       Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', showConfirmButton: false, timer: 1500 });
       setEditing(null); fetchRecords();
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
   const handleRunAutoCheckout = async () => {
@@ -79,7 +95,7 @@ export default function AttendanceManagement() {
       const res = await api.post('/attendance/auto-checkout-stale');
       Swal.fire({ icon: 'success', title: 'ตรวจสอบเสร็จแล้ว', text: `ตัดออกงาน ${res.data.attendance_closed} คน, ปิดกะ ${res.data.shifts_closed} กะ` });
       fetchRecords();
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
+    } catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
     finally { setRunningAuto(false); }
   };
 
@@ -147,8 +163,8 @@ export default function AttendanceManagement() {
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
                       {/* ⭐️ SECURITY FIX #1 — รูปเข้า-ออกงานถูกล็อกให้ต้องมี JWT แล้ว เปิดผ่าน PhotoLightbox (โหลด blob แนบ token) แทน <a href> ที่จะโดน 401 */}
-                      {r.check_in_photo && <button onClick={() => setLightbox({ path: r.check_in_photo, title: `รูปตอนเข้างาน — ${r.full_name}` })} title="รูปตอนเข้า" className="p-1 bg-emerald-50 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors duration-150"><Camera size={14} /></button>}
-                      {r.check_out_photo && <button onClick={() => setLightbox({ path: r.check_out_photo, title: `รูปตอนออกงาน — ${r.full_name}` })} title="รูปตอนออก" className="p-1 bg-red-50 rounded-lg text-red-500 hover:bg-red-100 transition-colors duration-150"><Camera size={14} /></button>}
+                      {r.check_in_photo && <button onClick={() => setLightbox({ path: r.check_in_photo ?? '', title: `รูปตอนเข้างาน — ${r.full_name}` })} title="รูปตอนเข้า" className="p-1 bg-emerald-50 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors duration-150"><Camera size={14} /></button>}
+                      {r.check_out_photo && <button onClick={() => setLightbox({ path: r.check_out_photo ?? '', title: `รูปตอนออกงาน — ${r.full_name}` })} title="รูปตอนออก" className="p-1 bg-red-50 rounded-lg text-red-500 hover:bg-red-100 transition-colors duration-150"><Camera size={14} /></button>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400 max-w-[150px] truncate">{r.note || '-'}</td>
@@ -189,21 +205,21 @@ export default function AttendanceManagement() {
                   <div className="flex gap-2 mt-2.5">
                     {r.check_in_photo && (
                       <button
-                        onClick={() => setLightbox({ path: r.check_in_photo, title: `รูปตอนเข้างาน — ${r.full_name}` })}
+                        onClick={() => setLightbox({ path: r.check_in_photo ?? '', title: `รูปตอนเข้างาน — ${r.full_name}` })}
                         className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-emerald-200 active:scale-95 transition-transform duration-150 shrink-0"
                         aria-label="ดูรูปตอนเข้างาน"
                       >
-                        <AuthImage path={r.check_in_photo} alt="รูปตอนเข้างาน" className="w-full h-full object-cover" fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center"><Camera size={16} className="text-gray-300" /></div>} />
+                        <AuthImage path={r.check_in_photo ?? ''} alt="รูปตอนเข้างาน" className="w-full h-full object-cover" fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center"><Camera size={16} className="text-gray-300" /></div>} />
                         <span className="absolute bottom-0 inset-x-0 bg-emerald-600/80 text-white text-[9px] font-bold text-center py-0.5">เข้า</span>
                       </button>
                     )}
                     {r.check_out_photo && (
                       <button
-                        onClick={() => setLightbox({ path: r.check_out_photo, title: `รูปตอนออกงาน — ${r.full_name}` })}
+                        onClick={() => setLightbox({ path: r.check_out_photo ?? '', title: `รูปตอนออกงาน — ${r.full_name}` })}
                         className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-red-200 active:scale-95 transition-transform duration-150 shrink-0"
                         aria-label="ดูรูปตอนออกงาน"
                       >
-                        <AuthImage path={r.check_out_photo} alt="รูปตอนออกงาน" className="w-full h-full object-cover" fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center"><Camera size={16} className="text-gray-300" /></div>} />
+                        <AuthImage path={r.check_out_photo ?? ''} alt="รูปตอนออกงาน" className="w-full h-full object-cover" fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center"><Camera size={16} className="text-gray-300" /></div>} />
                         <span className="absolute bottom-0 inset-x-0 bg-red-500/80 text-white text-[9px] font-bold text-center py-0.5">ออก</span>
                       </button>
                     )}

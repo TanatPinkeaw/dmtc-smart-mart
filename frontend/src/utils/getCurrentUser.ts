@@ -16,8 +16,12 @@ export interface User {
   student_id: string;
   full_name: string;
   phone_number: string;
+  // field ที่หลายหน้าเข้าถึงตรงๆ (server ส่งมาใน payload user) — ประกาศให้ typed ไม่ใช่ unknown
+  username?: string;
+  profile_image_url?: string | null;
   role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'MEMBER';
-  [key: string]: any;
+  // field เพิ่มเติมจาก server (เช่น points/group_id) — เป็น unknown บังคับให้โค้ด narrow ก่อนใช้
+  [key: string]: unknown;
 }
 
 export function getCurrentUser(): User | null {

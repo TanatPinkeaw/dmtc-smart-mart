@@ -7,7 +7,7 @@ interface PasswordStrengthMeterProps {
 }
 
 export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) {
-  const { valid, errors, strength, score } = validatePasswordStrength(password);
+  const { errors, strength, score } = validatePasswordStrength(password);
 
   const strengthColors = {
     weak: 'bg-red-500',
@@ -73,7 +73,7 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
                 <span className="text-green-500">✓</span> มีตัวเลข
               </p>
             )}
-            {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) && (
+            {/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) && (
               <p className="flex items-center gap-1 text-green-600">
                 <span className="text-green-500">✓</span> มีอักขระพิเศษ (คะแนนโบนัส)
               </p>
