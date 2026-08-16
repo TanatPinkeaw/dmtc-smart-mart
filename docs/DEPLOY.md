@@ -237,6 +237,20 @@ cd ../frontend && npm ci && npm run build
 sudo cp -r dist/* /var/www/dmtc-mart/
 ```
 
+### Pre-deploy Checklist — ตรวจก่อน deploy ทุกรอบ
+
+> ⭐️ ทุก release จะมีหัวข้อ **🔴 สิ่งที่ต้องทำตอน deploy** ใน **[docs/CHANGELOG.md](CHANGELOG.md)** — เปิดดูก่อนขึ้นโค้ดเสมอ
+
+- [ ] อ่าน `docs/CHANGELOG.md` หัวข้อ 🔴 ของเวอร์ชันที่จะขึ้น (บอกว่า: ต้อง rerun SQL มือไหม / มี env ใหม่ไหม / cron เปลี่ยนไหม)
+- [ ] **backend** — `npm ci --omit=dev` แล้ว `pm2 restart dmtc-mart-api`
+  - แค่ restart ก็พอสำหรับการแก้ DB: `db.js` จะ ALTER เพิ่มคอลัมน์ใหม่ (เช่น `idempotency_key`) ให้อัตโนมัติตอน startup — **ไม่ต้องรัน SQL มือ** (`schema.sql` ใช้กับ install ใหม่เท่านั้น)
+  - เช็ค `pm2 logs dmtc-mart-api` ว่าขึ้น "Server running" และไม่มี error ตอน initDB
+- [ ] **cron** — เวอร์ชัน 2026-08-16 เปลี่ยนเวลารายงานประจำวันเป็น **06:00 น. ไทย** (เดิม 13:00 ไทย) — ถ้ายังเห็นอีเมลรายงานช่วงบ่ายโมง แปลว่ายังไม่ได้ restart backend ใหม่
+- [ ] **env** — เช็คว่าเวอร์ชันใหม่ต้องการ env ใหม่หรือไม่ (ดู CHANGELOG 🔴) — เวอร์ชัน 2026-08-16 **ไม่มี** env ใหม่ (รายงานใช้ `ADMIN_EMAIL` + `SMTP_*` เดิม)
+- [ ] **frontend** — `npm ci && npm run build` (build จะตรวจ strict TS + `check:strict` อัตโนมัติ — ถ้า fail ห้ามขึ้น) แล้ว `sudo cp -r dist/* /var/www/dmtc-mart/`
+- [ ] **CI เขียว** — ดู GitHub Actions ของ commit ที่จะขึ้น: `frontend-build` + `backend-unit-tests` + `backend-smoke-test` ผ่านครบ
+- [ ] ทดสอบหลังขึ้น: ล็อกอินได้ / ขายบิลได้ / realtime อัปเดต / ไม่มี error ใหม่ใน `pm2 logs`
+
 ### กู้ข้อมูลจาก Backup
 
 ```bash
