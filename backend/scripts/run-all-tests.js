@@ -27,6 +27,8 @@ const SUITES = [
   { name: 'member-groups', file: 'tests/memberGroups.test.js' },
   { name: 'reward',       file: 'tests/rewardRedemption.test.js' },
   { name: 'sync-offline', file: 'tests/syncOfflineContract.test.js' },
+  { name: 'preorder-policy', file: 'tests/preorderPolicy.test.js' },
+  { name: 'order-realtime',  file: 'tests/orderRealtime.test.js' },
   { name: 'richmenu',     file: 'src/scripts/setup-richmenu.test.js' },
 ];
 

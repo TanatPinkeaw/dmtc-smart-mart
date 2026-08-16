@@ -41,3 +41,39 @@
 
 - Revert commit นี้แล้ว deploy ใหม่ — `idempotency_key` columns ที่ ALTER ไปแล้ว**ไม่ต้องลบ** (NULL ได้, UNIQUE ไม่บล็อกการใช้งานปกติ) — ปล่อยไว้ได้ ไม่กระทบ
 - อย่าลืม: cron กลับไปเป็น `'0 6 * * *'` (=13:00 ไทย) ตามโค้ดเก่า ถ้า revert ทั้ง commit
+
+---
+
+## [2026-08-16] — feat: staff สั่งจองสินค้าได้ + นโยบายแต้ม MEMBER-only + realtime สลิป (ยังไม่ push)
+
+> ⚠️ ยังไม่ถูก commit/push — เก็บเป็นรายการรอสรุปตอนขึ้นจริง (เพิ่ม commit hash หลัง push)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Restart backend + rebuild/deploy frontend — ไม่มี SQL มือ, ไม่มี env ใหม่**
+   - เปลี่ยนเฉพาะโค้ด (server.js + หน้าเว็บ) — ไม่มี migration/ALTER เพิ่ม, ไม่ได้อ่าน `process.env` ตัวใหม่
+2. **นโยบายแต้มเปลี่ยน: เฉพาะ MEMBER เท่านั้น**
+   - staff (CASHIER/MANAGER/ADMIN) **สั่งจองสินค้าได้** (ผ่าน LINE/เว็บ เหมือนสมาชิก — ดูออเดอร์/ส่งสลิป/ยกเลิกของตัวเองได้ครบ) **แต่ไม่มีสิทธิ์สะสม/แลกแต้มสมาชิก** ทุกช่องทาง: พรีออเดอร์ (ตอบ 403 ถ้าขอแลกแต้ม), บิลขาย POS (เลือกบัญชี staff เป็น "สมาชิก" → ตอบ 400 ถ้าขอแลกแต้ม/ของรางวัล + ไม่ได้แต้มสะสม), เครดิตแต้มตอนรับของ (COMPLETED) เช็ค role เจ้าของอีกชั้น
+   - UI แสดงชัด: หน้า Home/Profile มี badge "💼 บัญชีพนักงาน", หน้าสั่งจอง/หน้าขายซ่อนส่วนแต้ม + หมายเหตุ "ไม่มีสิทธิ์แต้ม" + ปุ่ม "สลับไปใช้บัญชีสมาชิก" (logout → login ด้วยบัญชี MEMBER แยก ถ้ามี)
+3. **หน้า Home มีเมนูครบตาม role** — เพิ่มการ์ด จัดการออเดอร์/สรุปข้อมูล/สรุปบัญชี/เข้า-ออกงาน/ตั้งค่า/สำรอง&กู้คืน/แจ้งเตือน/บัญชีของฉัน/ยอดฝากขาย + การ์ดสั่งจองเปิดให้ทุก role (ตรงกับ sidebar เดิม)
+
+### เปลี่ยนหลักในรอบนี้
+
+| ส่วน | อะไร |
+|---|---|
+| **staff สั่งจอง** (backend) | `POST /orders` + `POST /orders/:id/upload-slip` + `GET /orders/pending-count` เพิ่ม MANAGER; `GET /orders?mine=1` ครอบออเดอร์ตัวเอง (staff ที่สั่งจองดูประวัติตัวเอง ไม่ปนกับ view จัดการออเดอร์) |
+| **staff สั่งจอง** (frontend) | `/pre-order` เปิดให้ทุก role ที่ล็อกอิน (เดิม MEMBER-only); การ์ดสั่งจองใน Home โชว์ทุก role |
+| **นโยบายแต้ม** (backend) | `utils/preorderPolicy.js` (ของจริงที่ route ใช้): staff = ไม่แลก/ไม่สะสมแต้ม; checkout ใช้ `resolveSaleMemberPoints` + ตอบ 400 (client error ไม่กลายเป็น 500) |
+| **UI แจ้งสถานะ** (frontend) | badge "พนักงาน" (Home/Profile/POS), หมายเหตุไม่มีสิทธิ์แต้ม, ปุ่มสลับไปบัญชีสมาชิก, badge ออเดอร์รอตรวจใน Home |
+| **แถบเตือนสลิป** (backend) | upload-slip ตอน resubmit (SLIP_REJECTED → PENDING_VERIFY) ยิง `order_update_user_` กลับเจ้าของ + `order_status_changed` หลัง commit — แถบเตือน/รายการออเดอร์/badge รีเฟรช realtime ทุกเครื่อง (ครอบ staff ด้วย); เดิมยิงแค่ event ฝั่งพนักงาน = แถบค้างจน refresh |
+| **โมดัลออเดอร์** (frontend) | MyOrdersModal/OrderDetailModal: ซ่อนปุ่มยกเลิกตายบน SLIP_REJECTED (backend ไม่อนุญาต user-side cancel — เดิมกดแล้ว 500); แถบเตือนสลิปของ staff ดึง `?mine=1` เห็นเฉพาะออเดอร์ตัวเอง (กันรั่วออเดอร์ลูกค้าทั้งระบบ) |
+| **เทส** | backend +34 (`preorderPolicy.test.js`: policy matrix + จำลองฟลว mocked conn + source contract `lookupMember`; `orderRealtime.test.js`: ล็อก socket join/event สลิป realtime) = 10 ชุด; frontend +21 เทส (component tsx 17 ตัว + source contract Layout/PreOrder 4 ตัว) |
+
+### เทส/เครื่องมือ dev
+
+- **frontend:** เพิ่ม devDependency **`tsx`** (รันเทส .tsx) — `npm test` = 91 ตัวเดิม + 17 เทส component (`test-components.cjs` — ใช้ `--experimental-test-module-mocks` สำหรับ mock api/swal ในเทสโมดัล); `npm run build` เดิมไม่เปลี่ยน
+- **backend:** `npm run test:unit` = 10 ชุด (เพิ่ม `preorder-policy` + `order-realtime`) · เทสสคริปต์เดิมไม่เปลี่ยน
+
+### Rollback (ถ้าจำเป็น)
+
+- Revert โค้ดรอบนี้ = staff กลับไปสั่งจองไม่ได้ (หน้า /pre-order กลับเป็น MEMBER-only) และแต้มกลับให้ staff ได้เหมือนเดิม — ไม่มีข้อมูล/คอลัมน์ใหม่ต้องจัดการ ปลอดภัย

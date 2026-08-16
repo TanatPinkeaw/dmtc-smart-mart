@@ -38,7 +38,7 @@ interface CartItem extends Product { quantity: number; redeem_reward?: boolean; 
 const PRODUCTS_CACHE_KEY = 'dmtc_cached_products';
 
 // ── Types (state ที่เคยเป็น any — shape ตามที่ component ใช้จริง) ──────────────
-interface PosMember { id: number; full_name: string; points?: number | string; }
+interface PosMember { id: number; full_name: string; points?: number | string; role?: string; } // ⭐️ role จาก /members/lookup — ใช้ตัดสิทธิ์แต้ม (staff ไม่มีสิทธิ์)
 interface StorePromo { id: number; label: string; }
 interface PromoOption { id: number; name: string; discount_type?: string; discount_value?: number | string; }
 
@@ -280,9 +280,13 @@ export default function POS() {
   const netTotal = fromSatang(netTotalSatang);
   // ⭐️ แต้มที่ต้องใช้แลกของรางวัลในบิลนี้ (หักจากแต้มที่ใช้แลกส่วนลดเงินสดได้)
   const rewardPointsUsed = computeRewardPointsUsed(cart);
-  const availableForCash = currentMember ? availableForCashDiscount(Number(currentMember.points) || 0, rewardPointsUsed) : 0;
+  // ⭐️ นโยบายแต้ม: แต้ม = สิทธิ์ MEMBER เท่านั้น — ถ้าเลือกบัญชี staff (role ≠ MEMBER) มาเป็น
+  // "สมาชิก" ในบิล (เช่น cashier คิดเงินให้ตัวเอง) ต้องไม่มีสิทธิ์แต้มเลย (backend กันอีกชั้นที่
+  // POST /sales/checkout — ดู utils/preorderPolicy.js) UI จึงซ่อนส่วนแลกแต้ม/ของรางวัลด้วย
+  const memberCanUsePoints = currentMember ? currentMember.role === 'MEMBER' : true;
+  const availableForCash = memberCanUsePoints && currentMember ? availableForCashDiscount(Number(currentMember.points) || 0, rewardPointsUsed) : 0;
   // ⭐️ แลกส่วนลดเงินสด: 1 แต้ม = redeemRate บาท → จำนวนแต้มสูงสุด = floor(ยอด / redeemRate)
-  const maxRedeemable = currentMember ? Math.min(availableForCash, Math.floor(netTotal / redeemRate)) : 0;
+  const maxRedeemable = memberCanUsePoints && currentMember ? Math.min(availableForCash, Math.floor(netTotal / redeemRate)) : 0;
   const redeemPointsUsed = currentMember && redeemPoints ? Math.min(Number(redeemPoints), maxRedeemable) : 0;
   const pointsDiscount = fromSatang(toSatang(redeemPointsUsed * redeemRate)); // มูลค่าส่วนลด (บาท)
   const finalTotal = fromSatang(Math.max(0, netTotalSatang - toSatang(pointsDiscount)));
@@ -315,7 +319,9 @@ export default function POS() {
       // สมาชิก — เครื่องสแกน USB พิมพ์ตัวอักษรตามด้วย Enter ใส่ input ที่ focus อยู่แล้วส่ง form โดยอัตโนมัติ
       const res = await api.get(`/members/lookup/${encodeURIComponent(searchMemberQuery.trim())}`);
       setCurrentMember(res.data);
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบสมาชิก: ${res.data.full_name}`, showConfirmButton: false, timer: 1500 });
+      // ⭐️ บัญชีพนักงาน (role ≠ MEMBER) — บอกให้ชัดว่าไม่ใช่สมาชิก (ไม่มีสิทธิ์แต้ม) กัน cashier เข้าใจผิด
+      const isStaffAccount = res.data?.role && res.data.role !== 'MEMBER';
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: isStaffAccount ? `พบ: ${res.data.full_name} (บัญชีพนักงาน)` : `พบสมาชิก: ${res.data.full_name}`, showConfirmButton: false, timer: 1500 });
     } catch { setCurrentMember(null); Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: 'ไม่พบข้อมูลสมาชิก', showConfirmButton: false, timer: 1500 }); }
     finally { setMemberLoading(false); }
   };
@@ -567,6 +573,7 @@ export default function POS() {
         maxRedeemable={maxRedeemable}
         redeemPoints={redeemPoints}
         onRedeemPointsChange={setRedeemPoints}
+        memberCanUsePoints={memberCanUsePoints}
         grandTotal={grandTotal}
         pointsDiscount={pointsDiscount}
         finalTotal={finalTotal}

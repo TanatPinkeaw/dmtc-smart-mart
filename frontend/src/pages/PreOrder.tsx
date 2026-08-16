@@ -2,7 +2,8 @@
 //    ทำอะไร: เลือกสินค้า, ใส่เบอร์สะสมแต้ม/แลกแต้ม, จ่าย QR แนบสลิป หรือเงินสดรับที่ร้าน, สร้างออเดอร์ (POST /orders),
 //    ดูประวัติออเดอร์ตัวเอง; realtime อัปเดตสถานะ; ราคา/ส่วนลด backend คำนวณใหม่เสมอ (frontend แค่ preview)
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { performLogout } from '../utils/logout'; // ⭐️ staff สลับไปบัญชีสมาชิก (ใช้สิทธิ์แต้ม)
 import { ShoppingCart, ShoppingBag, Search } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
@@ -52,6 +53,7 @@ const CUSTOMER_STATUS_MESSAGE: Record<string, { icon: 'info' | 'success' | 'warn
 };
 
 export default function PreOrder() {
+  const navigate = useNavigate();
   const socket = useSocket();
   const [products, setProducts] = useState<Product[]>([]);
   const [highlights, setHighlights] = useState<{ popular: Product[]; promo: Product[] }>({ popular: [], promo: [] });
@@ -91,6 +93,9 @@ export default function PreOrder() {
 
   const PROMPTPAY_ID = import.meta.env.VITE_PROMPTPAY_ID || '';
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
+  // ⭐️ นโยบายแต้ม: เฉพาะ MEMBER มีสิทธิ์สะสม/แลกแต้ม — staff (CASHIER/MANAGER/ADMIN) สั่งจองของ
+  //   ตัวเองได้แต่ไม่มีสิทธิ์แต้ม (backend บังคับอีกชั้นที่ POST /orders — ดู utils/preorderPolicy.js)
+  const isMember = user.role === 'MEMBER';
 
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [myOrders, setMyOrders] = useState<PreOrderRow[]>([]);
@@ -104,6 +109,21 @@ export default function PreOrder() {
   const [slipOrder, setSlipOrder] = useState<PreOrderRow | null>(null);
   const [storeInfo, setStoreInfo] = useState<Record<string, unknown> | null>(null);
   const [refundReason, setRefundReason] = useState(''); // ✅ CHANGED: refund reason input
+
+  // ⭐️ staff ที่มีบัญชีสมาชิกแยก (คนละบัญชีกับบัญชีพนักงาน) → สลับไปล็อกอินด้วยบัญชีสมาชิก
+  // เพื่อใช้สิทธิ์สะสม/แลกแต้ม — แต้มเป็นสิทธิ์สมาชิก (นโยบาย utils/preorderPolicy.js) บัญชี
+  // พนักงานใช้สิทธิ์นี้ไม่ได้จริงๆ การ "สลับบัญชี" จึงเป็นทางเดียวที่ถูกต้อง ไม่ใช่ปลอม role
+  const handleSwitchToMember = async () => {
+    const r = await Swal.fire({
+      title: 'สลับไปใช้บัญชีสมาชิก?',
+      text: 'ระบบจะออกจากบัญชีพนักงานปัจจุบัน แล้วให้คุณล็อกอินด้วยบัญชีสมาชิก (เพื่อใช้สิทธิ์สะสม/แลกแต้ม)',
+      icon: 'question', showCancelButton: true, confirmButtonColor: '#ec296f', cancelButtonColor: '#9ca3af',
+      confirmButtonText: 'สลับบัญชี', cancelButtonText: 'ยกเลิก',
+    });
+    if (!r.isConfirmed) return;
+    await performLogout();
+    navigate('/login');
+  };
   // ⭐️ Phase 3 — กันกดปุ่ม "ยกเลิกออเดอร์" ซ้ำระหว่างที่ request แรกยังไม่จบ (double-submit)
   const [cancelling, setCancelling] = useState(false);
   // ⭐️ Deep link จากหน้า Home — 'slip' = ดันออเดอร์ที่สลิปไม่ผ่านขึ้นบนสุดของประวัติ (ไม่ได้กรองออก
@@ -408,10 +428,11 @@ export default function PreOrder() {
         items: cart.map(item => ({ product_id: item.id, quantity: item.quantity })),
         payment_method: paymentMethod,
         slip_image: null, // ⭐️ Sprint 2 — B9: Upload slip separately after order creation
-        use_phone_for_points: phoneNumber.trim().length >= 9, // ถ้ากรอกเบอร์มา ถือว่าสะสมแต้ม
+        // ⭐️ staff ไม่มีสิทธิ์แต้ม — บังคับปิดสะสม/แลกฝั่ง client ด้วย (backend กันอีกชั้น)
+        use_phone_for_points: isMember && phoneNumber.trim().length >= 9, // ถ้ากรอกเบอร์มา ถือว่าสะสมแต้ม
         // 🐛 FIX — เดิมส่ง pointsDiscount (หน่วยบาท) เป็น redeem_points ที่ backend คาดว่าเป็นหน่วย
         // "แต้ม" ตรงๆ พอ redeemRate ไม่ใช่ 1:1 อีกต่อไป สองหน่วยนี้เลขไม่เท่ากันแล้ว ต้องส่งแต้มจริง
-        redeem_points: redeemPointsUsed > 0 ? redeemPointsUsed : 0
+        redeem_points: isMember && redeemPointsUsed > 0 ? redeemPointsUsed : 0
       };
 
       const orderRes = await api.post('/orders', payload);
@@ -467,7 +488,9 @@ export default function PreOrder() {
   const fetchMyOrders = async () => {
     setOrdersLoading(true);
     try {
-      const res = await api.get(`/orders?t=${Date.now()}`);
+      // ⭐️ ?mine=1 — หน้านี้ดูได้แค่ออเดอร์ของตัวเองเสมอ (staff ที่สั่งจองได้แล้ว default ของ GET /orders
+      //   คือ "ดูทั้งหมด" สำหรับหน้า OrderManagement ต้องบังคับ scope ไม่งั้นเห็นออเดอร์ลูกค้าคนอื่น)
+      const res = await api.get(`/orders?mine=1&t=${Date.now()}`);
       setMyOrders(res.data);
       setOrdersError(false);
     } catch (err) {
@@ -484,7 +507,7 @@ export default function PreOrder() {
   // ถ้าออเดอร์เป็น SLIP_REJECTED จะเห็นปุ่ม "แตะเพื่อส่งสลิปใหม่" ทันที ไม่ต้องหาเอง
   const openMyOrder = async (orderId: number) => {
     try {
-      const res = await api.get(`/orders?t=${Date.now()}`);
+      const res = await api.get(`/orders?mine=1&t=${Date.now()}`);
       setMyOrders(res.data);
       const found = (res.data || []).find((o: PreOrderRow) => Number(o.id) === Number(orderId));
       if (found) { setSelectedOrder(found); setRefundReason(''); }
@@ -625,6 +648,8 @@ export default function PreOrder() {
         maxRedeemable={maxRedeemable}
         redeemPoints={redeemPoints}
         onRedeemPointsChange={setRedeemPoints}
+        pointsEnabled={isMember}
+        onSwitchToMember={handleSwitchToMember}
         paymentMethod={paymentMethod}
         onSetPaymentMethod={setPaymentMethod}
         promptpayId={PROMPTPAY_ID}

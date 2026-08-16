@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock, ShoppingBag, Receipt, FileCheck, Percent, Calendar } from 'lucide-react';
+import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock, ShoppingBag, Receipt, FileCheck, Percent, Calendar, ClipboardList, BarChart3, FileSpreadsheet, Settings, ClipboardCheck, Database, Bell, User, PiggyBank } from 'lucide-react';
 import api from '../api';
 import { performLogout } from '../utils/logout';
 import Swal from '../swal';
@@ -78,6 +78,7 @@ export default function Home() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [myHours, setMyHours] = useState<MyHours | null>(null); // ⭐️ Home page feature — ชม.ทำงาน/ค่าจ้างเดือนนี้
+  const [pendingOrders, setPendingOrders] = useState(0); // ⭐️ ออเดอร์รอตรวจ (badge การ์ดจัดการออเดอร์)
   // ⭐️ Member home — โปรทั้งหมด (สไลด์แนวนอน), สินค้าขายดี, ออเดอร์ที่ยังค้าง
   const [promos, setPromos] = useState<ActivePromo[]>([]);
   const [bestSellers, setBestSellers] = useState<HighlightProduct[]>([]);
@@ -92,6 +93,8 @@ export default function Home() {
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
   const isCashier = user.role === 'CASHIER';
   const isManager = user.role === 'MANAGER';
+  const isAdminRole = user.role === 'ADMIN';
+  const isStoreAdmin = isAdminRole || isManager; // ⭐️ ADMIN/MANAGER — เห็นเมนูจัดการร้าน (ตรงกับ sidebar)
   // ล็อกเฉพาะตอนรู้ผลแล้วว่าไม่มีกะเปิดจริงๆ
   const workLocked = isCashier && hasOpenShift === false;
 
@@ -100,6 +103,7 @@ export default function Home() {
       api.get('/reports/dashboard').then(res => setSummary(res.data.summary)).catch(() => {});
       api.get('/inventory/low-stock').then(res => setLowStockCount(res.data.length)).catch(() => {});
       api.get('/reports/my-hours').then(res => setMyHours(res.data)).catch(() => {});
+      api.get('/orders/pending-count').then(res => setPendingOrders(res.data?.count || 0)).catch(() => {});
     } else {
       // ⭐️ ทั้ง 3 อย่างนี้เป็นของ "สมาชิก" เท่านั้น และไม่ critical — ถ้าอันใดอันหนึ่งพัง
       // ต้องไม่ทำให้ส่วนอื่นของหน้าหายไปด้วย จึงแยก catch ของใครของมัน
@@ -152,16 +156,20 @@ export default function Home() {
 
   // ⭐️ การ์ดโมดูล — filter ตาม role, badge เป็นข้อมูลจริงเท่าที่ดึงมาได้ (ไม่ทำ "Shift active" แบบ
   // mockup เพราะต้องเรียก endpoint เพิ่มอีกจุด ยังไม่คุ้มสำหรับหน้ากลางที่ควรโหลดไว)
+  // ✅ UPDATE — เพิ่มการ์ดให้ครบทุกโมดูลตาม role (ตรงกับ sidebar) เพื่อให้หน้ากลางใช้เป็นจุดเข้า
+  //   งานหลักได้จริง ไม่ต้องเด้งเข้า Dashboard/Inventory ก่อนถึงจะเห็นเมนูที่เหลือ; และการ์ดสั่งจอง
+  //   เปิดให้ staff สั่งจองของตัวเองได้ (backend เปิดแล้ว + /pre-order ไม่บล็อก staff แล้ว)
   const modules = [
     {
-      // ⭐️ การ์ดสั่งจอง/ซื้อสินค้า เปิดให้เฉพาะ MEMBER — staff (ADMIN/CASHIER/MANAGER) ไม่มีโหมดซื้อของแล้ว
-      //   (/pre-order เป็น MEMBER-only) จึงซ่อนการ์ดนี้จาก staff ไม่ให้กดไปเจอหน้าบล็อก
-      key: 'pre-order', show: !isStaff, icon: ShoppingCart,
+      // ⭐️ สั่งจอง/ซื้อสินค้า — เปิดให้ทุก role: staff (CASHIER/MANAGER/ADMIN) ที่กดเข้า LINE ก็จอง
+      //   สินค้าเป็นของตัวเองได้เหมือนสมาชิก (ออเดอร์ผูก user_id ของคนสั่ง ดูได้เฉพาะออเดอร์ตัวเอง
+      //   ผ่าน ?mine=1 ฝั่ง backend)
+      key: 'pre-order', show: true, icon: ShoppingCart,
       title: 'สั่งจอง/ซื้อสินค้า', subtitle: 'เลือกดูสินค้าและสั่งจอง',
       badge: productCount > 0 ? `${productCount} รายการ` : null,
       onClick: () => goTo('/pre-order'),
     },
-    // ⭐️ 3 การ์ดนี้ล็อกพร้อมกันตอน CASHIER ยังไม่เปิดกะ — ล็อกแค่ POS ใบเดียวไม่พอ เพราะกดใบอื่น
+    // ⭐️ การ์ดงานล็อกพร้อมกันตอน CASHIER ยังไม่เปิดกะ — ล็อกแค่ POS ใบเดียวไม่พอ เพราะกดใบอื่น
     //   จะตั้ง session_mode เป็น 'work' ทำให้เมนู staff (รวมลิงก์ POS) กลับมาโผล่ = อ้อมกติกาได้
     {
       // ⭐️ POS โชว์เฉพาะ CASHIER — ADMIN ขายหน้าร้านไม่ได้ (เปิดกะไม่ได้ = บิลผูก shift_id ไม่ได้)
@@ -169,6 +177,12 @@ export default function Home() {
       title: 'หน้าขาย (POS)', subtitle: workLocked ? 'ต้องเปิดกะก่อนถึงจะขายได้' : 'ขายสินค้า/รับชำระเงิน',
       badge: null,
       onClick: () => goTo('/pos'),
+    },
+    {
+      key: 'orders', show: isStaff, icon: ClipboardList, locked: workLocked,
+      title: 'จัดการออเดอร์', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'ตรวจสลิป/ยืนยันออเดอร์จอง',
+      badge: pendingOrders > 0 ? `${pendingOrders} รอตรวจ` : null,
+      onClick: () => goTo('/orders'),
     },
     {
       key: 'dashboard', show: isStaff, icon: LayoutDashboard, locked: workLocked,
@@ -201,6 +215,58 @@ export default function Home() {
       badge: null,
       onClick: () => goTo('/shift'),
     },
+    // ⭐️ กลุ่มจัดการร้าน — ADMIN/MANAGER เท่านั้น (ตรงกับ sidebar: สรุปข้อมูล/สรุปบัญชี/คลัง/ตั้งค่า/เข้า-ออกงาน)
+    {
+      key: 'summary', show: isStoreAdmin, icon: BarChart3,
+      title: 'สรุปข้อมูล', subtitle: 'ชั่วโมงทำงาน/มาสาย/ค่าจ้าง',
+      badge: null,
+      onClick: () => goTo('/summary'),
+    },
+    {
+      key: 'accounting', show: isStoreAdmin, icon: FileSpreadsheet,
+      title: 'สรุปบัญชี', subtitle: 'หมวดหมู่/ยอดจ่ายคืนผู้ฝากขาย/Export',
+      badge: null,
+      onClick: () => goTo('/accounting-summary'),
+    },
+    {
+      key: 'attendance', show: isStoreAdmin, icon: ClipboardCheck,
+      title: 'เข้า-ออกงาน', subtitle: 'จัดการเวลาเข้างาน/ออกงานพนักงาน',
+      badge: null,
+      onClick: () => goTo('/attendance-management'),
+    },
+    {
+      key: 'settings', show: isStoreAdmin, icon: Settings,
+      title: 'ตั้งค่า', subtitle: 'ข้อมูลร้าน/ราคา&แต้ม/กลุ่มสมาชิก',
+      badge: null,
+      onClick: () => goTo('/settings'),
+    },
+    {
+      // ⭐️ งานระบบ (สำรอง/กู้คืน) — เฉพาะ ADMIN
+      key: 'backup', show: isAdminRole, icon: Database,
+      title: 'สำรอง & กู้คืนข้อมูล', subtitle: 'งานระบบฐานข้อมูล (ADMIN)',
+      badge: null,
+      onClick: () => goTo('/backup'),
+    },
+    // ⭐️ ทั่วไป — ทุก role
+    {
+      key: 'notifications', show: true, icon: Bell,
+      title: 'แจ้งเตือน', subtitle: 'ข่าวสารและสถานะออเดอร์',
+      badge: null,
+      onClick: () => goTo('/notifications'),
+    },
+    {
+      key: 'profile', show: true, icon: User,
+      title: 'บัญชีของฉัน', subtitle: 'แก้ไขข้อมูลส่วนตัว/เปลี่ยนรหัส',
+      badge: null,
+      onClick: () => goTo('/profile'),
+    },
+    {
+      // ⭐️ ยอดฝากขาย — สมาชิกที่ฝากขายสินค้า (MEMBER เท่านั้น)
+      key: 'my-sales', show: !isStaff, icon: PiggyBank,
+      title: 'ยอดฝากขาย', subtitle: 'รายได้จากการฝากขายสินค้า',
+      badge: null,
+      onClick: () => goTo('/my-sales'),
+    },
   ].filter(m => m.show);
 
   return (
@@ -227,6 +293,13 @@ export default function Home() {
         <span className="relative z-10 inline-flex items-center gap-1 mt-3 bg-white/20 text-white text-xs font-bold px-3 py-1.5 rounded-full">
           {user.role}
         </span>
+        {/* ⭐️ บัญชีพนักงาน (staff) — บอกชัดว่านี่คือบัญชีทำงาน ไม่ใช่บัญชีสมาชิก (ไม่มีสิทธิ์แต้ม)
+            กันพนักงานงงว่าทำไมสั่งจองได้แต่ใช้แต้มไม่ได้ */}
+        {isStaff && (
+          <span title="บัญชีพนักงาน — สั่งจองสินค้าได้ แต่ไม่มีสิทธิ์สะสม/แลกแต้มสมาชิก" className="relative z-10 inline-flex items-center gap-1 mt-3 bg-white text-brand text-xs font-bold px-3 py-1.5 rounded-full">
+            💼 บัญชีพนักงาน
+          </span>
+        )}
         <p className="relative z-10 text-white/70 text-[11px] mt-2.5">เมนูด้านล่างแสดงตามสิทธิ์การใช้งานของคุณ</p>
       </div>
 

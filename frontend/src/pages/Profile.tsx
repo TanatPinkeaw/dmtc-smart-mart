@@ -15,6 +15,8 @@ import { ChangePasswordModal } from '../components/auth/ChangePasswordModal';
 
 export default function Profile() {
   const user = getCurrentUserOrRedirect();
+  // ⭐️ บัญชีพนักงาน = ทำงาน (ไม่มีสิทธิ์แต้มสมาชิก) — badge แยกจาก badge role ให้เห็นชัด
+  const isStaff = user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'CASHIER';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [phoneNumber, setPhoneNumber] = useState(user.phone_number || '');
@@ -87,7 +89,15 @@ export default function Profile() {
 
           <p className="font-extrabold text-gray-900">{user.full_name}</p>
           <p className="text-xs text-gray-400 mt-0.5">{user.student_id || user.username}</p>
-          <span className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-brand-bg text-brand border border-brand-mid">{user.role}</span>
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-brand-bg text-brand border border-brand-mid">{user.role}</span>
+            {/* ⭐️ badge บัญชีพนักงาน — เห็นชัดว่านี่ไม่ใช่บัญชีสมาชิก (ไม่มีสิทธิ์แต้ม) */}
+            {isStaff && (
+              <span title="บัญชีพนักงาน — สั่งจองสินค้าได้ แต่ไม่มีสิทธิ์สะสม/แลกแต้มสมาชิก" className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500 border border-brand-border">
+                💼 พนักงาน
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Phone */}

@@ -15,6 +15,7 @@ interface Member {
   points?: number | string;
   group_name?: string;
   group_default_discount?: number | string;
+  role?: string; // ⭐️ จาก /members/lookup — ใช้ตัดสิทธิ์แต้ม (บัญชี staff ไม่มีสิทธิ์)
 }
 
 interface Promotion {
@@ -49,6 +50,8 @@ interface CartPanelProps {
   maxRedeemable: number;
   redeemPoints: number | '';
   onRedeemPointsChange: (value: number | '') => void;
+  // ⭐️ นโยบายแต้ม: บัญชีที่เลือกเป็น MEMBER เท่านั้นถึงใช้แต้ม/ของรางวัลได้ (staff = ไม่มีสิทธิ์)
+  memberCanUsePoints: boolean;
   grandTotal: number;
   pointsDiscount: number;
   finalTotal: number;
@@ -67,7 +70,7 @@ export function CartPanel({
   isCartOpen, onCloseCart, payOpen, onTogglePay, cart, products, onUpdateQuantity,
   currentMember, onClearMember, searchMemberQuery, onSearchMemberQueryChange, memberLoading, onSearchMember, onOpenRegisterModal,
   promotions, selectedPromoId, onSelectPromoId, appliedPromo, promoLoading, onApplyPromo, onRemovePromo,
-  maxRedeemable, redeemPoints, onRedeemPointsChange,
+  maxRedeemable, redeemPoints, onRedeemPointsChange, memberCanUsePoints,
   grandTotal, pointsDiscount, finalTotal,
   paymentMethod, onSetPaymentMethod, amountReceived, onAmountReceivedChange, promptpayId,
   onCheckout, loading, checkoutDisabled, onOpenRewardModal,
@@ -162,7 +165,13 @@ export function CartPanel({
                   <p className="text-sm font-semibold text-gray-900 truncate">{currentMember.full_name}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">{currentMember.points} 🌟</span>
+                  {/* ⭐️ สมาชิก → แสดงแต้ม 🌟; บัญชีพนักงาน → badge "พนักงาน" ชัดเจน (ไม่มีสิทธิ์แต้ม)
+                      กัน cashier งงว่าทำไมมีแต้มแต่ใช้ไม่ได้ (backend กันอีกชั้นที่ checkout) */}
+                  {memberCanUsePoints ? (
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">{currentMember.points} 🌟</span>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">พนักงาน</span>
+                  )}
                   <button onClick={onClearMember} className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors duration-150" aria-label="ปิด"><X size={14} /></button>
                 </div>
               </div>
@@ -172,8 +181,14 @@ export function CartPanel({
                   🏷️ {currentMember.group_name} — สิทธิ์ลด {Number(currentMember.group_default_discount)}%
                 </div>
               )}
-              {/* ⭐️ Part 5/6 — ปุ่มแลกของรางวัลด้วยแต้ม */}
-              {onOpenRewardModal && (
+              {/* ⭐️ นโยบายแต้ม: บัญชีที่เลือกเป็น staff → ไม่มีสิทธิ์แต้มสมาชิก (backend กันอีกชั้นที่ checkout) */}
+              {!memberCanUsePoints && (
+                <div className="bg-gray-50 border border-brand-border rounded-lg px-2.5 py-1.5 text-center">
+                  <p className="text-[11px] font-bold text-gray-500">💼 บัญชีพนักงาน — ไม่มีสิทธิ์ใช้แต้ม/ของรางวัลสมาชิก</p>
+                </div>
+              )}
+              {/* ⭐️ Part 5/6 — ปุ่มแลกของรางวัลด้วยแต้ม (เฉพาะบัญชี MEMBER) */}
+              {memberCanUsePoints && onOpenRewardModal && (
                 <button onClick={onOpenRewardModal} className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-500 text-white text-xs font-bold py-2 rounded-lg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
                   <Gift size={14} /> แลกของรางวัล
                 </button>
@@ -200,8 +215,8 @@ export function CartPanel({
           </div>
         )}
 
-        {/* Redeem points */}
-        {currentMember && Number(currentMember.points) > 0 && (
+        {/* Redeem points — เฉพาะบัญชี MEMBER (staff ไม่มีสิทธิ์) */}
+        {memberCanUsePoints && currentMember && Number(currentMember.points) > 0 && (
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             <Gift size={16} className="text-amber-500 shrink-0" />
             <span className="text-xs text-amber-700 shrink-0">แต้ม ({currentMember.points} 🌟):</span>

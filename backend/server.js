@@ -50,6 +50,7 @@ const { generateAccessToken, generateRefreshToken, verifyRefreshToken, setAuthCo
 // ⭐️ จัดการ request ซ้ำ (idempotency-key) ที่ชน UNIQUE constraint ฝั่ง DB หลัง server restart — ดู utils/idempotency.js
 const { isIdempotentDuplicate, respondIdempotentDuplicate } = require('./src/utils/idempotency');
 const { evaluateRewardItem, checkItemStock, settleRewardPoints } = require('./src/utils/rewardRedemption'); // ⭐️ Part 5 — ลอจิกแลกของรางวัล (pure — เทสได้)
+const { resolveOrderPoints, resolveRedeemPoints, computeEarnPoints, isMemberRole, resolveSaleMemberPoints } = require('./src/utils/preorderPolicy'); // ⭐️ นโยบายแต้ม (เฉพาะ MEMBER ได้สิทธิ์แต้ม — pure — เทสได้)
 
 // ⭐️ อ่าน cookie จาก request header เอง (ไม่พึ่ง cookie-parser เพราะไม่ได้ติดตั้งไว้ใน dependencies)
 function parseCookies(req) {
@@ -2986,6 +2987,23 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     //   ดึงยอดแต้มครั้งเดียวแบบ FOR UPDATE กันแลกซ้อนเกินยอด: หักของรางวัลก่อน เหลือเท่าไรค่อยแลกเป็นส่วนลด
     //   อัตราแลก = points_redeem_value_per_point (ปรับได้) — 1 แต้ม = redeemRate บาท
     let pointsRedeemed = 0;   // แต้มที่แลกเป็นส่วนลดเงินสด
+    // ⭐️ นโยบายแต้ม (เดียวกับพรีออเดอร์ — utils/preorderPolicy.js): แต้ม/ของรางวัล = สิทธิ์ MEMBER เท่านั้น
+    // /members/lookup ค้นได้ทุก role (รวมบัญชีพนักงาน) — ถ้า cashier เลือกบัญชี staff เป็น "สมาชิก"
+    // (เช่น คิดเงินให้ตัวเอง/พนักงานคนอื่นในบิล) บัญชีนั้นไม่มีสิทธิ์แต้ม: ห้ามแลกแต้ม/แลกของรางวัล
+    // (ตอบ 400 ชัดเจน ไม่ใช่เงียบๆ เพราะลูกค้าจะเข้าใจผิดว่าลดแล้วทั้งที่ไม่ได้ลด) + ไม่ได้แต้มสะสม
+    let memberCanUsePoints = true;
+    if (member_id) {
+      const [memberRoleRows] = await conn.query('SELECT role FROM users WHERE id = ?', [member_id]);
+      if (memberRoleRows.length === 0) throw new Error('ไม่พบข้อมูลสมาชิก');
+      const salePoints = resolveSaleMemberPoints({ role: memberRoleRows[0].role, redeemPoints: redeem_points, rewardPointsNeeded });
+      memberCanUsePoints = salePoints.canUsePoints;
+      if (salePoints.blockedRedeem) {
+        const err = new Error('บัญชีที่เลือกไม่ใช่สมาชิก (เป็นบัญชีพนักงาน) ไม่สามารถใช้แต้ม/แลกของรางวัลได้');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
     let pointsDiscount = 0;   // มูลค่าส่วนลด (บาท)
     let rewardPoints = 0;     // แต้มที่ใช้แลกของรางวัล (ยืนยันหลังเช็คยอดแล้ว)
     if (member_id && (redeem_points > 0 || rewardPointsNeeded > 0)) {
@@ -3075,7 +3093,8 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
       if (totalDeduct > 0) {
         await conn.query('UPDATE users SET points = points - ? WHERE id = ?', [totalDeduct, member_id]);
       }
-      earnedPoints = Math.floor(netTotal / earnPer);
+      // ⭐️ สมาชิกที่เลือกเป็นบัญชี staff → ไม่ได้แต้มสะสม (memberCanUsePoints = false)
+      earnedPoints = memberCanUsePoints ? Math.floor(netTotal / earnPer) : 0;
       if (earnedPoints > 0) {
         await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [earnedPoints, member_id]);
       }
@@ -3156,6 +3175,12 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
         });
       }
       return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
+    }
+
+    // ⭐️ client error ที่ตั้งใจตอบ (ตั้ง statusCode ไว้ตอน throw เช่น เลือกบัญชี staff เป็นสมาชิกแล้ว
+    // ขอใช้แต้ม) — อย่าให้กลายเป็น 500 ทั้งที่ความผิดอยู่ที่ request ฝั่งผู้ใช้
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
     }
 
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
@@ -3954,12 +3979,22 @@ app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
 // เก็บไฟล์ลง uploads/ ตรงๆ ไม่ได้จัดโฟลเดอร์ตามวันที่แบบระบบใหม่ (slipUpload ใน src/config/multer.js)
 
 // 2. API สร้างออเดอร์ใหม่
-app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateRequest(orderValidator), async (req, res) => {
+// ⭐️ เปิดให้ staff (รวม MANAGER) สั่งจองได้ด้วย — พนักงานที่กดเข้า LINE/เว็บก็จองสินค้าเป็นของตัวเองได้
+//   (order ผูก user_id ของคนสั่ง ตรวจ ownership ตามปกติ ไม่มีสิทธิ์เห็น/แตะออเดอร์คนอื่นเพิ่มขึ้น)
+app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'), validateRequest(orderValidator), async (req, res) => {
   // รับข้อมูลจากหน้าเว็บ (⭐️ เพิ่ม redeem_points สำหรับแลกแต้มเป็นส่วนลด)
   const { items, payment_method, slip_image, use_phone_for_points, redeem_points } = req.body;
   const user_id = req.user.id; // ดึงจากคนที่ล็อกอินอยู่
 
   if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าว่างเปล่า" });
+
+  // ⭐️ นโยบายแต้ม: เฉพาะ MEMBER มีสิทธิ์แต้มสมาชิก — staff จองได้แต่ไม่มีสิทธิ์แลก/สะสม
+  // (ดู utils/preorderPolicy.js) — ตอบ 403 ก่อนเริ่ม transaction เลย (ไม่มีการเขียนอะไรทั้งสิ้น)
+  // กัน staff ปลอม payload ส่ง redeem_points มาหวังส่วนลด แล้วโดนเงียบๆ (เข้าใจผิดว่าลดแล้ว)
+  const pointsPolicy = resolveOrderPoints({ role: req.user.role, usePhoneForPoints, redeem_points });
+  if (pointsPolicy.blockedRedeem) {
+    return res.status(403).json({ error: 'บัญชีพนักงานไม่มีสิทธิ์ใช้แต้มสมาชิก (แต้มสงวนสำหรับสมาชิกเท่านั้น)' });
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -4017,21 +4052,19 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
     // (pattern เดียวกับ POST /sales/checkout: ล็อกแถว users FOR UPDATE กันแลกแต้มซ้ำ/เกินยอดจริง)
     let pointsRedeemed = 0;
     let pointsDiscount = 0;
-    if (redeem_points > 0) {
+    if (pointsPolicy.redeemPoints > 0) {
       const [userRows] = await conn.query('SELECT points FROM users WHERE id = ? FOR UPDATE', [user_id]);
       if (userRows.length === 0) throw new Error('ไม่พบข้อมูลผู้ใช้');
       const availablePoints = userRows[0].points;
 
-      const maxByBill = Math.floor(totalAmount / redeemRate);
-      pointsRedeemed = Math.min(Number(redeem_points), availablePoints, maxByBill);
-      if (pointsRedeemed < 0) pointsRedeemed = 0;
+      pointsRedeemed = resolveRedeemPoints({ requested: pointsPolicy.redeemPoints, availablePoints, totalAmount, redeemRate });
       pointsDiscount = fromSatang(toSatang(pointsRedeemed * redeemRate)); // อัตราแลก = redeemRate บาท/แต้ม
     }
     const netTotal = fromSatang(totalAmountSatang - toSatang(pointsDiscount));
 
     // คำนวณแต้มสะสมใหม่ที่จะได้รับ ถ้าลูกค้ากรอกเบอร์มา หรือติ๊กว่าจะสะสมแต้ม
     // (ทุก earnPer บาท = 1 แต้ม, คิดจากยอดสุทธิ "หลังหักแต้มที่แลกไปแล้ว") — เครดิตจริงตอนออเดอร์ COMPLETED
-    const earnPoints = use_phone_for_points ? Math.floor(netTotal / earnPer) : 0;
+    const earnPoints = computeEarnPoints({ usePhoneForPoints: pointsPolicy.usePhoneForPoints, netTotal, earnPer });
     
     // สถานะ: ถ้าจ่ายสแกน = รอตรวจสอบสลิป, ถ้าเงินสด = รอจ่ายหน้าร้าน
     const status = payment_method === 'QR' ? 'PENDING_VERIFY' : 'WAITING_CASH';
@@ -4112,27 +4145,26 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'ADMIN'), validateReque
 // 3. API ดึงรายการออเดอร์
 app.get('/api/orders', async (req, res) => {
   try {
+    // ⭐️ ?mine=1 — หน้า "ประวัติการสั่ง" ของผู้ใช้ (รวม staff ที่สั่งจองของตัวเอง): ครอบเฉพาะออเดอร์
+    //   ของตัวเองเสมอ ไม่ว่า role อะไร (เดิม staff ที่สั่งจองได้แล้วจะเห็นออเดอร์ของคนอื่นทั้งระบบ
+    //   เพราะ default ของ staff คือ "ดูทั้งหมด" สำหรับหน้า OrderManagement) — staff ที่ใช้หน้า
+    //   OrderManagement ไม่ส่ง param นี้จึงยังเห็นทั้งหมดตามเดิม
+    const mineOnly = req.query.mine === '1' || req.query.mine === 'true';
+    const scopeOwn = mineOnly || req.user.role === 'MEMBER';
     let query = `
       SELECT o.*, u.full_name as customer_name, u.phone_number,
              DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') as created_at_bkk
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
-      ORDER BY o.created_at DESC
     `;
     const params = [];
 
-    // ถ้าเป็นแค่ MEMBER ให้ดูได้แค่ออเดอร์ของตัวเอง
-    if (req.user.role === 'MEMBER') {
-      query = `
-        SELECT o.*, u.full_name as customer_name, u.phone_number,
-               DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') as created_at_bkk
-        FROM orders o
-        LEFT JOIN users u ON o.user_id = u.id
-        WHERE o.user_id = ?
-        ORDER BY o.created_at DESC
-      `;
+    // MEMBER มองเห็นแค่ออเดอร์ของตัวเอง; staff มองเห็นทั้งหมดยกเว้นขอ ?mine=1 (ดูออเดอร์ตัวเองในหน้าสั่งจอง)
+    if (scopeOwn) {
+      query += ` WHERE o.user_id = ?`;
       params.push(req.user.id);
     }
+    query += ` ORDER BY o.created_at DESC`;
 
     const [orders] = await pool.query(query, params);
 
@@ -4279,8 +4311,14 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     if (status === 'COMPLETED') {
       await conn.query('UPDATE orders SET completed_at = NOW() WHERE id = ?', [orderId]);
       if (order.earn_points > 0) {
-        await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.earn_points, order.user_id]);
-        await writePointTxn(conn, order.user_id, 'EARN', order.earn_points, null, orderId, req.user.id, 'แต้มสะสมจากพรีออเดอร์');
+        // ⭐️ กันแต้มรั่วเข้าบัญชี staff (defense-in-depth): เครดิตเฉพาะเมื่อเจ้าของออเดอร์ยังเป็น
+        // MEMBER อยู่ (เช่น ถูกเลื่อน role ระหว่างรอรับของ) — แต้ม = สิทธิ์สมาชิกเท่านั้น
+        // (นโยบาย utils/preorderPolicy.js) — staff ที่สั่งตอนนี้ earn_points = 0 อยู่แล้ว
+        const [ownerRows] = await conn.query('SELECT role FROM users WHERE id = ?', [order.user_id]);
+        if (isMemberRole(ownerRows[0]?.role)) {
+          await conn.query('UPDATE users SET points = points + ? WHERE id = ?', [order.earn_points, order.user_id]);
+          await writePointTxn(conn, order.user_id, 'EARN', order.earn_points, null, orderId, req.user.id, 'แต้มสะสมจากพรีออเดอร์');
+        }
       }
     }
 
@@ -4412,7 +4450,7 @@ app.put('/api/notifications/read-all', async (req, res) => {
 });
 
 // ⭐️ API ดึงจำนวนออเดอร์ที่รอจัดการ (แสดงเลข Badge แดงๆ) — ย้ายมาไว้ก่อน จะได้ลบ route ซ้ำด้านล่างได้สะดวก
-app.get('/api/orders/pending-count', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+app.get('/api/orders/pending-count', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT COUNT(id) as count FROM orders WHERE status IN ('PENDING_VERIFY', 'WAITING_CASH', 'PREPARING')");
     res.json({ count: rows[0].count || 0 });
@@ -4483,7 +4521,9 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
  * Validates: MIME type (jpeg, png, gif, webp), size (5MB max), dimensions (400×300 to 4000×3000)
  * Returns: { success, filename, path, dimensions }
  */
-app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'), uploadLimiter, slipUpload.single('slip'), async (req, res) => {
+// ⭐️ เปิดให้ MANAGER ส่งสลิปได้ด้วย (staff สั่งจองของตัวเองแล้วต้องส่งสลิปเหมือนสมาชิก) — ownership
+//   ยังเช็ค user_id ใน handler เหมือนเดิม กันแตะออเดอร์คนอื่น
+app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'), uploadLimiter, slipUpload.single('slip'), async (req, res) => {
   const { id } = req.params;
   try {
     if (!req.file) {
@@ -4528,6 +4568,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'
     // (สถานะกลับ PENDING_VERIFY) ไม่มีใครตัดสต๊อกคืน → พอออเดอร์เดินต่อถึง COMPLETED สินค้าหลุดออก
     // โดยไม่หักสต๊อก (ขายเกินได้). ทำใน transaction + ล็อกแถว FOR UPDATE กันส่งซ้ำ/ตัดสต๊อกซ้ำ
     const conn = await pool.getConnection();
+    let wasRejected = false; // hoist ออกมา — ต้องใช้นอก transaction เพื่อตัดสินใจยิง event realtime
     try {
       await conn.beginTransaction();
       const [lockedOrders] = await conn.query(
@@ -4540,7 +4581,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'
         throw new Error(`Order must be in PENDING_VERIFY or SLIP_REJECTED status to upload slip. Current status: ${locked.status}`);
       }
 
-      const wasRejected = locked.status === 'SLIP_REJECTED';
+      wasRejected = locked.status === 'SLIP_REJECTED';
       const statusUpdate = wasRejected ? ', status = \'PENDING_VERIFY\'' : '';
       const [result] = await conn.query(
         `UPDATE orders SET slip_image = ?${statusUpdate} WHERE id = ? AND user_id = ?`,
@@ -4571,6 +4612,16 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'ADMIN'
     req.io.emit('notifications_updated', {
       message: `ลูกค้าส่งสลิปใหม่สำหรับออเดอร์ #${id}`
     });
+
+    // ⭐️ realtime กลับเจ้าของออเดอร์ เฉพาะตอน resubmit (SLIP_REJECTED → PENDING_VERIFY):
+    //   เดิมไม่ยิง event นี้ → แถบเตือนสลิปไม่ผ่านใน Layout ค้างอยู่บนเครื่องอื่นจนกว่าจะ refresh หน้า
+    //   (ฝั่งที่ส่งเองซ่อนได้เพราะ refetch ผ่าน onUploaded) + หน้า PreOrder ไม่รู้ว่าสถานะเปลี่ยน
+    //   ครอบ staff ด้วย (staff สั่งจองของตัวเองได้ — socket อยู่ในห้อง user_${id} เหมือนกัน)
+    if (wasRejected) {
+      req.io.to(`user_${req.user.id}`).emit(`order_update_user_${req.user.id}`, { order_id: id, status: 'PENDING_VERIFY' });
+      // ⭐️ ให้หน้า OrderManagement (list) + badge นับออเดอร์ค้างใน Layout รีเฟรชทันที
+      req.io.emit('order_status_changed', { order_id: id, status: 'PENDING_VERIFY' });
+    }
 
     res.json({ success: true, path: slipUrl, dimensions });
   } catch (err) {

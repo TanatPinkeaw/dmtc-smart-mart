@@ -79,11 +79,12 @@ function LayoutInner() {
   };
 
   // ⭐️ ออเดอร์ที่สลิปไม่ผ่าน — ต้องเด้งให้เห็นทุกหน้า ไม่ใช่ซ่อนอยู่ในโมดัลประวัติออเดอร์
-  // ดึงเฉพาะฝั่งลูกค้า (isStaff = false) เพราะ staff ไม่ได้เป็นคนส่งสลิป
+  // staff ก็สั่งจองของตัวเองได้แล้ว (staff-shopping) → ต้องโชว์แถบเตือนด้วย แต่ขอ ?mine=1
+  // เพื่อเห็นเฉพาะออเดอร์ตัวเอง (default ของ staff คือ "ดูทั้งหมด" = หน้า OrderManagement —
+  // ดึง unscoped มาจะรั่วออเดอร์ลูกค้าคนอื่นลงแถบเตือน)
   const fetchRejectedOrders = async () => {
-    if (isStaff) { setRejectedOrders([]); return; }
     try {
-      const res = await api.get(`/orders?t=${Date.now()}`);
+      const res = await api.get(`/orders?${isStaff ? 'mine=1&' : ''}t=${Date.now()}`);
       setRejectedOrders((res.data || []).filter((o: OrderAlert) => o.status === 'SLIP_REJECTED'));
     } catch (e) { console.error(e); }
   };

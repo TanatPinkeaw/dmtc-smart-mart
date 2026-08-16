@@ -265,8 +265,9 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
             </p>
           </div>
 
-          {/* Refund Reason Input */}
-          {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(selectedOrder.status) && (
+          {/* Refund Reason Input — สอดคล้องกับ backend: cancel-by-user รับแค่ PENDING_VERIFY/WAITING_CASH
+              (SLIP_REJECTED ให้ส่งสลิปใหม่แทน — หลังๆ กดยกเลิกแล้ว backend ตอบ 500 "ติดต่อพนักงาน") */}
+          {['PENDING_VERIFY', 'WAITING_CASH'].includes(selectedOrder.status) && (
             <div className="space-y-2.5 pt-2">
               <label className="block text-sm font-semibold text-gray-800 flex items-center gap-1.5">
                 🔍 เหตุผลในการยกเลิก
@@ -298,7 +299,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
                 <FileText size={15} /> ดูใบเสร็จ
               </button>
             )}
-            {['PENDING_VERIFY', 'WAITING_CASH', 'SLIP_REJECTED'].includes(selectedOrder.status) && (
+            {['PENDING_VERIFY', 'WAITING_CASH'].includes(selectedOrder.status) && (
               <button
                 onClick={() => onCancelOrder(selectedOrder, refundReason)}
                 disabled={!refundReason.trim() || cancelling}

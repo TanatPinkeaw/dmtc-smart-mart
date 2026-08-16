@@ -28,6 +28,10 @@ interface CartPanelProps {
   maxRedeemable: number;
   redeemPoints: number | '';
   onRedeemPointsChange: (value: number | '') => void;
+  // ⭐️ staff สั่งจองได้แต่ไม่มีสิทธิ์แต้มสมาชิก (สะสม/แลก) — ซ่อนส่วนแต้ม + โชว์หมายเหตุ
+  pointsEnabled: boolean;
+  // ⭐️ staff ที่มีบัญชีสมาชิกแยก → สลับไปล็อกอินด้วยบัญชีสมาชิกเพื่อใช้สิทธิ์แต้ม (optional)
+  onSwitchToMember?: () => void;
   paymentMethod: 'CASH' | 'QR';
   onSetPaymentMethod: (method: 'CASH' | 'QR') => void;
   promptpayId: string;
@@ -46,7 +50,7 @@ export function CartPanel({
   isCartOpen, onCloseCart, payOpen, onTogglePay, cart, onUpdateQuantity,
   grandTotal, pointsDiscount, redeemPointsUsed, finalTotal,
   phoneNumber, onPhoneNumberChange, phoneVerified, verifying, onVerifyPhone,
-  myPoints, maxRedeemable, redeemPoints, onRedeemPointsChange,
+  myPoints, maxRedeemable, redeemPoints, onRedeemPointsChange, pointsEnabled, onSwitchToMember,
   paymentMethod, onSetPaymentMethod, promptpayId,
   slipFile, slipPreview, slipDimensions, slipUploadProgress, slipProcessing, onSlipChange, onClearSlip,
   onCheckout, loading,
@@ -111,23 +115,42 @@ export function CartPanel({
         </div>
 
         <div className="space-y-4 mb-4">
-          {/* ช่องกรอกเบอร์สะสมแต้ม + ปุ่มตรวจสอบ */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</label>
-            <div className="flex gap-2">
-              <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} className="flex-1 p-2.5 bg-white border border-brand-border rounded-lg text-sm shadow-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
-              <button type="button" onClick={onVerifyPhone} disabled={verifying} className="shrink-0 bg-white text-brand-dark border border-brand-border px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-95 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-                {verifying ? '...' : 'ตรวจสอบ'}
-              </button>
+          {/* ⭐️ staff: ไม่มีสิทธิ์แต้ม — ซ่อนช่องสะสม/แลกทั้งหมด แล้วโชว์หมายเหตุแทน (backend กันอีกชั้น)
+              + ปุ่มสลับไปบัญชีสมาชิก (ถ้ามีบัญชี MEMBER แยก จะได้ใช้สิทธิ์แต้ม) */}
+          {!pointsEnabled && (
+            <div className="bg-gray-50 border border-brand-border rounded-lg p-3 text-center space-y-2">
+              <p className="text-xs font-bold text-gray-500">💼 บัญชีพนักงาน: สั่งจองได้ตามปกติ แต่ไม่มีสิทธิ์สะสม/แลกแต้มสมาชิก</p>
+              {onSwitchToMember && (
+                <button
+                  type="button"
+                  onClick={onSwitchToMember}
+                  className="w-full py-2 rounded-full bg-white border border-brand text-brand text-xs font-bold transition-all duration-150 hover:bg-brand-bg active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  สลับไปใช้บัญชีสมาชิก (ใช้สิทธิ์แต้ม)
+                </button>
+              )}
             </div>
-            {/* 🐛 FIX (Sprint 0 — A2): /users/verify-phone ไม่คืนแต้มแล้ว (กันข้อมูลรั่ว) แสดงแค่ชื่อยืนยัน */}
-            {phoneVerified && (
-              <p className="text-xs text-green-600 font-bold mt-1">✓ ยืนยันตัวตน: {phoneVerified.member_name}</p>
-            )}
-          </div>
+          )}
 
-          {/* ⭐️ แลกแต้มเป็นส่วนลด (แสดงเฉพาะตอนมีแต้มอยู่จริง) */}
-          {myPoints > 0 && (
+          {/* ช่องกรอกเบอร์สะสมแต้ม + ปุ่มตรวจสอบ (เฉพาะ MEMBER) */}
+          {pointsEnabled && (
+            <div>
+              <label className="block text-xs font-bold text-gray-600 mb-1">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</label>
+              <div className="flex gap-2">
+                <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} className="flex-1 p-2.5 bg-white border border-brand-border rounded-lg text-sm shadow-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
+                <button type="button" onClick={onVerifyPhone} disabled={verifying} className="shrink-0 bg-white text-brand-dark border border-brand-border px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-95 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                  {verifying ? '...' : 'ตรวจสอบ'}
+                </button>
+              </div>
+              {/* 🐛 FIX (Sprint 0 — A2): /users/verify-phone ไม่คืนแต้มแล้ว (กันข้อมูลรั่ว) แสดงแค่ชื่อยืนยัน */}
+              {phoneVerified && (
+                <p className="text-xs text-green-600 font-bold mt-1">✓ ยืนยันตัวตน: {phoneVerified.member_name}</p>
+              )}
+            </div>
+          )}
+
+          {/* ⭐️ แลกแต้มเป็นส่วนลด (แสดงเฉพาะตอนมีแต้มอยู่จริง + เป็น MEMBER) */}
+          {pointsEnabled && myPoints > 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
               <span className="block text-xs font-bold text-yellow-700 mb-2">แลกแต้มเป็นส่วนลด (มี {myPoints} 🌟)</span>
               <div className="flex items-center gap-2">
