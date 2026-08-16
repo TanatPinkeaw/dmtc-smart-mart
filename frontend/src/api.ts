@@ -65,6 +65,10 @@ function forceLogout() {
 
   setBearerToken(null); // ⭐️ session ตายแล้ว — ล้าง bearer token ทิ้งด้วย (ถ้ามี)
 
+  // 🐛 FIX — session ตาย = ต้องตัด socket ด้วย (SocketContext ฟัง event นี้) กัน socket เก่าที่ยัง
+  // auth อยู่ค้างรับ event ส่วนตัวของผู้ใช้ที่ถูกเตะออกไป
+  try { window.dispatchEvent(new Event('tokenChanged')); } catch { /* ไม่มี window — ข้าม */ }
+
   Swal.fire({
     icon: 'warning',
     title: 'เซสชันหมดอายุ',

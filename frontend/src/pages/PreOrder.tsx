@@ -1,7 +1,7 @@
 // 📄 pages/PreOrder.tsx — หน้าสั่งจองสินค้า (สมาชิกสั่งเองผ่านเว็บ/LINE)
 //    ทำอะไร: เลือกสินค้า, ใส่เบอร์สะสมแต้ม/แลกแต้ม, จ่าย QR แนบสลิป หรือเงินสดรับที่ร้าน, สร้างออเดอร์ (POST /orders),
 //    ดูประวัติออเดอร์ตัวเอง; realtime อัปเดตสถานะ; ราคา/ส่วนลด backend คำนวณใหม่เสมอ (frontend แค่ preview)
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ShoppingCart, ShoppingBag, Search } from 'lucide-react';
 import api from '../api';
@@ -95,6 +95,9 @@ export default function PreOrder() {
   // ⭐️ Deep link จากหน้า Home — 'promo' = โชว์เฉพาะสินค้าที่มีโปรกำลัง active (product.promo_active
   //   จาก /api/products คำนวณมาให้แล้วฝั่ง backend) มี chip ให้กดล้างกลับไปดูสินค้าทั้งหมดได้
   const [promoOnlyFilter, setPromoOnlyFilter] = useState(false);
+  // 🐛 FIX — in-flight lock กัน double-submit ตอนยืนยันคำสั่งซื้อ (disabled ปุ่มมีผลหลัง re-render
+  // เท่านั้น คลิกถี่ๆ/Enter ซ้ำอาจหลุด 2 request = 2 ออเดอร์ เพราะ idempotency-key ใหม่ทุก request)
+  const checkoutInFlight = useRef(false);
 
   // ⭐️ Deep link จากหน้า Home — หน้านี้เป็นเจ้าของทั้งตะกร้าและโมดัลประวัติออเดอร์ Home จึงส่ง
   //   เจตนามาทาง query param แทนที่จะยกสถานะขึ้นไปไว้ระดับบน
@@ -152,6 +155,13 @@ export default function PreOrder() {
       debounceTimer = setTimeout(fetchProducts, 300);
     });
 
+    // 🐛 FIX — ฟัง products_expired เหมือน POS กันสินค้าหมดอายุค้างการ์ดสถานะเก่า (badge/block มีแล้ว
+    // แต่หน้าไม่ได้ refetch ถ้าไม่มีการตัดสต๊อก) — refetch เงียบๆ ไม่เด้ง Swal ใส่ลูกค้า
+    socket.on('products_expired', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchProducts, 300);
+    });
+
     // ⭐️ WebSocket ฟังเสียงสวรรค์ (เวลามีอัปเดตสถานะจากพนักงาน)
     socket.on(`order_update_user_${user.id}`, (data) => {
       // ⭐️ แปลงรหัสสถานะเป็นข้อความเป็นกันเอง แทนโชว์ PREPARING/READY ดิบๆ
@@ -178,6 +188,7 @@ export default function PreOrder() {
     return () => {
       clearTimeout(debounceTimer);
       socket.off('stock_updated');
+      socket.off('products_expired');
       socket.off(`order_update_user_${user.id}`);
       socket.off(`notification_user_${user.id}`);
     };
@@ -363,9 +374,13 @@ export default function PreOrder() {
   };
 
   const handleCheckout = async () => {
+    // 🐛 FIX — in-flight lock กัน double-submit (ดู checkoutInFlight ข้างบน) — เดิมกันได้แค่
+    // disabled ปุ่มซึ่งมีผลหลัง re-render คลิกถี่ๆ/Enter ซ้ำ = ส่ง 2 request = ออเดอร์ซ้ำ
+    if (checkoutInFlight.current) return;
     if (cart.length === 0) return;
     if (paymentMethod === 'QR' && !slipFile) return Swal.fire({ icon: 'warning', text: 'กรุณาแนบสลิปการโอนเงินก่อนยืนยันออเดอร์ครับ' });
 
+    checkoutInFlight.current = true;
     setLoading(true);
     try {
       // 1. สั่งสร้างออเดอร์
@@ -382,9 +397,32 @@ export default function PreOrder() {
       const orderRes = await api.post('/orders', payload);
       const orderId = orderRes.data.id || orderRes.data.order_id;
 
+      // 🐛 FIX (ออเดอร์ซ้ำ) — ออเดอร์ถูกสร้างแล้ว (ตัดสต๊อกแล้ว): เคลียร์ตะกร้า/ฟอร์มทันที ไม่รอ
+      // อัปโหลดสลิปเสร็จ เดิมล้างทีหลัง พอสลิปพัง catch จะโชว์ error ทั่วไปแล้วปล่อยตะกร้าไว้ ลูกค้า
+      // คิดว่าสั่งไม่สำเร็จกดยืนยันอีก = ออเดอร์ใบที่ 2 ตัดสต๊อกซ้ำ
+      setCart([]); setSlipFile(null); setSlipPreview(null); setSlipUploadProgress(0); setSlipDimensions(null); setPhoneNumber(''); setRedeemPoints(''); setIsCartOpen(false);
+      fetchProducts(); // ดึงสต๊อกใหม่
+      fetchMyPoints(); // ⭐️ แต้มถูกหักไปแล้วถ้ามีการแลก ต้องดึงยอดคงเหลือใหม่
+
       // 2. ⭐️ Sprint 2 — B9: Upload payment slip to the created order (if QR payment)
       if (paymentMethod === 'QR' && slipFile) {
-        await handleUploadSlip(orderId);
+        try {
+          await handleUploadSlip(orderId);
+        } catch {
+          // 🐛 FIX — สลิปพัง ≠ ออเดอร์พัง ออเดอร์ #orderId ยังอยู่ (backend อนุญาตอัปสลิปตอน
+          // PENDING_VERIFY) เปิดโมดัลส่งสลิปใหม่ให้กับออเดอร์นี้เลย กันลูกค้ากดสั่งซ้ำ
+          Swal.fire({
+            icon: 'warning',
+            title: `ออเดอร์ #${orderId} ถูกสร้างแล้ว แต่ส่งสลิปไม่สำเร็จ`,
+            text: 'เลือกไฟล์สลิปแล้วส่งใหม่ให้ออเดอร์นี้ได้เลย (ห้ามกดยืนยันคำสั่งซื้อซ้ำ — จะได้ออเดอร์ใหม่)',
+            confirmButtonText: 'ส่งสลิปใหม่',
+            showCancelButton: true,
+            cancelButtonText: 'ทีหลัง',
+          }).then((result) => {
+            if (result.isConfirmed) setSlipOrder({ id: orderId });
+          });
+          return;
+        }
       }
 
       // ⭐️ Phase 2 — success modal โชว์เลขออเดอร์อ้างอิงด้วย (เดิมไม่มี ผู้ใช้ไม่มีเลขไว้ติดต่อ/ค้นประวัติ)
@@ -394,18 +432,15 @@ export default function PreOrder() {
           + (paymentMethod === 'QR' ? 'สลิปอัปโหลดสำเร็จ กรุณารอพนักงานตรวจสอบสักครู่นะครับ' : 'กรุณานำเงินสดมาชำระที่หน้าร้านได้เลยครับ')
           + (pointsDiscount > 0 ? ` (ใช้แต้มลดไปแล้ว ${pointsDiscount} บาท)` : '')
       });
-
-      // รีเซ็ตค่าทั้งหมด
-      setCart([]); setSlipFile(null); setSlipPreview(null); setSlipUploadProgress(0); setSlipDimensions(null); setPhoneNumber(''); setRedeemPoints(''); setIsCartOpen(false);
-      fetchProducts(); // ดึงสต๊อกใหม่
-      fetchMyPoints(); // ⭐️ แต้มถูกหักไปแล้วถ้ามีการแลก ต้องดึงยอดคงเหลือใหม่
     } catch (error: any) {
       // ⭐️ Phase 2 — ใช้ getErrorMessage เหมือนจุดอื่นในไฟล์นี้ (handleVerifyPhone/handleCancelMyOrder)
       // เดิมอ่าน error.response?.data?.error ตรงๆ พลาดเคส "เน็ตหลุด/เชื่อมเซิร์ฟเวอร์ไม่ได้" (ไม่มี
       // response เลย) ไปเห็นแค่ fallback ทั่วไปที่ไม่บอกสาเหตุจริง ระหว่างขั้นตอนสำคัญที่สุดของ flow
+      // หมายเหตุ: มาถึง catch นี้ = ยังไม่ได้สร้างออเดอร์ (สร้างสำเร็จจะ return ไปก่อน) ตะกร้าจึงยังอยู่
       Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: getErrorMessage(error, 'ไม่สามารถสั่งซื้อได้') });
     } finally {
       setLoading(false);
+      checkoutInFlight.current = false;
     }
   };
 

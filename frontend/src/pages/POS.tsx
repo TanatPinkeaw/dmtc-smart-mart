@@ -5,7 +5,7 @@
 // ✅ CHANGED: colors, layout → DMTC Mart theme (#F12B6B primary)
 // 🔒 UNCHANGED: all handlers (handleCheckout, handleSearchMember, handleRegister, handleApplyPromo, handleCloseShift, finishAndLogout), socket listeners, all state, filteredProducts, price calculations
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
@@ -71,6 +71,9 @@ export default function POS() {
   const [showRewardModal, setShowRewardModal] = useState(false);
   // ⭐️ POS ออฟไลน์ — จำนวนบิลที่ค้างอยู่ใน IndexedDB รอซิงค์
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  // 🐛 FIX — in-flight lock กัน double-submit (disabled ปุ่มมีผลหลัง re-render เท่านั้น คลิกถี่ๆ/
+  // Enter ซ้ำอาจหลุด 2 request = 2 บิล เพราะ idempotency-key ถูก generate ใหม่ทุก request)
+  const checkoutInFlight = useRef(false);
 
   const navigate = useNavigate();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
@@ -228,11 +231,29 @@ export default function POS() {
     setCart(prev => {
       const cartProduct = { ...product, quantity: 1, price: customPrice ?? product.price };
       const existing = prev.find(i => i.id === product.id);
-      if (existing) return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      if (existing) {
+        // 🐛 FIX — เดิมเพิ่มได้เกินสต๊อก (ต่างจากหน้าจองที่ clamp แล้ว) โดน backend ปฏิเสธทีหลัง
+        if (existing.quantity >= (product.stock ?? Infinity)) {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: 'สต๊อกไม่พอ!', showConfirmButton: false, timer: 1500 });
+          return prev;
+        }
+        return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
       return [...prev, cartProduct];
     });
   };
-  const updateQuantity = (id: number, delta: number) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: i.quantity + delta } : i).filter(i => i.quantity > 0));
+  const updateQuantity = (id: number, delta: number) => {
+    setCart(prev => prev.map(i => {
+      if (i.id !== id) return i;
+      const newQ = i.quantity + delta;
+      // 🐛 FIX — clamp สต๊อกเหมือนหน้าจอง (stock undefined = ของรางวัล ไม่จำกัด)
+      if (delta > 0 && newQ > (i.stock ?? Infinity)) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'สินค้าหมดสต๊อกแค่นี้', showConfirmButton: false, timer: 1500 });
+        return i;
+      }
+      return { ...i, quantity: newQ };
+    }).filter(i => i.quantity > 0));
+  };
 
   // ⭐️ Part 5 — เพิ่มของรางวัลลงตะกร้า (ราคา 0, ธง redeem_reward) กันเพิ่มซ้ำเกิน 1
   const addRewardToCart = (r: { id: number; name: string; image_url: string | null; points_required: number }) => {
@@ -350,8 +371,11 @@ export default function POS() {
   };
 
   const handleCheckout = async () => {
+    // 🐛 FIX — in-flight lock กัน double-submit (ดู checkoutInFlight ข้างบน)
+    if (checkoutInFlight.current) return;
     if (cart.length === 0) return Swal.fire({ icon: 'warning', title: 'ตะกร้าว่างเปล่า!' });
     if (paymentMethod === 'CASH' && (!amountReceived || Number(amountReceived) < finalTotal)) return Swal.fire({ icon: 'error', title: 'รับเงินมาไม่พอ!' });
+    checkoutInFlight.current = true;
 
     // ⭐️ POS ออฟไลน์ — รองรับเฉพาะบิลง่ายๆ (ไม่มีสมาชิก/โปรโมชั่น/แต้ม/ของรางวัล) เพราะฟีเจอร์พวกนี้
     //   ต้องเช็คยอดจริงกับเซิร์ฟเวอร์ (แต้มคงเหลือ/โควตาโปร/สต๊อกของรางวัล) ซึ่งไม่มีเน็ตเช็คไม่ได้ ถ้าปล่อย
@@ -388,6 +412,9 @@ export default function POS() {
       setReceiptData({ ...response.data.receipt, items: cart.map(i => ({ name: i.name, price: Number(i.price), quantity: i.quantity })), cashier_name: user.full_name, member_name: currentMember?.full_name || null, promo_name: appliedPromo?.name || null, created_at: new Date() });
       setCart([]); setAmountReceived(''); setCurrentMember(null); setSearchMemberQuery('');
       setAppliedPromo(null); setSelectedPromoId(''); setRedeemPoints(''); setIsCartOpen(false);
+      // 🐛 FIX — refetch สต๊อกเอง ไม่พึ่ง socket 'stock_updated' อย่างเดียว (socket หลุด/ช้า =
+      // เลขสต๊อกค้างจน reload — หน้าจอง refetch เองอยู่แล้ว)
+      fetchProducts();
     } catch (error: any) {
       if (error.code === 'ECONNABORTED') {
         Swal.fire({ icon: 'error', title: 'หมดเวลา', text: 'การส่งข้อมูลใช้เวลานานเกินไป (30 วินาที) — กรุณาลองใหม่' });
@@ -444,7 +471,7 @@ export default function POS() {
         Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(error) });
       }
     }
-    finally { setLoading(false); }
+    finally { setLoading(false); checkoutInFlight.current = false; }
   };
 
   // ── JSX ──────────────────────────────────────────────────────────────────
@@ -491,7 +518,8 @@ export default function POS() {
           onSearchChange={setProductSearchQuery}
           filteredProducts={filteredProducts}
           priceOverride={priceOverride}
-          onPriceOverrideChange={(productId, value) => setPriceOverride({ ...priceOverride, [productId]: value })}
+          // 🐛 FIX — functional update กัน stale closure (update หลายชิ้นติดกันไม่หาย)
+          onPriceOverrideChange={(productId, value) => setPriceOverride(prev => ({ ...prev, [productId]: value }))}
           onAddToCart={addToCart}
         />
       </div>

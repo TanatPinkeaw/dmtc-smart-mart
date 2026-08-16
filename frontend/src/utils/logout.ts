@@ -25,5 +25,9 @@ export async function performLogout() {
     localStorage.removeItem('user');
     setCsrfToken(null);
     setBearerToken(null); // ⭐️ ล้าง bearer token fallback ด้วย (ถ้ามี — LINE in-app browser)
+    // 🐛 FIX — บอก SocketContext ให้ตัด socket ด้วย: same-tab ไม่มี 'storage' event เกิดเอง
+    // ไม่งั้น socket เก่ายังต่อ + ยัง auth อยู่ + ยังรับ event ส่วนตัว (order_update/notification)
+    // ของผู้ใช้ที่ logout ไปแล้วต่อไปเรื่อยๆ
+    try { window.dispatchEvent(new Event('tokenChanged')); } catch { /* ไม่มี window (SSR) — ข้าม */ }
   }
 }

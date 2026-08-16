@@ -6,7 +6,7 @@
 // จุดสำคัญ: ต่อตรงไป API_ORIGIN (Render) เพราะ Vercel proxy ไม่รองรับ WebSocket; แนบ socket-token
 //   อายุสั้น (ขอจาก /auth/socket-token) แทน cookie เพราะ Safari/LINE ITP บล็อก cookie ตอน handshake
 // ═══════════════════════════════════════════════════════════════════════════════════
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_ORIGIN } from './config'; // ⭐️ DEPLOY FIX — URL จาก env แทนฮาร์ดโค้ด
 import api from './api';
@@ -15,9 +15,24 @@ const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
+  // 🐛 FIX — เดิมอ่าน `socket` state ผ่าน closure ของ effect ที่ deps ว่างเปล่า (= null ตลอดกาล)
+  // ทุกครั้งที่ 'tokenChanged'/'storage' event เกิด (login ใหม่, tab อื่นเปลี่ยนสถานะ) จะสร้าง socket
+  // ใหม่โดยไม่ตัดตัวเก่า → socket ค้างสะสมทั้งฝั่ง client และ server และตอน logout (same-tab ไม่มี
+  // 'storage' event เกิดเอง) socket เดิมยังต่ออยู่ + ยัง auth อยู่ + ยังรับ event ส่วนตัว (order_update/
+  // notification) ต่อไป. ใช้ ref เก็บ instance ปัจจุบัน อ่านค่าได้เสมอตอน reconnect/cleanup
+  const socketRef = useRef<Socket | null>(null);
 
   // ⭐️ F4 — Listen for storage events (cross-tab token changes) and establish/update Socket connection
   useEffect(() => {
+    // ตัด socket ที่ค้างอยู่ทิ้ง (ถ้ามี) — ใช้ ref ไม่ใช่ state กัน closure ค้างค่า null
+    const disconnectCurrent = () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
+    };
+
     const reconnectSocket = () => {
       // ⭐️ Security remediation — access token อยู่ใน httpOnly cookie แล้ว (อ่านจาก JS ไม่ได้)
       // ใช้ user object ใน localStorage (ไม่ลับ) เป็นตัวบอกว่า "ควรมี session" แทน ตัว cookie จริง
@@ -25,17 +40,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       const hasUser = !!localStorage.getItem('user');
 
       if (!hasUser) {
-        if (socket) {
-          socket.disconnect();
-          setSocket(null);
-        }
+        disconnectCurrent();
         return;
       }
 
-      // Disconnect old socket if exists
-      if (socket) {
-        socket.disconnect();
-      }
+      // 🐛 FIX — ตัด socket เก่าก่อนเสมอ กันค้างสะสม (เดิม skip เพราะ closure เห็น socket เป็น null)
+      disconnectCurrent();
 
       // ⭐️ Socket.io ต่อตรงไป API_ORIGIN (Render) เสมอ — Vercel rewrite ไม่รองรับ WebSocket upgrade
       // จึง proxy ไม่ได้เหมือน REST = handshake เป็น cross-site อยู่ดี
@@ -75,6 +85,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         console.log('Socket disconnected:', reason);
       });
 
+      socketRef.current = s; // ⭐️ เก็บ ref ก่อน setState — กัน window ว่างระหว่าง render
       setSocket(s);
     };
 
@@ -95,6 +106,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('storage', reconnectSocket);
       window.removeEventListener('tokenChanged', handleTokenChange as EventListener);
+      // 🐛 FIX — ตัด socket ให้เรียบร้อยตอน provider unmount (เดิมค้างอยู่)
+      disconnectCurrent();
     };
   }, []);
 
