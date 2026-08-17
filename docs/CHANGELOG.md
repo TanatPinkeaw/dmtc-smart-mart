@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — Backend: audit_logs INSERT 24 จุดเข้า utils/auditLog.logAudit กลาง + month parse รวมเป็น resolveMonth — เหลือ raw INSERT 0 จุด
+## [2026-08-17] — Backend: audit_logs INSERT 24 จุดเข้า utils/auditLog.logAudit กลาง + month parse รวมเป็น resolveMonth — เหลือ raw INSERT 0 จุด (commit `3432f57`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
