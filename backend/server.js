@@ -3991,7 +3991,9 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'), va
   // ⭐️ นโยบายแต้ม: เฉพาะ MEMBER มีสิทธิ์แต้มสมาชิก — staff จองได้แต่ไม่มีสิทธิ์แลก/สะสม
   // (ดู utils/preorderPolicy.js) — ตอบ 403 ก่อนเริ่ม transaction เลย (ไม่มีการเขียนอะไรทั้งสิ้น)
   // กัน staff ปลอม payload ส่ง redeem_points มาหวังส่วนลด แล้วโดนเงียบๆ (เข้าใจผิดว่าลดแล้ว)
-  const pointsPolicy = resolveOrderPoints({ role: req.user.role, usePhoneForPoints, redeem_points });
+  // 🐛 FIX — เดิมส่ง `usePhoneForPoints` (camelCase) ทั้งที่ destructure รับ `use_phone_for_points`
+  // (snake_case) → ตัวแปรไม่เคยถูกประกาศ = ReferenceError 500 ทุกออเดอร์ (เงินสด/QR ทุกใบ)
+  const pointsPolicy = resolveOrderPoints({ role: req.user.role, usePhoneForPoints: use_phone_for_points, redeem_points });
   if (pointsPolicy.blockedRedeem) {
     return res.status(403).json({ error: 'บัญชีพนักงานไม่มีสิทธิ์ใช้แต้มสมาชิก (แต้มสงวนสำหรับสมาชิกเท่านั้น)' });
   }

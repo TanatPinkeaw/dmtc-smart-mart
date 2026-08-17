@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): รวมการ์ดสินค้า/รูป/ราคาเป็น ProductCard/ProductImage/ProductPrice กลาง (POS + preorder + Home)
+## [2026-08-17] — feat(frontend): รวมการ์ดสินค้า/รูป/ราคาเป็น ProductCard/ProductImage/ProductPrice กลาง (POS + preorder + Home) (commit `bd3e785`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 

@@ -347,6 +347,30 @@ describe('D. source contract — server.js ใช้ preorderPolicy จริง
     assert.ok(src.includes('pointsPolicy.usePhoneForPoints'), 'สะสมแต้มต้องอ่านจาก pointsPolicy (ไม่ใช่ use_phone_for_points ดิบ)');
   });
 
+  // 🐛 regression — เดิม handler ส่ง `usePhoneForPoints` (camelCase) เปล่าๆ ทั้งที่ destructure
+  // รับ `use_phone_for_points` (snake_case) → ตัวแปรไม่เคยถูกประกาศ = ReferenceError 500 ทุกออเดอร์
+  // เทสเดิมเช็คแค่ข้อความ (pointsPolicy.usePhoneForPoints) ไม่เคยเช็คว่า identifier ใน call site
+  // อยู่ใน scope จริงหรือไม่ — กฎนี้จับ: identifier ที่ส่งแบบ bare (ไม่มี ':') ต้องอยู่ใน req.body destructure
+  test('POST /orders — identifier ที่ส่งให้ resolveOrderPoints ต้องถูกประกาศจริง (กัน ReferenceError)', () => {
+    const src = handlerWindow("app.post('/api/orders',", '// 3. API ดึงรายการออเดอร์');
+    const destructure = src.match(/const\s*\{\s*([^}]+)\s*\}\s*=\s*req\.body/);
+    assert.ok(destructure, 'handler ต้องมี const { ... } = req.body');
+    const declared = new Set(destructure[1].split(',').map(s => s.trim().split(':')[0].trim()));
+
+    const call = src.match(/resolveOrderPoints\(\{\s*([^}]+)\s*\}\)/);
+    assert.ok(call, 'ต้องเจอ resolveOrderPoints({...})');
+    for (const arg of call[1].split(',')) {
+      const [key, value] = arg.split(':').map(s => s.trim());
+      if (!value) {
+        assert.ok(declared.has(key),
+          `resolveOrderPoints รับค่า bare '${key}' ที่ไม่ได้ destructure จาก req.body — ตัวแปรไม่มีอยู่จริง = ReferenceError 500 ทุกออเดอร์`);
+      }
+    }
+    // ล็อกการ mapping ที่ถูกต้อง (camelCase ← snake_case) ให้ชัดเจน
+    assert.ok(src.includes('usePhoneForPoints: use_phone_for_points'),
+      'ต้อง mapping usePhoneForPoints: use_phone_for_points (ไม่ใช่ส่ง camelCase เปล่าๆ)');
+  });
+
   test('PUT /orders/:id/status (COMPLETED) เครดิตแต้มเฉพาะเจ้าของที่ยังเป็น MEMBER', () => {
     const src = handlerWindow("app.put('/api/orders/:id/status'", "app.get('/api/orders/pending-count'");
     assert.ok(src.includes('isMemberRole('), 'COMPLETED ต้องเช็ค role เจ้าของออเดอร์ก่อนเครดิตแต้ม (ผ่าน isMemberRole)');
