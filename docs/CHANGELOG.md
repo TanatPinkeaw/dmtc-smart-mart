@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): รวม primitive UI ที่เหลือ (badge สถานะ / field label / skeleton / ตาราง) (ยังไม่ push)
+## [2026-08-17] — feat(frontend): รวม primitive UI ที่เหลือ (badge สถานะ / field label / skeleton / ตาราง) (commit `e967ffc`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
