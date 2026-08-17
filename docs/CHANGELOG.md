@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): ขยายภาษาเดียวกัน (ชายคา/SectionTitle/Prompt) ไปหน้า PreOrder (ยังไม่ push)
+## [2026-08-17] — feat(frontend): ขยายภาษาเดียวกัน (ชายคา/SectionTitle/Prompt) ไปหน้า PreOrder (commit `8d3dceb`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
