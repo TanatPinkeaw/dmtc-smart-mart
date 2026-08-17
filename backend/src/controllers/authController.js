@@ -20,6 +20,7 @@
 const pool = require('../config/db');
 const crypto = require('crypto');
 const config = require('../config/config');
+const { serverError } = require('../utils/http');
 const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
 
 const LINE_VERIFY_URL = 'https://api.line.me/oauth2/v2.1/verify';
@@ -129,7 +130,7 @@ async function lineLogin(req, res) {
     });
   } catch (error) {
     console.error('[500] lineLogin', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 

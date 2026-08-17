@@ -8,6 +8,7 @@
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/member-groups) พฤติกรรม/path เดิม
 const pool = require('../config/db');
 const { buildGroupUpdateSql } = require('../utils/memberGroupUpdate');
+const { serverError } = require('../utils/http');
 
 // GET /api/member-groups — กลุ่มทั้งหมดพร้อม rules (nest rules เข้าใต้แต่ละกลุ่ม)
 async function list(req, res) {
@@ -22,7 +23,7 @@ async function list(req, res) {
     res.json([...byGroup.values()]);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -39,7 +40,7 @@ async function create(req, res) {
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'รหัสกลุ่มนี้ซ้ำกับที่มีอยู่แล้ว' });
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -55,7 +56,7 @@ async function update(req, res) {
     res.json({ message: 'อัปเดตกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -66,7 +67,7 @@ async function remove(req, res) {
     res.json({ message: 'ลบกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -83,7 +84,7 @@ async function addRule(req, res) {
     res.status(201).json({ message: 'บันทึกส่วนลดรายหมวดหมู่สำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -94,7 +95,7 @@ async function removeRule(req, res) {
     res.json({ message: 'ลบส่วนลดรายหมวดหมู่สำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 

@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ ไม่เปลี่ยน path/พฤติกรรม (mount /api/settings)
 const pool = require('../config/db');
+const { serverError } = require('../utils/http');
 
 // GET /api/settings/store — ข้อมูลร้านทั้งแถว (เปิดให้ทุก role ที่ล็อกอิน ใช้โชว์หัวใบเสร็จ ฯลฯ)
 async function getStore(req, res) {
@@ -16,7 +17,7 @@ async function getStore(req, res) {
     res.json(rows[0]);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -31,7 +32,7 @@ async function updateStore(req, res) {
     res.json({ message: "อัปเดตข้อมูลร้านค้าสำเร็จ" });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -42,7 +43,7 @@ async function getReceipt(req, res) {
     res.json({ receipt_footer: rows[0].receipt_footer });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -59,7 +60,7 @@ async function getLoyalty(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -84,7 +85,7 @@ async function updateLoyalty(req, res) {
     res.json({ message: 'อัปเดตอัตราแต้มสะสมสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 

@@ -116,5 +116,35 @@ check('requireRole → 403 + ข้อความมาตรฐาน', /res\.
 check('validateRequest → 400 Validation failed + details', /res\.status\(400\)\.json\(\{ error: 'Validation failed', details: messages \}\)/.test(guardsSrc));
 check('validateRequest set req.validatedBody + req.body (sanitize)', /req\.validatedBody = value/.test(guardsSrc) && /req\.body = value/.test(guardsSrc));
 
+console.log('G) error response ใช้ utils/http.js ตัวกลาง (serverError — กัน copy 500 ซ้ำ):');
+const httpSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'http.js'), 'utf8');
+check('http.js มี serverError (500 ข้อความกลาง)', /function serverError\(res/.test(httpSrc));
+check('http.js sendError คืน { error } + details เฉพาะเมื่อส่ง', /function sendError\(res/.test(httpSrc) && httpSrc.includes('{ error: message, details }') && httpSrc.includes('{ error: message }'));
+const raw500 = (serverSrc.match(/res\.status\(500\)\.json\(\{ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง'\}\);/g) || []).length;
+check('server.js ไม่เหลือ raw 500 ข้อความกลาง (ต้อง serverError(res))', raw500 === 0);
+check('server.js ใช้ serverError(res) แล้ว', serverSrc.includes('serverError(res)'));
+check('server.js import serverError จาก utils/http', /require\('\.\/src\/utils\/http'\)/.test(serverSrc));
+const ctrlWith500 = ['adminController', 'authController', 'memberController', 'memberGroupsController', 'promotionsController', 'reportController', 'settingsController'];
+let ctrl500Ok = true;
+for (const c of ctrlWith500) {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', c + '.js'), 'utf8');
+  const raw = (src.match(/res\.status\(500\)\.json\(\{ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง'\}\);/g) || []).length;
+  const imports = /require\('\.\.\/utils\/http'\)/.test(src);
+  if (raw > 0 || !imports) { ctrl500Ok = false; console.log('    ✗', c, 'raw500=', raw, 'import=', imports); }
+}
+check('controllers ทั้ง 7 ไฟล์ใช้ serverError(res) + import utils/http (ไม่เหลือ raw)', ctrl500Ok);
+
+console.log('H) SQL query ซ้ำรวมไว้ที่ utils/queries.js (กัน query ต่างกันทีละจุด):');
+const queriesSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'queries.js'), 'utf8');
+check('queries.js มี getOrderItems (order_items เดิม 6 จุด)', queriesSrc.includes('SELECT product_id, quantity FROM order_items WHERE order_id = ?'));
+check('queries.js มี getUserFullName', queriesSrc.includes('SELECT full_name FROM users WHERE id = ?'));
+check('queries.js มี getUserRole', queriesSrc.includes('SELECT role FROM users WHERE id = ?'));
+check('queries.js มี lockUserPoints (FOR UPDATE)', queriesSrc.includes('SELECT points FROM users WHERE id = ? FOR UPDATE'));
+check('server.js ไม่เหลือ order_items query raw (ต้อง getOrderItems)', !/conn\.query\('SELECT product_id, quantity FROM order_items WHERE order_id = \?'/.test(serverSrc));
+check('server.js ไม่เหลือ full_name query raw (ต้อง getUserFullName)', !/conn\.query\('SELECT full_name FROM users WHERE id = \?'/.test(serverSrc));
+check('server.js ไม่เหลือ role query raw (ต้อง getUserRole)', !/(?:pool|conn)\.query\('SELECT role FROM users WHERE id = \?'/.test(serverSrc));
+check('server.js ไม่เหลือ points FOR UPDATE raw (ต้อง lockUserPoints)', !/conn\.query\('SELECT points FROM users WHERE id = \?' FOR UPDATE'/.test(serverSrc));
+check('server.js import queries จาก utils/queries', /require\('\.\/src\/utils\/queries'\)/.test(serverSrc));
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} serverGuardRails: ${pass} ผ่าน, ${fail} ไม่ผ่าน`);
 process.exit(fail ? 1 : 0);

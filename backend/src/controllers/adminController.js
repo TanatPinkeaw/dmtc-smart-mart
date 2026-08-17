@@ -14,6 +14,7 @@
 // ALLOW_DATA_RESET=true บน deployment นั้นๆ อย่างจงใจเท่านั้น (ไม่ใช่ default ที่เปิดเอง)
 const pool = require('../config/db');
 const config = require('../config/config');
+const { serverError } = require('../utils/http');
 
 function isResetAllowed() {
   return process.env.ALLOW_DATA_RESET === 'true' || !config.IS_PRODUCTION;
@@ -92,7 +93,7 @@ async function unlinkAllLine(req, res) {
     res.json({ success: true, message: `ปลดผูกบัญชี LINE ของสมาชิกแล้ว ${result.affectedRows} รายการ`, affected: result.affectedRows });
   } catch (error) {
     console.error('[500] unlinkAllLine', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -176,7 +177,7 @@ async function resetMembers(req, res) {
         detail: error.message,
       });
     }
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   } finally {
     conn.release();
   }
@@ -199,7 +200,7 @@ async function resetMemberPoints(req, res) {
     res.json({ success: true, message: `รีเซ็ตแต้มสะสมของสมาชิกแล้ว ${result.affectedRows} บัญชี`, affected: result.affectedRows });
   } catch (error) {
     console.error('[500] resetMemberPoints', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -310,7 +311,7 @@ async function resetProducts(req, res) {
         detail: error.message,
       });
     }
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   } finally {
     conn.release();
   }

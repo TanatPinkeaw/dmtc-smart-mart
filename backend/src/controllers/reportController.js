@@ -12,6 +12,7 @@
 // module กลางเดียวกับที่ server.js ใช้ (pool, money utils) กัน logic เพี้ยนไปคนละแบบ
 const pool = require('../config/db');
 const { toSatang, fromSatang } = require('../utils/money');
+const { serverError } = require('../utils/http');
 const { sendDailyReport } = require('../scripts/dailyReport'); // ⭐️ Sprint 1 — D4
 const reportsExport = require('../services/reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
@@ -60,7 +61,7 @@ async function weeklySales(req, res) {
     res.json(result);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -118,7 +119,7 @@ async function hourlySales(req, res) {
     res.json({ period, hourly: result, peak_hour: peakHour, averaged_over_days: divisor });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -152,7 +153,7 @@ async function attendance(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -195,7 +196,7 @@ async function dashboard(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -226,7 +227,7 @@ async function topSelling(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -275,7 +276,7 @@ async function vendorSales(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -309,7 +310,7 @@ async function vendorSalesDetail(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -324,7 +325,7 @@ async function voidSummary(req, res) {
     res.json(rows[0]);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -342,7 +343,7 @@ async function shiftAnomalies(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -374,7 +375,7 @@ async function salesComparison(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -398,7 +399,7 @@ async function salesByCashier(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -415,7 +416,7 @@ async function openShifts(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -431,7 +432,7 @@ async function pendingOrders(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -443,7 +444,7 @@ async function salesChannel(req, res) {
     res.json({ walkin_sales: Number(walkin[0].total), preorder_sales: Number(preorder[0].total) });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -468,7 +469,7 @@ async function grossProfit(req, res) {
     res.json(rows[0]);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -527,7 +528,7 @@ async function profitSummary(req, res) {
     res.json({ overall, monthly });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -550,7 +551,7 @@ async function deadStock(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -575,7 +576,7 @@ async function vendorSummary(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -664,7 +665,7 @@ async function payroll(req, res) {
     res.json({ month, staff: result });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -708,7 +709,7 @@ async function myHours(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -770,7 +771,7 @@ async function monthlyOverview(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -785,7 +786,7 @@ async function dailySend(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -987,7 +988,7 @@ async function exportSalesCsv(req, res) {
     res.send('﻿' + combined); // BOM ให้ Excel อ่านภาษาไทยถูก
   } catch (err) {
     console.error('[sales-csv export] ERROR:', err.code || '', err.sqlMessage || err.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -1022,7 +1023,7 @@ async function executiveExport(req, res) {
     res.end();
   } catch (err) {
     console.error('[executive-export] ERROR:', err.code || '', err.sqlMessage || err.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -1054,7 +1055,7 @@ async function accountingSummary(req, res) {
     });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -1086,7 +1087,7 @@ async function accountingSummaryExport(req, res) {
     res.end();
   } catch (err) {
     console.error('[accounting-summary/export] ERROR:', err.code || '', err.sqlMessage || err.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 

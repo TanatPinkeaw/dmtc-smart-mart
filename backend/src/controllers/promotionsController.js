@@ -9,6 +9,7 @@
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/promotions) พฤติกรรม/path เดิม
 const pool = require('../config/db');
 const { calculatePromotionDiscount, checkPromotionUsageLimit } = require('../services/promotionEngine');
+const { serverError } = require('../utils/http');
 // ⭐️ จัดการ request ซ้ำ (idempotency-key) ที่ชน UNIQUE constraint ฝั่ง DB หลัง server restart
 const { isIdempotentDuplicate } = require('../utils/idempotency');
 
@@ -19,7 +20,7 @@ async function list(req, res) {
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -48,7 +49,7 @@ async function active(req, res) {
     res.json(items);
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -85,7 +86,7 @@ async function create(req, res) {
       return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
     }
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -106,7 +107,7 @@ async function remove(req, res) {
     }
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -131,7 +132,7 @@ async function verify(req, res) {
     res.json({ discount_amount, net_total, promo_name: promo.name });
   } catch (error) {
     console.error('[500]', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 

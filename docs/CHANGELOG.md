@@ -4,6 +4,25 @@
 
 ---
 
+## [2026-08-17] — refactor(backend): รวม error response ซ้ำ 146 จุดเข้า sendError/serverError + SQL ซ้ำ 14 จุดเข้า queries.js — helper กลางที่เดียว
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Restart backend เท่านั้น** — ไม่มี SQL/env/logic เปลี่ยน เป็น refactor โค้ดล้วน (error JSON/ข้อความ/สถานะเดิมเป๊ะ ไม่กระทบ client)
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **utils/http.js** (backend — ไฟล์ใหม่) | helper กลาง: `sendError(res, status, msg, details)` · `serverError(res)` (500 ข้อความกลาง) · `badRequest` · `notFound` — แทน `res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ...' })` ที่ copy ซ้ำกันเป๊ะ **146 จุด** (server.js 96 + 7 controllers 50) — error JSON ที่ส่งกลับเหมือนเดิมเป๊ะ |
+| **utils/queries.js** (backend — ไฟล์ใหม่) | query ที่ copy string ซ้ำหลายจุด → helper เดียว **14 call site**: `getOrderItems` (6) · `getUserFullName` (3) · `getUserRole` (3) · `lockUserPoints` (2 — FOR UPDATE ต้องเรียกใน transaction) — กันแก้คอลัมน์ทีละจุดแล้วที่อื่นเพี้ยน |
+| **เทส contract** (backend) | `serverGuardRails` +**section G (6 เช็ค)**: ห้าม `res.status(500).json` เขียนเองทั่ว src/ + server.js (ต้องผ่าน `serverError`); +**section H (9 เช็ค)**: query ที่รวมแล้วต้องเรียกผ่าน queries.js — **49 เช็คผ่าน** |
+
+### 🧪 เทส
+- backend: `npm run test:unit` — **12/12 ชุดผ่าน** (serverGuardRails 49 เช็ค) + `node --check` syntax ผ่านทุกไฟล์ที่แก้
+
+---
+
 ## [2026-08-17] — refactor(backend): รวม requireRole/validateRequest เข้า middleware/guards.js ที่เดียว — ลบ copy ซ้ำ 4 จุด (commit `95a853c`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

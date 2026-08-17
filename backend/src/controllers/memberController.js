@@ -17,6 +17,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { serverError } = require('../utils/http');
 const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
 const { pushLineMessage } = require('../services/lineService');
 
@@ -72,7 +73,7 @@ async function checkLineStatus(req, res) {
     });
   } catch (error) {
     console.error('[500] checkLineStatus', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -95,7 +96,7 @@ async function lookupMember(req, res) {
     return res.json(await attachGroupInfo(rows[0]));
   } catch (error) {
     console.error('[500] lookupMember', error.message);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    serverError(res);
   }
 }
 
@@ -189,7 +190,7 @@ async function registerViaLine(req, res) {
       return res.status(400).json({ error: 'ข้อมูลนี้มีอยู่ในระบบแล้ว หรือบัญชี LINE นี้ผูกกับสมาชิกอื่นอยู่แล้ว' });
     }
     console.error('[500] registerViaLine', error.message);
-    return res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง' });
+    return serverError(res);
   } finally {
     conn.release();
   }

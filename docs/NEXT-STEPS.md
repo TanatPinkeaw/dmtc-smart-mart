@@ -29,6 +29,7 @@
 - Header ทุกหน้า (ยกเว้น Home) เป็นแบบเดียวกับ POS.tsx แล้ว
 - โปรไฟล์แยกเป็นหน้าเต็ม `/profile` (ไม่ใช่ modal แล้ว)
 - Backend config รวมเป็นไฟล์เดียว `backend/config.js` — ทุกไฟล์อื่น `require('./config')` ห้ามอ่าน `process.env` ตรงๆ อีก
+- Backend error response + query ซ้ำรวมเป็น helper กลางแล้ว: `src/utils/http.js` (`sendError`/`serverError`/`badRequest`/`notFound` — แทน `res.status(500).json` ที่ copy 146 จุด) + `src/utils/queries.js` (`getOrderItems`/`getUserFullName`/`getUserRole`/`lockUserPoints` — 14 call site) — ห้ามเขียนแบบเดิมซ้ำ (serverGuardRails section G/H ล็อกอยู่)
 - ลบไฟล์ขยะ/รูป/`.md` ที่ไม่ใช้แล้ว, จัดเอกสารเข้า `docs/` (DEMO-DEPLOY.md, DEPLOY.md, GOOGLE_FORM_SETUP.md)
 - PR #29 merge เข้า main แล้ว (`326bc59`), local main ดึงมาล่าสุดแล้ว ไม่ค้าง
 
