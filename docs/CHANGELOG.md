@@ -4,6 +4,28 @@
 
 ---
 
+## [2026-08-17] — Backend: audit_logs INSERT 24 จุดเข้า utils/auditLog.logAudit กลาง + month parse รวมเป็น resolveMonth — เหลือ raw INSERT 0 จุด
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Restart backend เท่านั้น** — เขียนตาราง audit_logs เหมือนเดิมเป๊ะ (resource_type/resource_id = NULL เมื่อไม่ส่ง — ค่าเก็บเท่ากับเดิม) ไม่มี SQL/env/logic เปลี่ยน
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **utils/auditLog.js** (backend) | helper กลางใหม่ `logAudit(db, action, userId, details, resourceType, resourceId)` — INSERT audit_logs แบบเต็มคอลัมน์เสมอ (ไม่ส่ง resource = NULL — ข้อมูลเก็บเหมือนเดิม) + `JSON.stringify(details)` ที่เดียว กันลืม/format ต่างกัน; รับทั้ง pool/conn (ใช้ใน transaction ได้) |
+| **server.js + 2 controllers** (backend) | อพยพ `INSERT INTO audit_logs` เขียนเอง **24 จุด** (server.js 22 + adminController/memberController อย่างละ 1) → `logAudit(...)` — รวม socket fire-and-forget (`.catch`) + ใน transaction (conn) + offline sync + middleware ERROR; adminController `logAdminReset` delegate เข้า logAudit (คง try/catch เดิม) |
+| **reportController** (backend) | month parse copy 3 จุด (`req.query.month \|\| bangkokDateStr().slice(0, 7)`) → helper ท้องถิ่น `resolveMonth(query)` |
+| **เทส contract** (backend) | serverGuardRails **59 → 65 เช็ค** — section J ใหม่ 6 เช็ค: logAudit มี JSON.stringify ที่เดียว · server.js + controllers 7 ไฟล์ **ห้ามเหลือ `INSERT INTO audit_logs` raw** · reportController ต้องใช้ resolveMonth · withTransaction ยังอยู่ (legacy tx site มี early-rollback ต่างกัน — บันทึกข้ามตั้งใจ) |
+
+### 🧪 เทส
+- backend: **test:unit 12/12 ชุดผ่าน** (serverGuardRails 65 เช็ค) + `node --check` ทุกไฟล์ + probe ยืนยัน logAudit เขียน full/short shape ถูกต้อง
+
+**ผลสแกน validation/parse — สะอาดอยู่แล้ว:** pagination clamp (audit-logs) 1 จุดเดียว · parseInt guard 1 จุด · date range (report export) 1 endpoint เดียว — ไม่มีอะไรต้องรวม; **transaction boilerplate 18 จุดข้ามตั้งใจ** — แต่ละจุดมี early-rollback บน validation ต่างกัน (เช่น assign order rollback กลาง try) ไม่ใช่ shape เดียวที่ withTransaction ห่อได้ปลอดภัย (บันทึกใน NEXT-STEPS — โค้ดใหม่ใช้ withTransaction)
+
+---
+
 ## [2026-08-17] — Backend: อพยพ response 4xx เขียนเองครบ 162 จุดเข้า utils/http (badRequest/unauthorized/forbidden/notFound/conflict/gone) — เหลือ raw 4xx 0 จุด (commit `e4b8bfd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

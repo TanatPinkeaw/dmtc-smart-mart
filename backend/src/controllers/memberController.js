@@ -18,6 +18,7 @@ const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { serverError, badRequest, notFound } = require('../utils/http');
+const { logAudit } = require('../utils/auditLog');
 const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
 const { pushLineMessage } = require('../services/lineService');
 
@@ -142,14 +143,7 @@ async function registerViaLine(req, res) {
       };
     }
 
-    await conn.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      [
-        isNewMember ? 'MEMBER_REGISTER_LINE' : 'MEMBER_LINK_LINE',
-        user.id, 'USER', user.id,
-        JSON.stringify({ via: 'LIFF', line_user_id, new_member: isNewMember }),
-      ]
-    );
+    await logAudit(conn, isNewMember ? 'MEMBER_REGISTER_LINE' : 'MEMBER_LINK_LINE', user.id, { via: 'LIFF', line_user_id, new_member: isNewMember }, 'USER', user.id);
 
     await conn.commit();
 

@@ -168,5 +168,21 @@ for (const c of ctrlWith500) {
 check('controllers ทั้ง 7 ไฟล์ไม่เหลือ raw res.status(4xx).json (ต้องผ่าน helper)', ctrlNoRaw4xx);
 check('lineWebhook res.status(401).end() ยังอยู่ (LINE webhook ต้องตอบ raw status)', /res\.status\(401\)\.end\(\)/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'lineWebhookController.js'), 'utf8')));
 
+console.log('J) audit_logs INSERT ใช้ utils/auditLog.logAudit กลาง (เดิม copy 24 จุด):');
+const auditSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'auditLog.js'), 'utf8');
+check('auditLog.js มี logAudit (INSERT + JSON.stringify ที่เดียว)', /async function logAudit/.test(auditSrc) && auditSrc.includes('JSON.stringify(details)') && auditSrc.includes('INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details)'));
+check('server.js import logAudit จาก utils/auditLog', /require\('\.\/src\/utils\/auditLog'\)/.test(serverSrc) && serverSrc.includes('logAudit'));
+check('server.js ไม่เหลือ INSERT INTO audit_logs raw (ต้อง logAudit)', (serverSrc.match(/INSERT INTO audit_logs/g) || []).length === 0);
+let ctrlAuditOk = true;
+for (const c of ctrlWith500) {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', c + '.js'), 'utf8');
+  const raw = (src.match(/INSERT INTO audit_logs/g) || []).length;
+  if (raw > 0) { ctrlAuditOk = false; console.log('    ✗', c, 'rawAudit=', raw); }
+}
+check('controllers ทั้ง 7 ไฟล์ไม่เหลือ INSERT INTO audit_logs raw (ต้อง logAudit)', ctrlAuditOk);
+const reportSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'reportController.js'), 'utf8');
+check('reportController ใช้ resolveMonth (ห้าม copy req.query.month || bangkokDateStr().slice(0, 7))', !/req\.query\.month \|\| bangkokDateStr\(\)\.slice\(0, 7\)/.test(reportSrc) && /function resolveMonth\(query\)/.test(reportSrc) && /resolveMonth\(req\.query\)/.test(reportSrc));
+check('withTransaction helper ยังอยู่ (ที่เดียวของแอป — legacy tx มี early-rollback ต่างกัน ข้ามตั้งใจ)', /async function withTransaction\(pool, callback\)/.test(serverSrc));
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} serverGuardRails: ${pass} ผ่าน, ${fail} ไม่ผ่าน`);
 process.exit(fail ? 1 : 0);

@@ -26,6 +26,11 @@ function bangkokDateStr(d = new Date()) {
   }).format(d);
 }
 
+// เดือนจาก query (?month=YYYY-MM) — default เป็นเดือนปัจจุบัน (ไทย) — เดิม copy 3 จุด
+function resolveMonth(query) {
+  return query.month || bangkokDateStr().slice(0, 7);
+}
+
 // GET /api/reports/weekly-sales — ยอดขายรวม (POS + พรีออเดอร์) รายวัน ย้อนหลัง 7 วัน
 async function weeklySales(req, res) {
   try {
@@ -585,7 +590,7 @@ async function payroll(req, res) {
   try {
     // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default
     // จะเป็นเดือนก่อนหน้า (รายงานโชว์เดือนผิด) — ใช้ bangkokDateStr() (เดือนตามเวลาไทย)
-    const month = req.query.month || bangkokDateStr().slice(0, 7); // 'YYYY-MM'
+    const month = resolveMonth(req.query); // 'YYYY-MM'
 
     // พนักงานทั้งหมด (CASHIER + MANAGER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
     // ⭐️ Update — เพิ่ม MANAGER (ผู้ใช้ attendance clock-in/out ตัวจริงตอนนี้แทน ADMIN) คง ADMIN ไว้
@@ -674,7 +679,7 @@ async function myHours(req, res) {
   try {
     // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default
     // จะเป็นเดือนก่อนหน้า (รายงานโชว์เดือนผิด) — ใช้ bangkokDateStr() (เดือนตามเวลาไทย)
-    const month = req.query.month || bangkokDateStr().slice(0, 7); // 'YYYY-MM'
+    const month = resolveMonth(req.query); // 'YYYY-MM'
     const userId = req.user.id;
 
     const [users] = await pool.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
@@ -718,7 +723,7 @@ async function monthlyOverview(req, res) {
   try {
     // 🐛 FIX — เดิม new Date().toISOString().slice(0,7) เป็นเดือนแบบ UTC: ช่วง 00:00–07:00 ไทย default
     // จะเป็นเดือนก่อนหน้า (รายงานโชว์เดือนผิด) — ใช้ bangkokDateStr() (เดือนตามเวลาไทย)
-    const month = req.query.month || bangkokDateStr().slice(0, 7);
+    const month = resolveMonth(req.query);
 
     // ยอดขายรวมเดือนนี้ (sales หน้าร้าน + orders จองที่มารับแล้ว)
     const [salesRows] = await pool.query(

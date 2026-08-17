@@ -41,6 +41,7 @@ const { saveImage } = require('./src/config/cloudinary');  // ⭐️ เก็�
 const { requireRole, validateRequest } = require('./src/middleware/guards');  // ⭐️ guards รวมไว้ที่เดียว (server.js ไม่นิยามเอง)
 const { serverError, badRequest, unauthorized, forbidden, notFound, conflict, gone } = require('./src/utils/http');  // ⭐️ response กลาง (500/400/401/403/404/409/410)
 const { getOrderItems, getUserFullName, getUserRole, lockUserPoints } = require('./src/utils/queries');  // ⭐️ SQL ซ้ำรวมไว้ที่เดียว (เดิม copy 14 จุด)
+const { logAudit } = require('./src/utils/auditLog');  // ⭐️ เขียน audit_logs กลาง (เดิม copy INSERT 24 จุด)
 
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
 // รอบเดียวก็โดนล็อกยาว) NODE_ENV=production ยังคงเข้มเท่าเดิม, ค่าอื่นๆ (development/undefined) ผ่อนให้
@@ -765,17 +766,11 @@ io.on('connection', (socket) => {
   if (socket.user?.id) socket.join(`user_${socket.user.id}`);
 
   // ⭐️ Task 1A — audit log การเชื่อมต่อ socket
-  pool.query(
-    'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
-    ['SOCKET_CONNECTED', socket.user?.id || null, JSON.stringify({ socket_id: socket.id })]
-  ).catch(err => console.error('audit_logs SOCKET_CONNECTED ล้มเหลว:', err.message));
+  logAudit(pool, 'SOCKET_CONNECTED', socket.user?.id || null, { socket_id: socket.id }).catch(err => console.error('audit_logs SOCKET_CONNECTED ล้มเหลว:', err.message));
 
   socket.on('disconnect', (reason) => {
     console.log(`🔴 หน้าจอ POS ปิดการเชื่อมต่อ: ${socket.id} - reason: ${reason}`);
-    pool.query(
-      'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
-      ['SOCKET_DISCONNECTED', socket.user?.id || null, JSON.stringify({ socket_id: socket.id, reason })]
-    ).catch(err => console.error('audit_logs SOCKET_DISCONNECTED ล้มเหลว:', err.message));
+    logAudit(pool, 'SOCKET_DISCONNECTED', socket.user?.id || null, { socket_id: socket.id, reason }).catch(err => console.error('audit_logs SOCKET_DISCONNECTED ล้มเหลว:', err.message));
   });
 });
 
@@ -1082,10 +1077,7 @@ app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(produ
       [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null, is_reward_item ? 1 : 0, points_required || 0, (min_stock === undefined || min_stock === null || min_stock === '') ? 10 : min_stock]
     );
     // ⭐️ Task 5 — audit log
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['CREATE_PRODUCT', req.user.id, 'PRODUCT', result.insertId, JSON.stringify({ name, price })]
-    );
+    await logAudit(pool, 'CREATE_PRODUCT', req.user.id, { name, price }, 'PRODUCT', result.insertId);
     res.status(201).json({ id: result.insertId, message: "เพิ่มสินค้าสำเร็จ" });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -1188,10 +1180,7 @@ app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(pr
       [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, finalIsReward, finalPointsRequired, finalMinStock, req.params.id]
     );
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['UPDATE_PRODUCT', req.user.id, 'PRODUCT', req.params.id, JSON.stringify({ old: oldRows[0] || null, new: { barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent } })]
-    );
+    await logAudit(pool, 'UPDATE_PRODUCT', req.user.id, { old: oldRows[0] || null, new: { barcode, name, category_id, price, image_url, vendor_id, gp_rate, expiry_date, discount_percent } }, 'PRODUCT', req.params.id);
 
     res.json({ message: "อัปเดตข้อมูลสินค้าสำเร็จ" });
   } catch (error) {
@@ -1573,10 +1562,7 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
     // ⭐️ token ใช้ครั้งเดียว — mark used_at กันเอาไปใช้ซ้ำ
     await pool.query('UPDATE password_resets SET used_at = NOW() WHERE reset_token = ?', [reset_token]);
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['PASSWORD_RESET', userId, 'USER', userId, JSON.stringify({ via: 'reset_token' })]
-    );
+    await logAudit(pool, 'PASSWORD_RESET', userId, { via: 'reset_token' }, 'USER', userId);
 
     res.json({ message: "ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่" });
   } catch (error) {
@@ -1613,10 +1599,7 @@ app.delete('/api/admin/password-resets/:id', requireRole('ADMIN'), async (req, r
 
     await pool.query('DELETE FROM password_resets WHERE id = ?', [req.params.id]);
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['REJECT_PASSWORD_RESET', req.user.id, 'USER', existing[0].user_id, JSON.stringify({ password_reset_id: req.params.id })]
-    );
+    await logAudit(pool, 'REJECT_PASSWORD_RESET', req.user.id, { password_reset_id: req.params.id }, 'USER', existing[0].user_id);
 
     res.json({ message: "ปฏิเสธคำขอรีเซ็ตรหัสผ่านแล้ว ลิงก์นี้ใช้งานไม่ได้อีกต่อไป" });
   } catch (error) {
@@ -1770,10 +1753,7 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
     );
 
     // Audit log
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['CREATE_USER', req.user.id, 'USER', result.insertId, JSON.stringify({ username, full_name, role })]
-    );
+    await logAudit(pool, 'CREATE_USER', req.user.id, { username, full_name, role }, 'USER', result.insertId);
 
     res.status(201).json({ id: result.insertId, message: "สร้างพนักงานสำเร็จ" });
   } catch (error) {
@@ -1808,10 +1788,7 @@ app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
       [full_name, nextStudentId, phone_number || null, role, points === undefined || points === null || points === '' ? null : points, nextIsActive, req.params.id]
     );
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['UPDATE_USER', req.user.id, 'USER', req.params.id, JSON.stringify({ full_name, student_id, phone_number, role, points })]
-    );
+    await logAudit(pool, 'UPDATE_USER', req.user.id, { full_name, student_id, phone_number, role, points }, 'USER', req.params.id);
 
     const [rows] = await pool.query(
       'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users WHERE id = ?',
@@ -1870,10 +1847,7 @@ app.put('/api/users/:id/change-password', async (req, res) => {
     await pool.query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [newHash, newHash, id]);
 
     // Audit log
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['PASSWORD_CHANGED', user_id, 'USER', id, JSON.stringify({ via: 'change_password_modal' })]
-    );
+    await logAudit(pool, 'PASSWORD_CHANGED', user_id, { via: 'change_password_modal' }, 'USER', id);
 
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {
@@ -1899,10 +1873,7 @@ app.put('/api/users/update-role', requireRole('ADMIN'), validateRequest(updateRo
       return notFound(res, "ไม่พบรหัสนักศึกษานี้ในระบบ");
     }
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['ROLE_CHANGE', req.user.id, 'USER', oldRows[0]?.id || null, JSON.stringify({ student_id, old_role: oldRows[0]?.role || null, new_role: role })]
-    );
+    await logAudit(pool, 'ROLE_CHANGE', req.user.id, { student_id, old_role: oldRows[0]?.role || null, new_role: role }, 'USER', oldRows[0]?.id || null);
 
     res.json({ message: `อัปเดตสิทธิ์ ${student_id} เป็น ${role} สำเร็จ` });
   } catch (error) {
@@ -1930,10 +1901,7 @@ app.put('/api/users/:id/reactivate', requireRole('ADMIN'), async (req, res) => {
   try {
     const [result] = await pool.query('UPDATE users SET is_active = TRUE WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['REACTIVATE_USER', req.user.id, 'USER', req.params.id, JSON.stringify({ target_user_id: req.params.id })]
-    );
+    await logAudit(pool, 'REACTIVATE_USER', req.user.id, { target_user_id: req.params.id }, 'USER', req.params.id);
     res.json({ message: 'ปลดระงับการใช้งานสำเร็จ' });
   } catch (error) {
     console.error('[500] reactivate user', error.message);
@@ -1978,10 +1946,7 @@ app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) =>
     await conn.query('DELETE FROM users WHERE id = ?', [targetId]);
     await conn.commit();
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['HARD_DELETE_USER', req.user.id, 'USER', null, JSON.stringify({ target_user_id: targetId, deleteWorkHistory })]
-    );
+    await logAudit(pool, 'HARD_DELETE_USER', req.user.id, { target_user_id: targetId, deleteWorkHistory }, 'USER', null);
     res.json({ success: true, message: 'ลบบัญชีผู้ใช้ถาวรแล้ว' });
   } catch (error) {
     await conn.rollback();
@@ -2231,10 +2196,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
       variance: Math.abs(difference)
     });
 
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['CLOSE_SHIFT_PENDING_CLOSE', req.user.id, 'SHIFT', currentShift.id, JSON.stringify({ discrepancy: difference, expected_cash, actual_cash, variance: Math.abs(difference) })]
-    );
+    await logAudit(pool, 'CLOSE_SHIFT_PENDING_CLOSE', req.user.id, { discrepancy: difference, expected_cash, actual_cash, variance: Math.abs(difference) }, 'SHIFT', currentShift.id);
 
     // ⭐️ Day 3 — end-of-shift stock sweep: ปิดกะไม่ได้ตัดสต๊อกเอง (ต่างจาก checkout/sync-offline ที่
     // แจ้งเฉพาะตอน "ข้าม threshold ครั้งแรก") จึงเช็คสต๊อกปัจจุบันทั้งร้านทีเดียวแทน รวมเป็น LINE alert
@@ -2320,10 +2282,7 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, 
     );
 
     // Audit log
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['APPROVE_SHIFT_CLOSE', approverId, 'SHIFT', shiftId, JSON.stringify({ approval_notes })]
-    );
+    await logAudit(pool, 'APPROVE_SHIFT_CLOSE', approverId, { approval_notes }, 'SHIFT', shiftId);
 
     // Notify cashier
     req.io.to(`user_${shift.cashier_id}`).emit('shift_approved', {
@@ -2383,10 +2342,7 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, r
     );
 
     // Audit log
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['REJECT_SHIFT_CLOSE', rejectorId, 'SHIFT', shiftId, JSON.stringify({ reason })]
-    );
+    await logAudit(pool, 'REJECT_SHIFT_CLOSE', rejectorId, { reason }, 'SHIFT', shiftId);
 
     // Notify cashier
     req.io.to(`user_${shift.cashier_id}`).emit('shift_rejected', {
@@ -3083,10 +3039,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     }
 
     // ⭐️ Task 5 — audit log (ในทรานแซกชันเดียวกับบิล กันเคส commit สำเร็จแต่ log หาย)
-    await conn.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['CHECKOUT', req.user.id, 'SALE', saleId, JSON.stringify({ amount: netTotal, items: processedItems.length, payment_method })]
-    );
+    await logAudit(conn, 'CHECKOUT', req.user.id, { amount: netTotal, items: processedItems.length, payment_method }, 'SALE', saleId);
 
     await conn.commit();
     req.io.emit('stock_updated', { message: 'มีการตัดสต๊อกสินค้า ให้โหลดข้อมูลใหม่' });
@@ -3282,10 +3235,7 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), syncOfflineLimiter, 
         if (lowStock) { saleLowStockMsgs.push(lowStock.message); allLowStockProducts.push(lowStock.product); }
       }
 
-      await conn.query(
-        'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-        ['CHECKOUT_OFFLINE_SYNC', req.user.id, 'SALE', saleId, JSON.stringify({ amount: netTotal, items: processedItems.length, payment_method, client_offline_id })]
-      );
+      await logAudit(conn, 'CHECKOUT_OFFLINE_SYNC', req.user.id, { amount: netTotal, items: processedItems.length, payment_method, client_offline_id }, 'SALE', saleId);
 
       await conn.commit();
       inTransaction = false;
@@ -3403,10 +3353,7 @@ app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res
     await conn.query('UPDATE sales SET status = "VOIDED" WHERE id = ?', [saleId]);
 
     // ⭐️ บันทึก audit log: ใครสั่ง void บิลไหน มูลค่าเท่าไร (ใช้ req.user.id/role จาก JWT เท่านั้น ห้ามเชื่อ body)
-    await conn.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['VOID_SALE', req.user.id, 'sale', saleId, JSON.stringify({ role: req.user.role, total_amount: sale.total_amount, member_id: sale.member_id })]
-    );
+    await logAudit(conn, 'VOID_SALE', req.user.id, { role: req.user.role, total_amount: sale.total_amount, member_id: sale.member_id }, 'sale', saleId);
 
     // คืนสต๊อก
     const [items] = await conn.query('SELECT product_id, quantity FROM sale_items WHERE sale_id = ?', [saleId]);
@@ -3692,10 +3639,7 @@ app.put('/api/users/:id/unlink-line', requireRole('ADMIN'), async (req, res) => 
     if (!rows[0].line_user_id) return badRequest(res, 'สมาชิกคนนี้ยังไม่ได้ผูกบัญชี LINE');
 
     await pool.query('UPDATE users SET line_user_id = NULL WHERE id = ?', [req.params.id]);
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      ['UNLINK_LINE', req.user.id, 'USER', req.params.id, JSON.stringify({ target_full_name: rows[0].full_name })]
-    );
+    await logAudit(pool, 'UNLINK_LINE', req.user.id, { target_full_name: rows[0].full_name }, 'USER', req.params.id);
     res.json({ message: `ปลดผูกบัญชี LINE ของ ${rows[0].full_name} แล้ว` });
   } catch (error) {
     console.error('[500]', error.message);
@@ -4262,10 +4206,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
         `UPDATE orders SET slip_verification_status = 'REJECTED' WHERE id = ?`,
         [orderId]
       );
-      await conn.query(
-        'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-        ['REJECT_SLIP', req.user.id, 'ORDER', orderId, JSON.stringify({ reason: reject_reason || null })]
-      );
+      await logAudit(conn, 'REJECT_SLIP', req.user.id, { reason: reject_reason || null }, 'ORDER', orderId);
     }
 
     // ⭐️ ขอคืนเงิน (โอนมาแล้วแต่ไม่เอาแล้ว) — แจ้งลูกค้าให้นำสลิปมาที่ร้าน + คืนแต้ม
@@ -4312,10 +4253,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
         `UPDATE orders SET slip_verification_status = 'VERIFIED', slip_verified_by = ?, slip_verified_at = NOW() WHERE id = ?`,
         [req.user.id, orderId]
       );
-      await conn.query(
-        'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-        ['VERIFY_SLIP', req.user.id, 'ORDER', orderId, JSON.stringify({ notes: reject_reason || null })]
-      );
+      await logAudit(conn, 'VERIFY_SLIP', req.user.id, { notes: reject_reason || null }, 'ORDER', orderId);
     }
 
     // ⭐️ แจ้งเตือนลูกค้าแบบมีข้อความจริง บันทึกลง notifications ด้วย (ไม่ใช่แค่ socket เฉยๆ กันพลาดถ้าลูกค้าไม่ได้เปิดแอปอยู่ตอนนั้น)
@@ -5217,10 +5155,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
 
   if (req.user?.id && (req.path.includes('/sales') || req.path.includes('/orders'))) {
-    pool.query(
-      'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
-      ['ERROR', req.user.id, JSON.stringify({ error: err.message, path: req.path, method: req.method, requestId })]
-    ).catch(logErr => console.error('audit_logs ERROR insert ล้มเหลว:', logErr.message));
+    logAudit(pool, 'ERROR', req.user.id, { error: err.message, path: req.path, method: req.method, requestId }).catch(logErr => console.error('audit_logs ERROR insert ล้มเหลว:', logErr.message));
   }
 
   let statusCode = 500;

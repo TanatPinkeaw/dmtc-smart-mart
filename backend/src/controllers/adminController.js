@@ -15,6 +15,7 @@
 const pool = require('../config/db');
 const config = require('../config/config');
 const { serverError, notFound, conflict } = require('../utils/http');
+const { logAudit } = require('../utils/auditLog');
 
 function isResetAllowed() {
   return process.env.ALLOW_DATA_RESET === 'true' || !config.IS_PRODUCTION;
@@ -22,10 +23,7 @@ function isResetAllowed() {
 
 async function logAdminReset(action, adminId, details) {
   try {
-    await pool.query(
-      'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-      [action, adminId, 'SYSTEM', null, JSON.stringify(details)]
-    );
+    await logAudit(pool, action, adminId, details, 'SYSTEM', null);
   } catch (err) {
     console.error('[adminController] เขียน audit_logs ไม่สำเร็จ:', err.message);
   }
