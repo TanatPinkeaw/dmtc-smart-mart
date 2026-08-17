@@ -82,5 +82,39 @@ for (const [idx, table] of idxDefs) {
   check(`${idx} อยู่ใน schema.sql (${table})`, new RegExp('KEY `' + idx + '`').test(schemaSrc));
 }
 
+console.log('F) requireRole/validateRequest รวมไว้ที่ src/middleware/guards.js (ห้ามนิยามซ้ำ):');
+const guardsSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'middleware', 'guards.js'), 'utf8');
+check('server.js ไม่นิยาม function requireRole เอง (ต้อง import จาก guards)', !/function requireRole\s*\(/.test(serverSrc));
+check('server.js ไม่นิยาม function validateRequest เอง (ต้อง import จาก guards)', !/function validateRequest\s*\(/.test(serverSrc));
+check('server.js import requireRole/validateRequest จาก src/middleware/guards', /require\('\.\/src\/middleware\/guards'\)/.test(serverSrc) && serverSrc.includes('requireRole, validateRequest'));
+check('guards.js ยังมี requireRole อยู่ (ที่เดียวของแอป)', /function requireRole\s*\(\.\.\.roles\)/.test(guardsSrc));
+check('guards.js ยังมี validateRequest อยู่ (ที่เดียวของแอป)', /function validateRequest\s*\(schema\)/.test(guardsSrc));
+// ทั่ว src/ — ต้องไม่มีไฟล์อื่นนิยาม guards ซ้ำ (นอกจาก guards.js)
+const srcRoot = path.join(__dirname, '..', 'src');
+function walkJs(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+    const full = path.join(dir, e.name);
+    return e.isDirectory() ? walkJs(full) : (e.name.endsWith('.js') ? [full] : []);
+  });
+}
+const guardDup = walkJs(srcRoot).filter(f => !f.endsWith('middleware' + path.sep + 'guards.js')
+  && /function requireRole\s*\(|function validateRequest\s*\(/.test(fs.readFileSync(f, 'utf8')));
+check('ไม่มีไฟล์อื่นใน src/ นิยาม requireRole/validateRequest ซ้ำ (รวมไว้ที่ guards.js)', guardDup.length === 0);
+// router ทุกไฟล์ที่ใช้ guards ต้อง import จาก middleware/guards
+const routesDir = path.join(__dirname, '..', 'src', 'routes');
+let allRoutesOk = true;
+for (const f of fs.readdirSync(routesDir).filter(x => x.endsWith('.js'))) {
+  const src = fs.readFileSync(path.join(routesDir, f), 'utf8');
+  if (/requireRole|validateRequest/.test(src) && !/require\('\.\.\/middleware\/guards'\)/.test(src)) {
+    allRoutesOk = false;
+    console.log('    ✗', f, 'ใช้ guards แต่ไม่ import จาก middleware/guards');
+  }
+}
+check('router ทุกไฟล์ที่ใช้ guards ต้อง import จาก middleware/guards', allRoutesOk);
+// พฤติกรรม middleware ล็อก (กันแก้ guards.js แล้วเพี้ยน):
+check('requireRole → 403 + ข้อความมาตรฐาน', /res\.status\(403\)\.json\(\{ error: 'สิทธิ์ไม่เพียงพอสำหรับการดำเนินการนี้' \}\)/.test(guardsSrc));
+check('validateRequest → 400 Validation failed + details', /res\.status\(400\)\.json\(\{ error: 'Validation failed', details: messages \}\)/.test(guardsSrc));
+check('validateRequest set req.validatedBody + req.body (sanitize)', /req\.validatedBody = value/.test(guardsSrc) && /req\.body = value/.test(guardsSrc));
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} serverGuardRails: ${pass} ผ่าน, ${fail} ไม่ผ่าน`);
 process.exit(fail ? 1 : 0);

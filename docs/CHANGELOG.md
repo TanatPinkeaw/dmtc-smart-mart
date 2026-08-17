@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-08-17] — refactor(backend): รวม requireRole/validateRequest เข้า middleware/guards.js ที่เดียว — ลบ copy ซ้ำ 4 จุด (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Restart backend เท่านั้น** — ไม่มี SQL/env/logic เปลี่ยน เป็น refactor โค้ดล้วน (พฤติกรรม/ข้อความ error เดิมเป๊ะ — guards.js ถูกยกมาจาก server.js ตัวต่อตัว)
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **guards.js** (backend) | `requireRole` + `validateRequest` รวมไว้ที่ `src/middleware/guards.js` เป็นที่เดียวของแอป — **server.js** (เดิมนิยามเอง 2 ตัว ใช้ 84 จุด) + **adminRoutes/reportRoutes/memberRoutes** (เดิม copy `requireRole` กันเองคนละไฟล์ เพราะของ server.js เรียกข้ามไฟล์ไม่ได้) + **memberRoutes** copy `validateBody` → ทั้งหมด import จาก guards.js; ลบ local definition ทิ้ง |
+| **เทส contract** (backend) | `serverGuardRails` +**section F (9 เช็ค)**: server.js/routes ต้องไม่นิยาม guards ซ้ำ (ไล่ทั่ว src/), router ทุกไฟล์ที่ใช้ต้อง import จาก middleware/guards, พฤติกรรมล็อก (403 ข้อความมาตรฐาน / 400 Validation failed + details / sanitize req.body) — 34 เช็คผ่าน |
+
+### 🧪 เทส
+- backend: `npm run test:unit` — **12/12 ชุดผ่าน** (serverGuardRails 34 เช็ค + undefinedIdentifiers ไล่ identifier ใหม่ครบ)
+
+---
+
 ## [2026-08-17] — UI: empty state เข้า EmptyState กลางใน 3 หน้าที่เหลือ (Dashboard/Attendance/Settings) + label ของ Settings เข้า FieldLabel (commit `c89746c`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

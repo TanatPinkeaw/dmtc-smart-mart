@@ -38,6 +38,7 @@ const { ipKeyGenerator } = require('express-rate-limit');  // ← เพิ่�
 const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
 const { slipUpload, shiftPhotoUpload, profilePhotoUpload } = require('./src/config/multer');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
 const { saveImage } = require('./src/config/cloudinary');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
+const { requireRole, validateRequest } = require('./src/middleware/guards');  // ⭐️ guards รวมไว้ที่เดียว (server.js ไม่นิยามเอง)
 
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
 // รอบเดียวก็โดนล็อกยาว) NODE_ENV=production ยังคงเข้มเท่าเดิม, ค่าอื่นๆ (development/undefined) ผ่อนให้
@@ -307,19 +308,8 @@ const csvUpload = multer({
   },
 });
 
-// ⭐️ Task 5A — validates req.body against a Joi schema, sets req.validatedBody on success
-function validateRequest(schema) {
-  return (req, res, next) => {
-    const { error, value } = schema.validate(req.body, { abortEarly: false, stripUnknown: true });
-    if (error) {
-      const messages = error.details.map(d => d.message).join('; ');
-      return res.status(400).json({ error: 'Validation failed', details: messages });
-    }
-    req.validatedBody = value;
-    req.body = value; // ⭐️ existing handlers destructure req.body directly; keep them working unmodified with sanitized/coerced values
-    next();
-  };
-}
+// ⭐️ requireRole/validateRequest รวมไว้ที่ src/middleware/guards.js แล้ว (ยกมาจาก server.js เป๊ะ)
+//    — อย่านิยามซ้ำในนี้ (เทส serverGuardRails section F ล็อก)
 
 // ⭐️ Sprint 2 — B7: withTransaction Helper
 // Purpose: Get connection, BEGIN TRANSACTION, execute callback(conn), COMMIT on success, ROLLBACK on error
@@ -651,14 +641,6 @@ function authenticateToken(req, res, next) {
   });
 }
 
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'สิทธิ์ไม่เพียงพอสำหรับการดำเนินการนี้' });
-    }
-    next();
-  };
-}
 
 // ⭐️ Security fix — เช็ค CSRF จาก claim ที่ฝังในตัว JWT ที่ authenticateToken ถอดรหัสไว้แล้วใน
 // req.user.csrf (เซ็นด้วย JWT_SECRET ปลอมไม่ได้) เทียบกับ header X-CSRF-Token ที่ frontend แนบมา

@@ -15,16 +15,9 @@ const { registerLineValidator } = require('../validators');
 const router = express.Router();
 
 // ⭐️ /lookup/:identifier ไม่ใช่ public — ไม่ได้อยู่ใน PUBLIC_PATHS (server.js) จึงผ่าน authenticateToken
-// มาก่อนแล้วเสมอเมื่อถึง router นี้ (req.user มีค่าแน่นอน) เช็ค role ซ้ำอีกชั้นตรงนี้แบบเดียวกับ
-// requireRole ใน server.js (เขียนซ้ำเพราะ requireRole เป็น local function เรียกข้ามไฟล์ไม่ได้)
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'สิทธิ์ไม่เพียงพอสำหรับการดำเนินการนี้' });
-    }
-    next();
-  };
-}
+// มาก่อนแล้วเสมอเมื่อถึง router นี้ (req.user มีค่าแน่นอน) เช็ค role ซ้ำอีกชั้นตรงนี้
+// ⭐️ requireRole/validateRequest ใช้ตัวกลางจาก middleware/guards (รวมไว้ที่เดียว — ไม่เขียนซ้ำเอง)
+const { requireRole, validateRequest } = require('../middleware/guards');
 
 // ⭐️ POST /register-line เป็น endpoint public ที่เขียนข้อมูลได้ (insert/update users) — ไม่มี rate limit
 // จะโดนยิงสมัครปลอมถล่ม/เดา phone_number เพื่อ hijack line_user_id ผ่านบัญชีคนอื่นได้ จำกัดหลวมๆ
@@ -38,22 +31,8 @@ const registerLineLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ⭐️ validate เอง (แยกจาก validateRequest ใน server.js ซึ่งเป็น local function เรียกข้ามไฟล์ไม่ได้ —
-// logic เดียวกันทุกอย่าง: stripUnknown, abortEarly:false, เซ็ต req.body เป็นค่าที่ sanitize แล้ว)
-function validateBody(schema) {
-  return (req, res, next) => {
-    const { error, value } = schema.validate(req.body, { abortEarly: false, stripUnknown: true });
-    if (error) {
-      const messages = error.details.map((d) => d.message).join('; ');
-      return res.status(400).json({ error: 'Validation failed', details: messages });
-    }
-    req.body = value;
-    next();
-  };
-}
-
 router.get('/check-line/:line_user_id', checkLineStatus);
-router.post('/register-line', registerLineLimiter, validateBody(registerLineValidator), registerViaLine);
+router.post('/register-line', registerLineLimiter, validateRequest(registerLineValidator), registerViaLine);
 router.get('/lookup/:identifier', requireRole('CASHIER', 'MANAGER', 'ADMIN'), lookupMember);
 
 module.exports = router;
