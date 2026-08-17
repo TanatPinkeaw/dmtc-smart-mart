@@ -184,5 +184,15 @@ const reportSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers
 check('reportController ใช้ resolveMonth (ห้าม copy req.query.month || bangkokDateStr().slice(0, 7))', !/req\.query\.month \|\| bangkokDateStr\(\)\.slice\(0, 7\)/.test(reportSrc) && /function resolveMonth\(query\)/.test(reportSrc) && /resolveMonth\(req\.query\)/.test(reportSrc));
 check('withTransaction helper ยังอยู่ (ที่เดียวของแอป — legacy tx มี early-rollback ต่างกัน ข้ามตั้งใจ)', /async function withTransaction\(pool, callback\)/.test(serverSrc));
 
+console.log('K) backend/Dockerfile node version ตรงกับ engines.node (กัน Dockerfile หลุดแบบ sharp):');
+const backendPkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const dockerSrc = fs.readFileSync(path.join(__dirname, '..', 'Dockerfile'), 'utf8');
+const engNode = backendPkg.engines && backendPkg.engines.node;
+check('backend/package.json มี engines.node', !!engNode);
+const engFloor = engNode ? Number(((engNode.match(/(?:>=|~=|~|\^|=|)\s*v?(\d+)/) || [])[1])) : NaN;
+const dockerMajor = Number(((dockerSrc.match(/^FROM\s+node:(\d+)/m) || [])[1]));
+check(`Dockerfile node major (${dockerMajor}) ≥ engines floor (${engFloor})`, Number.isFinite(dockerMajor) && Number.isFinite(engFloor) && dockerMajor >= engFloor);
+check('มี scripts/check-docker-node-version.js (ตัว CI รัน)', fs.existsSync(path.join(__dirname, '..', 'scripts', 'check-docker-node-version.js')));
+
 console.log(`\n${fail === 0 ? '✅' : '❌'} serverGuardRails: ${pass} ผ่าน, ${fail} ไม่ผ่าน`);
 process.exit(fail ? 1 : 0);

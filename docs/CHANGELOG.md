@@ -4,6 +4,25 @@
 
 ---
 
+## [2026-08-17] — CI guard: backend/Dockerfile node version ต้องตรงกับ engines.node — กัน Dockerfile หลุดแบบ sharp (node:18) ซ้ำ
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- ไม่มี — ตัว guard เอง ไม่กระทบ runtime (CI เท่านั้น)
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **scripts/check-docker-node-version.js** (backend) | สคริปต์ใหม่ dependency-free: อ่าน `engines.node` จาก package.json เทียบ `FROM node:<major>` ใน Dockerfile — major ต้อง ≥ floor ของ engines (เช่น `>=20.9.0` → 20) ไม่ใช่ = exit 1 พร้อม error บอกวิธีแก้; รันเองได้ไม่ต้อง npm ci |
+| **.github/workflows/ci.yml** | เพิ่ม step `node scripts/check-docker-node-version.js` ใน job backend-unit-tests — push/PR ขึ้น main ทุกครั้งจะเช็ค |
+| **serverGuardRails.test.js** | section K ใหม่ 3 เช็ค (68 รวม): package.json ต้องมี engines.node · Dockerfile major ≥ engines floor · มีสคริปต์ให้ CI รัน — รันใน test:unit ท้องถิ่นด้วย |
+
+### 🧪 เทส
+- backend: probe ทั้ง 2 ทาง — node:20 ผ่าน ✓ / node:18 fail ทั้งสคริปต์ + serverGuardRails (67/1 แดง) ✓ revert แล้ว 68 ผ่าน + test:unit **12/12**
+
+---
+
 ## [2026-08-17] — Env/security: ตั้ง DB_SSL_CA ครบ — คู่มือใน DEMO-DEPLOY.md (ขั้น B.5) + config.js fail-fast ถ้า CA format เพี้ยน (commit `4233725`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

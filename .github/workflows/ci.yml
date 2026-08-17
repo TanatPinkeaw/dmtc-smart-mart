@@ -92,4 +92,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      # ⭐️ Dockerfile guard — กัน base image node ใน backend/Dockerfile หลุดจาก engines.node
+      #    (เจอจริง 2026-08-17: node:18-alpine แต่ sharp 0.35 ต้อง Node ≥ 20.9 → deploy ล้มตอน boot)
+      - run: node scripts/check-docker-node-version.js
       - run: npm run test:unit
