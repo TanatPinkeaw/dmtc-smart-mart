@@ -4,6 +4,30 @@
 
 ---
 
+## [2026-08-17] — UI: fetch error path ทุกหน้าโชว์ผ่าน EmptyState tone="error" — อพยพกล่อง error เขียนเอง (Register) + แก้ 4 หน้าที่กลืน error แล้วโชว์ "ไม่มีข้อมูล" หลอก (Notifications/VendorSales/Inventory/Schedules)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Register** (frontend) | การ์ด error เขียนเอง ("เกิดข้อผิดพลาด" แดง + ข้อความเทา) → `<EmptyState tone="error">` — หน้าตามาตรฐานเดียวกับ RewardModal/MyOrdersModal |
+| **Notifications** (frontend) | เดิม fetch พัง → `catch` กลืน แล้วโชว์ "ไม่มีการแจ้งเตือน" หลอกผู้ใช้ → เพิ่ม error state + `<EmptyState tone="error">` + ปุ่ม "ลองใหม่" (fetchNotifications) — เงื่อนไขโชว์เฉพาะ error && ยังไม่มีข้อมูล (มีข้อมูลเก่า = โชว์ต่อ) |
+| **VendorSales** (frontend) | เดิม fetch พัง → โชว์ "ยังไม่มีสินค้าฝากขาย" → error state + `<EmptyState tone="error">` + ปุ่ม "ลองใหม่" (fetchData) — error มาก่อน empty state |
+| **Inventory** (frontend) | เดิมดึงสินค้าพัง → แผงซ้ายว่างเปล่าเงียบๆ → error state ในแผงสินค้า + `<EmptyState compact tone="error">` + ปุ่ม "ลองใหม่" (fetchProducts) — socket refetch สำเร็จก็หายเอง |
+| **Schedules** (frontend) | เดิม fetch กะ/พนักงาน/วันหยุดพัง → ปฏิทินว่าง → error state แทนตารางปฏิทิน (เดือนเปลี่ยนยังได้ — ปุ่มนำทางอยู่) + `<EmptyState tone="error">` + ปุ่ม "ลองใหม่" (fetchAll) |
+| **เทส contract** (frontend) | `uiConsistencyContract` +**section ใหม่ (2 เช็ค)**: `FETCH_ERROR_ADOPTED` 7 ไฟล์ (RewardModal/MyOrdersModal/Register/Notifications/VendorSales/Inventory/Schedules) ต้องมี `<EmptyState tone="error">` จริง + ไฟล์ที่ fetch เองต้องมี error state (`setError` ใน catch — ห้ามกลืน error แล้วโชว์ว่าง); `EMPTY_ADOPTED` +Register/Schedules (รวม 18 ไฟล์) |
+
+### 🧪 เทส
+- frontend: **143 เทสผ่าน** (126 + 17 component — contract 35 ตัว) + `typecheck` + `build` ผ่าน
+
+**ที่ตั้งใจไม่แตะ (ข้อยกเว้น — คนละบริบท ไม่ใช่ data-fetch error state):** กล่อง error ในฟอร์ม Login/Register (ข้อความตอน submit — ต้องเล็กอยู่ในฟอร์ม ไม่ใช่ EmptyState กลาง), แบนเนอร์เตือน Dashboard "บางข้อมูลโหลดไม่สำเร็จ" (amber warning ใต้แถบหัว — ไม่ใช่ error state), `ErrorBoundary` (React crash ทั้งหน้า), `PhotoLightbox`/`AuthImage` fallback (รูปโหลดไม่ขึ้นในตัวแสดงภาพ), `Swal.fire` toast error (แจ้งเตือนชั่วคราวคนละ pattern)
+
+---
+
 ## [2026-08-17] — refactor(backend): รวม error response ซ้ำ 146 จุดเข้า sendError/serverError + SQL ซ้ำ 14 จุดเข้า queries.js — helper กลางที่เดียว (commit `4002fdb`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

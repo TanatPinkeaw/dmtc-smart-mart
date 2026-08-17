@@ -4,7 +4,7 @@
 // 🔒 UNCHANGED: all state, handlers (addToReceiveList, updateQuantity, updateUnitCost, handleSubmitPurchase, fetchProducts, socket logic)
 
 import { useState, useEffect } from 'react';
-import { Boxes, Search, Plus, Minus, Trash2, PackagePlus, Truck, X } from 'lucide-react';
+import { Boxes, Search, Plus, Minus, Trash2, PackagePlus, PackageX, RotateCw, Truck, X } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
 import { useSocket } from '../hooks/useSocket';
@@ -26,13 +26,14 @@ export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [isReceiveOpen, setIsReceiveOpen] = useState(false);
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const socket = useSocket();
 
   const fetchProducts = async () => {
-    try { const res = await api.get('/products'); setProducts(res.data); }
-    catch (e) { console.error('fetch products failed', e); }
+    try { const res = await api.get('/products'); setProducts(res.data); setError(false); }
+    catch (e) { console.error('fetch products failed', e); setError(true); }
   };
   const fetchSuppliers = async () => {
     try { const res = await api.get('/suppliers'); setSuppliers(res.data); }
@@ -90,6 +91,9 @@ export default function Inventory() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 pb-28 md:pb-4">
+          {error && products.length === 0 ? (
+            <EmptyState compact tone="error" icon={<PackageX size={20} />} title="โหลดสินค้าไม่สำเร็จ" hint="กรุณาลองใหม่อีกครั้ง" action={<Button size="sm" onClick={fetchProducts}><RotateCw size={14} /> ลองใหม่</Button>} className="h-full" />
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {filteredProducts.map(p => (
               <div key={p.id} className="bg-white border border-brand-border rounded-3xl p-3 flex justify-between items-center hover:border-brand-mid hover:shadow-lg hover:-translate-y-0.5 shadow-md transition-all duration-150">
@@ -106,6 +110,7 @@ export default function Inventory() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </div>
 

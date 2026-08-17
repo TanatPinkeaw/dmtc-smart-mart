@@ -272,6 +272,7 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
     'pages/OrderManagement.tsx', 'pages/Summary.tsx', 'pages/Inventory.tsx',
     'components/pos/RewardModal.tsx',
     'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx', 'pages/Settings.tsx',
+    'pages/Register.tsx', 'pages/Schedules.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import EmptyState จาก ui/EmptyState', () => {
@@ -293,6 +294,35 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
         `${f} ห้ามเขียน empty state แบบข้อความ (text-gray-400 py-) เอง — ใช้ <EmptyState compact>`);
       assert.ok(!src.includes('text-center text-gray-400 text-sm'),
         `${f} ห้ามเขียน empty state แบบข้อความ (text-center text-gray-400 text-sm) เอง — ใช้ <EmptyState compact>`);
+    }
+  });
+});
+
+describe('fetch error — ตอนโหลดข้อมูลพัง ต้องโชว์ผ่าน <EmptyState tone="error"> (ห้ามเขียนกล่อง error เอง / ห้ามกลืนแล้วโชว์ว่าง)', () => {
+  // ⭐️ ไฟล์ที่อพยพแล้ว: error path ของการ fetch ข้อมูลต้องใช้ EmptyState tone="error"
+  //   (เดิมบางจุดเขียนกล่อง error เอง — Register stage==='error' / บางจุดกลืน error แล้วโชว์
+  //   "ไม่มีข้อมูล" หลอกผู้ใช้ — Notifications/VendorSales/Inventory/Schedules เคยเป็นแบบนั้น)
+  const FETCH_ERROR_ADOPTED = [
+    'components/pos/RewardModal.tsx', 'components/preorder/MyOrdersModal.tsx',
+    'pages/Register.tsx', 'pages/Notifications.tsx', 'pages/VendorSales.tsx',
+    'pages/Inventory.tsx', 'pages/Schedules.tsx',
+  ];
+
+  test('ไฟล์ที่อพยพแล้วต้องมี <EmptyState tone="error"> อยู่จริง (render ตอน fetch พัง)', () => {
+    for (const f of FETCH_ERROR_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes('tone="error"'),
+        `${f} ต้องมี <EmptyState tone="error"> — ตอน fetch พังห้ามโชว์ "ไม่มีข้อมูล" หรือกล่อง error เขียนเอง`);
+    }
+  });
+
+  test('ไฟล์ที่ fetch เองต้องมี error state (setError ใน catch) — ห้ามกลืน error แล้วโชว์ว่างเงียบๆ', () => {
+    // MyOrdersModal รับ error ผ่าน prop จาก PreOrder (ไม่ fetch เอง) — ข้ามได้
+    for (const f of ['components/pos/RewardModal.tsx', 'pages/Register.tsx', 'pages/Notifications.tsx',
+                      'pages/VendorSales.tsx', 'pages/Inventory.tsx', 'pages/Schedules.tsx']) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(/setError(?:Msg)?\(/.test(src),
+        `${f} ต้องมี state error (setError/setErrorMsg ใน catch) — ห้ามกลืน fetch error แล้วโชว์ "ไม่มีข้อมูล" แทน`);
     }
   });
 });

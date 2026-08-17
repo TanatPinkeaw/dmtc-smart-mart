@@ -4,13 +4,14 @@
 // 🔒 UNCHANGED: fetchData, socket listeners, all interfaces/types/state
 
 import { useState, useEffect } from 'react';
-import { Wallet, Package, TrendingUp, PiggyBank } from 'lucide-react';
+import { Wallet, Package, TrendingUp, PiggyBank, RotateCw } from 'lucide-react';
 import api from '../api';
 import { useSocket } from '../hooks/useSocket';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { PageHeader } from '../components/layout/PageHeader';
 import { SkeletonListRow } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Button } from '../components/ui/Button';
 
 interface VendorSummary {
   vendor_id: number; student_id: string; full_name: string;
@@ -25,6 +26,7 @@ export default function VendorSales() {
   const [summary, setSummary] = useState<VendorSummary | null>(null);
   const [items, setItems] = useState<VendorDetailItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const socket = useSocket();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
 
@@ -36,7 +38,8 @@ export default function VendorSales() {
       ]);
       setSummary(summaryRes.data[0] || null);
       setItems(detailRes.data);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+      setError(false);
+    } catch (e) { console.error(e); setError(true); } finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -70,7 +73,11 @@ export default function VendorSales() {
 
         <div className="p-4 sm:p-6">
 
-        {!summary || items.length === 0 ? (
+        {error ? (
+          <div className="bg-white border border-brand-border rounded-3xl shadow-md">
+            <EmptyState tone="error" icon={<Package size={24} />} title="โหลดยอดฝากขายไม่สำเร็จ" hint="กรุณาลองใหม่อีกครั้ง" action={<Button size="sm" onClick={fetchData}><RotateCw size={14} /> ลองใหม่</Button>} />
+          </div>
+        ) : !summary || items.length === 0 ? (
           <div className="bg-white border border-brand-border rounded-3xl shadow-md">
             <EmptyState icon={<Package size={24} />} title="ยังไม่มีสินค้าฝากขาย" hint="ยังไม่มียอดขายเข้ามา" />
           </div>

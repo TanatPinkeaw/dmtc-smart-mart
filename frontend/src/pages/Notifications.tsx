@@ -4,7 +4,7 @@
 // 🔒 UNCHANGED: fetchNotifications, filteredNotis, all state/logic
 
 import { useState, useEffect } from 'react';
-import { Bell, Search, Clock, CheckCircle2 } from 'lucide-react';
+import { Bell, Search, Clock, CheckCircle2, RotateCw } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -29,6 +29,7 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [rejectedOrders, setRejectedOrders] = useState<RejectedOrder[]>([]);
   const [slipOrder, setSlipOrder] = useState<RejectedOrder | null>(null);
   const socket = useSocket();
@@ -37,7 +38,8 @@ export default function Notifications() {
     try {
       const res = await api.get(`/notifications?t=${Date.now()}`);
       setNotifications(res.data);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+      setError(false);
+    } catch (e) { console.error(e); setError(true); } finally { setLoading(false); }
   };
 
   // ⭐️ ตาราง notifications เก็บแค่ (id, user_id, message, is_read, created_at) — ไม่มีคอลัมน์ชี้ว่า
@@ -186,6 +188,8 @@ export default function Notifications() {
                 </div>
               ))}
             </div>
+          ) : error && notifications.length === 0 ? (
+            <EmptyState tone="error" icon={<Bell size={24} />} title="โหลดการแจ้งเตือนไม่สำเร็จ" hint="กรุณาลองใหม่อีกครั้ง" action={<Button size="sm" onClick={fetchNotifications}><RotateCw size={14} /> ลองใหม่</Button>} />
           ) : filteredNotis.length === 0 ? (
             <EmptyState icon={<Bell size={24} />} title="ไม่มีการแจ้งเตือน" hint="50 รายการล่าสุดจะแสดงที่นี่" />
           ) : (

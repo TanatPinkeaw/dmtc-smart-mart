@@ -4,9 +4,10 @@
 // 🔒 UNCHANGED: fetchAll, handleSave, handleAddHoliday, openPopover, popover logic, all state
 
 import { useState, useEffect, useRef } from 'react';
-import { CalendarClock, ChevronLeft, ChevronRight, CalendarOff, X, Trash2 } from 'lucide-react';
+import { CalendarClock, ChevronLeft, ChevronRight, CalendarOff, X, Trash2, RotateCw } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
 import { inputCls } from '../components/ui/fieldStyles';
 import api from '../api';
 import Swal from '../swal';
@@ -35,6 +36,7 @@ export default function Schedules() {
   // ⭐️ ถ้ากำลังแก้ตารางกะที่มีอยู่แล้ว (คลิกจาก badge) เก็บ id ไว้เพื่อรู้ว่าต้อง "แก้" ไม่ใช่ "เพิ่มใหม่"
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
   const [holidayForm, setHolidayForm] = useState({ holiday_date: '', note: '' });
   const [showHolidayPanel, setShowHolidayPanel] = useState(false);
@@ -47,7 +49,8 @@ export default function Schedules() {
       const [staffRes, schRes, holRes] = await Promise.all([api.get('/staff-list'), api.get('/schedules'), api.get('/holidays')]);
       setStaff(staffRes.data);
       setSchedules(schRes.data); setHolidays(holRes.data);
-    } catch (e) { console.error(e); }
+      setError(false);
+    } catch (e) { console.error(e); setError(true); }
   };
 
   // IIFE: ให้กฎ set-state-in-effect มองว่า setState อยู่ใน async continuation
@@ -161,9 +164,13 @@ export default function Schedules() {
             <span className="text-sm font-bold text-gray-900">{MONTHS_TH[viewDate.getMonth()]} {viewDate.getFullYear() + 543}</span>
             <button onClick={nextMonth} className="p-2 hover:bg-brand-bg rounded-lg transition-colors duration-150 text-gray-500 hover:text-brand"><ChevronRight size={18} /></button>
           </div>
-          <div className="grid grid-cols-7 bg-brand-bg">
-            {WEEKDAYS.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold text-gray-500">{d}</div>)}
-          </div>
+          {error ? (
+            <EmptyState tone="error" icon={<CalendarClock size={24} />} title="โหลดตารางกะไม่สำเร็จ" hint="กรุณาลองใหม่อีกครั้ง" action={<Button size="sm" onClick={fetchAll}><RotateCw size={14} /> ลองใหม่</Button>} />
+          ) : (
+            <>
+            <div className="grid grid-cols-7 bg-brand-bg">
+              {WEEKDAYS.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold text-gray-500">{d}</div>)}
+            </div>
           <div className="grid grid-cols-7 gap-px bg-brand-border">
             {cells.map((day, i) => {
               if (!day) return <div key={`empty-${i}`} className="bg-white min-h-[72px]" />;
@@ -190,6 +197,8 @@ export default function Schedules() {
               );
             })}
           </div>
+            </>
+          )}
         </div>
 
         {/* Legend */}

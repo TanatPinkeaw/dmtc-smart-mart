@@ -14,6 +14,8 @@ import { MobileBottomNav } from '../components/layout/MobileBottomNav';
 import { FieldLabel } from '../components/ui/FieldLabel';
 import { MobileMenuDrawer } from '../components/layout/MobileMenuDrawer';
 import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
+import { AlertTriangle } from 'lucide-react';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
 // เข้าระบบนี้เสมอ (LIFF มี session ของ LINE เอง ไม่ใช่ JWT ของแอปนี้) ยิง fetch ตรงไป API_BASE_URL
@@ -231,9 +233,8 @@ export default function Register() {
         )}
 
         {stage === 'error' && (
-          <div className="bg-white rounded-3xl shadow-md border border-brand-border p-8 text-center">
-            <p className="text-red-500 font-bold mb-2">เกิดข้อผิดพลาด</p>
-            <p className="text-sm text-gray-500">{errorMsg}</p>
+          <div className="bg-white rounded-3xl shadow-md border border-brand-border p-8">
+            <EmptyState tone="error" icon={<AlertTriangle size={28} />} title="เกิดข้อผิดพลาด" hint={errorMsg} />
           </div>
         )}
 
