@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — UI: ปุ่ม outline ขาว (bg-white border) เข้า Button ครบ — secondary (แบรนด์) + variant ใหม่ outline-danger (แดง quiet) + ล็อก contract
+## [2026-08-17] — UI: ปุ่ม outline ขาว (bg-white border) เข้า Button ครบ — secondary (แบรนด์) + variant ใหม่ outline-danger (แดง quiet) + ล็อก contract (commit `41fa1a8`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -25,7 +25,7 @@
 
 ---
 
-## [2026-08-17] — test(ui): กฎปุ่ม contract จับปุ่มสีทึบ (bg-{สี}-50 + border) ใน BUTTON_ADOPTED — ปิดช่องโหว่ที่กฎ gradient มองไม่เห็น + อพยพปุ่ม "พอดี" (pos CartPanel) ที่โดนกฎใหม่
+## [2026-08-17] — test(ui): กฎปุ่ม contract จับปุ่มสีทึบ (bg-{สี}-50 + border) ใน BUTTON_ADOPTED — ปิดช่องโหว่ที่กฎ gradient มองไม่เห็น + อพยพปุ่ม "พอดี" (pos CartPanel) ที่โดนกฎใหม่ (commit `41fa1a8`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -43,7 +43,7 @@
 
 ---
 
-## [2026-08-17] — UI: InlineAlert เพิ่ม tone info (น้ำเงิน) — อพยพกล่องวิธีใช้ปิดกะ (CloseShiftModal) + ปุ่ม "ดูสลิป" สีทึบที่หลุดจากรอบปุ่ม 2 จุด (OrderManagement)
+## [2026-08-17] — UI: InlineAlert เพิ่ม tone info (น้ำเงิน) — อพยพกล่องวิธีใช้ปิดกะ (CloseShiftModal) + ปุ่ม "ดูสลิป" สีทึบที่หลุดจากรอบปุ่ม 2 จุด (OrderManagement) (commit `41fa1a8`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
