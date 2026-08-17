@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — Env/security: ตั้ง DB_SSL_CA ครบ — คู่มือใน DEMO-DEPLOY.md (ขั้น B.5) + config.js fail-fast ถ้า CA format เพี้ยน
+## [2026-08-17] — Env/security: ตั้ง DB_SSL_CA ครบ — คู่มือใน DEMO-DEPLOY.md (ขั้น B.5) + config.js fail-fast ถ้า CA format เพี้ยน (commit `4233725`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
