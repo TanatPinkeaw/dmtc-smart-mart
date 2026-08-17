@@ -21,6 +21,7 @@ import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import PendingShiftClosesWidget from '../components/dashboard/PendingShiftClosesWidget'; // ⭐️ Sprint 2 — D1
 import { Section } from '../components/dashboard/Section';
 import { EmptyState } from '../components/ui/EmptyState';
+import { InlineAlert } from '../components/ui/InlineAlert';
 import { StatCards } from '../components/dashboard/StatCards';
 import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
@@ -249,9 +250,9 @@ export default function Dashboard() {
       <div className="p-4 md:p-6">
       {/* 🐛 FIX — เดิม widget ที่ดึงไม่สำเร็จโชว์ว่าง/0 เงียบๆ — แจ้งชัดว่าบางข้อมูลไม่ได้อัปเดต */}
       {widgetLoadFailed && (
-        <div className="max-w-7xl mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-4 py-2.5 rounded-xl">
+        <InlineAlert tone="warning" size="sm" className="max-w-7xl mx-auto mb-4">
           ⚠️ บางข้อมูลโหลดไม่สำเร็จ แสดงค่าว่าง/เก่าชั่วคราว — ลองรีเฟรชหน้านี้อีกครั้ง
-        </div>
+        </InlineAlert>
       )}
 
       {/* ⭐️ Sprint 2 — D1: Pending Shift Closes Widget (ADMIN + MANAGER) */}

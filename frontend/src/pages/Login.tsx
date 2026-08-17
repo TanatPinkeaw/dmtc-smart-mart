@@ -12,6 +12,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { FieldLabel } from '../components/ui/FieldLabel';
+import { InlineAlert } from '../components/ui/InlineAlert';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
@@ -213,17 +214,15 @@ export default function Login() {
         {/* Card */}
         <div className="bg-white border border-neutral-border rounded-3xl shadow-sm p-6">
           {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl">
-              {error}
-            </div>
+            <InlineAlert tone="error" className="mb-4">{error}</InlineAlert>
           )}
 
 
           {/* ⭐️ F4 — แจ้งเตือน rate limit + countdown */}
           {isRateLimited && (
-            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-2xl text-center">
+            <InlineAlert tone="warning" className="mb-4 text-center">
               พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารออีก <span className="font-bold">{rateLimitCountdown}</span> วินาที
-            </div>
+            </InlineAlert>
           )}
 
           <h2 className="text-lg font-bold text-gray-800 mb-5">เข้าสู่ระบบ</h2>

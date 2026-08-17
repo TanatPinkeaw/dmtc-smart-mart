@@ -4,6 +4,50 @@
 
 ---
 
+## [2026-08-17] — UI: แถบ amber ใต้หัวโมดัล ChangePasswordModal เข้า InlineAlert variant strip — ปิด exception ที่เคยบันทึกไว้ในรอบก่อน
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **InlineAlert** (frontend) | เพิ่ม `variant` `'box' | 'strip'` — strip = `border-b` เต็มความกว้าง ไม่มน (px-5 py-2 text-xs) สำหรับแถบใต้หัวโมดัล |
+| **ChangePasswordModal** (frontend) | แถบเตือน "บัญชีนี้ใช้รหัสผ่านชั่วคราวอยู่..." (เดิม `<p>` เขียน `bg-amber-50 border-b` เอง) → `<InlineAlert tone="warning" variant="strip">` — รูปทรงเดิม (เต็มความกว้าง ไม่มน) สีอักษร/ขอบ normalize เข้ามาตรฐาน warning (amber-700/200 แทน 600/100) — **ปิด exception ที่บันทึกไว้ใน entry ก่อนหน้า** |
+| **เทส contract** (frontend) | `uiConsistencyContract` — `INLINE_ALERT_ADOPTED` +ChangePasswordModal (4 ไฟล์) + กฎใหม่ห้าม `bg-amber-50 border-b` เขียนเอง (จับ strip) + เทสล็อก `variant="strip"` ต้องมีใน InlineAlert — contract **39 ตัว** |
+
+### 🧪 เทส
+- frontend: **146 เทสผ่าน** (129 + 17 component — contract 39 ตัว) + `typecheck` + `build` ผ่าน
+
+**ที่ตั้งใจไม่แตะ (เหลือ — คนละ anatomy):** กล่องแดง/เหลืองที่แสดงข้อมูลโดเมน (เหตุผลปฏิเสธสลิป / จำนวนเงินส่วนต่างกะ / โซนอันตราย Settings / แบนเนอร์สลิปถูกปฏิเสธที่แถบบน Layout — เป็นเนื้อหาข้อมูล ไม่ใช่ alert)
+
+---
+
+## [2026-08-17] — UI: กล่องแจ้งเตือนเล็กในฟอร์ม/หน้า (error/warning) รวมเข้า InlineAlert กลาง — Login/Register/Dashboard ไม่เขียน bg-red-50/amber-50 เองอีก
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **InlineAlert** (frontend — ไฟล์ใหม่) | สร้าง `components/ui/InlineAlert.tsx` — กล่องแจ้งเตือนเล็กที่อยู่กับฟอร์ม/เนื้อหา (ต่างจาก EmptyState = กล่องใหญ่กลางหน้าสำหรับ "ไม่มีข้อมูล"): tone `error` (แดง) / `warning` (เหลือง) + ขนาด `sm` (แถบเล็ก rounded-xl) / `md` (กล่องฟอร์ม rounded-2xl) + `className` ต่อท้ายได้ |
+| **Login** (frontend) | กล่อง error ข้อความตอน submit (bg-red-50 เขียนเอง) → `<InlineAlert tone="error">`; กล่อง rate limit + countdown (amber) → `<InlineAlert tone="warning" className="text-center">` — หน้าตาเดิมเป๊ะ |
+| **Register** (frontend) | ข้อความ error ในฟอร์มสมัคร (เดิม `<p>` แดงลอย) → `<InlineAlert tone="error" size="sm">` — เล็กขึ้นเป็นกล่องตามมาตรฐานเดียวกับ Login |
+| **Dashboard** (frontend) | แบนเนอร์เตือน "บางข้อมูลโหลดไม่สำเร็จ" (amber เขียนเอง) → `<InlineAlert tone="warning" size="sm" className="max-w-7xl mx-auto mb-4">` — หน้าตา/ตำแหน่งเดิมเป๊ะ |
+| **เทส contract** (frontend) | `uiConsistencyContract` +**section ใหม่ (2 เช็ค)**: `INLINE_ALERT_ADOPTED` 3 ไฟล์ (Login/Register/Dashboard) ต้อง import `ui/InlineAlert` + **ห้าม `bg-red-50 border` / `bg-amber-50 border` เขียนเอง** — กันใครเขียนกล่อง alert เองกลับมา |
+
+### 🧪 เทส
+- frontend: **145 เทสผ่าน** (128 + 17 component — contract 37 ตัว) + `typecheck` + `build` ผ่าน
+
+**ที่ตั้งใจไม่แตะ (ข้อยกเว้น — คนละ anatomy):** แถบ amber ใต้หัวโมดัล ChangePasswordModal (px-5 border-b เต็มความกว้าง ไม่ใช่กล่องมน), กล่องแดง/เหลืองที่แสดงข้อมูลโดเมน (เหตุผลปฏิเสธสลิป / จำนวนเงินส่วนต่างกะ / โซนอันตราย Settings — เป็นเนื้อหาข้อมูล ไม่ใช่ alert)
+
+---
+
 ## [2026-08-17] — UI: fetch error path ทุกหน้าโชว์ผ่าน EmptyState tone="error" — อพยพกล่อง error เขียนเอง (Register) + แก้ 4 หน้าที่กลืน error แล้วโชว์ "ไม่มีข้อมูล" หลอก (Notifications/VendorSales/Inventory/Schedules) (commit `d4c6ba0`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

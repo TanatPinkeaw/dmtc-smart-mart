@@ -327,6 +327,41 @@ describe('fetch error — ตอนโหลดข้อมูลพัง ต�
   });
 });
 
+describe('inline alert — กล่องแจ้งเตือนเล็กในฟอร์ม/หน้า ต้องใช้ ui/InlineAlert (ห้าม bg-red-50/amber-50 border เขียนเองในไฟล์ที่อพยพแล้ว)', () => {
+  // ⭐️ ไฟล์ที่อพยพแล้ว: กล่อง error/เตือนเล็กๆ ที่อยู่กับฟอร์มหรือเนื้อหา (ข้อความ submit, rate limit,
+  //   แบนเนอร์เตือนใต้แถบหัว) ต้องใช้ <InlineAlert> — ต่างจาก EmptyState (กล่องใหญ่กลางหน้า)
+  const INLINE_ALERT_ADOPTED = ['pages/Login.tsx', 'pages/Register.tsx', 'pages/Dashboard.tsx',
+    'components/auth/ChangePasswordModal.tsx'];
+
+  test('ไฟล์ที่อพยพแล้ว import InlineAlert จาก ui/InlineAlert', () => {
+    for (const f of INLINE_ALERT_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { InlineAlert } from '../components/ui/InlineAlert'") ||
+                src.includes("import { InlineAlert } from '../ui/InlineAlert'"),
+        `${f} ต้อง import InlineAlert จาก ui/InlineAlert`);
+    }
+  });
+
+  test('ไม่มีกล่อง alert เขียนเอง (bg-red-50 border / bg-amber-50 border) ในไฟล์ที่อพยพแล้ว', () => {
+    for (const f of INLINE_ALERT_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(!src.includes('bg-red-50 border'),
+        `${f} ห้ามเขียนกล่อง error เอง (bg-red-50 border) — ใช้ <InlineAlert tone="error">`);
+      assert.ok(!src.includes('bg-amber-50 border'),
+        `${f} ห้ามเขียนกล่องเตือนเอง (bg-amber-50 border) — ใช้ <InlineAlert tone="warning">`);
+      assert.ok(!src.includes('bg-amber-50 border-b'),
+        `${f} ห้ามเขียนแถบ strip เอง (bg-amber-50 border-b) — ใช้ <InlineAlert variant="strip">`);
+    }
+  });
+
+  test('InlineAlert ต้องมี variant strip (border-b เต็มความกว้าง — แถบใต้หัวโมดัล)', () => {
+    const src = readFileSync(join(BASE, 'components/ui/InlineAlert.tsx'), 'utf8');
+    assert.ok(src.includes("variant = 'box'") && src.includes("'strip'"),
+      'InlineAlert ต้องมี variant box + strip (strip = border-b เต็มความกว้าง ไม่มน)'
+    );
+  });
+});
+
 describe('skeleton — ใช้ ui/Skeleton (SkeletonLine/SkeletonListRow) ห้ามกล่อง animate-pulse เขียนเองในไฟล์ที่อพยพแล้ว', () => {
   const SKELETON_ADOPTED = [
     'pages/BackupManagement.tsx', 'pages/VendorSales.tsx',

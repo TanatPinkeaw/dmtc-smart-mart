@@ -15,6 +15,7 @@ import { FieldLabel } from '../components/ui/FieldLabel';
 import { MobileMenuDrawer } from '../components/layout/MobileMenuDrawer';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
+import { InlineAlert } from '../components/ui/InlineAlert';
 import { AlertTriangle } from 'lucide-react';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
@@ -319,7 +320,7 @@ export default function Register() {
             </div>
             <div className="p-6 flex flex-col gap-4">
               {errorMsg && stage === 'form' && (
-                <p className="text-sm text-red-500 font-medium -mt-1">{errorMsg}</p>
+                <InlineAlert tone="error" size="sm" className="-mt-1">{errorMsg}</InlineAlert>
               )}
               <div>
                 <FieldLabel size="xs">รหัสนักศึกษา / รหัสประจำตัว</FieldLabel>

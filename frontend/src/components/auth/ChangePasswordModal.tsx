@@ -6,6 +6,7 @@ import api from '../../api';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { validatePasswordStrength } from '../../validators/passwordValidator';
 import { FieldLabel } from '../ui/FieldLabel';
+import { InlineAlert } from '../ui/InlineAlert';
 import { KeyRound } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -70,9 +71,9 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
       title={<><KeyRound size={18} /> เปลี่ยนรหัสผ่าน</>}
     >
       {forceChange && (
-        <p className="px-5 py-2 text-xs text-amber-600 bg-amber-50 border-b border-amber-100">
+        <InlineAlert tone="warning" variant="strip">
           บัญชีนี้ใช้รหัสผ่านชั่วคราวอยู่ กรุณาตั้งรหัสผ่านใหม่ก่อนใช้งานต่อ
-        </p>
+        </InlineAlert>
       )}
 
         {/* Form */}
