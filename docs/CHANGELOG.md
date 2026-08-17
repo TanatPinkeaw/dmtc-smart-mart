@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — UI: ปุ่มชำระเงินสีตามวิธีจ่ายเข้า Button (payment-cash/payment-qr) + สแกนทั้งแอปกำจัด <button> gradient เหลือ (commit pending-hash)
+## [2026-08-17] — UI: ปุ่มชำระเงินสีตามวิธีจ่ายเข้า Button (payment-cash/payment-qr) + สแกนทั้งแอปกำจัด <button> gradient เหลือ (commit `7500f15`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
