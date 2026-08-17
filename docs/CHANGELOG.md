@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — UI: empty state เข้า EmptyState กลางใน 3 หน้าที่เหลือ (Dashboard/Attendance/Settings) + label ของ Settings เข้า FieldLabel (commit pending-hash)
+## [2026-08-17] — UI: empty state เข้า EmptyState กลางใน 3 หน้าที่เหลือ (Dashboard/Attendance/Settings) + label ของ Settings เข้า FieldLabel (commit `c89746c`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
