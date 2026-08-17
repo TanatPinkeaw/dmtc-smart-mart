@@ -79,7 +79,9 @@ export default function Home() {
   const isStaff = user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'CASHIER';
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [lowStockCount, setLowStockCount] = useState(0);
+  // 🐛 FIX — เดิม default 0 + catch กลืน error: ถ้า API ล่ม การ์ดจะโชว์ "0 ใกล้หมด" หลอก (ทั้งที่
+  // โหลดไม่สำเร็จ). null = ยังไม่รู้ผล → โชว์ "—" แทนเลข 0 ปลอม
+  const [lowStockCount, setLowStockCount] = useState<number | null>(null);
   const [productCount, setProductCount] = useState(0);
   const [myHours, setMyHours] = useState<MyHours | null>(null); // ⭐️ Home page feature — ชม.ทำงาน/ค่าจ้างเดือนนี้
   const [pendingOrders, setPendingOrders] = useState(0); // ⭐️ ออเดอร์รอตรวจ (badge การ์ดจัดการออเดอร์)
@@ -87,6 +89,9 @@ export default function Home() {
   const [promos, setPromos] = useState<ActivePromo[]>([]);
   const [bestSellers, setBestSellers] = useState<HighlightProduct[]>([]);
   const [openOrder, setOpenOrder] = useState<OpenOrder | null>(null);
+  // 🐛 FIX — เดิม staff section ไม่มีสถานะโหลด: API ล่ม = การ์ดสรุปยอดหายเงียบๆ (summary null) หรือ
+  // โชว์ 0 ปลอม (lowStock) — จริงๆแล้วควรโชว์การ์ดพร้อม "—" เมื่อโหลดเสร็จ (สำเร็จหรือไม่)
+  const [staffLoaded, setStaffLoaded] = useState(false);
   const [slipOrder, setSlipOrder] = useState<OpenOrder | null>(null);
   // แยก loading ต่อ section เพื่อให้ skeleton หายทีละส่วนตามที่โหลดเสร็จ ไม่ต้องรอพร้อมกันทั้งหน้า
   const [loadingPromos, setLoadingPromos] = useState(!isStaff);
@@ -104,10 +109,20 @@ export default function Home() {
 
   useEffect(() => {
     if (isStaff) {
-      api.get('/reports/dashboard').then(res => setSummary(res.data.summary)).catch(() => {});
-      api.get('/inventory/low-stock').then(res => setLowStockCount(res.data.length)).catch(() => {});
-      api.get('/reports/my-hours').then(res => setMyHours(res.data)).catch(() => {});
-      api.get('/orders/pending-count').then(res => setPendingOrders(res.data?.count || 0)).catch(() => {});
+      // 🐛 FIX — เดิม .catch(() => {}) กลืน error: summary/lowStock หายเงียบหรือโชว์ 0 หลอก.
+      // ตอนนี้ failure = คงค่า null (โชว์ "—") และ staffLoaded ค่อย true เมื่อครบ (allSettled ไม่
+      // ตัดตอนเมื่อตัวใดตัวหนึ่ง fail — การ์ดจะโชว์ค่าที่ได้ + "—" ตัวที่ไม่ได้)
+      Promise.allSettled([
+        api.get('/reports/dashboard'),
+        api.get('/inventory/low-stock'),
+        api.get('/reports/my-hours'),
+        api.get('/orders/pending-count'),
+      ]).then(([dash, low, hours, pend]) => {
+        if (dash.status === 'fulfilled') setSummary(dash.value.data.summary);
+        if (low.status === 'fulfilled') setLowStockCount(low.value.data.length);
+        if (hours.status === 'fulfilled') setMyHours(hours.value.data);
+        if (pend.status === 'fulfilled') setPendingOrders(pend.value.data?.count || 0);
+      }).finally(() => setStaffLoaded(true));
     } else {
       // ⭐️ ทั้ง 3 อย่างนี้เป็นของ "สมาชิก" เท่านั้น และไม่ critical — ถ้าอันใดอันหนึ่งพัง
       // ต้องไม่ทำให้ส่วนอื่นของหน้าหายไปด้วย จึงแยก catch ของใครของมัน
@@ -200,7 +215,7 @@ export default function Home() {
       // "ตารางกะ" แทนด้านล่าง (ดูตารางเวลาทำงานของตัวเอง มีประโยชน์กว่า)
       key: 'inventory', show: isStaff && !isCashier, icon: Boxes, locked: workLocked,
       title: 'คลังสินค้า', subtitle: workLocked ? 'ต้องเปิดกะก่อน' : 'จัดการสินค้าและสต๊อก',
-      badge: lowStockCount > 0 ? `${lowStockCount} ใกล้หมด` : null,
+      badge: (lowStockCount ?? 0) > 0 ? `${lowStockCount} ใกล้หมด` : null,
       onClick: () => goTo('/inventory'),
     },
     {
@@ -308,20 +323,21 @@ export default function Home() {
         <p className="relative z-10 text-white/70 text-[11px] mt-2.5">เมนูด้านล่างแสดงตามสิทธิ์การใช้งานของคุณ</p>
       </div>
 
-      {/* Stat card (staff only) — ลอยคาบเส้นขอบล่างของ header ตามดีไซน์อ้างอิง สีต่างกันตามประเภทข้อมูล */}
-      {isStaff && summary && (
+      {/* Stat card (staff only) — ลอยคาบเส้นขอบล่างของ header ตามดีไซน์อ้างอิง สีต่างกันตามประเภทข้อมูล
+          โชว์เมื่อโหลดครบ (สำเร็จหรือไม่) — ค่าที่โหลดไม่ได้ = "—" กันโชว์ 0 ปลอม */}
+      {isStaff && staffLoaded && (
         <div className="px-5 -mt-16 relative z-10">
           <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 grid grid-cols-3 divide-x divide-brand-border">
             <div className="text-center px-1">
-              <p className="text-base font-extrabold text-brand">฿{Number(summary.total_sales).toLocaleString()}</p>
+              <p className="text-base font-extrabold text-brand">{summary ? `฿${Number(summary.total_sales).toLocaleString()}` : '—'}</p>
               <p className="text-[11px] text-gray-400 font-medium mt-0.5">ยอดขายวันนี้</p>
             </div>
             <div className="text-center px-1">
-              <p className="text-base font-extrabold text-blue-500">{summary.total_bills}</p>
+              <p className="text-base font-extrabold text-blue-500">{summary ? summary.total_bills : '—'}</p>
               <p className="text-[11px] text-gray-400 font-medium mt-0.5">ออเดอร์</p>
             </div>
             <div className="text-center px-1">
-              <p className="text-base font-extrabold text-amber-500">{lowStockCount}</p>
+              <p className="text-base font-extrabold text-amber-500">{lowStockCount ?? '—'}</p>
               <p className="text-[11px] text-gray-400 font-medium mt-0.5">สต๊อกใกล้หมด</p>
             </div>
           </div>

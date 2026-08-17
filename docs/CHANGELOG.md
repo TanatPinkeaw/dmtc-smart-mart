@@ -4,6 +4,22 @@
 
 ---
 
+## [2026-08-17] — fix(backend+frontend): ล่าบัค 4 จุด — แยกลิมิต sync-offline, clamp page/limit audit-logs, โชว์ "—" แทน 0 ปลอม, ลบ dead socket
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+1. **Restart backend เท่านั้น** (server.js เปลี่ยน 2 จุด + ลบ dead socket) + rebuild frontend (Home/Dashboard โชว์ "—" แทน 0 ปลอม)
+2. **MEDIUM — บิลออฟไลน์หลุดจากลิมิต**: เดิม `/api/sales/sync-offline` ใช้ `checkoutLimiter` ตัวเดียวกับ `/checkout` (30 ครั้ง/นาที prod) — คิวออฟไลน์ replay บิลค้าง >30 ใบหลังเน็ตกลับโดน 429 → queueProcessor retry 3 ครั้งแล้วตัดทิ้งถาวร = บิลหลุดจริง. ตอนนี้แยก `syncOfflineLimiter` (300/นาที prod + `skipFailedRequests`) — ยังกัน DoS อยู่
+3. **LOW — `GET /api/audit-logs?page=abc` เคย 500** (offset = NaN เข้า mysql2) + `?limit=100000000` query ยักษ์ — clamp แล้ว (page ≥ 1, limit 1–200)
+4. **NIT — Home/Dashboard** เดิม `.catch(() => {})` กลืน error: การ์ดสรุปยอดหายเงียบ/โชว์ "0 ใกล้หมด" หลอก — ตอนนี้โชว์ "—" สำหรับค่าที่โหลดไม่ได้ (Home) + แบนเนอร์ "บางข้อมูลโหลดไม่สำเร็จ" (Dashboard)
+5. **NIT — dead code**: `socket.on('request_shift_report')` ถูกลบ (ไม่มีฝั่งไหน listen) — เทส order-realtime ปรับ anchor marker ตาม
+
+### 🧪 เทสใหม่/แก้
+- `tests/serverGuardRails.test.js` ใหม่ — ล็อก: sync-offline ใช้ limiter แยก + skipFailedRequests + max > checkout · audit-logs clamp page/limit · ไม่มี dead socket (12 เช็ค, probe จับ fail จริงแล้ว) — ต่อเข้า runner = **12/12 ชุดผ่าน**
+- `tests/orderRealtime.test.js` — end marker เปลี่ยนเป็น `socket.on('disconnect'` (comment เดิมถูกลบไปพร้อม dead code)
+
+---
+
 ## [2026-08-17] — test(backend): เทส contract ใหม่ undefinedIdentifiers — ไล่ identifier ที่ไม่ได้ประกาศ/ชื่อไม่ตรงทุก call site (server.js + controllers 7 ไฟล์) (commit `439b681`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

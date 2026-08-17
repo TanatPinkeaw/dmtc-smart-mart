@@ -50,6 +50,9 @@ interface DeadStockRow { id: number; name: string; stock: number; }
 interface AttendanceRow { user_id: number; full_name: string; late_minutes?: number | null; }
 
 export default function Dashboard() {
+  // 🐛 FIX — เดิม .catch(() => {}) กลืน error ทุก widget: ตัวไหนล่ม โชว์ว่าง/0 เงียบๆ หลอก. 
+  // โชว์แบนเนอร์ "บางส่วนโหลดไม่สำเร็จ" แทนการเงียบ
+  const [widgetLoadFailed, setWidgetLoadFailed] = useState(false);
   const [summary, setSummary] = useState<{ total_sales?: number | string; total_bills?: number | string } | null>(null);
   const [topProducts, setTopProducts] = useState<{ name: string; total_quantity?: number | string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,7 +122,7 @@ export default function Dashboard() {
       const [dashRes, topRes] = await Promise.all([api.get('/reports/dashboard'), api.get('/reports/top-selling')]);
       setSummary(dashRes.data.summary); setTopProducts(topRes.data);
       if (!isManagerOrAdmin) { setLoading(false); return; }
-      const get = <T,>(url: string, setter: (d: T) => void) => api.get(url).then(r => setter(r.data as T)).catch(() => {});
+      const get = <T,>(url: string, setter: (d: T) => void) => api.get(url).then(r => setter(r.data as T)).catch(() => setWidgetLoadFailed(true));
       await Promise.all([
         get('/inventory/low-stock', setLowStock), get('/reports/void-summary', setVoidSummary),
         get('/reports/shift-anomalies', setShiftAnomalies), get('/reports/sales-comparison', setComparison),
@@ -242,6 +245,13 @@ export default function Dashboard() {
       </div>
 
       <div className="p-4 md:p-6">
+      {/* 🐛 FIX — เดิม widget ที่ดึงไม่สำเร็จโชว์ว่าง/0 เงียบๆ — แจ้งชัดว่าบางข้อมูลไม่ได้อัปเดต */}
+      {widgetLoadFailed && (
+        <div className="max-w-7xl mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-4 py-2.5 rounded-xl">
+          ⚠️ บางข้อมูลโหลดไม่สำเร็จ แสดงค่าว่าง/เก่าชั่วคราว — ลองรีเฟรชหน้านี้อีกครั้ง
+        </div>
+      )}
+
       {/* ⭐️ Sprint 2 — D1: Pending Shift Closes Widget (ADMIN + MANAGER) */}
       {isManagerOrAdmin && (
         <div className="max-w-7xl mx-auto mb-5">

@@ -95,6 +95,20 @@ const checkoutLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// 🐛 FIX — เดิม sync-offline ใช้ checkoutLimiter ตัวเดียวกับ /checkout: คิวออฟไลน์ replay
+// บิลค้าง >30 ใบ (prod) รัวๆ หลังเน็ตกลับ จะโดน 429 ทั้งชุด → queueProcessor retry 3 ครั้งแล้ว
+// ตัดทิ้งถาวร = บิลออฟไลน์หลุดจริง. แยก limiter ตัวใหม่ + skipFailedRequests: ถ้าโดนจำกัดแล้ว
+// request ที่ fail ไปแล้วไม่นับซ้ำ (กัน replay ติดลิมิตเพราะโดน 429 เอง) — ยังกัน DoS อยู่
+const syncOfflineLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: IS_PRODUCTION ? 300 : 600, // prod 300 บิล/นาที = คิวออฟไลน์ทั้งวัน replay ได้ในรอบเดียว, dev ผ่อนเป็น 600
+  keyGenerator: (req) => req.user?.id?.toString() || ipKeyGenerator(req),
+  message: { error: 'ส่งบิลออฟไลน์ถี่เกินไป กรุณารอสักครู่' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+});
+
 // ⭐️ SECURITY FIX (วิกฤต #2) — forgot-password ยืนยันตัวตนด้วย student_id + เบอร์โทร (ทั้งคู่เดาง่าย)
 // เดิมไม่มี rate limit = ยิงเดาเบอร์รัวๆ เพื่อยึดบัญชีได้ จำกัด 3 ครั้ง/ชม./IP
 const forgotPasswordLimiter = rateLimit({
@@ -771,15 +785,6 @@ io.on('connection', (socket) => {
     'INSERT INTO audit_logs (action, user_id, details) VALUES (?, ?, ?)',
     ['SOCKET_CONNECTED', socket.user?.id || null, JSON.stringify({ socket_id: socket.id })]
   ).catch(err => console.error('audit_logs SOCKET_CONNECTED ล้มเหลว:', err.message));
-
-  // ⭐️ Task 1A — ตัวอย่าง event ที่ต้องเช็ค role ก่อนตอบข้อมูล (เฉพาะ ADMIN)
-  socket.on('request_shift_report', () => {
-    if (socket.user?.role !== 'ADMIN') {
-      socket.emit('error', 'Unauthorized');
-      return;
-    }
-    socket.emit('shift_report_ack', { message: 'ok' });
-  });
 
   socket.on('disconnect', (reason) => {
     console.log(`🔴 หน้าจอ POS ปิดการเชื่อมต่อ: ${socket.id} - reason: ${reason}`);
@@ -3214,7 +3219,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
 //     existing sale_id.
 //   - Batch semantics: each sale in the batch is its own transaction — one bad item never blocks
 //     the rest of the batch from syncing.
-app.post('/api/sales/sync-offline', requireRole('CASHIER'), checkoutLimiter, validateRequest(syncOfflineValidator), async (req, res) => {
+app.post('/api/sales/sync-offline', requireRole('CASHIER'), syncOfflineLimiter, validateRequest(syncOfflineValidator), async (req, res) => {
   const { sales } = req.body;
   const cashierId = req.user.id; // ⭐️ ตัวตนจาก JWT เสมอ ไม่เชื่อ client-sent cashier_id (เหมือน checkout)
   const results = [];
@@ -5042,7 +5047,11 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
 
 // ⭐️ Sprint 2 — C2: Audit Log Viewer — GET /api/audit-logs
 app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
-  const { page = 1, limit = 50, action, user_id, start_date, end_date, search } = req.query;
+  // 🐛 FIX — เดิม parseInt ตรงๆ ไม่มี guard: `?page=abc` → offset = NaN → mysql2 throw → 500 generic,
+  // และ `?limit=100000000` (MEMBER กดได้) → query ยักษ์. clamp ทั้งคู่: page ≥ 1, limit 1–200
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const { action, user_id, start_date, end_date, search } = req.query;
   const currentUser = req.user;
 
   try {
@@ -5119,9 +5128,9 @@ app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req
     const total = countResult[0].total;
 
     // Pagination
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (page - 1) * limit;
     query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    params.push(limit, offset);
 
     const [logs] = await pool.query(query, params);
 

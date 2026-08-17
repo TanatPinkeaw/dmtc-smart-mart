@@ -29,6 +29,7 @@ const SUITES = [
   { name: 'sync-offline', file: 'tests/syncOfflineContract.test.js' },
   { name: 'preorder-policy', file: 'tests/preorderPolicy.test.js' },
   { name: 'undefined-identifiers', file: 'tests/undefinedIdentifiers.test.js' },
+  { name: 'server-guard-rails',  file: 'tests/serverGuardRails.test.js' },
   { name: 'order-realtime',  file: 'tests/orderRealtime.test.js' },
   { name: 'richmenu',     file: 'src/scripts/setup-richmenu.test.js' },
 ];

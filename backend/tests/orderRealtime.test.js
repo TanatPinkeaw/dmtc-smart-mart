@@ -29,7 +29,9 @@ function handlerWindow(startMarker, endMarker) {
 }
 
 describe('A. socket join — ทุก role (รวม staff) เข้าห้องส่วนตัว user_${id}', () => {
-  const connSrc = handlerWindow("io.on('connection'", '// ⭐️ Task 1A — ตัวอย่าง event');
+  // end marker = socket.on('disconnect' (comment "Task 1A — ตัวอย่าง event" ถูกลบไปพร้อม dead code
+  // request_shift_report — ใช้ marker ตัวถัดไปที่ยังอยู่แทน)
+  const connSrc = handlerWindow("io.on('connection'", "socket.on('disconnect'");
 
   test('socket ต้อง join ห้อง user_${socket.user.id} — ฐานของ event ส่วนตัวทุกตัว', () => {
     assert.ok(connSrc.includes('socket.join(`user_${socket.user.id}`)'),
