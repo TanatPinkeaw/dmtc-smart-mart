@@ -28,6 +28,7 @@ const SUITES = [
   { name: 'reward',       file: 'tests/rewardRedemption.test.js' },
   { name: 'sync-offline', file: 'tests/syncOfflineContract.test.js' },
   { name: 'preorder-policy', file: 'tests/preorderPolicy.test.js' },
+  { name: 'undefined-identifiers', file: 'tests/undefinedIdentifiers.test.js' },
   { name: 'order-realtime',  file: 'tests/orderRealtime.test.js' },
   { name: 'richmenu',     file: 'src/scripts/setup-richmenu.test.js' },
 ];

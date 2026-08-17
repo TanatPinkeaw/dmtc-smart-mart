@@ -4,6 +4,15 @@
 
 ---
 
+## [2026-08-17] — test(backend): เทส contract ใหม่ undefinedIdentifiers — ไล่ identifier ที่ไม่ได้ประกาศ/ชื่อไม่ตรงทุก call site (server.js + controllers 7 ไฟล์)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+1. **ไม่ต้องทำอะไร** — เป็นเทสฝั่ง dev เท่านั้น (รันใน `run-all-tests.js`) ไม่กระทบ runtime/DB/env
+2. เทสนี้จะจับบัคแบบ `usePhoneForPoints` ReferenceError (commit `6f30e5e`) กลับมาใหม่โดยอัตโนมัติ — ไล่ทั้ง object shorthand `{ a }` และ mapping `{ key: b }` ว่าตัวแปรต้องประกาศจริงในไฟล์นั้น
+
+---
+
 ## [2026-08-17] — feat(frontend): รวมการ์ดสินค้า/รูป/ราคาเป็น ProductCard/ProductImage/ProductPrice กลาง (POS + preorder + Home) (commit `bd3e785`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
