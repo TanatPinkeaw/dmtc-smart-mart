@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — UI: ปุ่มสีตามสถานะรวมเข้า Button (variant warning/success/purple/orange/info) + loading state เข้า Skeleton + contract เข้มขึ้น (commit pending-hash)
+## [2026-08-17] — UI: ปุ่มสีตามสถานะรวมเข้า Button (variant warning/success/purple/orange/info) + loading state เข้า Skeleton + contract เข้มขึ้น (commit `137ecc0`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -25,7 +25,7 @@
 
 ---
 
-## [2026-08-17] — UI: อพยพแถบหัว POS/PreOrder/Notifications เข้า PageHeader + ปุ่ม CloseShift/Notifications เข้า Button — แถบหัวหน้าเขียนเองหมดทั้งแอป (commit pending-hash)
+## [2026-08-17] — UI: อพยพแถบหัว POS/PreOrder/Notifications เข้า PageHeader + ปุ่ม CloseShift/Notifications เข้า Button — แถบหัวหน้าเขียนเองหมดทั้งแอป (commit `137ecc0`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -49,7 +49,7 @@
 
 ---
 
-## [2026-08-17] — UI: อพยพ Inventory (หน้าคลังสุดท้าย) เข้า PageHeader + EmptyState — ครบทุกหน้า staff (commit pending-hash)
+## [2026-08-17] — UI: อพยพ Inventory (หน้าคลังสุดท้าย) เข้า PageHeader + EmptyState — ครบทุกหน้า staff (commit `137ecc0`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
