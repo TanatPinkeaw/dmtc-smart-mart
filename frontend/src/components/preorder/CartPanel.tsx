@@ -4,6 +4,7 @@
 import { ShoppingCart, Plus, Minus, X, CheckCircle, Upload, ChevronUp, ChevronDown } from 'lucide-react';
 import { FieldLabel } from '../ui/FieldLabel';
 import { EmptyState } from '../ui/EmptyState';
+import { Button } from '../ui/Button';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 
@@ -230,13 +231,19 @@ export function CartPanel({
         {/* ⭐️ FIX: ปุ่มยืนยัน — ปรับให้ตรงกับปุ่ม "ชำระเงิน" หน้า POS: ขนาด/ฟอนต์เล็กลง (py-3.5, text-sm,
             ไอคอน 18px), เปลี่ยนเป็นสีฟ้าตอนเลือกสแกนจ่าย (เหมือน POS ที่สลับสีตาม paymentMethod) */}
         {/* ⭐️ QR: ล็อกปุ่มจนกว่าสลิปจะแนบ+ตรวจเสร็จ กันกดยืนยันก่อนสลิปพร้อม (รูปสลิปจะไม่ขึ้น) */}
-        <button onClick={onCheckout} disabled={cart.length === 0 || loading || qrNotReady} className={`w-full py-3.5 rounded-full text-sm font-bold text-white shadow-sm transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${(cart.length === 0 || qrNotReady) ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-gradient-to-br from-blue-600 to-blue-700 focus-visible:ring-blue-500' : 'bg-gradient-to-br from-brand to-brand-dark focus-visible:ring-brand'}`}>
-          {loading ? (
-            <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังส่งข้อมูล...</>
-          ) : slipProcessing ? 'กำลังเตรียมสลิป...'
+        {/* ⭐️ ปุ่มยืนยันสีตามวิธีจ่าย: เงินสด = payment-cash (ชมพูแบรนด์) / QR = payment-qr (น้ำเงิน) */}
+        <Button
+          variant={paymentMethod === 'QR' ? 'payment-qr' : 'payment-cash'}
+          size="lg"
+          className="w-full disabled:cursor-not-allowed"
+          onClick={onCheckout}
+          disabled={cart.length === 0 || loading || qrNotReady}
+          loading={loading}
+        >
+          {loading ? 'กำลังส่งข้อมูล...' : slipProcessing ? 'กำลังเตรียมสลิป...'
             : (paymentMethod === 'QR' && !slipFile) ? <><Upload size={18} /> แนบสลิปก่อนยืนยัน</>
             : <><CheckCircle size={18} /> ยืนยันคำสั่งซื้อ</>}
-        </button>
+        </Button>
         </div>
       </div>
     </div>

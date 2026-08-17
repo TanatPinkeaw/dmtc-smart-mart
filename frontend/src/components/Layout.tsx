@@ -18,6 +18,7 @@ import { SocketProvider } from '../SocketContext';
 import { useSocket } from '../hooks/useSocket';
 import { getCurrentUser, getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
+import { Button } from './ui/Button';
 import { Sidebar } from './layout/Sidebar';
 import { MobileBottomNav } from './layout/MobileBottomNav';
 import { MobileMenuDrawer } from './layout/MobileMenuDrawer';
@@ -166,12 +167,9 @@ function LayoutInner() {
               ⚠️ ออเดอร์ #{order.id} สลิปไม่ผ่าน
               {order.reject_reason && <span className="font-normal text-red-600"> — {order.reject_reason}</span>}
             </p>
-            <button
-              onClick={() => setSlipOrder(order)}
-              className="shrink-0 px-4 py-1.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-xs font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
-            >
+            <Button variant="danger" size="sm" className="shrink-0" onClick={() => setSlipOrder(order)}>
               ส่งสลิปใหม่
-            </button>
+            </Button>
           </div>
         ))}
         <Outlet />

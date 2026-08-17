@@ -4,6 +4,26 @@
 
 ---
 
+## [2026-08-17] — UI: ปุ่มชำระเงินสีตามวิธีจ่ายเข้า Button (payment-cash/payment-qr) + สแกนทั้งแอปกำจัด <button> gradient เหลือ (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Button** (frontend) | เพิ่ม variant `payment-cash` (ชมพูแบรนด์ — เงินสด) + `payment-qr` (น้ำเงิน — QR) สำหรับปุ่มชำระเงิน + `reward` (amber — แลกของรางวัล) |
+| **ปุ่มชำระเงิน** (frontend) | checkout POS + PreOrder (เดิม `<button>` สลับสีตามวิธีจ่าย + disabled เป็นเทา) → `<Button variant={QR ? payment-qr : payment-cash}>` — สี/ข้อความ/loading เดิม, disabled เป็นมาตรฐาน opacity-fade ของ Button |
+| **สแกนทั้งแอป** (frontend) | เทส whole-app ไล่ทุก `<button>` ว่ามี `bg-gradient-to-br` — ไล่พบปุ่มที่หลุดจากกฎเก่าอีก **8 จุด** อพยพครบ: pos CartPanel "แลกของรางวัล" (amber), ChangePasswordModal submit, PendingShiftClosesWidget อนุมัติ/ปฏิเสธ, Layout "ส่งสลิปใหม่", MyOrdersModal "ส่งสลิปใหม่", Schedules บันทึกกะ — เหลือ `<button>` gradient ในแอปแค่ **FAB กลม 3 จุด** (POS/PreOrder/MobileBottomNav — w-14 h-14 rounded-full) ที่เป็น exception โดยตั้งใจ |
+| **เทส contract** (frontend) | `uiConsistencyContract` — Button ต้องมี payment-cash/payment-qr/reward (ล็อกสีไม่ให้เพี้ยน); +7 ไฟล์ใน `BUTTON_ADOPTED` (CartPanel ×2/ChangePasswordModal/PendingShiftClosesWidget/Layout/MyOrdersModal/Schedules — รวม 25 ไฟล์ห้าม gradient button เขียนเอง); กฎใหม่ทั้งแอป: `<button>` gradient เหลือได้เฉพาะ FAB กลม (w-14 h-14 + rounded-full) |
+
+### 🧪 เทส
+- frontend: **140 เทสผ่าน** (123 + 17 component — contract 32 ตัว) + `typecheck` + `build` ผ่าน
+
+---
+
 ## [2026-08-17] — UI: ปุ่มสีตามสถานะรวมเข้า Button (variant warning/success/purple/orange/info) + loading state เข้า Skeleton + contract เข้มขึ้น (commit `137ecc0`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

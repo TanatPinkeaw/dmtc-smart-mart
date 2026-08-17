@@ -4,6 +4,7 @@ import { X, RotateCw, Receipt } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 import { StatusBadge } from '../ui/StatusBadge';
 import { EmptyState } from '../ui/EmptyState';
+import { Button } from '../ui/Button';
 
 // สี/class badge มาจาก ui/StatusBadge (map กลาง) — ตรงนี้เก็บแค่ label เต็มแบบ member view
 const STATUS_LABEL: Record<string, string> = {
@@ -99,12 +100,13 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
                 {/* ⭐️ สลิปไม่ผ่าน = งานที่ผู้ใช้ต้องทำต่อ ดันปุ่มขึ้นมาที่การ์ดเลย
                     stopPropagation กัน onClick ของการ์ด (เปิดหน้ารายละเอียด) ทำงานทับ */}
                 {order.status === 'SLIP_REJECTED' && (
-                  <button
+                  <Button
+                    variant="danger"
+                    className="mt-3 w-full"
                     onClick={(e) => { e.stopPropagation(); onResubmitSlip(order); }}
-                    className="mt-3 w-full py-2.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-sm font-bold transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
                   >
                     ส่งสลิปใหม่
-                  </button>
+                  </Button>
                 )}
               </div>
             ))

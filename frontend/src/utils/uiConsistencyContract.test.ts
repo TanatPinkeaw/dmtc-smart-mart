@@ -104,6 +104,9 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
     'components/common/ErrorBoundary.tsx', 'components/settings/LoyaltySettingsPanel.tsx',
     'components/preorder/OrderDetailModal.tsx', 'components/dashboard/DetailModal.tsx',
     'components/dashboard/CloseShiftModal.tsx', 'components/pos/RewardModal.tsx',
+    'components/pos/CartPanel.tsx', 'components/preorder/CartPanel.tsx',
+    'components/auth/ChangePasswordModal.tsx', 'components/dashboard/PendingShiftClosesWidget.tsx',
+    'components/Layout.tsx', 'components/preorder/MyOrdersModal.tsx', 'pages/Schedules.tsx',
   ];
 
   test('ไม่มีปุ่ม gradient เขียนเอง (<button ... bg-gradient-to-br) ในไฟล์ที่อพยพแล้ว', () => {
@@ -132,6 +135,37 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
     const button = readFileSync(join(BASE, 'components/ui/Button.tsx'), 'utf8');
     assert.ok(button.includes("primary: 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold'"),
       'Button variant primary ต้องเป็น gradient แบรนด์ — ปุ่มหลักทั้งแอปต้องหน้าตาเดียวกัน');
+  });
+
+  test('Button ต้องมี variant payment-cash/payment-qr (ชำระเงินสีตามวิธีจ่าย) + reward (แลกของรางวัล)', () => {
+    const button = readFileSync(join(BASE, 'components/ui/Button.tsx'), 'utf8');
+    assert.ok(button.includes("'payment-cash': 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold'"),
+      'Button ต้องมี payment-cash — เงินสด = ชมพูแบรนด์ (ปุ่มชำระเงิน POS/PreOrder)');
+    assert.ok(button.includes("'payment-qr': 'bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold'"),
+      'Button ต้องมี payment-qr — QR = น้ำเงิน (ปุ่มชำระเงิน POS/PreOrder)');
+    assert.ok(button.includes("reward: 'bg-gradient-to-br from-amber-400 to-amber-500 text-white font-bold'"),
+      'Button ต้องมี reward (amber) — ปุ่มแลกของรางวัล');
+  });
+
+  // ⭐️ ไล่ <button> gradient ทั้งแอป (นอกไฟล์ที่ ADOPTED แล้ว) — เหลือได้เฉพาะ FAB กลมลอย
+  // (w-14 h-14 rounded-full — POS/PreOrder/MobileBottomNav) ที่เป็น exception โดยตั้งใจ
+  test('ทั้งแอป — <button> gradient เขียนเองเหลือได้เฉพาะ FAB กลม (w-14 h-14 rounded-full)', () => {
+    const offenders: string[] = [];
+    for (const f of ALL_UI) {
+      const src = readFileSync(f, 'utf8');
+      let idx = 0;
+      while ((idx = src.indexOf('<button', idx)) !== -1) {
+        if (src[idx + 7] !== '/') { // ข้าม </button>
+          const win = src.slice(idx, idx + 400);
+          if (win.includes('bg-gradient-to-br') && !(win.includes('w-14 h-14') && win.includes('rounded-full'))) {
+            offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}`);
+          }
+        }
+        idx += 7;
+      }
+    }
+    assert.deepEqual(offenders, [],
+      `เจอปุ่ม gradient เขียนเอง (ที่ไม่ใช่ FAB กลม w-14 h-14) — ต้องใช้ <Button> variant (payment-cash/payment-qr/reward ฯลฯ):\n${offenders.join('\n')}`);
   });
 });
 

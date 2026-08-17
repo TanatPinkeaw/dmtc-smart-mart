@@ -8,6 +8,7 @@ import { validatePasswordStrength } from '../../validators/passwordValidator';
 import { FieldLabel } from '../ui/FieldLabel';
 import { KeyRound } from 'lucide-react';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import { getErrorMessage } from '../../utils/errorMessage';
 
 interface ChangePasswordModalProps {
@@ -118,19 +119,16 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
 
           {/* Buttons */}
           <div className="flex gap-2 pt-2">
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="lg"
+              className="flex-1"
               disabled={loading}
-              className="flex-1 py-3 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-                enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70"
+              loading={loading}
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  กำลังเปลี่ยน...
-                </span>
-              ) : 'เปลี่ยนรหัสผ่าน'}
-            </button>
+              {loading ? 'กำลังเปลี่ยน...' : 'เปลี่ยนรหัสผ่าน'}
+            </Button>
             {!forceChange && (
               <button
                 type="button"

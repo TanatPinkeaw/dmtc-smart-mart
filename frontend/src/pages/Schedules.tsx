@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CalendarClock, ChevronLeft, ChevronRight, CalendarOff, X, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
+import { Button } from '../components/ui/Button';
 import { inputCls } from '../components/ui/fieldStyles';
 import api from '../api';
 import Swal from '../swal';
@@ -231,11 +232,9 @@ export default function Schedules() {
               </button>
             </div>
           ))}
-          <button onClick={handleSave} disabled={saving}
-            className="w-full mt-1 py-2.5 text-white text-sm font-bold rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-              enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
+          <Button onClick={handleSave} disabled={saving} loading={saving} className="w-full mt-1">
             {saving ? 'กำลังบันทึก...' : editingScheduleId ? 'บันทึกการแก้ไข' : '+ เพิ่มกะ'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import { ShoppingCart, Plus, Minus, X, CheckCircle, UserPlus, Gift, ChevronUp, C
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 import { EmptyState } from '../ui/EmptyState';
+import { Button } from '../ui/Button';
 
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
 interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
@@ -189,9 +190,9 @@ export function CartPanel({
               )}
               {/* ⭐️ Part 5/6 — ปุ่มแลกของรางวัลด้วยแต้ม (เฉพาะบัญชี MEMBER) */}
               {memberCanUsePoints && onOpenRewardModal && (
-                <button onClick={onOpenRewardModal} className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-500 text-white text-xs font-bold py-2 rounded-lg active:scale-[0.98] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+                <Button variant="reward" size="sm" className="w-full" onClick={onOpenRewardModal}>
                   <Gift size={14} /> แลกของรางวัล
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -267,12 +268,17 @@ export function CartPanel({
 
         {/* Checkout button */}
         {/* ⭐️ F5 — เพิ่ม !!checkoutValidationError เข้าเงื่อนไข disabled (เช่น payment_method ผิด/items ว่าง/quantity ผิดรูปแบบ) */}
-        <button onClick={onCheckout} disabled={checkoutDisabled}
-          className={`w-full py-3.5 rounded-full text-sm font-bold text-white transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${checkoutDisabled ? 'bg-gray-300 cursor-not-allowed shadow-none' : paymentMethod === 'QR' ? 'bg-gradient-to-br from-blue-600 to-blue-700 focus-visible:ring-blue-500' : 'bg-gradient-to-br from-brand to-brand-dark focus-visible:ring-brand'}`}>
-          {loading ? (
-            <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังประมวลผล...</>
-          ) : <><CheckCircle size={18} /> {paymentMethod === 'QR' ? 'ยืนยันตรวจสอบสลิปแล้ว' : 'ชำระเงิน'}</>}
-        </button>
+        {/* ⭐️ ปุ่มชำระเงินสีตามวิธีจ่าย: เงินสด = payment-cash (ชมพูแบรนด์) / QR = payment-qr (น้ำเงิน) */}
+        <Button
+          variant={paymentMethod === 'QR' ? 'payment-qr' : 'payment-cash'}
+          size="lg"
+          className="w-full disabled:cursor-not-allowed"
+          onClick={onCheckout}
+          disabled={checkoutDisabled}
+          loading={loading}
+        >
+          {loading ? 'กำลังประมวลผล...' : <><CheckCircle size={18} /> {paymentMethod === 'QR' ? 'ยืนยันตรวจสอบสลิปแล้ว' : 'ชำระเงิน'}</>}
+        </Button>
         </div>
       </div>
     </div>

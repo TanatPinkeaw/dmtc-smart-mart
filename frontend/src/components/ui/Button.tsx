@@ -4,7 +4,7 @@
 import { Loader2 } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'warning' | 'success' | 'purple' | 'orange' | 'info';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'warning' | 'success' | 'purple' | 'orange' | 'info' | 'payment-cash' | 'payment-qr' | 'reward';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -25,6 +25,11 @@ const variantClasses: Record<ButtonVariant, string> = {
   purple: 'bg-gradient-to-br from-purple-500 to-purple-600 text-white font-bold',
   orange: 'bg-gradient-to-br from-orange-500 to-orange-600 text-white font-bold',
   info: 'bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold',
+  // ⭐️ ปุ่มชำระเงินสีตามวิธีจ่าย (checkout POS/PreOrder — เงินสดชมพูแบรนด์ / QR น้ำเงิน)
+  'payment-cash': 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold',
+  'payment-qr': 'bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold',
+  // ⭐️ ปุ่มแลกของรางวัล (amber — โทนเดียวกับ badge แต้ม)
+  reward: 'bg-gradient-to-br from-amber-400 to-amber-500 text-white font-bold',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
