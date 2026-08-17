@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — UI: แถบ amber ใต้หัวโมดัล ChangePasswordModal เข้า InlineAlert variant strip — ปิด exception ที่เคยบันทึกไว้ในรอบก่อน
+## [2026-08-17] — UI: แถบ amber ใต้หัวโมดัล ChangePasswordModal เข้า InlineAlert variant strip — ปิด exception ที่เคยบันทึกไว้ในรอบก่อน (commit `50a0a61`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -25,7 +25,7 @@
 
 ---
 
-## [2026-08-17] — UI: กล่องแจ้งเตือนเล็กในฟอร์ม/หน้า (error/warning) รวมเข้า InlineAlert กลาง — Login/Register/Dashboard ไม่เขียน bg-red-50/amber-50 เองอีก
+## [2026-08-17] — UI: กล่องแจ้งเตือนเล็กในฟอร์ม/หน้า (error/warning) รวมเข้า InlineAlert กลาง — Login/Register/Dashboard ไม่เขียน bg-red-50/amber-50 เองอีก (commit `50a0a61`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
