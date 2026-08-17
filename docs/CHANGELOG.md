@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — UI: fetch error path ทุกหน้าโชว์ผ่าน EmptyState tone="error" — อพยพกล่อง error เขียนเอง (Register) + แก้ 4 หน้าที่กลืน error แล้วโชว์ "ไม่มีข้อมูล" หลอก (Notifications/VendorSales/Inventory/Schedules)
+## [2026-08-17] — UI: fetch error path ทุกหน้าโชว์ผ่าน EmptyState tone="error" — อพยพกล่อง error เขียนเอง (Register) + แก้ 4 หน้าที่กลืน error แล้วโชว์ "ไม่มีข้อมูล" หลอก (Notifications/VendorSales/Inventory/Schedules) (commit `d4c6ba0`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
