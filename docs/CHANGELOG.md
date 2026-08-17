@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): ขยายภาษาแบรนด์ไปหน้า member + รวม empty state เป็น EmptyState กลาง (ยังไม่ push)
+## [2026-08-17] — feat(frontend): ขยายภาษาแบรนด์ไปหน้า member + รวม empty state เป็น EmptyState กลาง (commit `47d09cb`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
