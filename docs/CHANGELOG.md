@@ -24,7 +24,7 @@
 
 ---
 
-## [2026-08-17] — fix(backend): POST /api/orders 500 ทุกใบ — usePhoneForPoints ReferenceError
+## [2026-08-17] — fix(backend): POST /api/orders 500 ทุกใบ — usePhoneForPoints ReferenceError (commit `6f30e5e`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
