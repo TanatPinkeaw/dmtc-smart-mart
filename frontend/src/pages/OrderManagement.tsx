@@ -333,9 +333,9 @@ export default function OrderManagement() {
                   <span className="text-lg font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</span>
                 </div>
 
-                <button onClick={() => setSelectedOrder(order)} className="w-full bg-blue-50 border border-blue-200 text-blue-700 font-bold py-2.5 rounded-full transition-colors duration-150 active:scale-[0.98] hover:bg-blue-100 flex items-center justify-center gap-2">
-                  <Eye size={18}/> ดูสลิป & ตรวจสอบ
-                </button>
+                <Button variant="info" className="w-full" onClick={() => setSelectedOrder(order)}>
+                  <Eye size={18} /> ดูสลิป & ตรวจสอบ
+                </Button>
               </div>
             ))}
           </div>
@@ -381,9 +381,9 @@ export default function OrderManagement() {
                   </div>
                 )}
 
-                <button onClick={() => setSelectedOrder(order)} className="w-full bg-red-50 border border-red-200 text-red-700 font-bold py-2.5 rounded-full transition-colors duration-150 active:scale-[0.98] hover:bg-red-100 flex items-center justify-center gap-2">
-                  <Eye size={18}/> ดูสลิปเดิม & รับสลิปใหม่
-                </button>
+                <Button variant="danger" className="w-full" onClick={() => setSelectedOrder(order)}>
+                  <Eye size={18} /> ดูสลิปเดิม & รับสลิปใหม่
+                </Button>
               </div>
             ))}
           </div>

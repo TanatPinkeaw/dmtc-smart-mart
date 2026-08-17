@@ -5,8 +5,9 @@
 //    จุดสำคัญ: ต่างจาก EmptyState — EmptyState คือกล่องใหญ่กลางหน้าสำหรับ "ไม่มีข้อมูล/โหลดพังทั้งหน้า"
 //      InlineAlert คือแถบเล็กๆ ที่อยู่กับฟอร์ม/เนื้อหา (className ต่อท้ายได้ — ปรับ margin/ความกว้างตามบริบท)
 //      variant strip = แถบ border-b เต็มความกว้างใต้หัวโมดัล (ChangePasswordModal "บัญชีนี้ใช้รหัสผ่านชั่วคราว")
+//      tone info (น้ำเงิน) = ข้อมูล/วิธีใช้ (เช่น "วิธีนับเงินปิดกะ" ใน CloseShiftModal)
 interface InlineAlertProps {
-  tone?: 'error' | 'warning';
+  tone?: 'error' | 'warning' | 'info';
   variant?: 'box' | 'strip';
   size?: 'sm' | 'md';
   className?: string;
@@ -16,6 +17,7 @@ interface InlineAlertProps {
 const TONES = {
   error: 'bg-red-50 border-red-200 text-red-600',
   warning: 'bg-amber-50 border-amber-200 text-amber-700',
+  info: 'bg-blue-50 border-blue-200 text-blue-700',
 } as const;
 
 const VARIANTS = {

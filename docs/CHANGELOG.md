@@ -4,6 +4,67 @@
 
 ---
 
+## [2026-08-17] — UI: ปุ่ม outline ขาว (bg-white border) เข้า Button ครบ — secondary (แบรนด์) + variant ใหม่ outline-danger (แดง quiet) + ล็อก contract
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Button** (frontend) | เพิ่ม variant `outline-danger` (bg-white border-red-200 text-red-600 hover:bg-red-50 — อันตรายแบบ quiet ไม่ทึบ); `secondary` (แบรนด์ outline) ที่มีอยู่แล้ว = ตัว outline กลาง |
+| **Settings** (frontend) | ปุ่ม X "ปฏิเสธคำขอรีเซ็ตรหัส" (แดง outline เขียนเอง) → `<Button variant="outline-danger">`; ปุ่ม export Excel (เขียว) + CSV (แบรนด์) → `<Button variant="secondary">` ทั้งคู่ — คู่ปุ่ม export หน้าตาเดียวกัน (Excel สูญเสียสีเขียว — standardize ตั้งใจ) |
+| **pos CartPanel** (frontend) | ปุ่มเงินลัด ฿10/20/50/100/500 (outline เขียนเอง 5 จุด) → `<Button variant="secondary" size="sm">` — คู่กับ "พอดี" (success) ที่ย้ายรอบก่อน |
+| **preorder CartPanel** (frontend) | ปุ่ม "สลับไปใช้บัญชีสมาชิก" (outline เขียนเอง) → `<Button variant="secondary" size="sm" className="w-full">` |
+| **เทส contract** (frontend) | กฎปุ่มใหม่: ไล่ className ทุก `<button>` ใน BUTTON_ADOPTED ว่ามี `bg-white border` (outline เขียนเอง) — probe ยืนยันจับ className เก่าทั้ง 4 แบบ + ไม่โดน input (`<input>` ไม่ใช่ button) / border-2 / ไอคอนปุ่ม; เทสล็อก `outline-danger` ต้องมีใน Button — contract **43 ตัว** |
+
+### 🧪 เทส
+- frontend: **150 เทสผ่าน** (133 + 17 component — contract 43 ตัว) + `typecheck` + `build` ผ่าน
+
+---
+
+## [2026-08-17] — test(ui): กฎปุ่ม contract จับปุ่มสีทึบ (bg-{สี}-50 + border) ใน BUTTON_ADOPTED — ปิดช่องโหว่ที่กฎ gradient มองไม่เห็น + อพยพปุ่ม "พอดี" (pos CartPanel) ที่โดนกฎใหม่
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **เทส contract** (frontend) | กฎปุ่มใหม่: ไล่ className ของทุก `<button>` ใน `BUTTON_ADOPTED` (25 ไฟล์) ว่ามี `bg-{สี}-50` ตามด้วย `border` (สีพื้นอ่อน + ขอบ = signature ปุ่มสีทึบเขียนเอง) — กฎเดิมจับแค่ gradient ไล่พบปุ่มหลุดจริง 3 จุด (OrderManagement "ดูสลิป" ×2 — แก้รอบก่อน — + pos CartPanel "พอดี") — **ไม่จับเท็จบวก**: toggle วิธีจ่าย QR (`bg-blue-50 text-blue-700` ไม่มี border ตามหลัง), ไอคอนปุ่ม (`hover:bg-*-50`), ปุ่ม outline ขาว (`bg-white border`) |
+| **pos CartPanel** (frontend) | ปุ่ม "พอดี" (จ่ายพอดีไม่ปัดขึ้น — เดิม bg-emerald-50 เขียนเอง) → `<Button variant="success" size="sm" className="flex-1 min-w-[40px]">` — โทนเขียวเท่าเดิม (ไล่มาทาง hover เดิม) รูปทรงปุ่มมาตรฐาน |
+
+### 🧪 เทส
+- frontend: **148 เทสผ่าน** (131 + 17 component — contract 41 ตัว) + `typecheck` + `build` ผ่าน — probe ยืนยัน: กฎใหม่จับ className เก่าของปุ่มทั้ง 2 ไฟล์ได้จริง + ไม่จับ QR toggle/icon hover
+
+---
+
+## [2026-08-17] — UI: InlineAlert เพิ่ม tone info (น้ำเงิน) — อพยพกล่องวิธีใช้ปิดกะ (CloseShiftModal) + ปุ่ม "ดูสลิป" สีทึบที่หลุดจากรอบปุ่ม 2 จุด (OrderManagement)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **InlineAlert** (frontend) | เพิ่ม `tone="info"` (น้ำเงิน — `bg-blue-50 border-blue-200 text-blue-700`) สำหรับข้อมูล/วิธีใช้ |
+| **CloseShiftModal** (frontend) | กล่อง "📋 วิธีนับเงินปิดกะ" (bg-blue-50 เขียนเอง) → `<InlineAlert tone="info" size="sm">` — เนื้อหา/รายการวิธีใช้คงเดิม |
+| **OrderManagement** (frontend) | ปุ่มสีทึบเขียนเอง 2 จุดที่กฎ gradient มองไม่เห็น (ไม่มี gradient — พ้นกฎเดิม): "ดูสลิป & ตรวจสอบ" (ฟ้า) → `<Button variant="info">` · "ดูสลิปเดิม & รับสลิปใหม่" (แดง) → `<Button variant="danger">` — ครอบครัวเดียวกับปุ่มในโมดัลรายละเอียดที่ใช้ variant เดิมอยู่แล้ว (สีเปลี่ยนจากฟ้าอ่อนเป็น gradient ฟ้าเข้ม/แดงเข้ม — ตามมาตรฐานปุ่ม) |
+| **เทส contract** (frontend) | `uiConsistencyContract` — `INLINE_ALERT_ADOPTED` +CloseShiftModal (5 ไฟล์) + เทสล็อก `tone="info"` ต้องมีใน InlineAlert — contract **40 ตัว** |
+
+### 🧪 เทส
+- frontend: **147 เทสผ่าน** (130 + 17 component — contract 40 ตัว) + `typecheck` + `build` ผ่าน
+
+**ที่ตั้งใจไม่แตะ (ข้อยกเว้น — เป็นพื้นผิว/ข้อมูล ไม่ใช่ alert):** แผง QR payment ของ CartPanel ×2 (bg-blue-50 + QR code + ปุ่มอัปโหลดสลิป — เป็นพื้นที่ชำระเงินที่ต้องจัด layout เอง ไม่ใช่กล่องแจ้งเตือน), กล่อง "เงินที่นำมา" ใน PendingShiftClosesWidget + แถว shift ใน DetailModal (bg-blue-50 — เป็นบล็อกข้อมูลตัวเลข), แผงฟอร์มสีฟ้าใน Settings (ตั้งเจ้าของผลงาน/BOGO), badge แหล่งที่มา (Attendance/Settings "จอง"/Summary role) + PENDING_VERIFY ใน StatusBadge + สีพนักงาน Schedules (เป็น status pill — map สีกลางอยู่แล้ว), แถบความแข็งแรงรหัสผ่าน (สีระดับ)
+
+---
+
 ## [2026-08-17] — UI: แถบ amber ใต้หัวโมดัล ChangePasswordModal เข้า InlineAlert variant strip — ปิด exception ที่เคยบันทึกไว้ในรอบก่อน (commit `50a0a61`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

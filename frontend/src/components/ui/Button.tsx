@@ -4,7 +4,7 @@
 import { Loader2 } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'warning' | 'success' | 'purple' | 'orange' | 'info' | 'payment-cash' | 'payment-qr' | 'reward';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline-danger' | 'warning' | 'success' | 'purple' | 'orange' | 'info' | 'payment-cash' | 'payment-qr' | 'reward';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,6 +18,8 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary: 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold',
   secondary: 'bg-white border border-brand-border text-brand hover:bg-brand-bg font-bold',
   danger: 'bg-red-500 hover:bg-red-600 text-white font-bold',
+  // ⭐️ อันตรายแบบ outline (quiet) — ปฏิเสธ/ปิดการ์ดที่ควรแดงแต่ไม่ต้องทึบ
+  'outline-danger': 'bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold',
   ghost: 'bg-transparent hover:bg-brand-bg text-gray-700',
   // ⭐️ ปุ่มสีตามสถานะ (semantic — สื่อความหมายของ action เช่น ขอสลิปใหม่/คืนเงิน/ยืนยัน/ปิดบิล)
   warning: 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white font-bold',

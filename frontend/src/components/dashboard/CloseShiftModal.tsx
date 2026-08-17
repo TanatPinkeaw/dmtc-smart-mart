@@ -5,6 +5,7 @@ import { inputCls } from '../ui/fieldStyles';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { FieldLabel } from '../ui/FieldLabel';
+import { InlineAlert } from '../ui/InlineAlert';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
@@ -48,11 +49,11 @@ export function CloseShiftModal({
         {!shiftSummary ? (
           <>
             <div className="p-5">
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-xs text-blue-700">
+              <InlineAlert tone="info" size="sm" className="mb-4">
                 <p className="font-semibold mb-1">📋 วิธีนับเงินปิดกะ</p>
                 <p>• เงินสด: นับแบงก์/เหรียญในลิ้นชักแล้วใส่ด้านล่าง</p>
                 <p>• โอน/QR: ระบบนับจากบิลให้อัตโนมัติ ไม่ต้องนับเอง</p>
-              </div>
+              </InlineAlert>
               <form onSubmit={onSubmit} className="space-y-4">
                 {/* Denom grid */}
                 <div className="grid grid-cols-2 gap-2">

@@ -1038,7 +1038,7 @@ export default function Settings() {
                       </div>
                       <div className="flex gap-2 mt-auto pt-2">
                         <Button className="flex-1" onClick={() => handleCopyResetLink(r.reset_token ?? '')}><Copy size={15} /> คัดลอกลิงก์</Button>
-                        <button onClick={() => handleRejectPasswordReset(r.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-sm px-3 py-2 rounded-xl transition-colors duration-150" aria-label="ปิด"><X size={15} /></button>
+                        <Button variant="outline-danger" onClick={() => handleRejectPasswordReset(r.id)} aria-label="ปิด"><X size={15} /></Button>
                       </div>
                     </div>
                   ))}
@@ -1445,14 +1445,12 @@ function ExportImportButtons({ entity, onImportDone, showImport = true }: { enti
 
   return (
     <div className="flex gap-1.5 shrink-0">
-      <button type="button" onClick={() => handleExport('excel')} disabled={!!busy} title="ส่งออก Excel"
-        className="p-2 bg-white border border-brand-border text-emerald-600 rounded-xl hover:bg-emerald-50 active:scale-95 transition-all duration-150 disabled:opacity-50">
+      <Button variant="secondary" size="sm" className="p-2" type="button" onClick={() => handleExport('excel')} disabled={!!busy} title="ส่งออก Excel">
         <FileSpreadsheet size={16} />
-      </button>
-      <button type="button" onClick={() => handleExport('csv')} disabled={!!busy} title="ส่งออก CSV"
-        className="p-2 bg-white border border-brand-border text-brand rounded-xl hover:bg-brand-bg active:scale-95 transition-all duration-150 disabled:opacity-50">
+      </Button>
+      <Button variant="secondary" size="sm" className="p-2" type="button" onClick={() => handleExport('csv')} disabled={!!busy} title="ส่งออก CSV">
         <Download size={16} />
-      </button>
+      </Button>
       {showImport && (
         <label htmlFor={fileInputId} title="นำเข้า CSV (แก้ไข/เพิ่มจากไฟล์)"
           className={`p-2 bg-white border border-brand-border text-gray-500 rounded-xl hover:bg-brand-bg active:scale-95 transition-all duration-150 cursor-pointer flex items-center justify-center ${busy ? 'opacity-50 pointer-events-none' : ''}`}>

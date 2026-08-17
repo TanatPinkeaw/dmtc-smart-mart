@@ -253,9 +253,9 @@ export function CartPanel({
               className="w-full text-right text-xl font-bold px-4 py-3 bg-white border border-brand-border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150" />
             <div className="flex gap-1.5 mt-2 flex-wrap">
               {[10, 20, 50, 100, 500].map(v => (
-                <button key={v} onClick={() => onAmountReceivedChange(v)} className="flex-1 min-w-[40px] py-1.5 bg-white border border-brand-border text-brand font-semibold rounded-lg text-xs shadow-sm hover:bg-brand hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">฿{v}</button>
+                <Button key={v} variant="secondary" size="sm" className="flex-1 min-w-[40px]" onClick={() => onAmountReceivedChange(v)}>฿{v}</Button>
               ))}
-              <button onClick={() => onAmountReceivedChange(finalTotal)} className="flex-1 min-w-[40px] py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg text-xs hover:bg-emerald-500 hover:text-white active:scale-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1">พอดี</button>
+              <Button variant="success" size="sm" className="flex-1 min-w-[40px]" onClick={() => onAmountReceivedChange(finalTotal)}>พอดี</Button>
             </div>
           </div>
         ) : (

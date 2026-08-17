@@ -131,6 +131,59 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
       `เจอปุ่ม gradient เขียนเองในไฟล์ที่ควรใช้ ui/Button — ต้องใช้ <Button> (variant กลาง):\n${offenders.join('\n')}`);
   });
 
+  test('ไม่มีปุ่มสีทึบเขียนเอง (bg-{สี}-50 + border) ในไฟล์ที่อพยพแล้ว', () => {
+    // ⭐️ กฎ gradient จับแค่ bg-gradient-to-br — ปุ่มสีทึบ (ฟ้าอ่อน/แดงอ่อน/เขียวอ่อน + ขอบ) หลุดได้
+    //   (เจอจริง: OrderManagement "ดูสลิป" ×2 + pos CartPanel "พอดี") — ไล่ className ของทุก <button>
+    //   ว่ามี bg-{color}-50 ตามด้วย border (สีพื้นอ่อน + ขอบ = signature ปุ่มสีทึบเขียนเอง)
+    const SOLID_BTN = /bg-(red|blue|amber|emerald|purple|orange|green|yellow|gray|sky)-50\s+border/;
+    const offenders: string[] = [];
+    for (const f of BUTTON_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      let idx = 0;
+      while ((idx = src.indexOf('<button', idx)) !== -1) {
+        if (src[idx + 7] !== '/') { // ข้าม </button>
+          const win = src.slice(idx, idx + 400);
+          const cm = win.match(/className=(["'`])([^"'`]*)\1/);
+          if (cm && SOLID_BTN.test(cm[2])) {
+            offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}`);
+          }
+        }
+        idx += 7;
+      }
+    }
+    assert.deepEqual(offenders, [],
+      `เจอปุ่มสีทึบเขียนเอง (bg-*-50 + border) — ต้องใช้ <Button> variant (success/info/danger/warning ฯลฯ):\n${offenders.join('\n')}`);
+  });
+
+  test('ไม่มีปุ่ม outline ขาวเขียนเอง (bg-white border) ในไฟล์ที่อพยพแล้ว', () => {
+    // ⭐️ กฎสีทึบจับ bg-{สี}-50 — ปุ่ม outline ขาว (bg-white border border-{สี}-*) หลุดได้
+    //   (เจอจริง: Settings ปฏิเสธรีเซ็ต ×1 + export ×2, pos CartPanel เงินลัด ×5, preorder สลับบัญชี)
+    //   ต้องใช้ <Button variant="secondary"> (แบรนด์) / variant="outline-danger" (แดง quiet)
+    const offenders: string[] = [];
+    for (const f of BUTTON_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      let idx = 0;
+      while ((idx = src.indexOf('<button', idx)) !== -1) {
+        if (src[idx + 7] !== '/') { // ข้าม </button>
+          const win = src.slice(idx, idx + 400);
+          const cm = win.match(/className=(["'`])([^"'`]*)\1/);
+          if (cm && /(^| )bg-white border/.test(cm[2])) {
+            offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}`);
+          }
+        }
+        idx += 7;
+      }
+    }
+    assert.deepEqual(offenders, [],
+      `เจอปุ่ม outline เขียนเอง (bg-white border) — ใช้ <Button variant="secondary"> หรือ variant="outline-danger":\n${offenders.join('\n')}`);
+  });
+
+  test('Button ต้องมี variant outline-danger (แดง outline — ปฏิเสธ/ปิดการ์ดแบบ quiet)', () => {
+    const button = readFileSync(join(BASE, 'components/ui/Button.tsx'), 'utf8');
+    assert.ok(button.includes("'outline-danger': 'bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold'"),
+      'Button ต้องมี outline-danger (bg-white border-red-200 text-red-600 hover:bg-red-50) — ปุ่มอันตรายแบบไม่ทึบ');
+  });
+
   test('Button.tsx ต้องมี variant primary = gradient แบรนด์ (มาตรฐานปุ่มหลัก)', () => {
     const button = readFileSync(join(BASE, 'components/ui/Button.tsx'), 'utf8');
     assert.ok(button.includes("primary: 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold'"),
@@ -331,7 +384,7 @@ describe('inline alert — กล่องแจ้งเตือนเล็�
   // ⭐️ ไฟล์ที่อพยพแล้ว: กล่อง error/เตือนเล็กๆ ที่อยู่กับฟอร์มหรือเนื้อหา (ข้อความ submit, rate limit,
   //   แบนเนอร์เตือนใต้แถบหัว) ต้องใช้ <InlineAlert> — ต่างจาก EmptyState (กล่องใหญ่กลางหน้า)
   const INLINE_ALERT_ADOPTED = ['pages/Login.tsx', 'pages/Register.tsx', 'pages/Dashboard.tsx',
-    'components/auth/ChangePasswordModal.tsx'];
+    'components/auth/ChangePasswordModal.tsx', 'components/dashboard/CloseShiftModal.tsx'];
 
   test('ไฟล์ที่อพยพแล้ว import InlineAlert จาก ui/InlineAlert', () => {
     for (const f of INLINE_ALERT_ADOPTED) {
@@ -359,6 +412,12 @@ describe('inline alert — กล่องแจ้งเตือนเล็�
     assert.ok(src.includes("variant = 'box'") && src.includes("'strip'"),
       'InlineAlert ต้องมี variant box + strip (strip = border-b เต็มความกว้าง ไม่มน)'
     );
+  });
+
+  test('InlineAlert ต้องมี tone info (น้ำเงิน — ข้อมูล/วิธีใช้ เช่น "วิธีนับเงินปิดกะ")', () => {
+    const src = readFileSync(join(BASE, 'components/ui/InlineAlert.tsx'), 'utf8');
+    assert.ok(src.includes("info: 'bg-blue-50 border-blue-200 text-blue-700'"),
+      'InlineAlert ต้องมี tone info (bg-blue-50 border-blue-200 text-blue-700) — แบนเนอร์ข้อมูล/วิธีใช้');
   });
 });
 

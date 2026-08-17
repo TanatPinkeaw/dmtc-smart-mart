@@ -124,13 +124,14 @@ export function CartPanel({
             <div className="bg-gray-50 border border-brand-border rounded-lg p-3 text-center space-y-2">
               <p className="text-xs font-bold text-gray-500">💼 บัญชีพนักงาน: สั่งจองได้ตามปกติ แต่ไม่มีสิทธิ์สะสม/แลกแต้มสมาชิก</p>
               {onSwitchToMember && (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
                   onClick={onSwitchToMember}
-                  className="w-full py-2 rounded-full bg-white border border-brand text-brand text-xs font-bold transition-all duration-150 hover:bg-brand-bg active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   สลับไปใช้บัญชีสมาชิก (ใช้สิทธิ์แต้ม)
-                </button>
+                </Button>
               )}
             </div>
           )}
