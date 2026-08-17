@@ -62,7 +62,7 @@ export function MobileBottomNav({
 
         <Link
           to="/home"
-          className="absolute left-1/2 -translate-x-1/2 -top-5 w-14 h-14 rounded-full bg-gradient-to-br from-brand to-brand-dark shadow-lg flex items-center justify-center text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+          className="absolute left-1/2 -translate-x-1/2 -top-5 w-14 h-14 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-150 active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
           aria-label="หน้าหลัก"
         >
           <Home size={22} />

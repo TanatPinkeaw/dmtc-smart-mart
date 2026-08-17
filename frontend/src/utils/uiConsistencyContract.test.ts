@@ -147,9 +147,13 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
       'Button ต้องมี reward (amber) — ปุ่มแลกของรางวัล');
   });
 
-  // ⭐️ ไล่ <button> gradient ทั้งแอป (นอกไฟล์ที่ ADOPTED แล้ว) — เหลือได้เฉพาะ FAB กลมลอย
-  // (w-14 h-14 rounded-full — POS/PreOrder/MobileBottomNav) ที่เป็น exception โดยตั้งใจ
-  test('ทั้งแอป — <button> gradient เขียนเองเหลือได้เฉพาะ FAB กลม (w-14 h-14 rounded-full)', () => {
+  // ⭐️ ไล่ <button> gradient ทั้งแอป — เหลือได้เฉพาะ FAB กลมลอยที่เป็นมาตรฐานเดียวเท่านั้น:
+  //   w-14 h-14 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full shadow-lg
+  //   flex items-center justify-center (POS/PreOrder/MobileBottomNav — ยกเว้นโดยตั้งใจ)
+  //   ปุ่ม gradient อื่น (สี/ขนาด/ลำดับ class ต่าง) = ต้องใช้ <Button> variant
+  const FAB_CORE = 'w-14 h-14 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-150 active:scale-90';
+
+  test('ทั้งแอป — <button> gradient เหลือได้เฉพาะ FAB กลมมาตรฐานเดียว (ตรง FAB_CORE เป๊ะ)', () => {
     const offenders: string[] = [];
     for (const f of ALL_UI) {
       const src = readFileSync(f, 'utf8');
@@ -157,7 +161,7 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
       while ((idx = src.indexOf('<button', idx)) !== -1) {
         if (src[idx + 7] !== '/') { // ข้าม </button>
           const win = src.slice(idx, idx + 400);
-          if (win.includes('bg-gradient-to-br') && !(win.includes('w-14 h-14') && win.includes('rounded-full'))) {
+          if (win.includes('bg-gradient-to-br') && !win.includes(FAB_CORE)) {
             offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}`);
           }
         }
@@ -165,7 +169,17 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
       }
     }
     assert.deepEqual(offenders, [],
-      `เจอปุ่ม gradient เขียนเอง (ที่ไม่ใช่ FAB กลม w-14 h-14) — ต้องใช้ <Button> variant (payment-cash/payment-qr/reward ฯลฯ):\n${offenders.join('\n')}`);
+      `เจอ <button> gradient ที่ไม่ใช่ FAB กลมมาตรฐานเดียว (ต้องตรง FAB_CORE: w-14 h-14 + gradient แบรนด์ + rounded-full) — ปุ่มอื่นต้องใช้ <Button> variant:\n${offenders.join('\n')}`);
+  });
+
+  // ⭐️ FAB ทั้ง 3 จุดต้องมี signature มาตรฐานอยู่จริง — กันแก้ FAB หน้าใดหน้าเป็นสี/ขนาด/ลำดับเพี้ยน
+  // แล้วหลุดเงื่อนไขบน (ไล่ FAB ที่ยังใช้ gradient อยู่ได้เฉพาะ 3 ไฟล์นี้)
+  test('FAB กลมมาตรฐานต้องอยู่ครบ 3 จุด (POS/PreOrder/MobileBottomNav) — ตรง FAB_CORE เป๊ะ', () => {
+    for (const f of ['pages/POS.tsx', 'pages/PreOrder.tsx', 'components/layout/MobileBottomNav.tsx']) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes(FAB_CORE),
+        `${f} ต้องมี FAB กลมมาตรฐานเดียว (w-14 h-14 + bg-gradient-to-br from-brand to-brand-dark + text-white + rounded-full + shadow-lg) — กัน FAB เพี้ยน`);
+    }
   });
 });
 

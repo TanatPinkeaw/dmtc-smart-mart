@@ -627,7 +627,7 @@ export default function PreOrder() {
 
       {/* ⭐️ FIX: เดิม bottom-6 ทับ bottom nav bar (h-14 + z-50) เพราะปุ่มนี้ z-40 ต่ำกว่า — เปลี่ยนเป็น
           bottom-20 ให้ตรงกับปุ่มลอยหน้าอื่น (POS.tsx, Inventory.tsx) ที่แก้ถูกไว้แล้ว */}
-      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-28 right-4 bg-gradient-to-br from-brand to-brand-dark text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-40 active:scale-90 transition-all duration-150">
+      <button onClick={() => setIsCartOpen(true)} className="md:hidden fixed bottom-28 right-4 z-40 w-14 h-14 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-150 active:scale-90">
         <ShoppingCart size={24} />
         {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
       </button>

@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-08-17] — UI: ล็อก FAB กลมให้เป็นมาตรฐานเดียว (contract กัน FAB หน้าใหม่เพี้ยน) (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **FAB 3 จุด** (frontend) | จัดลำดับ class ของ PreOrder/MobileBottomNav ให้ตรงกับ POS (เรียง core เดียวกัน — CSS ไม่สนใจลำดับ class = ไม่มีผลภาพ) |
+| **เทส contract** (frontend) | `uiConsistencyContract` — กฎ whole-app เข้มขึ้น: `<button>` gradient เหลือได้เฉพาะ **FAB กลมมาตรฐานเดียว** (`FAB_CORE` = w-14 h-14 + `bg-gradient-to-br from-brand to-brand-dark` + text-white + rounded-full + shadow-lg + flex center — ตรงเป๊ะทั้งสี/ขนาด/ลำดับ) + เทสใหม่ยืนยัน **FAB ครบ 3 จุด** (POS/PreOrder/MobileBottomNav) ว่ามี signature อยู่จริง — กันใครแก้ FAB เป็นสี/ขนาดอื่นหรือเพิ่ม FAB ใหม่เพี้ยน |
+
+### 🧪 เทส
+- frontend: **141 เทสผ่าน** (124 + 17 component — contract 33 ตัว) + `typecheck` + `build` ผ่าน
+
+---
+
 ## [2026-08-17] — UI: ปุ่มชำระเงินสีตามวิธีจ่ายเข้า Button (payment-cash/payment-qr) + สแกนทั้งแอปกำจัด <button> gradient เหลือ (commit `7500f15`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
