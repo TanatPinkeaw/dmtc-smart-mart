@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — test(backend): เทส contract ใหม่ undefinedIdentifiers — ไล่ identifier ที่ไม่ได้ประกาศ/ชื่อไม่ตรงทุก call site (server.js + controllers 7 ไฟล์)
+## [2026-08-17] — test(backend): เทส contract ใหม่ undefinedIdentifiers — ไล่ identifier ที่ไม่ได้ประกาศ/ชื่อไม่ตรงทุก call site (server.js + controllers 7 ไฟล์) (commit `439b681`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
