@@ -12,6 +12,8 @@ import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { ChangePasswordModal } from '../components/auth/ChangePasswordModal';
+import { PageHeader } from '../components/layout/PageHeader';
+import { Button } from '../components/ui/Button';
 
 export default function Profile() {
   const user = getCurrentUserOrRedirect();
@@ -53,17 +55,13 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
+    <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-lg mx-auto">
 
-        {/* Header — แถวเดียวแบบ POS.tsx */}
-        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <User size={18} className="text-white" />
-          </div>
-          <h1 className="text-xl font-semibold text-white">บัญชีของฉัน</h1>
-        </div>
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+        <PageHeader icon={User} title="บัญชีของฉัน" />
 
+        <div className="p-4 sm:p-6">
         {/* Identity card — รูปโปรไฟล์ + ชื่อ + สิทธิ์ */}
         <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-5 mb-4 flex flex-col items-center">
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
@@ -114,11 +112,10 @@ export default function Profile() {
           />
           <p className="text-[11px] text-amber-600 mt-2">⚠️ รหัสผ่านเริ่มต้นคือเบอร์โทรตอนสมัคร ถ้าเปลี่ยนเบอร์ควรเปลี่ยนรหัสผ่านด้วย</p>
 
-          <button type="submit" disabled={saving}
-            className="w-full mt-4 py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
+          <Button type="submit" size="lg" className="w-full mt-4" disabled={saving}>
             {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {saving ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
-          </button>
+          </Button>
         </form>
 
         {/* Security */}
@@ -137,6 +134,7 @@ export default function Profile() {
       {showChangePassword && (
         <ChangePasswordModal userId={user.id} onClose={() => setShowChangePassword(false)} />
       )}
+      </div>
     </div>
   );
 }

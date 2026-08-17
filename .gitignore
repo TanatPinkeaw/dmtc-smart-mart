@@ -23,3 +23,7 @@ tsconfig.tsbuildinfo
 
 # ไฟล์ tooling (Freebuff agent — project id metadata)
 .freebuff/
+
+# โฟลเดอร์ Agent Skill (local — ไม่ใช่โค้ดแอป)
+.agents/
+.claude/

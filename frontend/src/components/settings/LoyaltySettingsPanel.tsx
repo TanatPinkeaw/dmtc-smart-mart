@@ -5,6 +5,7 @@
 //   บันทึกแล้วมีผลทันทีทุกเครื่อง POS (checkout อ่านค่าจาก settings ต่อรายการ ไม่ต้อง restart)
 import { useState, useEffect } from 'react';
 import { Save, Coins } from 'lucide-react';
+import { Button } from '../ui/Button';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -77,10 +78,9 @@ export function LoyaltySettingsPanel() {
             <p className="text-[11px] text-gray-400 mt-1">เช่น 1 = 1 แต้ม แลกส่วนลดได้ 1 บาท</p>
           </div>
         </div>
-        <button onClick={saveRates} disabled={saving}
-          className="mt-4 inline-flex items-center gap-2 bg-gradient-to-br from-brand to-brand-dark text-white px-6 py-2.5 rounded-full font-bold text-sm active:scale-[0.98] transition-all disabled:opacity-50">
+        <Button onClick={saveRates} disabled={saving} className="mt-4">
           <Save size={16} /> {saving ? 'กำลังบันทึก...' : 'บันทึกอัตรา'}
-        </button>
+        </Button>
       </div>
 
       <div>

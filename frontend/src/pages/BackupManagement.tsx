@@ -4,6 +4,7 @@
 // 🔒 UNCHANGED: loadBackups, handleCreateBackup, handleRestore, getStatusColor, all state/API calls
 import { useState, useEffect } from 'react';
 import { Database, RefreshCw, RotateCcw, Cloud, CloudOff } from 'lucide-react';
+import { PageHeader } from '../components/layout/PageHeader';
 import Swal from '../swal';
 import api from '../api';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -110,16 +111,12 @@ export default function BackupManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
+    <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-5xl mx-auto">
-        {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ปุ่ม/คำอธิบายย้ายออกมานอกการ์ด */}
-        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <Database size={18} className="text-white" />
-          </div>
-          <h1 className="text-xl font-semibold text-white">สำรอง & กู้คืนข้อมูล</h1>
-        </div>
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+        <PageHeader icon={Database} title="สำรอง & กู้คืนข้อมูล" />
 
+        <div className="p-4 sm:p-6">
         <p className="text-xs text-gray-400 mb-3 px-1">ระบบสำรองข้อมูลอัตโนมัติทุกวัน + กดสำรองเองได้ตลอดเวลา</p>
 
         <div className="mb-5">
@@ -182,7 +179,7 @@ export default function BackupManagement() {
             <div className="hidden sm:block bg-white rounded-3xl border border-brand-border shadow-md overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-brand-bg text-gray-600 text-sm">
+                  <thead className="bg-gray-50 text-gray-600 text-xs">
                     <tr>
                       <th className="p-3 border-b">ไฟล์</th>
                       <th className="p-3 border-b">วันที่</th>
@@ -231,6 +228,7 @@ export default function BackupManagement() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,29 @@
 
 ---
 
+## [2026-08-17] — feat(frontend): รวม UI เป็นระบบเดียว (PageHeader + primitive + ปุ่ม/โมดัล) (commit `<ยังไม่ push — เติมหลัง commit>`)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — commit นี้ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **UX เปลี่ยนเล็กน้อย** (ไม่กระทบข้อมูล): แถบหัวหน้าทุกหน้าเป็นแบบเดียวกัน, พื้นหลังชมพูอ่อนทั้งแอป, ปุ่ม/โมดัลใช้คอมโพเนนต์กลาง — ถ้าสังเกตหน้าตาเปลี่ยนจากเดิม = ถูกต้องตามที่รวมมาตรฐาน
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Header ทุกหน้า** (frontend) | สร้าง `components/layout/PageHeader.tsx` (แถบ gradient flush: icon w-8 + title text-lg) — 9 หน้าที่เคยเป็น "การ์ดมน rounded-3xl" แปลงเป็นแถบเดียวกับ POS/PreOrder; Dashboard/Summary คง health dot/ปุ่มกลับ/print override |
+| **พื้นหลังหน้า** (frontend) | ทุกหน้า + Layout shell เป็น `bg-brand-bg` (เดิมปน gray-50 กับ brand-bg — หน้าไม่เป็นครอบครัวเดียวกัน) |
+| **ช่องกรอก** (frontend) | สร้าง `components/ui/fieldStyles.ts` (inputCls กลาง) — 3 ไฟล์ที่นิยามซ้ำกันเอง (padding เพี้ยน) import แทน |
+| **ตาราง** (frontend) | thead รวมเป็น `bg-gray-50 text-gray-600 text-xs` (เดิมปน brand-bg/text-sm) |
+| **ปุ่ม** (frontend) | อพยพปุ่ม gradient ~25 จุด (16 ไฟล์) → `ui/Button` (variant primary/secondary/danger/ghost + ขนาด sm/md/lg) — คงไว้: FAB กลม (POS/PreOrder/MobileBottomNav), โลโก้ login, การ์ด hero, ปุ่มเช็คเอาต์ตสีตามวิธีจ่าย |
+| **โมดัล** (frontend) | อัปเกรด `ui/Modal` (หัว gradient แบรนด์ + `hideClose`/`backdropClosable` รองรับ forceChange) — อพยพ 6 โมดัล (Settings CustomModal / Attendance edit / Reward / Detail / CloseShift / ChangePassword) |
+| **เทส** (frontend) | เพิ่ม source contract: `pageHeaderContract.test.ts` (แถบหัวห้ามกลับ 2 แบบ) + `uiConsistencyContract.test.ts` (พื้นหลัง/thead/inputCls/ปุ่ม gradient/โมดัล shell ต้องใช้ component กลาง) |
+
+**Rollback:** revert แล้ว rebuild frontend — ไม่มีผลต่อ data
+
+---
+
 ## [2026-08-17] — feat(frontend): รวมแถบล่างเป็น MobileBottomNav ตัวเดียวทุกหน้า (commit `133b7f2`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)

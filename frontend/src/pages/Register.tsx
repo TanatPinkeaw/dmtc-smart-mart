@@ -12,6 +12,7 @@ import { performLogout } from '../utils/logout';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import { MobileBottomNav } from '../components/layout/MobileBottomNav';
 import { MobileMenuDrawer } from '../components/layout/MobileMenuDrawer';
+import { Button } from '../components/ui/Button';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
 // เข้าระบบนี้เสมอ (LIFF มี session ของ LINE เอง ไม่ใช่ JWT ของแอปนี้) ยิง fetch ตรงไป API_BASE_URL
@@ -250,12 +251,9 @@ export default function Register() {
             <div className="p-6 text-center">
               <p className="text-xs text-gray-400 mb-1">แต้มสะสมปัจจุบัน</p>
               <p className="text-4xl font-bold text-brand mb-6">{sessionMember.points.toLocaleString()} <span className="text-base font-medium text-gray-400">แต้ม</span></p>
-              <button
-                onClick={() => navigate('/pre-order')}
-                className="w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold rounded-full transition-all duration-150 active:scale-[0.98]"
-              >
+              <Button size="lg" className="w-full" onClick={() => navigate('/pre-order')}>
                 🛒 ไปที่ร้านค้า
-              </button>
+              </Button>
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
@@ -304,12 +302,9 @@ export default function Register() {
               </div>
               <p className="text-xs text-gray-400 mb-1">แต้มสะสมปัจจุบัน</p>
               <p className="text-4xl font-bold text-brand mb-6">{member.points.toLocaleString()} <span className="text-base font-medium text-gray-400">แต้ม</span></p>
-              <button
-                onClick={closeLiff}
-                className="w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold rounded-full transition-all duration-150 active:scale-[0.98]"
-              >
+              <Button size="lg" className="w-full" onClick={closeLiff}>
                 ปิดหน้านี้
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -359,18 +354,14 @@ export default function Register() {
                 />
                 {fieldError.phone && <p className="text-xs text-red-500 mt-1 ml-2">{fieldError.phone}</p>}
               </div>
-              <button
-                type="submit"
-                disabled={stage === 'submitting'}
-                className="w-full py-3.5 mt-2 bg-gradient-to-br from-brand to-brand-dark hover:opacity-95 text-white font-bold rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
-              >
+              <Button type="submit" size="lg" className="w-full mt-2" disabled={stage === 'submitting'}>
                 {stage === 'submitting' ? (
                   <>
                     <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                     กำลังลงทะเบียน...
                   </>
                 ) : 'ยืนยันการลงทะเบียน'}
-              </button>
+              </Button>
             </div>
           </form>
         )}

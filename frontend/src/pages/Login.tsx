@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
@@ -250,11 +251,8 @@ export default function Login() {
               </div>
             </div>
 
-            <button
-              type="submit" disabled={loading || isRateLimited}
-              className="w-full py-3.5 mt-1 rounded-full text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-                enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-gray-300
-                focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+            <Button
+              type="submit" disabled={loading || isRateLimited} size="lg" className="w-full mt-1"
             >
               {isRateLimited ? (
                 `กรุณารอ ${rateLimitCountdown} วินาที`
@@ -264,7 +262,7 @@ export default function Login() {
                   กำลังเข้าสู่ระบบ...
                 </span>
               ) : 'เข้าสู่ระบบ'}
-            </button>
+            </Button>
           </form>
 
           {/* ⭐️ F1 — ลืมรหัสผ่าน */}

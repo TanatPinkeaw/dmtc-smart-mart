@@ -9,7 +9,7 @@
     "typecheck": "tsc -b --noEmit",
     "check:strict": "node scripts/check-strict.js",
     "lint": "eslint .",
-    "test": "node --test src/utils/queueProcessor.test.ts src/utils/rewardCart.test.ts src/utils/offlinePayload.test.ts src/utils/offlineSalesDb.test.ts src/utils/offlineSync.test.ts src/utils/requestQueue.test.ts src/utils/queueLabels.test.ts src/utils/queueDrainContract.test.ts src/utils/layoutRealtimeContract.test.ts scripts/check-strict.test.js && node scripts/test-components.cjs",
+    "test": "node --test src/utils/queueProcessor.test.ts src/utils/rewardCart.test.ts src/utils/offlinePayload.test.ts src/utils/offlineSalesDb.test.ts src/utils/offlineSync.test.ts src/utils/requestQueue.test.ts src/utils/queueLabels.test.ts src/utils/queueDrainContract.test.ts src/utils/layoutRealtimeContract.test.ts src/utils/pageHeaderContract.test.ts src/utils/uiConsistencyContract.test.ts scripts/check-strict.test.js && node scripts/test-components.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

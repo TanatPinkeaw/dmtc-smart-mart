@@ -4,7 +4,8 @@
 // ผู้ฝากขายแต่ละราย ในช่วงวันที่ที่เลือก + ปุ่ม export Excel (2 ชีต: สรุปบัญชี, ยอดจ่ายคืนผู้ฝากขาย)
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileSpreadsheet, TrendingUp, Wallet, Coins, Download, PiggyBank } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, Wallet, Coins, Download, PiggyBank } from 'lucide-react';
+import { PageHeader } from '../components/layout/PageHeader';
 import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -85,18 +86,12 @@ export default function AccountingSummary() {
   ] : [];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-brand-bg">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-            <ArrowLeft size={20} />
-          </button>
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="text-white" size={24} />
-            <h1 className="text-xl md:text-2xl font-semibold text-white">สรุปบัญชีสหกรณ์</h1>
-          </div>
-        </div>
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+        <PageHeader icon={FileSpreadsheet} title="สรุปบัญชีสหกรณ์" onBack={() => navigate(-1)} />
+
+        <div className="p-4 md:p-6">
 
         {/* Date range + export */}
         <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -246,6 +241,7 @@ export default function AccountingSummary() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 // 📄 components/dashboard/DetailModal.tsx — popup แสดงรายละเอียดเจาะลึกของการ์ดสรุปบน Dashboard
 //    ทำอะไร: กดการ์ดสรุปแล้วเด้ง modal โชว์รายการเต็ม (เช่น รายบิล/รายพนักงาน) — หน้าตาล้วน
-import { X } from 'lucide-react';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import { formatBangkokTime } from '../../utils/timezone';
 
 interface DetailModalData {
@@ -28,13 +29,8 @@ export function DetailModal({
   onApproveShift, onClose,
 }: DetailModalProps) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg max-h-[80dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center px-4 py-3 border-b border-brand-border">
-          <h3 className="text-sm font-semibold text-gray-900">{detailModal.title}</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-brand-bg transition-colors duration-150" aria-label="ปิด"><X size={16} /></button>
-        </div>
-        <div className="overflow-y-auto max-h-[60dvh] p-4 space-y-2">
+    <Modal onClose={onClose} widthClassName="max-w-lg" title={detailModal.title}>
+        <div className="p-4 space-y-2">
           {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีสินค้าสต๊อกใกล้หมด</p> :
             lowStock.map((p: LowStockItem) => (
               <div key={p.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-100 rounded-xl">
@@ -76,16 +72,12 @@ export function DetailModal({
                     {Number(s.difference) > 0 ? '+' : ''}{Number(s.difference).toFixed(2)}
                   </span>
                 </div>
-                <button
-                  onClick={() => onApproveShift(s.id)}
-                  className="w-full py-2 bg-gradient-to-br from-brand to-brand-dark text-white text-sm font-semibold rounded-xl transition-all duration-150 active:scale-[0.98]"
-                >
+                <Button className="w-full" onClick={() => onApproveShift(s.id)}>
                   อนุมัติปิดกะ
-                </button>
+                </Button>
               </div>
             )))}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -10,6 +10,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import AuthImage from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
+import { Button } from '../components/ui/Button';
 import { openAuthImage } from '../utils/openAuthImage';
 
 interface StaffOrderItem { id: number; product_name: string; quantity: number; price?: number | string; subtotal?: number | string; image_url?: string; }
@@ -619,9 +620,9 @@ export default function OrderManagement() {
 
                 {/* ลูกค้ามารับ */}
                 {selectedOrder.status === 'READY' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'COMPLETED')} disabled={loading} className="w-full bg-gradient-to-br from-brand to-brand-dark text-white font-bold py-3 rounded-full flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98]">
+                  <Button size="lg" className="w-full" onClick={() => handleUpdateStatus(selectedOrder.id, 'COMPLETED')} disabled={loading}>
                     <CheckCircle size={20}/> {selectedOrder.payment_method === 'CASH' ? 'รับเงิน ทอนแล้ว → ปิดบิล' : 'ลูกค้ารับของแล้ว → ปิดบิล'}
-                  </button>
+                  </Button>
                 )}
               </div>
               );

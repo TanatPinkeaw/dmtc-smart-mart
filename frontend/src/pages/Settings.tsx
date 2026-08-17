@@ -5,12 +5,16 @@
 import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Store, History, Users, Tags, Truck, Package, Trash2, Save, Eye, Calendar, Plus, X, Edit, Gift, Search, Upload, KeyRound, Copy, Phone, Clock, Download, FileSpreadsheet, Coins, UsersRound, RotateCcw, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import Swal from '../swal';
+import { BRAND } from '../theme'; // ⭐️ สีปุ่มยืนยัน Swal ใช้ token กลาง
 import api from '../api';
 import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { getLocalDate } from '../utils/localDate'; // ⭐️ วันนี้ตามเวลาท้องถิ่น (ย้าย helper ไป utils กลาง)
 import { LoyaltySettingsPanel } from '../components/settings/LoyaltySettingsPanel';
+import { PageHeader } from '../components/layout/PageHeader';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { MemberGroupsPanel } from '../components/settings/MemberGroupsPanel';
 
 // ── Types (state ที่เคยเป็น any — shape ตาม backend + การใช้งานจริงในหน้านี้) ──────
@@ -562,7 +566,7 @@ export default function Settings() {
 
       const confirm = await Swal.fire({
         icon: 'info', title: 'ตรวจสอบการเปลี่ยนแปลง', html,
-        showCancelButton: true, confirmButtonColor: '#ec4899', cancelButtonColor: '#9ca3af',
+        showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af',
         confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก'
       });
       if (!confirm.isConfirmed) return;
@@ -577,20 +581,14 @@ export default function Settings() {
   const handleDeleteSupplier = async (id: number) => { const res = await Swal.fire({ title: 'ลบซัพพลายเออร์นี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก' }); if (!res.isConfirmed) return; try { await api.delete(`/suppliers/${id}`); fetchSuppliers(); } catch (err) { Swal.fire({ icon: 'error', text: getErrorMessage(err) }); } };
 
   return (
-    <div className="min-h-screen bg-brand-bg font-sans p-4 md:p-6 relative pb-20 md:pb-6">
+    <div className="min-h-screen bg-brand-bg font-sans relative pb-20 md:pb-6">
 
-      {/* Header */}
-      <div className="max-w-7xl mx-auto flex items-center gap-3 mb-6 bg-gradient-to-r from-brand to-brand-dark p-4 md:p-6 rounded-3xl shadow-md">
-        <div className="w-11 h-11 md:w-12 md:h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-          <SettingsIcon size={24} className="md:w-7 md:h-7 text-white" />
-        </div>
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold text-white">แผงควบคุม (Admin)</h1>
-          <p className="text-white/80 text-xs md:text-sm">จัดการข้อมูลหลักในระบบ</p>
-        </div>
-      </div>
+      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+      <div className="max-w-7xl mx-auto">
+        <PageHeader icon={SettingsIcon} title="แผงควบคุม (Admin)" subtitle="จัดการข้อมูลหลักในระบบ" />
 
-      <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-6">
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col xl:flex-row gap-6">
 
         {/* Sidebar Tabs */}
         <div className="w-full xl:w-64 flex flex-row xl:flex-col gap-2 shrink-0 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide snap-x">
@@ -620,7 +618,7 @@ export default function Settings() {
               </div>
               <Input label="ที่อยู่" value={storeInfo.address || ''} required={false} onChange={(v) => setStoreInfo({ ...storeInfo, address: v })} />
               <Input label="ข้อความท้ายใบเสร็จ" value={storeInfo.receipt_footer || ''} required={false} onChange={(v) => setStoreInfo({ ...storeInfo, receipt_footer: v })} />
-              <button type="submit" className="w-full md:w-auto bg-gradient-to-br from-brand to-brand-dark text-white px-8 py-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 mt-4"><Save size={20} /> บันทึกข้อมูล</button>
+              <Button type="submit" size="lg" className="w-full md:w-auto mt-4"><Save size={20} /> บันทึกข้อมูล</Button>
             </form>
           )}
 
@@ -719,7 +717,7 @@ export default function Settings() {
 
               <div className="hidden md:block overflow-x-auto border border-brand-border rounded-xl">
                 <table className="w-full text-left">
-                  <thead className="bg-brand-bg text-gray-600 text-sm"><tr><th className="p-3 border-b">บิล</th><th className="p-3 border-b">ประเภท</th><th className="p-3 border-b">เวลา</th><th className="p-3 border-b">ยอดรวม</th><th className="p-3 border-b">ลูกค้า/แคชเชียร์</th><th className="p-3 border-b text-center">สถานะ</th><th className="p-3 border-b text-center">จัดการ</th></tr></thead>
+                  <thead className="bg-gray-50 text-gray-600 text-xs"><tr><th className="p-3 border-b">บิล</th><th className="p-3 border-b">ประเภท</th><th className="p-3 border-b">เวลา</th><th className="p-3 border-b">ยอดรวม</th><th className="p-3 border-b">ลูกค้า/แคชเชียร์</th><th className="p-3 border-b text-center">สถานะ</th><th className="p-3 border-b text-center">จัดการ</th></tr></thead>
                   <tbody>
                     {salesHistory.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-gray-400">ไม่พบข้อมูลการขาย</td></tr> : salesHistory.map(bill => (
                         <tr key={`${bill.source || 'POS'}-${bill.id}`} className="border-b hover:bg-brand-bg">
@@ -750,7 +748,7 @@ export default function Settings() {
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
                   <ExportImportButtons entity="products" onImportDone={fetchProducts} />
-                  <button onClick={() => { setActiveModal('ADD_PRODUCT'); setVendorSearch(''); }} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มสินค้า</span></button>
+                  <Button onClick={() => { setActiveModal('ADD_PRODUCT'); setVendorSearch(''); }} className="shrink-0"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มสินค้า</span></Button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -790,7 +788,7 @@ export default function Settings() {
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
                   <ExportImportButtons entity="categories" onImportDone={fetchCategories} />
-                  <button onClick={() => setActiveModal('ADD_CATEGORY')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มหมวดหมู่</span></button>
+                  <Button onClick={() => setActiveModal('ADD_CATEGORY')} className="shrink-0"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มหมวดหมู่</span></Button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -815,7 +813,7 @@ export default function Settings() {
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
                   <ExportImportButtons entity="suppliers" onImportDone={fetchSuppliers} />
-                  <button onClick={() => setActiveModal('ADD_SUPPLIER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มบริษัท</span></button>
+                  <Button onClick={() => setActiveModal('ADD_SUPPLIER')} className="shrink-0"><Plus size={18} /> <span className="hidden sm:inline">เพิ่มบริษัท</span></Button>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -854,7 +852,7 @@ export default function Settings() {
                     <input type="file" accept=".csv,text/csv" onChange={handleCsvImport} className="hidden" />
                   </label>
                   {/* ปุ่มเปลี่ยนชื่อจาก เพิ่มพนักงาน เป็น แต่งตั้งสิทธิ์ */}
-                  <button onClick={() => setActiveModal('ADD_USER')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">แต่งตั้งสิทธิ์</span></button>
+                  <Button onClick={() => setActiveModal('ADD_USER')} className="shrink-0"><Plus size={18} /> <span className="hidden sm:inline">แต่งตั้งสิทธิ์</span></Button>
                 </div>
               </div>
 
@@ -967,7 +965,7 @@ export default function Settings() {
                     <input type="text" placeholder="ค้นหาชื่อโปรโมชั่น..." value={searchPromotion} onChange={e => setSearchPromotion(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-brand-border rounded-full focus:ring-2 focus:ring-brand focus:bg-white outline-none text-sm font-medium transition-colors duration-150" />
                     <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                   </div>
-                  <button onClick={() => setActiveModal('ADD_PROMOTION')} className="shrink-0 bg-gradient-to-br from-brand to-brand-dark text-white px-4 py-2 rounded-full font-bold transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Plus size={18} /> <span className="hidden sm:inline">สร้างโปรโมชั่น</span></button>
+                  <Button onClick={() => setActiveModal('ADD_PROMOTION')} className="shrink-0"><Plus size={18} /> <span className="hidden sm:inline">สร้างโปรโมชั่น</span></Button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1033,7 +1031,7 @@ export default function Settings() {
                         <Clock size={13} className="text-gray-400 shrink-0" /> หมดอายุ {new Date(r.expires_at ?? '').toLocaleString('th-TH')}
                       </div>
                       <div className="flex gap-2 mt-auto pt-2">
-                        <button onClick={() => handleCopyResetLink(r.reset_token ?? '')} className="flex-1 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm py-2 rounded-xl transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"><Copy size={15} /> คัดลอกลิงก์</button>
+                        <Button className="flex-1" onClick={() => handleCopyResetLink(r.reset_token ?? '')}><Copy size={15} /> คัดลอกลิงก์</Button>
                         <button onClick={() => handleRejectPasswordReset(r.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-sm px-3 py-2 rounded-xl transition-colors duration-150" aria-label="ปิด"><X size={15} /></button>
                       </div>
                     </div>
@@ -1043,6 +1041,8 @@ export default function Settings() {
             </div>
           )}
 
+        </div>
+      </div>
         </div>
       </div>
 
@@ -1140,7 +1140,7 @@ export default function Settings() {
               )}
             </div>
 
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกการแก้ไข</button>
+            <Button type="submit" className="w-full mt-2">บันทึกการแก้ไข</Button>
           </form>
         </CustomModal>
       )}
@@ -1226,7 +1226,7 @@ export default function Settings() {
               )}
             </div>
 
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสินค้าใหม่</button>
+            <Button type="submit" className="w-full mt-2">บันทึกสินค้าใหม่</Button>
           </form>
         </CustomModal>
       )}
@@ -1252,7 +1252,7 @@ export default function Settings() {
                 <option value="ADMIN">ผู้ดูแลระบบ (ADMIN)</option>
               </select>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">ยืนยัน</button>
+            <Button type="submit" className="w-full mt-2">ยืนยัน</Button>
           </form>
         </CustomModal>
       )}
@@ -1298,7 +1298,7 @@ export default function Settings() {
                 {memberGroups.map((g: MemberGroup) => <option key={g.id} value={g.id}>{g.name} (ลด {Number(g.default_discount_percent)}%)</option>)}
               </select>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกสิทธิ์</button>
+            <Button type="submit" className="w-full mt-2">บันทึกสิทธิ์</Button>
           </form>
         </CustomModal>
       )}
@@ -1358,7 +1358,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกโปรโมชั่น</button>
+            <Button type="submit" className="w-full mt-2">บันทึกโปรโมชั่น</Button>
           </form>
         </CustomModal>
       )}
@@ -1369,7 +1369,7 @@ export default function Settings() {
           <p className="text-gray-500 text-xs md:text-sm mb-4">{new Date(viewingBillInfo.created_at ?? '').toLocaleString('th-TH')}</p>
           <div className="overflow-y-auto max-h-60 mb-4 border border-brand-border rounded-lg">
             <table className="w-full text-left text-xs md:text-sm">
-              <thead className="bg-brand-bg text-gray-600 sticky top-0"><tr><th className="p-2 border-b">สินค้า</th><th className="p-2 border-b text-center">จำนวน</th><th className="p-2 border-b text-right">รวม</th></tr></thead>
+              <thead className="bg-gray-50 text-gray-600 text-xs sticky top-0"><tr><th className="p-2 border-b">สินค้า</th><th className="p-2 border-b text-center">จำนวน</th><th className="p-2 border-b text-right">รวม</th></tr></thead>
               <tbody>
                 {viewingBillItems.map((item, idx) => (
                   <tr key={idx} className="border-b last:border-0"><td className="p-2 font-bold text-gray-800">{item.product_name}</td><td className="p-2 text-center">{item.quantity}</td><td className="p-2 text-right font-bold text-brand">฿{Number(item.subtotal).toFixed(2)}</td></tr>
@@ -1385,8 +1385,8 @@ export default function Settings() {
           )}
         </CustomModal>
       )}
-      {activeModal === 'ADD_CATEGORY' && (<CustomModal title="เพิ่มหมวดหมู่" onClose={() => setActiveModal(null)}><form onSubmit={handleAddCategory} className="space-y-4"><Input label="ชื่อหมวดหมู่" value={newCategory} onChange={setNewCategory} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">เพิ่มหมวดหมู่</button></form></CustomModal>)}
-      {activeModal === 'ADD_SUPPLIER' && (<CustomModal title="เพิ่มตัวแทนจำหน่าย" onClose={() => setActiveModal(null)}><form onSubmit={handleAddSupplier} className="space-y-4"><Input label="ชื่อบริษัท / บุคคล" value={newSupplier.name} onChange={(v) => setNewSupplier({ ...newSupplier, name: v })} /><Input label="ข้อมูลติดต่อ" value={newSupplier.contact_info} required={false} onChange={(v) => setNewSupplier({ ...newSupplier, contact_info: v })} /><button type="submit" className="w-full bg-gradient-to-br from-brand to-brand-dark text-white p-3 rounded-full font-bold transition-all duration-150 active:scale-[0.98] mt-2">บันทึกข้อมูล</button></form></CustomModal>)}
+      {activeModal === 'ADD_CATEGORY' && (<CustomModal title="เพิ่มหมวดหมู่" onClose={() => setActiveModal(null)}><form onSubmit={handleAddCategory} className="space-y-4"><Input label="ชื่อหมวดหมู่" value={newCategory} onChange={setNewCategory} /><Button type="submit" className="w-full mt-2">เพิ่มหมวดหมู่</Button></form></CustomModal>)}
+      {activeModal === 'ADD_SUPPLIER' && (<CustomModal title="เพิ่มตัวแทนจำหน่าย" onClose={() => setActiveModal(null)}><form onSubmit={handleAddSupplier} className="space-y-4"><Input label="ชื่อบริษัท / บุคคล" value={newSupplier.name} onChange={(v) => setNewSupplier({ ...newSupplier, name: v })} /><Input label="ข้อมูลติดต่อ" value={newSupplier.contact_info} required={false} onChange={(v) => setNewSupplier({ ...newSupplier, contact_info: v })} /><Button type="submit" className="w-full mt-2">บันทึกข้อมูล</Button></form></CustomModal>)}
       
       <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
     </div>
@@ -1394,10 +1394,10 @@ export default function Settings() {
 }
 
 const TabButton = ({ icon, label, isActive, onClick, badge }: { icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; badge?: React.ReactNode }) => (
-  <button onClick={onClick} className={`shrink-0 snap-start flex items-center gap-2 px-4 py-3 md:p-4 rounded-full font-bold text-sm md:text-base transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${isActive ? 'bg-gradient-to-br from-brand to-brand-dark text-white shadow-md' : 'bg-white text-gray-600 hover:bg-brand-border border border-brand-border shadow-sm'}`}>
+  <Button onClick={onClick} variant={isActive ? 'primary' : 'secondary'} className="shrink-0 snap-start">
     {icon} <span className="whitespace-nowrap">{label}</span>
     {!!badge && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/25 text-white' : 'bg-brand-bg text-brand'}`}>{badge}</span>}
-  </button>
+  </Button>
 );
 
 // ⭐️ Export/Import CSV+Excel ใช้ร่วมกัน 4 แท็บ (สินค้า/หมวดหมู่/ซัพพลายเออร์/พนักงาน) — ดึงออกไปแก้ไข
@@ -1475,15 +1475,9 @@ const Input = ({ label, value, onChange, type = "text", required = true, disable
 );
 
 const CustomModal = ({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) => (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-end md:items-center justify-center sm:p-4 animate-fade-in">
-    <div className="bg-white rounded-t-3xl md:rounded-3xl shadow-lg w-full max-w-md overflow-hidden flex flex-col transform transition-all">
-      <div className="px-5 py-4 flex justify-between items-center bg-gradient-to-r from-brand to-brand-dark rounded-t-3xl md:rounded-t-none shadow-sm">
-        <h2 className="text-base md:text-lg font-semibold text-white">{title}</h2>
-        <button onClick={onClose} className="text-white/90 hover:text-white hover:bg-white/20 active:scale-90 p-1.5 rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
-      </div>
-      <div className="p-5 pb-12 md:pb-5 overflow-y-auto max-h-[75dvh] md:max-h-[85dvh]">
-        {children}
-      </div>
+  <Modal title={title} onClose={onClose}>
+    <div className="p-5 pb-12 md:pb-5">
+      {children}
     </div>
-  </div>
+  </Modal>
 );

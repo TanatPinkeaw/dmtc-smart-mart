@@ -172,17 +172,19 @@ export default function Summary() {
   ] : [];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ตัวเลือกเดือนย้ายออกมานอกการ์ด */}
-      <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4 print:bg-none print:shadow-none print:p-0">
-        <button onClick={() => navigate(-1)} className="print:hidden p-2 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-          <ArrowLeft size={20} />
+    <div className="min-h-screen bg-brand-bg">
+      {/* ⭐️ แถบหัวหน้ามาตรฐาน (flush แบบ PageHeader — คงปุ่มกลับ + print override) */}
+      <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex items-center gap-2.5 shrink-0 shadow-md print:bg-none print:shadow-none print:p-0">
+        <button onClick={() => navigate(-1)} className="print:hidden p-1.5 -ml-1.5 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <ArrowLeft size={18} />
         </button>
-        <div className="flex items-center gap-2">
-          <BarChart3 className="text-white print:text-gray-800" size={24} />
-          <h1 className="text-xl md:text-2xl font-semibold text-white print:text-gray-800">สรุปข้อมูล</h1>
+        <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0 print:bg-transparent">
+          <BarChart3 size={16} className="text-white print:text-gray-800" />
         </div>
+        <h1 className="text-lg font-semibold text-white truncate print:text-gray-800">สรุปข้อมูล</h1>
       </div>
+
+      <div className="p-4 md:p-6">
 
       <div className="flex items-center gap-2 mb-6 print:mb-2">
         <input
@@ -475,6 +477,7 @@ export default function Summary() {
           </>)}
         </>
       )}
+        </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import Swal from '../swal';
 import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { Button } from '../components/ui/Button';
 
 interface Product { id: number; barcode: string; name: string; stock: number; cost: number; }
 interface Supplier { id: number; name: string; }
@@ -170,12 +171,9 @@ export default function Inventory() {
             <span>มูลค่ารวม</span>
             <span className="text-brand font-bold">฿{totalCost.toFixed(2)}</span>
           </div>
-          <button onClick={handleSubmitPurchase} disabled={receiveList.length === 0 || loading}
-            className="w-full py-3.5 text-white font-bold text-sm rounded-full shadow-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
-              enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">
+          <Button size="lg" className="w-full" onClick={handleSubmitPurchase} disabled={receiveList.length === 0 || loading}>
             <Truck size={16} /> {loading ? 'กำลังบันทึก...' : 'บันทึกเข้าคลัง'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

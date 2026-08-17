@@ -8,6 +8,7 @@ import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { formatBangkokTime } from '../../utils/timezone';
 import AuthImage from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
+import { Button } from '../ui/Button';
 
 // ⭐️ Construct slip image path from created_at date + filename
 // รูปใหม่เก็บเป็น URL/พาธเต็ม (https://cloudinary... หรือ /uploads/...) → คืนตรงๆ
@@ -292,12 +293,13 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
               ปิด
             </button>
             {selectedOrder.status === 'COMPLETED' && (
-              <button
+              <Button
+                size="lg"
+                className="flex-1"
                 onClick={viewOrderReceipt}
-                className="flex-1 px-4 py-3 bg-gradient-to-br from-brand to-brand-dark active:scale-[0.98] text-white font-bold rounded-full transition-all duration-150 text-sm flex items-center justify-center gap-2"
               >
                 <FileText size={15} /> ดูใบเสร็จ
-              </button>
+              </Button>
             )}
             {['PENDING_VERIFY', 'WAITING_CASH'].includes(selectedOrder.status) && (
               <button

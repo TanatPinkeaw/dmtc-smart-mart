@@ -6,6 +6,7 @@
 // ระหว่าง render (เช่น undefined.property, localStorage เพี้ยนแล้วโค้ดเก่าไม่ได้กัน) ทำให้ทั้งแอป
 // unmount กลายเป็นจอขาว ไม่มีทางกู้คืนนอกจากผู้ใช้เดารีเฟรชเอง
 import React, { type ReactNode } from 'react';
+import { Button } from '../ui/Button';
 
 interface Props {
   children: ReactNode;
@@ -41,12 +42,9 @@ class ErrorBoundary extends React.Component<Props, State> {
             <h1 className="text-2xl font-extrabold text-gray-900 mb-2">เกิดข้อผิดพลาด</h1>
             <p className="text-sm text-gray-600 font-medium mb-1">ระบบเกิดข้อผิดพลาดที่ไม่คาดคิด</p>
             <p className="text-xs text-gray-500 mb-6 font-mono break-all">{this.state.error?.message}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold rounded-full transition-all duration-150 active:scale-[0.98]"
-            >
+            <Button size="lg" className="w-full" onClick={() => window.location.reload()}>
               รีเซ็ตแอปฯ
-            </button>
+            </Button>
           </div>
         </div>
       );

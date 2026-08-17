@@ -5,7 +5,8 @@ import Swal from '../../swal';
 import api from '../../api';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { validatePasswordStrength } from '../../validators/passwordValidator';
-import { KeyRound, X } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
+import { Modal } from '../ui/Modal';
 import { getErrorMessage } from '../../utils/errorMessage';
 
 interface ChangePasswordModalProps {
@@ -60,32 +61,20 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={forceChange ? undefined : onClose} />
-      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-xl w-full sm:max-w-md overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
-          <div className="flex items-center gap-2">
-            <KeyRound size={18} className="text-brand" />
-            <h3 className="font-semibold text-gray-900">เปลี่ยนรหัสผ่าน</h3>
-          </div>
-          {!forceChange && (
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-white transition-colors duration-150"
-            >
-              <X size={18} />
-            </button>
-          )}
-        </div>
-        {forceChange && (
-          <p className="px-5 pt-3 text-xs text-amber-600 bg-amber-50 border-b border-amber-100 py-2">
-            บัญชีนี้ใช้รหัสผ่านชั่วคราวอยู่ กรุณาตั้งรหัสผ่านใหม่ก่อนใช้งานต่อ
-          </p>
-        )}
+    <Modal
+      onClose={onClose}
+      hideClose={forceChange}
+      backdropClosable={!forceChange}
+      title={<><KeyRound size={18} /> เปลี่ยนรหัสผ่าน</>}
+    >
+      {forceChange && (
+        <p className="px-5 py-2 text-xs text-amber-600 bg-amber-50 border-b border-amber-100">
+          บัญชีนี้ใช้รหัสผ่านชั่วคราวอยู่ กรุณาตั้งรหัสผ่านใหม่ก่อนใช้งานต่อ
+        </p>
+      )}
 
         {/* Form */}
-        <form onSubmit={handleChangePassword} className="p-5 space-y-4 max-h-[80dvh] overflow-y-auto">
+        <form onSubmit={handleChangePassword} className="p-5 space-y-4">
           {/* Current Password */}
           <div className="space-y-1">
             <label className="block text-xs font-medium text-gray-600">รหัสผ่านปัจจุบัน</label>
@@ -152,7 +141,6 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
             )}
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

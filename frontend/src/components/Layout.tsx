@@ -141,7 +141,7 @@ function LayoutInner() {
   // ในหน้า Notifications เท่านั้น (ดู pages/Notifications.tsx)
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+    <div className="flex h-screen bg-brand-bg font-sans overflow-hidden">
       <Sidebar
         isStaff={isStaff}
         isAdmin={isAdmin}

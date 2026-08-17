@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, ChevronRight, Tag, Lock, ShoppingBag, Receipt, FileCheck, Percent, Calendar, ClipboardList, BarChart3, FileSpreadsheet, Settings, ClipboardCheck, Database, Bell, User, PiggyBank } from 'lucide-react';
 import api from '../api';
 import { performLogout } from '../utils/logout';
+import { Button } from '../components/ui/Button';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { BRAND } from '../theme';
@@ -496,12 +497,13 @@ export default function Home() {
                             <span className="text-[10px] text-gray-400 line-through">฿{original.toLocaleString()}</span>
                           )}
                         </div>
-                        <button
+                        <Button
+                          size="sm"
+                          className="mt-2 w-full"
                           onClick={() => goTo(`/pre-order?add=${p.id}`)}
-                          className="mt-2 w-full py-1.5 rounded-full bg-gradient-to-br from-brand to-brand-dark text-white text-[11px] font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                         >
                           + เพิ่มลงตะกร้า
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   );

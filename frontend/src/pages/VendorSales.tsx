@@ -8,6 +8,7 @@ import { Wallet, Package, TrendingUp, PiggyBank } from 'lucide-react';
 import api from '../api';
 import { useSocket } from '../hooks/useSocket';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
+import { PageHeader } from '../components/layout/PageHeader';
 
 interface VendorSummary {
   vendor_id: number; student_id: string; full_name: string;
@@ -48,27 +49,24 @@ export default function VendorSales() {
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 pb-24">
-      <div className="max-w-2xl mx-auto space-y-4">
-        {[1,2,3].map(i => <div key={i} className="h-24 bg-white border border-brand-border rounded-3xl animate-pulse" />)}
+    <div className="min-h-screen bg-brand-bg pb-24">
+      <div className="max-w-2xl mx-auto">
+        <PageHeader icon={PiggyBank} title="ยอดฝากขายของฉัน" subtitle="สรุปยอดและเงินที่สหกรณ์จะโอนคืน" />
+        <div className="p-4 sm:p-6 space-y-4">
+          {[1,2,3].map(i => <div key={i} className="h-24 bg-white border border-brand-border rounded-3xl animate-pulse" />)}
+        </div>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 pb-24">
+    <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-2xl mx-auto">
 
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-5 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <PiggyBank size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">ยอดฝากขายของฉัน</h1>
-            <p className="text-xs text-white/80">สรุปยอดและเงินที่สหกรณ์จะโอนคืน</p>
-          </div>
-        </div>
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+        <PageHeader icon={PiggyBank} title="ยอดฝากขายของฉัน" subtitle="สรุปยอดและเงินที่สหกรณ์จะโอนคืน" />
+
+        <div className="p-4 sm:p-6">
 
         {!summary || items.length === 0 ? (
           <div className="bg-white border border-brand-border rounded-3xl shadow-md py-16 flex flex-col items-center text-center">
@@ -128,6 +126,7 @@ export default function VendorSales() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { KeyRound, ArrowLeft } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 import api from '../api';
 
 // ⭐️ ระบบนี้ไม่มีคอลัมน์ email บน users — ยืนยันตัวตนด้วย student_id + phone_number แทน
@@ -52,12 +53,9 @@ export default function ForgotPassword() {
               <p className="mt-2 text-xs text-gray-400">
                 กรุณารอเจ้าหน้าที่ติดต่อกลับพร้อมลิงก์สำหรับตั้งรหัสผ่านใหม่ (เช่น ทาง LINE หรือช่องทางที่ให้ไว้ตอนสมัคร) ลิงก์จะหมดอายุภายใน 1 ชั่วโมงหลังเจ้าหน้าที่ส่งให้
               </p>
-              <button
-                onClick={() => navigate('/login')}
-                className="mt-5 w-full py-3.5 bg-gradient-to-br from-brand to-brand-dark text-white font-bold text-sm rounded-full shadow-sm transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-              >
+              <Button size="lg" className="w-full mt-5" onClick={() => navigate('/login')}>
                 กลับไปหน้าเข้าสู่ระบบ
-              </button>
+              </Button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">

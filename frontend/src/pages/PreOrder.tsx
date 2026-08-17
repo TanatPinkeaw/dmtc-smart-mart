@@ -7,6 +7,7 @@ import { performLogout } from '../utils/logout'; // ⭐️ staff สลับไ
 import { ShoppingCart, ShoppingBag, Search } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
+import { BRAND } from '../theme'; // ⭐️ สีปุ่มยืนยัน Swal ใช้ token กลาง ไม่ใช่ hex hardcode
 import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
@@ -117,7 +118,7 @@ export default function PreOrder() {
     const r = await Swal.fire({
       title: 'สลับไปใช้บัญชีสมาชิก?',
       text: 'ระบบจะออกจากบัญชีพนักงานปัจจุบัน แล้วให้คุณล็อกอินด้วยบัญชีสมาชิก (เพื่อใช้สิทธิ์สะสม/แลกแต้ม)',
-      icon: 'question', showCancelButton: true, confirmButtonColor: '#ec296f', cancelButtonColor: '#9ca3af',
+      icon: 'question', showCancelButton: true, confirmButtonColor: BRAND, cancelButtonColor: '#9ca3af',
       confirmButtonText: 'สลับบัญชี', cancelButtonText: 'ยกเลิก',
     });
     if (!r.isConfirmed) return;

@@ -29,7 +29,7 @@ function ShiftCard({ fullName, onHome, onLogout, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-white border border-brand-border rounded-3xl shadow-sm overflow-hidden">
         {/* Brand strip */}
         <div className="bg-gradient-to-r from-brand to-brand-dark px-5 py-4 flex items-center gap-3">
@@ -190,7 +190,7 @@ export default function Shift() {
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (pageLoading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center">
       <div className="text-center space-y-3">
         <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-sm text-gray-400">กำลังตรวจสอบ...</p>

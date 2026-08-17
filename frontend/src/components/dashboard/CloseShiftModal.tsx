@@ -1,8 +1,9 @@
 // 📄 components/dashboard/CloseShiftModal.tsx — popup ปิดกะการขาย (แคชเชียร์นับเงิน+ถ่ายรูปยืนยัน)
 //    ทำอะไร: กรอกเงินสดจริงในลิ้นชัก + ถ่ายรูป แล้วส่งปิดกะ (ระบบเทียบกับยอดที่ควรมี = เงินขาด/เกิน)
-import { Camera, X } from 'lucide-react';
-
-const inputCls = "w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
+import { Camera } from 'lucide-react';
+import { inputCls } from '../ui/fieldStyles';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
@@ -42,15 +43,10 @@ export function CloseShiftModal({
   closeLoading, actualCash, shiftSummary, onSubmit, onClose, onDone,
 }: CloseShiftModalProps) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-t-3xl md:rounded-3xl shadow-xl w-full md:max-w-md overflow-hidden">
+    <Modal onClose={onClose} widthClassName="md:max-w-md" title={!shiftSummary ? 'ปิดกะการขาย' : 'สรุปยอดการขาย'}>
         {!shiftSummary ? (
           <>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-bg">
-              <h3 className="text-sm font-semibold text-gray-900">ปิดกะการขาย</h3>
-              <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-colors duration-150" aria-label="ปิด"><X size={18} /></button>
-            </div>
-            <div className="p-5 max-h-[75dvh] overflow-y-auto">
+            <div className="p-5">
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-xs text-blue-700">
                 <p className="font-semibold mb-1">📋 วิธีนับเงินปิดกะ</p>
                 <p>• เงินสด: นับแบงก์/เหรียญในลิ้นชักแล้วใส่ด้านล่าง</p>
@@ -72,7 +68,7 @@ export function CloseShiftModal({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">สาเหตุส่วนต่าง (ถ้ามี)</label>
-                  <select value={discrepancyCategory} onChange={e => onDiscrepancyCategoryChange(e.target.value)} className={inputCls}>
+                  <select value={discrepancyCategory} onChange={e => onDiscrepancyCategoryChange(e.target.value)} className={`${inputCls} w-full`}>
                     <option value="">— ไม่ระบุ —</option>
                     <option value="SHORT_CHANGE">ทอนผิด</option>
                     <option value="FAKE_BILL">รับเงินปลอม</option>
@@ -104,7 +100,6 @@ export function CloseShiftModal({
           </>
         ) : (
           <div className="p-6 text-center">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">สรุปยอดการขาย</h3>
             <p className="text-xs text-gray-400 mb-4">ปิดกะสำเร็จ บันทึกเรียบร้อยแล้ว</p>
             <div className="bg-brand-bg border border-brand-border rounded-xl p-4 text-left space-y-2 mb-5 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">จำนวนบิล</span><span className="font-semibold">{Number(shiftSummary.bill_count || 0)} บิล</span></div>
@@ -120,10 +115,9 @@ export function CloseShiftModal({
                 </span>
               </div>
             </div>
-            <button onClick={onDone} className="w-full py-3 bg-gradient-to-br from-brand to-brand-dark text-white font-semibold rounded-full transition-all duration-150 active:scale-[0.98]">กลับหน้าหลัก</button>
+            <Button onClick={onDone} className="w-full">กลับหน้าหลัก</Button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

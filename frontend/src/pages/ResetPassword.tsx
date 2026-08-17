@@ -6,6 +6,7 @@ import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, XCircle } from 'lucide-reac
 import api from '../api';
 import customSwal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
+import { Button } from '../components/ui/Button';
 
 // ⭐️ ตรงกับ backend จริง: GET /api/auth/reset-token/:token, POST /api/auth/reset-password { reset_token, new_password }
 // เงื่อนไขรหัสผ่าน (ต้องตรงกับ regex ฝั่ง backend): 8+ ตัวอักษร, มีพิมพ์เล็ก, พิมพ์ใหญ่, ตัวเลข
@@ -113,11 +114,8 @@ export default function ResetPassword() {
                 <CheckRow ok={checks.digit} label="ตัวเลข" />
               </div>
 
-              <button
-                type="submit" disabled={loading || !isStrong}
-                className="w-full py-3.5 mt-1 rounded-full text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-                  enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+              <Button
+                type="submit" disabled={loading || !isStrong} size="lg" className="w-full mt-1"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -125,7 +123,7 @@ export default function ResetPassword() {
                     กำลังบันทึก...
                   </span>
                 ) : 'ตั้งรหัสผ่านใหม่'}
-              </button>
+              </Button>
             </form>
           )}
         </div>

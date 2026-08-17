@@ -5,6 +5,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { CalendarClock, ChevronLeft, ChevronRight, CalendarOff, X, Trash2 } from 'lucide-react';
+import { PageHeader } from '../components/layout/PageHeader';
+import { inputCls } from '../components/ui/fieldStyles';
 import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -116,21 +118,15 @@ export default function Schedules() {
     catch (err) { Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: getErrorMessage(err) }); }
   };
 
-  const inputCls = "px-3 py-2 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
+
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
+    <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-5xl mx-auto">
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+        <PageHeader icon={CalendarClock} title="ตารางเวลาทำงาน" />
 
-        {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx (ไอคอน+ชื่อหน้าเท่านั้น) ปุ่ม/คำอธิบาย
-            ย้ายออกมานอกการ์ดกันบวมและปุ่มไปกลืนกับพื้นไล่สีตอนจอมือถือ */}
-        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <CalendarClock size={18} className="text-white" />
-          </div>
-          <h1 className="text-xl font-semibold text-white">ตารางเวลาทำงาน</h1>
-        </div>
-
+        <div className="p-4 sm:p-6">
         <p className="text-xs text-gray-400 mb-3 px-1">{canManage ? 'คลิกวันในปฏิทินเพื่อกำหนดกะ หรือคลิกชื่อพนักงานเพื่อแก้ไข' : 'ดูตารางเวลาทำงานของทีม (ผู้จัดการเป็นคนกำหนด)'}</p>
 
         {canManage && (
@@ -200,6 +196,7 @@ export default function Schedules() {
           {staff.map((s, i) => (
             <span key={s.id} className={`text-xs font-medium px-3 py-1 rounded-full ${COLORS[i % COLORS.length]}`}>{s.full_name}</span>
           ))}
+        </div>
         </div>
       </div>
 

@@ -5,6 +5,10 @@
 
 import { useState, useEffect } from 'react';
 import { ClipboardCheck, RefreshCw, Edit2, Camera, Trash2 } from 'lucide-react';
+import { PageHeader } from '../components/layout/PageHeader';
+import { inputCls } from '../components/ui/fieldStyles';
+import { Modal } from '../components/ui/Modal';
+import { Button } from '../components/ui/Button';
 import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
@@ -99,20 +103,16 @@ export default function AttendanceManagement() {
     finally { setRunningAuto(false); }
   };
 
-  const inputCls = "px-4 py-2.5 bg-brand-bg border border-brand-border rounded-full text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors duration-150";
+
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 p-4 sm:p-6">
+    <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-5xl mx-auto">
 
-        {/* Header — ⭐️ Design-ref: กระชับแถวเดียวแบบ POS.tsx ปุ่ม/คำอธิบายย้ายออกมานอกการ์ด */}
-        <div className="flex items-center gap-3 mb-4 bg-gradient-to-r from-brand to-brand-dark rounded-3xl shadow-md p-4">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <ClipboardCheck size={18} className="text-white" />
-          </div>
-          <h1 className="text-xl font-semibold text-white">จัดการเข้า-ออกงาน</h1>
-        </div>
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+        <PageHeader icon={ClipboardCheck} title="จัดการเข้า-ออกงาน" />
 
+        <div className="p-4 sm:p-6">
         <p className="text-xs text-gray-400 mb-3 px-1">แก้ไขกรณีลืมลงเวลา + ตรวจสอบรูปยืนยันสถานที่</p>
 
         <div className="mb-5">
@@ -229,25 +229,22 @@ export default function AttendanceManagement() {
             ))}
           </div>
         </div>
+        </div>
       </div>
 
       {/* Edit Modal */}
       {editing && (
-        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditing(null)} />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-xl w-full sm:max-w-md p-5">
-            <h3 className="text-base font-bold text-gray-900 mb-4">แก้ไขเวลา: {editing.full_name}</h3>
-            <form onSubmit={handleSaveEdit} className="space-y-3">
+        <Modal onClose={() => setEditing(null)} title={`แก้ไขเวลา: ${editing.full_name}`}>
+            <form onSubmit={handleSaveEdit} className="space-y-3 p-5">
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาเข้างาน</label><input type="datetime-local" value={editForm.check_in} onChange={e => setEditForm({ ...editForm, check_in: e.target.value })} className={`${inputCls} w-full`} /></div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาออกงาน</label><input type="datetime-local" value={editForm.check_out} onChange={e => setEditForm({ ...editForm, check_out: e.target.value })} className={`${inputCls} w-full`} /></div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">หมายเหตุ</label><input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="เช่น ลืมลงชื่อออก..." className={`${inputCls} w-full`} /></div>
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setEditing(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-full text-sm font-bold hover:bg-gray-200 transition-all duration-150 active:scale-[0.98]">ยกเลิก</button>
-                <button type="submit" className="flex-1 py-2.5 bg-gradient-to-br from-brand to-brand-dark text-white rounded-full text-sm font-bold transition-all duration-150 active:scale-[0.98]">บันทึก</button>
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => setEditing(null)}>ยกเลิก</Button>
+                <Button type="submit" className="flex-1">บันทึก</Button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ⭐️ Lightbox รูปยืนยันสถานที่ — responsive ทั้งมือถือ/เดสก์ท็อป */}
