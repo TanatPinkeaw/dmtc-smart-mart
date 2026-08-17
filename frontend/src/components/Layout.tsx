@@ -9,7 +9,7 @@
 // 🔒 UNCHANGED: fetchNotificationsAndBadge, socket listeners, handleUpdateProfile, handleLogoutClick, handleOpenNotifications, isStaff logic, all navigation routes
 
 import { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import Swal from '../swal';
 import { BRAND } from '../theme';
 import api from '../api';
@@ -20,7 +20,6 @@ import { getCurrentUser, getCurrentUserOrRedirect } from '../utils/getCurrentUse
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { Sidebar } from './layout/Sidebar';
 import { MobileBottomNav } from './layout/MobileBottomNav';
-import { MemberBottomNav } from './layout/MemberBottomNav';
 import { MobileMenuDrawer } from './layout/MobileMenuDrawer';
 import { UploadSlipModal } from './preorder/UploadSlipModal';
 
@@ -29,7 +28,6 @@ function LayoutInner() {
   const socket = useSocket();
   const user = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   const navigate = useNavigate();
-  const location = useLocation();
 
   // รูปร่างขั้นต่ำของข้อมูลจาก API (field ที่ Layout อ่านจริง) — field อื่นเป็น unknown
   interface NotificationAlert { id: number; is_read?: boolean; [key: string]: unknown; }
@@ -60,12 +58,8 @@ function LayoutInner() {
   // ⭐️ POS เปิดให้เฉพาะ CASHIER — ADMIN/MANAGER ขายหน้าร้านไม่ได้ (เปิดกะไม่ได้ = เงินสดไม่มีกะรองรับ)
   const isCashier = user.role === 'CASHIER';
   const unreadCount = notifications.filter(n => !n.is_read).length;
-  // ⭐️ Phase 1 (5-day plan) — /pre-order ใช้ MemberBottomNav (2 ปุ่ม: ร้านค้า/บัตรสมาชิก) แทน
-  // MobileBottomNav ของ staff เดิม เฉพาะหน้านี้เท่านั้น กันไม่ให้มีแถบล่างซ้อนกัน 2 อัน (Layout ครอบ
-  // /pre-order อยู่แล้วเพราะต้องใช้ SocketProvider — ดึง /my-sales ออกจากเงื่อนไขนี้เจตนา ให้ยังใช้
-  // MobileBottomNav เดิม/ไม่เปลี่ยนพฤติกรรมหน้านั้น ตามสโคปที่ขอเฉพาะ /pre-order + /register)
-  const isMemberShopPage = !isStaff && location.pathname.startsWith('/pre-order');
-
+  // ⭐️ ทุกหน้าใช้ MobileBottomNav ตัวเดียวกัน (รวม member บน /pre-order) — กัน UI แถบล่างเพี้ยน
+  //    ต่างกันไปทีละหน้า; สมาชิกที่ต้องการ "บัตรสมาชิก" ไปได้ทาง เมนู → บัตรสมาชิก (navConfig)
   const fetchNotificationsAndBadge = async () => {
     try {
       const t = Date.now();
@@ -183,18 +177,14 @@ function LayoutInner() {
         <Outlet />
       </main>
 
-      {isMemberShopPage ? (
-        <MemberBottomNav />
-      ) : (
-        <MobileBottomNav
-          isStaff={isStaff}
-          isCashier={isCashier}
-          unreadCount={unreadCount}
-          pendingOrders={pendingOrders}
-          onOpenMobileMenu={() => setShowMobileMenu(true)}
-          onOpenProfile={() => navigate('/profile')}
-        />
-      )}
+      <MobileBottomNav
+        isStaff={isStaff}
+        isCashier={isCashier}
+        unreadCount={unreadCount}
+        pendingOrders={pendingOrders}
+        onOpenMobileMenu={() => setShowMobileMenu(true)}
+        onOpenProfile={() => navigate('/profile')}
+      />
 
       {showMobileMenu && (
         <MobileMenuDrawer

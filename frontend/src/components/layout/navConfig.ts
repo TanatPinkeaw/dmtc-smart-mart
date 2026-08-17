@@ -2,7 +2,7 @@
 //    export MEMBER_ITEMS/STAFF_ITEMS/STORE_ITEMS_*/SYSTEM_ITEMS — แก้เมนูที่เดียว มีผลทั้ง sidebar และ drawer
 import {
   LayoutDashboard, Boxes, Settings, CalendarClock, BarChart3,
-  ClipboardCheck, ShoppingBag, PiggyBank, Database, FileSpreadsheet,
+  ClipboardCheck, ShoppingBag, PiggyBank, Database, FileSpreadsheet, IdCard,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -13,9 +13,12 @@ export interface NavItemDef {
   mobileLabel?: string; // label สั้นกว่าสำหรับ mobile bottom nav (ที่ว่างจำกัด)
 }
 
-// สมาชิก (ไม่ใช่ staff) เท่านั้น — ใช้ใน sidebar + mobile bottom nav
+// สมาชิก (ไม่ใช่ staff) เท่านั้น — ใช้ใน sidebar + mobile drawer
+// ⭐️ รวม "บัตรสมาชิก" (/register) ไว้ที่นี่ — หลังรวมแถบล่างเป็น MobileBottomNav ตัวเดียวแล้ว
+//    ปุ่มลัด ร้านค้า/บัตรสมาชิก ของ MemberBottomNav ตัวเก่าถูกลบ สมาชิกเข้าบัตรได้ทาง sidebar/drawer
 export const MEMBER_ITEMS: NavItemDef[] = [
   { to: '/pre-order', icon: ShoppingBag, label: 'สั่งจอง', mobileLabel: 'จอง' },
+  { to: '/register', icon: IdCard, label: 'บัตรสมาชิก' },
   { to: '/my-sales', icon: PiggyBank, label: 'ยอดฝากขาย', mobileLabel: 'ฝากขาย' },
 ];
 

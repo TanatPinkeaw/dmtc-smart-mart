@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-08-17] — feat(frontend): รวมแถบล่างเป็น MobileBottomNav ตัวเดียวทุกหน้า (commit `<ยังไม่ push — เติมหลัง commit>`)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — commit นี้ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **UX เปลี่ยนของสมาชิก**: หน้า /pre-order แถบล่างเปลี่ยนจาก 2 ปุ่ม (ร้านค้า/บัตรสมาชิก) เป็นแถบมาตรฐาน 5 ปุ่ม (เมนู/แจ้งเตือน/หน้าแรก/จอง/โปรไฟล์) — เข้าบัตรสมาชิกได้ทาง **เมนู → บัตรสมาชิก** หรือ sidebar
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Bottom nav** (frontend) | ลบ `MemberBottomNav` (แถบ 2 ปุ่มเฉพาะ member) — ทุกหน้ารวมเป็น `MobileBottomNav` ตัวเดียว (แถบลอย + FAB กลาง); หน้า /register การ์ด "เป็นสมาชิกอยู่แล้ว" ใช้แถบเดียวกัน + drawer ครบ |
+| **เมนูสมาชิก** (frontend) | เพิ่ม "บัตรสมาชิก" (`/register`) ใน `MEMBER_ITEMS` → ปรากฏใน sidebar + mobile drawer กันเข้าบัตรไม่ได้หลังรวมแถบ |
+
+**Rollback:** revert commit นี้แล้ว rebuild frontend — ไม่มีผลต่อ data
+
+---
+
 ## [2026-08-16] — fix: harden offline queue, timezone ranges, rewards, strict TS + CI (commit `1cf0f1b`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)

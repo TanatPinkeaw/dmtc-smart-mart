@@ -10,7 +10,8 @@ import { getCurrentUser } from '../utils/getCurrentUser';
 import { type ErrorLike } from '../utils/errorMessage';
 import { performLogout } from '../utils/logout';
 import api, { setCsrfToken, setBearerToken } from '../api';
-import { MemberBottomNav } from '../components/layout/MemberBottomNav';
+import { MobileBottomNav } from '../components/layout/MobileBottomNav';
+import { MobileMenuDrawer } from '../components/layout/MobileMenuDrawer';
 
 // ⭐️ LIFF endpoint URL page — /register ไม่มี auth guard ใน App.tsx เพราะเปิดจาก LIFF ก่อน login
 // เข้าระบบนี้เสมอ (LIFF มี session ของ LINE เอง ไม่ใช่ JWT ของแอปนี้) ยิง fetch ตรงไป API_BASE_URL
@@ -60,6 +61,8 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [fieldError, setFieldError] = useState<{ [k: string]: string }>({});
   const [refreshing, setRefreshing] = useState(false);
+  // ⭐️ แถบล่างใช้ MobileBottomNav ตัวเดียวกับทุกหน้า (member) — เมนูเปิด drawer เดียวกับ Layout
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // ⭐️ ใช้ทั้งตอนโหลดครั้งแรกและตอนกด "รีเฟรช" / auto-refresh — ยิงซ้ำ endpoint เดิม (public,
   // ไม่ต้องมี JWT) เอาแต้ม/กลุ่มสมาชิกล่าสุดมาโชว์ ไม่แตะ stage ถ้ากำลัง refresh บัตรที่แสดงอยู่แล้ว
@@ -216,7 +219,7 @@ export default function Register() {
   }
 
   return (
-    <div className={`min-h-screen bg-brand-bg flex items-center justify-center p-4 ${stage === 'authenticated' ? 'pb-24' : ''}`}>
+    <div className={`min-h-screen bg-brand-bg flex items-center justify-center p-4 ${stage === 'authenticated' ? 'pb-28' : ''}`}>
       <div className="w-full max-w-md">
         {stage === 'loading' && (
           <div className="bg-white rounded-3xl shadow-md border border-brand-border p-8 flex flex-col items-center gap-4">
@@ -381,8 +384,28 @@ export default function Register() {
         )}
       </div>
 
-      {/* ⭐️ Phase 1 (5-day plan) — โชว์เฉพาะตอน login แล้วเท่านั้น (การ์ด "เป็นสมาชิกอยู่แล้ว") */}
-      {stage === 'authenticated' && <MemberBottomNav />}
+      {/* ⭐️ แถบล่างตัวเดียวกับทุกหน้า (mobile) — โชว์เฉพาะตอน login แล้ว (การ์ด "เป็นสมาชิกอยู่แล้ว") */}
+      {stage === 'authenticated' && (
+        <>
+          <MobileBottomNav
+            isStaff={false}
+            isCashier={false}
+            unreadCount={0}
+            pendingOrders={0}
+            onOpenMobileMenu={() => setShowMobileMenu(true)}
+            onOpenProfile={() => navigate('/profile')}
+          />
+          {showMobileMenu && (
+            <MobileMenuDrawer
+              isStaff={false}
+              isAdmin={false}
+              isStoreAdmin={false}
+              onClose={() => setShowMobileMenu(false)}
+              onLogoutClick={handleLogout}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

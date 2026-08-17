@@ -57,7 +57,7 @@ export function MobileMenuDrawer({ isStaff, isAdmin, isStoreAdmin, pendingOrders
             </>
           ) : (
             <>
-              {/* ⭐️ สั่งจอง ย้ายไปอยู่แถบลอยโดยตรงแล้ว เหลือแค่ฝากขาย + ออกจากระบบ */}
+              {/* ⭐️ สั่งจอง ย้ายไปอยู่แถบลอยโดยตรงแล้ว เหลือฝากขาย + บัตรสมาชิก + ออกจากระบบ */}
               {MEMBER_ITEMS.filter(item => item.to !== '/pre-order').map(item => (
                 <NavLink key={item.to} to={item.to} onClick={onClose} className={drawerLinkClass}>
                   <item.icon size={18} /> {item.label}
