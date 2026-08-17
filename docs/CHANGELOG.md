@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — security: เคลียร์ vuln ทั้ง 2 ฝั่งเป็น 0 (backend 6→0, frontend 5→0) + รวม Dashboard/OrderManagement เข้า PageHeader/EmptyState
+## [2026-08-17] — security: เคลียร์ vuln ทั้ง 2 ฝั่งเป็น 0 (backend 6→0, frontend 5→0) + รวม Dashboard/OrderManagement เข้า PageHeader/EmptyState (commit `fca6723`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
