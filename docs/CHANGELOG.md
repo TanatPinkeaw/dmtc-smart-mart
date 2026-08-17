@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — fix(backend+frontend): ล่าบัค 4 จุด — แยกลิมิต sync-offline, clamp page/limit audit-logs, โชว์ "—" แทน 0 ปลอม, ลบ dead socket
+## [2026-08-17] — fix(backend+frontend): ล่าบัค 4 จุด — แยกลิมิต sync-offline, clamp page/limit audit-logs, โชว์ "—" แทน 0 ปลอม, ลบ dead socket (commit `61e50dd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
