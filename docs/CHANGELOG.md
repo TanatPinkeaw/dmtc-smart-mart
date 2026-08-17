@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — refactor(backend): รวม error response ซ้ำ 146 จุดเข้า sendError/serverError + SQL ซ้ำ 14 จุดเข้า queries.js — helper กลางที่เดียว
+## [2026-08-17] — refactor(backend): รวม error response ซ้ำ 146 จุดเข้า sendError/serverError + SQL ซ้ำ 14 จุดเข้า queries.js — helper กลางที่เดียว (commit `4002fdb`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
