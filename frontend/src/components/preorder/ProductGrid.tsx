@@ -93,12 +93,12 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
 
             <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
               {discountPct > 0 ? (
-                <p className={`text-sm font-bold flex items-baseline gap-1 ${nearExpiry ? 'text-red-600' : 'text-brand'}`}>
+                <p className={`font-display text-sm font-bold tabular-nums flex items-baseline gap-1 ${nearExpiry ? 'text-red-600' : 'text-brand'}`}>
                   ฿{finalPrice.toFixed(2)}
                   <span className="text-[9px] text-gray-400 line-through font-normal">฿{Number(product.price).toFixed(2)}</span>
                 </p>
               ) : (
-                <p className="text-base font-bold text-brand">฿{Number(product.price).toFixed(2)}</p>
+                <p className="font-display text-base font-bold text-brand tabular-nums">฿{Number(product.price).toFixed(2)}</p>
               )}
               {discountPct > 0
                 ? <span className={`shrink-0 text-[10px] text-white px-1.5 py-0.5 rounded-md font-bold ${nearExpiry ? 'bg-yellow-500' : 'bg-amber-500'}`}>-{discountPct}%</span>

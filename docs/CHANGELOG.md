@@ -4,6 +4,25 @@
 
 ---
 
+## [2026-08-17] — feat(frontend): ขยายภาษาเดียวกัน (ชายคา/SectionTitle/Prompt) ไปหน้า PreOrder (ยังไม่ push)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **หน้า /pre-order เปลี่ยนหน้าตา** (ข้อมูล/ลอจิก/ปุ่มทุกปุ่มไม่เปลี่ยน): หัวหน้าเป็นชายคาหยักเหมือน Home, หัวข้อ "สินค้ามีโปร/สินค้ายอดนิยม" เป็น `SectionTitle`, ราคาเป็นเลข tabular — icons/ภาพสินค้า/ปุ่มเพิ่มลงตะกร้าเดิมทั้งหมด
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **หัวหน้า PreOrder** (frontend) | เพิ่มชายคาหยัก (`.awning-edge` — signature เดียวกับ Home) + ชื่อเป็น `font-display` (Prompt) — icon box `w-8`/title `text-lg` เดิมเป๊ะ (contract ยังล็อก); เผื่อ `pt-5` กันครุยทับช่องค้นหา |
+| **หัวข้อส่วน** (frontend) | `PromoPopularRow` — "🏷️ สินค้ามีโปร" (แท่ง amber) + "🔥 สินค้ายอดนิยม" เปลี่ยนเป็น `SectionTitle` (เดียวกับ Home) แทน h3 เขียนเองคนละแบบ |
+| **ราคาสินค้า** (frontend) | `ProductGrid` — ราคาเป็น `font-display` + `tabular-nums` เลขเรียงตรง (เดียวกับ Home/POS) |
+
+**Rollback:** revert แล้ว rebuild frontend — ไม่มีผลต่อ data
+
+---
+
 ## [2026-08-17] — feat(frontend): รวม primitive UI ที่เหลือ (badge สถานะ / field label / skeleton / ตาราง) (commit `e967ffc`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)

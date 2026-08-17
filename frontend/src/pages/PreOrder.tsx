@@ -555,13 +555,14 @@ export default function PreOrder() {
     <div className="flex h-screen bg-brand-bg font-sans relative">
       {/* ================= ฝั่งซ้าย: เลือกสินค้า ================= */}
       <div className="w-full md:w-2/3 flex flex-col h-full">
-        {/* ⭐️ FIX: ปรับ header ให้เหมือนหน้า POS — แถวเดียว icon box + title ซ้าย ปุ่มขวา ไม่ค่อยสตัดเป็น 2 บรรทัด */}
-        <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md">
+        {/* ⭐️ FIX: ปรับ header ให้เหมือนหน้า POS — แถวเดียว icon box + title ซ้าย ปุ่มขวา ไม่ค่อยสตัดเป็น 2 บรรทัด
+            + ชายคาหยักใต้แถบ (awning-edge — signature เดียวกับหน้า Home) */}
+        <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md awning-edge">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
               <ShoppingBag size={16} className="text-white" />
             </div>
-            <h1 className="text-lg font-semibold text-white truncate">สั่งจองสินค้า (Pre-order)</h1>
+            <h1 className="text-lg font-semibold font-display text-white truncate">สั่งจองสินค้า (Pre-order)</h1>
           </div>
           {/* ⭐️ ปุ่มกดดูประวัติของตัวเอง */}
           <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-white/15 border border-white/20 hover:bg-white/25 px-3 py-1.5 rounded-full transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
@@ -569,7 +570,8 @@ export default function PreOrder() {
           </button>
         </div>
 
-        <div className="flex-1 p-4 md:p-6 overflow-y-auto pb-24 md:pb-6">
+        {/* pt-5 เผื่อชายคาหยัก (awning) ยื่นลงมา 12px กันครุยทับช่องค้นหา */}
+        <div className="flex-1 px-4 md:px-6 pt-5 overflow-y-auto pb-24 md:pb-6">
           {/* ⭐️ ค้นหา */}
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />

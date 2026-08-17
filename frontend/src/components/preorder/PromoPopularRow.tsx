@@ -3,6 +3,7 @@
 //    แบนเนอร์โปรร้าน — โชว์เฉพาะตอน browse ปกติ (ไม่ค้นหา/ไม่กรองหมวด)
 import { PackagePlus } from 'lucide-react';
 import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money';
+import { SectionTitle } from '../ui/SectionTitle';
 
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
 
@@ -62,7 +63,7 @@ export function PromoPopularRow({ selectedCategory, productSearch, storePromos, 
         <div className="space-y-4 mb-4">
           {highlights.promo.length > 0 && (
             <div>
-              <h3 className="text-sm font-bold text-amber-600 mb-2 flex items-center gap-1.5">🏷️ สินค้ามีโปร <span className="text-[10px] font-normal text-gray-400">(ใกล้หมดอายุ ลดราคา)</span></h3>
+              <SectionTitle accent="bg-gradient-to-b from-amber-500 to-amber-600">🏷️ สินค้ามีโปร <span className="text-[10px] font-normal text-gray-400">(ใกล้หมดอายุ ลดราคา)</span></SectionTitle>
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {highlights.promo.map(p => (
                   <div key={`promo-${p.id}`} onClick={() => onAddToCart(p)} className="shrink-0 w-28 bg-white border border-amber-200 rounded-3xl p-2 shadow-md cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all duration-150 relative">
@@ -79,7 +80,7 @@ export function PromoPopularRow({ selectedCategory, productSearch, storePromos, 
           )}
           {highlights.popular.length > 0 && (
             <div>
-              <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">🔥 สินค้ายอดนิยม</h3>
+              <SectionTitle>🔥 สินค้ายอดนิยม</SectionTitle>
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {highlights.popular.map((p, i) => (
                   <div key={`pop-${p.id}`} onClick={() => onAddToCart(p)} className="shrink-0 w-28 bg-white border border-brand-border rounded-3xl p-2 shadow-md cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all duration-150 relative">
