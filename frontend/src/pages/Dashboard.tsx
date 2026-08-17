@@ -20,6 +20,7 @@ import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import PendingShiftClosesWidget from '../components/dashboard/PendingShiftClosesWidget'; // ⭐️ Sprint 2 — D1
 import { Section } from '../components/dashboard/Section';
+import { EmptyState } from '../components/ui/EmptyState';
 import { StatCards } from '../components/dashboard/StatCards';
 import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
@@ -337,7 +338,7 @@ export default function Dashboard() {
                 {(() => {
                   const max = Math.max(1, ...hourly.map(h => Number(h.total)));
                   const active = hourly.filter(h => Number(h.total) > 0);
-                  if (active.length === 0) return <p className="text-center text-sm text-gray-400 py-8">ยังไม่มียอดขาย</p>;
+                  if (active.length === 0) return <EmptyState compact icon={<TrendingUp size={20} />} title="ยังไม่มียอดขาย" />;
                   return (
                     <div className="flex items-end gap-1 h-32">
                       {hourly.map(h => (
@@ -369,7 +370,7 @@ export default function Dashboard() {
               <div className={`${card} p-4`}>
                 <div className="flex items-center gap-2 mb-3"><Users size={16} className="text-brand" /><h3 className="text-xs font-semibold text-gray-700">ยอดขายต่อพนักงานต่อกะ (วันนี้)</h3></div>
                 <div className="space-y-2">
-                  {byCashier.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ยังไม่มีข้อมูล</p> :
+                  {byCashier.length === 0 ? <EmptyState compact icon={<Users size={20} />} title="ยังไม่มีข้อมูล" /> :
                     byCashier.map(c => (
                       <div key={c.shift_id} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl transition-colors duration-150">
                         <div>
@@ -386,7 +387,7 @@ export default function Dashboard() {
               <div className={`${card} p-4`}>
                 <div className="flex items-center gap-2 mb-3"><PiggyBank size={16} className="text-orange-400" /><h3 className="text-xs font-semibold text-gray-700">สินค้าฝากขาย (หัก GP แล้ว)</h3></div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {vendorSummary.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ยังไม่มีข้อมูล</p> :
+                  {vendorSummary.length === 0 ? <EmptyState compact icon={<PiggyBank size={20} />} title="ยังไม่มีข้อมูล" /> :
                     vendorSummary.map(v => (
                       <div key={v.vendor_id} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl transition-colors duration-150">
                         <div>
@@ -403,7 +404,7 @@ export default function Dashboard() {
               <div className={`${card} p-4`}>
                 <div className="flex items-center gap-2 mb-3"><Package size={16} className="text-blue-500" /><h3 className="text-xs font-semibold text-gray-700">Pre-order ค้างดำเนินการ</h3></div>
                 <div className="space-y-2">
-                  {pendingOrders.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ไม่มีออเดอร์ค้าง</p> :
+                  {pendingOrders.length === 0 ? <EmptyState compact icon={<Package size={20} />} title="ไม่มีออเดอร์ค้าง" /> :
                     pendingOrders.map(o => (
                       <div key={o.status} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl text-xs transition-colors duration-150">
                         <span className="font-medium text-gray-700">{orderStatusLabel(o.status)}</span>
@@ -417,7 +418,7 @@ export default function Dashboard() {
               <div className={`${card} p-4`}>
                 <div className="flex items-center gap-2 mb-3"><Package size={16} className="text-gray-400" /><h3 className="text-xs font-semibold text-gray-700">สินค้าขายไม่ออก (30 วัน)</h3></div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {deadStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-4">ไม่มีสินค้าค้างสต๊อก</p> :
+                  {deadStock.length === 0 ? <EmptyState compact icon={<Package size={20} />} title="ไม่มีสินค้าค้างสต๊อก" /> :
                     deadStock.map(p => (
                       <div key={p.id} className="flex justify-between items-center px-2 py-2 hover:bg-brand-bg rounded-xl text-xs transition-colors duration-150">
                         <span className="font-medium text-gray-700 truncate">{p.name}</span>
@@ -440,7 +441,7 @@ export default function Dashboard() {
                     if (r.late_minutes != null && r.late_minutes > 0) { byUser[r.user_id].lateCount += 1; byUser[r.user_id].lateMinutes += r.late_minutes; }
                   });
                   const list = Object.values(byUser);
-                  if (list.length === 0) return <p className="text-center text-sm text-gray-400 py-4">ยังไม่มีตารางเวลาที่ตั้งไว้เดือนนี้</p>;
+                  if (list.length === 0) return <EmptyState compact icon={<Users size={20} />} title="ยังไม่มีตารางเวลาที่ตั้งไว้เดือนนี้" />;
                   return (
                     <div className="space-y-2">
                       {list.map(s => (

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { ClipboardCheck, RefreshCw, Edit2, Camera, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { SkeletonLine, SkeletonListRow } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
 import { inputCls } from '../components/ui/fieldStyles';
 import { Modal } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
@@ -149,7 +150,7 @@ export default function AttendanceManagement() {
                   <tr key={i}><td colSpan={6} className="px-4 py-3"><SkeletonLine width="w-3/4" /></td></tr>
                 ))
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">ไม่พบข้อมูล{filterDate ? ` วันที่ ${filterDate}` : ''}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">ไม่พบข้อมูล{filterDate ? ` วันที่ ${filterDate}` : ''}</td></tr>
               ) : filtered.map(r => (
                 <tr key={`${r.source}-${r.id}`} className="border-b last:border-0 hover:bg-brand-bg">
                   <td className="px-4 py-3">
@@ -184,7 +185,7 @@ export default function AttendanceManagement() {
           {/* Mobile cards */}
           <div className="sm:hidden divide-y divide-gray-50">
             {loading ? <div className="p-4 space-y-3">{Array.from({length:3}).map((_,i) => <SkeletonListRow key={i} />)}</div>
-            : filtered.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">ไม่พบข้อมูล</p>
+            : filtered.length === 0 ? <EmptyState compact icon={<ClipboardCheck size={22} />} title="ไม่พบข้อมูล" />
             : filtered.map(r => (
               <div key={`${r.source}-${r.id}`} className="p-4 hover:bg-brand-bg transition-colors duration-150">
                 <div className="flex justify-between items-start mb-2">

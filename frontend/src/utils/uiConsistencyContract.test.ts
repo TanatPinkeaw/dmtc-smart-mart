@@ -233,7 +233,7 @@ describe('badge สถานะ — ต้องใช้ ui/StatusBadge (map �
 describe('label ฟอร์ม — ต้องใช้ ui/FieldLabel (เดิม ~6 แบบ text-xs gray-500/600/bold + sm gray-700)', () => {
   const LABEL_ADOPTED = [
     'pages/Login.tsx', 'pages/ForgotPassword.tsx', 'pages/ResetPassword.tsx', 'pages/Register.tsx',
-    'pages/Inventory.tsx', 'pages/AttendanceManagement.tsx',
+    'pages/Inventory.tsx', 'pages/AttendanceManagement.tsx', 'pages/Settings.tsx',
     'components/auth/ChangePasswordModal.tsx', 'components/dashboard/CloseShiftModal.tsx',
     'components/pos/RegisterMemberModal.tsx', 'components/preorder/CartPanel.tsx',
     'components/settings/LoyaltySettingsPanel.tsx', 'components/preorder/OrderDetailModal.tsx',
@@ -271,6 +271,7 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
     'components/dashboard/StatCards.tsx', 'components/dashboard/AdminDashboardHero.tsx',
     'pages/OrderManagement.tsx', 'pages/Summary.tsx', 'pages/Inventory.tsx',
     'components/pos/RewardModal.tsx',
+    'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx', 'pages/Settings.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import EmptyState จาก ui/EmptyState', () => {

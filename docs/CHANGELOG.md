@@ -4,6 +4,28 @@
 
 ---
 
+## [2026-08-17] — UI: empty state เข้า EmptyState กลางใน 3 หน้าที่เหลือ (Dashboard/Attendance/Settings) + label ของ Settings เข้า FieldLabel (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Dashboard** (frontend) | empty state เขียนเอง 6 จุดในแผงรายละเอียด (ยังไม่มียอดขาย/ยังไม่มีข้อมูลพนักงาน/ฝากขาย/ออเดอร์ค้าง/สินค้าค้างสต๊อก/ตารางเวลา) → `<EmptyState compact>` (ไอคอนตามหัวแผง) |
+| **Attendance** (frontend) | "ไม่พบข้อมูล" มือถือ → `<EmptyState compact>`; แถวว่างตาราง desktop ลด `text-sm` ให้ตรง precedent ของ OrderManagement (`text-center text-gray-400`) |
+| **Settings** (frontend) | empty state 4 จุด (ประวัติขายมือถือ / โปรโมชั่น / คำขอรีเซ็ตรหัสผ่าน + ทีหลัง) → `<EmptyState compact>`; **label ฟอร์มทั้งหมด** — `Input` component ท้องถิ่น (ใช้ทุกแท็บ ~20 จุด) + label น้ำเงิน BOGO ×2 → `FieldLabel` กลาง (BOGO คงสีน้ำเงินผ่าน `!text-blue-800 !font-bold`) |
+| **เทส contract** (frontend) | `uiConsistencyContract` — `EMPTY_ADOPTED` +3 หน้า (Dashboard/AttendanceManagement/Settings — รวม 16 ไฟล์ห้าม empty state เขียนเอง), `LABEL_ADOPTED` +Settings (13 ไฟล์) |
+
+### 🧪 เทส
+- frontend: **141 เทสผ่าน** (124 + 17 component — contract 33 ตัว) + `typecheck` + `build` ผ่าน
+
+**ที่ตั้งใจไม่แตะ (ข้อยกเว้น):** badge สถานะ = ป้าย **role** (Home/Profile badge "พนักงาน", Settings ROLE_BADGE) + ป้าย เปิด/ปิดใช้งานของสินค้า — StatusBadge กลางเป็น map สถานะ **ออเดอร์** โดยเฉพาะ ไม่ใช่ role/สถานะเปิดปิด (คนละโดเมน); แถวว่างใน `<td>` ของตารางยังเป็นข้อความตาม precedent (EmptyState ใส่ในตารางไม่ได้)
+
+---
+
 ## [2026-08-17] — UI: ล็อก FAB กลมให้เป็นมาตรฐานเดียว (contract กัน FAB หน้าใหม่เพี้ยน) (commit `13e59a2`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

@@ -14,6 +14,8 @@ import { getLocalDate } from '../utils/localDate'; // ⭐️ วันนี้�
 import { LoyaltySettingsPanel } from '../components/settings/LoyaltySettingsPanel';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
+import { FieldLabel } from '../components/ui/FieldLabel';
 import { Modal } from '../components/ui/Modal';
 import { MemberGroupsPanel } from '../components/settings/MemberGroupsPanel';
 
@@ -688,7 +690,7 @@ export default function Settings() {
                   ไม่เห็นประวัติการขายเลย เพิ่ม card list สำหรับ mobile (< md) ตรงนี้ */}
               <div className="md:hidden space-y-3">
                 {salesHistory.length === 0 ? (
-                  <p className="text-center text-gray-400 py-8 text-sm">ไม่พบข้อมูลการขาย</p>
+                  <EmptyState compact icon={<History size={22} />} title="ไม่พบข้อมูลการขาย" />
                 ) : salesHistory.map(bill => (
                   <div key={`m-${bill.source || 'POS'}-${bill.id}`} className="bg-white border border-brand-border rounded-xl p-3.5 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
@@ -995,7 +997,11 @@ export default function Settings() {
                     </div>
                   </div>
                 ))}
-                {filteredPromotions.length === 0 && <div className="col-span-full p-8 text-center text-gray-400">ไม่พบข้อมูลโปรโมชั่น</div>}
+                {filteredPromotions.length === 0 && (
+                  <div className="col-span-full">
+                    <EmptyState compact icon={<Tags size={22} />} title="ไม่พบข้อมูลโปรโมชั่น" />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1015,7 +1021,7 @@ export default function Settings() {
               </div>
 
               {passwordResets.length === 0 ? (
-                <div className="p-8 text-center text-gray-400 bg-brand-bg rounded-3xl border border-brand-border">ไม่มีคำขอรีเซ็ตรหัสผ่านที่ค้างอยู่</div>
+                <EmptyState compact icon={<KeyRound size={22} />} title="ไม่มีคำขอรีเซ็ตรหัสผ่านที่ค้างอยู่" />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {passwordResets.map(r => (
@@ -1323,7 +1329,7 @@ export default function Settings() {
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-blue-800 mb-1">สินค้าที่ต้องซื้อ</label>
+                    <FieldLabel size="xs" className="!text-blue-800 !font-bold">สินค้าที่ต้องซื้อ</FieldLabel>
                     <select className="w-full p-2 border border-blue-200 rounded-lg outline-none text-sm" value={newPromotion.buy_product_id} onChange={e => setNewPromotion({...newPromotion, buy_product_id: e.target.value})}>
                       <option value="">-- เลือกสินค้า --</option>
                       {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1333,7 +1339,7 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-blue-800 mb-1">สินค้าที่แถม</label>
+                    <FieldLabel size="xs" className="!text-blue-800 !font-bold">สินค้าที่แถม</FieldLabel>
                     <select className="w-full p-2 border border-blue-200 rounded-lg outline-none text-sm" value={newPromotion.free_product_id} onChange={e => setNewPromotion({...newPromotion, free_product_id: e.target.value})}>
                       <option value="">-- เลือกสินค้า --</option>
                       {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1469,7 +1475,7 @@ const Input = ({ label, value, onChange, type = "text", required = true, disable
   max?: string;
 }) => (
   <div>
-    <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{label}</label>
+    <FieldLabel size="sm">{label}</FieldLabel>
     <input type={type} required={required} disabled={disabled} min={min} max={max} value={value} onChange={e => onChange(e.target.value)} className={`w-full p-2.5 md:p-3 border border-brand-border rounded-full focus:ring-2 focus:ring-brand outline-none transition-colors duration-150 text-sm md:text-base font-medium ${disabled ? 'bg-brand-bg text-gray-400 cursor-not-allowed' : ''}`} />
   </div>
 );
