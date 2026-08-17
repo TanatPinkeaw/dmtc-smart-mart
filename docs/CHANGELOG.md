@@ -4,6 +4,26 @@
 
 ---
 
+## [2026-08-17] — Fix(deploy): backend Dockerfile node:18-alpine → node:20-alpine — sharp 0.35 ต้อง Node ≥ 20.9 (deploy ล้มตอน boot "Could not load sharp... Requires >=20.9.0")
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild + redeploy backend image** — นี่คือตัวแก้ deploy ล้มเอง (ต้อง deploy ถึงจะหาย)
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **backend/Dockerfile** | `FROM node:18-alpine` → `node:20-alpine` — Render build พบ Node 18.20.8 แต่ sharp ^0.35.3 ต้อง Node ≥ 20.9 (lockfile มี `@img/sharp-linuxmusl-x64` ครบ — ปัญหาเป็นแค่ Node version) |
+| **backend/package.json** | เพิ่ม `engines.node >=20.9.0` — ล็อกข้อกำหนดให้ตรง sharp/CI (CI ใช้ Node 20 อยู่แล้ว 3 จุด — มีแต่ Dockerfile ที่หลุด) |
+
+### 🧪 เทส
+- backend: test:unit **12/12 ผ่าน** (CI Node 20 + local Node 24 โหลด sharp ได้อยู่แล้ว — ยืนยันว่าปัญหาคือ container 18 จุดเดียว)
+
+**หมายเหตุ:** `[BOOT WARNING] DB_SSL=true แต่ไม่ได้ตั้ง DB_SSL_CA` — เป็น warning เดิมที่บันทึกไว้ใน NEXT-STEPS แล้ว ไม่ใช่ตัวล้ม deploy (env check ผ่าน) — ยังค้างต้องตั้ง DB_SSL_CA ตามเดิม
+
+---
+
 ## [2026-08-17] — Backend: audit_logs INSERT 24 จุดเข้า utils/auditLog.logAudit กลาง + month parse รวมเป็น resolveMonth — เหลือ raw INSERT 0 จุด (commit `3432f57`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
