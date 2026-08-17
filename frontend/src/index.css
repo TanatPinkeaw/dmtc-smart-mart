@@ -1,6 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ⭐️ ฟอนต์หัวข้อ/ตัวเลขของแบรนด์ — Prompt (ไทย มนๆ วัยรุ่น ตรงตัวร้านค้าในมหา'ลัย) ใช้กับ
+   font-display utility เท่านั้น ส่วน body ใช้ระบบเดิมเพื่อความอ่านง่าย + โหลดเร็ว */
+
+/* ⭐️ ชายคาร้าน (signature ของหน้า Home/PreOrder) — ครุยหยักใต้แถบหัว เหมือนชายคาร้านค้าในมอ
+   ใช้คลาส .awning-edge กับแถบ gradient หัวหน้า (ต้องไม่ลืมว่า ::after ยื่นออกมา 12px ด้านล่าง
+   — เนื้อหาที่ตามมาควรเผื่อระยะ pt ไว้ด้วย) */
+.awning-edge { position: relative; }
+.awning-edge::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  height: 12px;
+  overflow: hidden;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 12px 0, #FF467E 11.5px, transparent 13px);
+  background-size: 24px 12px;
+  background-repeat: repeat-x;
+}
 
 /* ⭐️ Brand/neutral colors now live in tailwind.config.js (theme.extend.colors), not in a v4
    `@theme` block here. Utility names are unchanged: bg-brand, text-brand-mid, bg-brand-bg,

@@ -11,6 +11,7 @@ import { ShoppingCart, CreditCard, LayoutDashboard, Boxes, Clock, LogOut, Chevro
 import api from '../api';
 import { performLogout } from '../utils/logout';
 import { Button } from '../components/ui/Button';
+import { SectionTitle } from '../components/ui/SectionTitle';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { BRAND } from '../theme';
@@ -273,7 +274,8 @@ export default function Home() {
   return (
     <div className="min-h-dvh bg-brand-bg">
       {/* Header — ⭐️ Design-ref: รวมแถวโลโก้/แถวอวตารเดิมเป็นแถวเดียว (อวตาร+ทักทาย ซ้าย, ออกจากระบบ ขวา) */}
-      <div className="bg-gradient-to-br from-brand to-brand-dark px-5 pt-16 pb-16 relative overflow-hidden">
+      {/* ⭐️ ชายคาร้าน — ครุยหยักใต้แถบหัว (signature หน้า Home/PreOrder) */}
+      <div className="bg-gradient-to-br from-brand to-brand-dark px-5 pt-16 pb-16 relative awning-edge">
         <div className="flex items-start justify-between relative z-10">
           <div className="flex items-center gap-3 min-w-0">
             <img
@@ -283,7 +285,7 @@ export default function Home() {
             />
             <div className="min-w-0">
               <p className="text-white/80 text-sm font-medium">{greeting()}</p>
-              <h1 className="text-white text-xl font-extrabold truncate">{user.full_name || user.student_id}</h1>
+              <h1 className="text-white text-2xl font-bold font-display truncate">{user.full_name || user.student_id}</h1>
             </div>
           </div>
           <button onClick={handleLogout} className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl transition-colors duration-150 shrink-0" title="ออกจากระบบ">
@@ -353,33 +355,33 @@ export default function Home() {
               <div className="h-3 bg-brand-border/40 rounded-lg w-2/3" />
             </div>
           ) : openOrder && (
-            <div className="bg-white border border-brand-border rounded-2xl shadow-md p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-extrabold text-gray-900 text-sm">ออเดอร์ #{openOrder.id}</p>
-                  <p className={`text-xs font-semibold mt-1 ${OPEN_ORDER_STATUS[openOrder.status].tone === 'warn' ? 'text-red-600' : 'text-brand'}`}>
-                    {OPEN_ORDER_STATUS[openOrder.status].label}
-                  </p>
-                </div>
-                <span className="shrink-0 text-sm font-extrabold text-gray-900">
-                  ฿{Number(openOrder.total_amount).toLocaleString()}
+            // 🎫 ตั๋วรับของ — แถบหัวตั๋ว + เส้นประตัด เหมือนตั๋วรับของที่เคาน์เตอร์ (signature)
+            <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-brand-bg border-b border-dashed border-brand-mid">
+                <p className="font-display text-xs font-bold text-brand truncate">🎫 ตั๋วรับของ #{openOrder.id}</p>
+                <span className={`shrink-0 text-[11px] font-bold ${OPEN_ORDER_STATUS[openOrder.status].tone === 'warn' ? 'text-red-600' : 'text-brand'}`}>
+                  {OPEN_ORDER_STATUS[openOrder.status].label}
                 </span>
               </div>
-              {openOrder.status === 'SLIP_REJECTED' ? (
-                <button
-                  onClick={() => setSlipOrder(openOrder)}
-                  className="mt-3 w-full py-2.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-sm font-bold transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
-                >
-                  ส่งสลิปด่วน
-                </button>
-              ) : (
-                <button
-                  onClick={() => goTo('/pre-order?view=orders')}
-                  className="mt-3 w-full py-2.5 rounded-full bg-brand-bg text-brand text-sm font-bold transition-all duration-150 active:scale-[0.98] hover:bg-brand-border/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  ดูรายละเอียด
-                </button>
-              )}
+              <div className="p-4">
+                <p className="text-[11px] text-gray-400 font-medium">ยอดรวม</p>
+                <p className="font-display text-xl font-bold text-ink tabular-nums">฿{Number(openOrder.total_amount).toLocaleString()}</p>
+                {openOrder.status === 'SLIP_REJECTED' ? (
+                  <button
+                    onClick={() => setSlipOrder(openOrder)}
+                    className="mt-3 w-full py-2.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-sm font-bold transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+                  >
+                    ส่งสลิปด่วน
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => goTo('/pre-order?view=orders')}
+                    className="mt-3 w-full py-2.5 rounded-full bg-brand-bg text-brand text-sm font-bold transition-all duration-150 active:scale-[0.98] hover:bg-brand-border/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    ดูรายละเอียด
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -431,7 +433,7 @@ export default function Home() {
       {/* 3. สไลด์โปรโมชั่น — เลื่อนแนวนอน */}
       {!isStaff && (loadingPromos || promos.length > 0) && (
         <div id="home-promos" className="mt-6 max-w-lg mx-auto scroll-mt-6">
-          <p className="px-5 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">โปรโมชันที่ใช้ได้ตอนนี้</p>
+          <SectionTitle className="px-5">โปรโมชันที่ใช้ได้ตอนนี้</SectionTitle>
           {/* ⭐️ overflow-x-auto + snap ให้เลื่อนลื่นบนมือถือ; ไม่ใช้ scroll-behavior แบบ JS
               เพื่อให้ WebKit เก่ารองรับได้ตามปกติ */}
           <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide">
@@ -455,12 +457,16 @@ export default function Home() {
       {/* 4. สินค้าขายดี — เลื่อนแนวนอน */}
       {!isStaff && (loadingBest || bestSellers.length > 0) && (
         <div className="mt-5 max-w-lg mx-auto">
-          <div className="px-5 flex items-center justify-between mb-2">
-            <p className="text-sm font-extrabold text-gray-900">🔥 สินค้าขายดีประจำสัปดาห์</p>
-            <button onClick={() => goTo('/pre-order')} className="text-xs font-bold text-brand hover:underline shrink-0">
-              ดูทั้งหมด
-            </button>
-          </div>
+          <SectionTitle
+            className="px-5"
+            right={
+              <button onClick={() => goTo('/pre-order')} className="text-xs font-bold text-brand hover:underline shrink-0">
+                ดูทั้งหมด
+              </button>
+            }
+          >
+            🔥 สินค้าขายดีประจำสัปดาห์
+          </SectionTitle>
           <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x scrollbar-hide">
             {loadingBest
               ? [1, 2, 3].map(i => (
@@ -492,7 +498,7 @@ export default function Home() {
                         )}
                         <p className="text-xs font-bold text-gray-800 leading-snug line-clamp-2 flex-1">{p.name}</p>
                         <div className="flex items-baseline gap-1.5 mt-1.5">
-                          <span className="text-sm font-extrabold text-brand">฿{final.toLocaleString()}</span>
+                          <span className="font-display text-sm font-bold text-brand tabular-nums">฿{final.toLocaleString()}</span>
                           {original !== null && (
                             <span className="text-[10px] text-gray-400 line-through">฿{original.toLocaleString()}</span>
                           )}
@@ -514,7 +520,7 @@ export default function Home() {
 
       {/* Module list */}
       <div className={`px-5 ${isStaff ? 'mt-5' : 'mt-6'} pb-10 max-w-lg mx-auto`}>
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">เมนูสำหรับคุณ</p>
+        <SectionTitle className="px-1">เมนูสำหรับคุณ</SectionTitle>
         <div className="space-y-3">
           {modules.map(m => {
             const Icon = m.icon;

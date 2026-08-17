@@ -22,8 +22,15 @@ export default {
         'brand-mid': '#FD94B4',
         'brand-border': '#F6C7C7',
         'brand-bg': '#FFF5F7',
+        // ⭐️ ม่วงพลัมอุ่น — ข้อความหลักบนพื้นอ่อน (แทน gray-900 ที่มี undertone เย็น ตัดกับชมพู)
+        // ใช้กับหัวข้อ/ชื่อในหน้า Home/PreOrder (font-display) เท่านั้น
+        ink: '#3A2230',
         'neutral-bg': '#F8FAFC',
         'neutral-border': '#E2E8F0',
+      },
+      fontFamily: {
+        // ⭐️ ฟอนต์หัวข้อ/ตัวเลขแบรนด์ (Prompt 700 — โหลดใน index.css) — body คงระบบเดิม
+        display: ['Prompt', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
     },
   },
