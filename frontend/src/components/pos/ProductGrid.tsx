@@ -3,6 +3,7 @@
 //    สินค้าหมดอายุกดไม่ได้ ; เป็นหน้าตาล้วน logic อยู่ pages/POS.tsx
 import { Search, PackagePlus } from 'lucide-react';
 import { EmptyState } from '../ui/EmptyState';
+import { ProductCard } from '../ui/ProductCard';
 import { effectiveUnitPrice } from '../../utils/money'; // 🐛 FIX — ใช้ helper กลางเดียวกับหน้าจอง กันราคา 2 หน้าไม่ตรงกัน
 
 interface Category { id: number; name: string; }
@@ -80,100 +81,37 @@ export function ProductGrid({
               const overridePrice = priceOverride[p.id];
               // ⭐️ Phase 1 — โปรช่วงวันที่ (ใช้เมื่อไม่มีลดใกล้หมดอายุ; ถ้ามีทั้งคู่ server จะเลือกอันดีสุดตอนคิดเงินเอง)
               const promoActive = !showDiscount && !!pWithExpiry.promo_active;
-              const promoPct = Number(pWithExpiry.promo_percent) || 0;
               const finalPrice = overridePrice ?? effectiveUnitPrice(pWithExpiry);
               const isExpired = pWithExpiry.expiry_status === 'expired';
+              const discountPct = showDiscount ? Number(pWithExpiry.discount_percent) || 0 : promoActive ? Number(pWithExpiry.promo_percent) || 0 : 0;
 
+              // ⭐️ การ์ดเป็น ui/ProductCard กลาง (เดียวกับหน้าจอง) — ช่องแก้ราคาเบิกเพิ่มเติมส่งเป็น prop
               return (
-                <div
+                <ProductCard
                   key={p.id}
-                  onClick={() => !isExpired && onAddToCart(p, finalPrice)}
-                  className={`relative overflow-hidden bg-white border rounded-3xl p-3 shadow-md transition-all duration-150 flex flex-col items-center h-full
-                    ${showDiscount ? 'border-yellow-400 bg-yellow-50' : 'border-brand-border'}
-                    ${isExpired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-brand-mid hover:shadow-lg hover:-translate-y-0.5 active:scale-95'}
-                  `}
-                >
-                  {!showDiscount && !isExpired && <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />}
-                  <div className="w-full aspect-square bg-brand-bg rounded-lg mb-2 flex items-center justify-center overflow-hidden">
-                    {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <PackagePlus size={28} className="text-brand-mid opacity-50" />}
-                  </div>
-                  <p className="text-xs font-medium text-gray-800 text-center line-clamp-2 mb-1">{p.name}</p>
-
-                  {/* ⭐️ Sprint 2: Expiry Badges */}
-                  {showDiscount && (
-                    <div className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
-                      🎁 ใกล้หมดอายุ - {pWithExpiry.discount_percent}% OFF
-                    </div>
-                  )}
-                  {isExpired && (
-                    <div className="bg-red-200 text-red-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
-                      ❌ หมดอายุ
-                    </div>
-                  )}
-                  {pWithExpiry.expiry_status === 'expires_today' && (
-                    <div className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs mb-1 w-full text-center">
-                      ⚠️ หมดอายุวันนี้
-                    </div>
-                  )}
-                  {promoActive && (
-                    <div className="bg-amber-200 text-amber-800 px-2 py-1 rounded text-xs font-bold mb-1 w-full text-center">
-                      🏷️ โปรลดราคา -{promoPct}%
-                    </div>
-                  )}
-
-                  {/* ⭐️ FIX: ราคาอยู่มุมซ้ายล่าง จำนวนคงเหลืออยู่มุมขวาล่าง เหมือนการ์ดสินค้าหน้าจอง (Pre-order)
-                      mt-auto ดันราคา+ปุ่มด้านล่างทั้งกลุ่มให้ชิดขอบล่างเสมอ แม้การ์ดถูก grid stretch สูงไม่เท่ากัน */}
-                  <div className="w-full flex justify-between items-end mb-1 gap-1 mt-auto">
-                    <div className="min-w-0">
-                      {showDiscount ? (
-                        <>
-                          <s className="text-gray-400 text-xs block">฿{Number(p.price).toFixed(2)}</s>
-                          <span className="text-red-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
-                        </>
-                      ) : promoActive ? (
-                        <>
-                          <s className="text-gray-400 text-xs block">฿{Number(p.price).toFixed(2)}</s>
-                          <span className="text-amber-600 font-bold text-sm">฿{Number(finalPrice).toFixed(2)}</span>
-                        </>
-                      ) : (
-                        <p className="text-base font-bold text-brand">฿{Number(finalPrice).toFixed(2)}</p>
-                      )}
-                    </div>
-                    {typeof p.stock === 'number' && (
-                      <p className="shrink-0 text-[10px] bg-brand-bg text-brand px-1.5 py-0.5 rounded-md font-bold">เหลือ {p.stock}</p>
-                    )}
-                  </div>
-
-                  {/* ⭐️ Sprint 2: Staff Override Price Input */}
-                  {showDiscount && (
-                    <div className="w-full mt-1 mb-2" onClick={(e) => e.stopPropagation()}>
-                      <label className="text-xs text-gray-600">ราคาเบิกเพิ่มเติม:</label>
-                      <input
-                        type="number"
-                        value={overridePrice ?? ''}
-                        onChange={(e) => onPriceOverrideChange(p.id, parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1 border rounded text-sm"
-                        placeholder={effectiveUnitPrice(pWithExpiry).toFixed(2)}
-                        step="0.01"
-                      />
-                    </div>
-                  )}
-
-                  {/* ⭐️ FIX: เพิ่ม stopPropagation กัน addToCart ยิงซ้อน 2 ครั้ง (การ์ดทั้งใบก็ onClick
-                      addToCart อยู่แล้ว กดปุ่มจะ bubble ขึ้นไปยิงซ้ำ) + เปลี่ยน hover เป็น #FF467E ให้ตรงธีม */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); if (!isExpired) onAddToCart(p, finalPrice); }}
-                    disabled={isExpired}
-                    className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1
-                      ${isExpired
-                        ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                        : 'bg-brand text-white hover:bg-brand-dark active:scale-95'
-                      }
-                    `}
-                  >
-                    {isExpired ? 'ไม่สามารถขายได้' : 'เพิ่มลงตะกร้า'}
-                  </button>
-                </div>
+                  product={pWithExpiry}
+                  finalPrice={finalPrice}
+                  discountPct={discountPct}
+                  tone={showDiscount ? 'danger' : promoActive ? 'promo' : 'brand'}
+                  showStock
+                  disabled={isExpired}
+                  onAddToCart={() => onAddToCart(p, finalPrice)}
+                  priceOverrideInput={
+                    showDiscount ? (
+                      <div className="w-full mt-1 mb-2" onClick={(e) => e.stopPropagation()}>
+                        <label className="text-xs text-gray-600">ราคาเบิกเพิ่มเติม:</label>
+                        <input
+                          type="number"
+                          value={overridePrice ?? ''}
+                          onChange={(e) => onPriceOverrideChange(p.id, parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-1 border rounded text-sm"
+                          placeholder={effectiveUnitPrice(pWithExpiry).toFixed(2)}
+                          step="0.01"
+                        />
+                      </div>
+                    ) : null
+                  }
+                />
               );
             })}
           </div>

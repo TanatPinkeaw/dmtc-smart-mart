@@ -57,7 +57,7 @@ export function RewardModal({ memberPoints, onClose, onRedeem }: RewardModalProp
               {rewards.map(r => {
                 const canAfford = canAffordReward(memberPoints, r.points_required);
                 return (
-                  <div key={r.id} className="bg-white border border-brand-border rounded-2xl overflow-hidden flex flex-col">
+                  <div key={r.id} className="bg-white border border-brand-border rounded-3xl overflow-hidden flex flex-col">
                     <div className="h-24 bg-brand-bg shrink-0">
                       {r.image_url
                         ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover" loading="lazy" />

@@ -89,7 +89,7 @@ export function LoyaltySettingsPanel() {
         <p className="text-xs text-gray-400 mb-4">ส่วนลดที่สมาชิกกลุ่มนั้นได้อัตโนมัติทุกชิ้น (ถ้าไม่มีโปรสินค้า/กฎรายหมวดหมู่มาก่อน)</p>
         <div className="space-y-2">
           {groups.map(g => (
-            <div key={g.id} className="flex items-center justify-between bg-white border border-brand-border rounded-2xl p-3">
+            <div key={g.id} className="flex items-center justify-between bg-white border border-brand-border rounded-3xl p-3">
               <div>
                 <p className="text-sm font-bold text-gray-800">{g.name}</p>
                 <p className="text-[11px] text-gray-400">{g.code}</p>

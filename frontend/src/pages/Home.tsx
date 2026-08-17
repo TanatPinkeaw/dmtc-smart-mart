@@ -12,6 +12,8 @@ import api from '../api';
 import { performLogout } from '../utils/logout';
 import { Button } from '../components/ui/Button';
 import { SectionTitle } from '../components/ui/SectionTitle';
+import { ProductImage } from '../components/ui/ProductImage';
+import { ProductPrice } from '../components/ui/ProductPrice';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { BRAND } from '../theme';
@@ -350,13 +352,13 @@ export default function Home() {
       {!isStaff && (loadingOrder || openOrder) && (
         <div className="px-5 -mt-16 relative z-10 max-w-lg mx-auto">
           {loadingOrder ? (
-            <div className="bg-white border border-brand-border rounded-2xl shadow-md p-4 animate-pulse">
+            <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 animate-pulse">
               <div className="h-3.5 bg-brand-border/40 rounded-lg w-1/3 mb-2.5" />
               <div className="h-3 bg-brand-border/40 rounded-lg w-2/3" />
             </div>
           ) : openOrder && (
             // 🎫 ตั๋วรับของ — แถบหัวตั๋ว + เส้นประตัด เหมือนตั๋วรับของที่เคาน์เตอร์ (signature)
-            <div className="bg-white border border-brand-border rounded-2xl shadow-md overflow-hidden">
+            <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
               <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-brand-bg border-b border-dashed border-brand-mid">
                 <p className="font-display text-xs font-bold text-brand truncate">🎫 ตั๋วรับของ #{openOrder.id}</p>
                 <span className={`shrink-0 text-[11px] font-bold ${OPEN_ORDER_STATUS[openOrder.status].tone === 'warn' ? 'text-red-600' : 'text-brand'}`}>
@@ -390,7 +392,7 @@ export default function Home() {
       {/* 2. ปุ่มลัด 4 ช่อง */}
       {!isStaff && (
         <div className={`px-5 max-w-lg mx-auto ${(loadingOrder || openOrder) ? 'mt-4' : '-mt-16 relative z-10'}`}>
-          <div className="bg-white border border-brand-border rounded-2xl shadow-md p-3 grid grid-cols-4 gap-1">
+          <div className="bg-white border border-brand-border rounded-3xl shadow-md p-3 grid grid-cols-4 gap-1">
             {[
               // ⭐️ FIX — ใช้ navigate() ตรงแทน goTo() สำหรับ 4 ปุ่มนี้ goTo() เดิมก็ navigate(path)
               // เหมือนกัน (query string ไม่ได้หายระหว่างทาง) แต่ยังเซ็ต session_mode='shop' ทิ้งไว้ด้วย
@@ -439,7 +441,7 @@ export default function Home() {
           <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide">
             {loadingPromos
               ? [1, 2].map(i => (
-                  <div key={i} className="shrink-0 w-64 h-24 bg-white border border-brand-border rounded-2xl shadow-sm animate-pulse" />
+                  <div key={i} className="shrink-0 w-64 h-24 bg-white border border-brand-border rounded-3xl shadow-sm animate-pulse" />
                 ))
               : promos.map(p => (
                   <div key={p.id} className="snap-start shrink-0 w-64 bg-gradient-to-br from-brand to-brand-dark rounded-2xl shadow-md p-4 text-white">
@@ -470,7 +472,7 @@ export default function Home() {
           <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x scrollbar-hide">
             {loadingBest
               ? [1, 2, 3].map(i => (
-                  <div key={i} className="shrink-0 w-36 bg-white border border-brand-border rounded-2xl shadow-sm p-2.5 animate-pulse">
+                  <div key={i} className="shrink-0 w-36 bg-white border border-brand-border rounded-3xl shadow-sm p-2.5 animate-pulse">
                     <div className="w-full h-24 bg-brand-border/40 rounded-xl mb-2" />
                     <div className="h-3 bg-brand-border/40 rounded w-3/4 mb-1.5" />
                     <div className="h-3 bg-brand-border/40 rounded w-1/2" />
@@ -479,11 +481,9 @@ export default function Home() {
               : bestSellers.map(p => {
                   const { final, original, pct } = priceAfterPromo(p);
                   return (
-                    <div key={p.id} className="snap-start shrink-0 w-36 bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
-                      <div className="relative h-24 bg-brand-bg shrink-0">
-                        {p.image_url
-                          ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                          : <div className="w-full h-full flex items-center justify-center"><ShoppingBag size={22} className="text-brand-mid" /></div>}
+                    <div key={p.id} className="snap-start shrink-0 w-36 bg-white border border-brand-border rounded-3xl shadow-sm overflow-hidden flex flex-col">
+                      <div className="relative shrink-0">
+                        <ProductImage imageUrl={p.image_url} name={p.name} className="h-24 mb-0" iconSize={22} />
                         {pct > 0 && (
                           <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                             -{pct}%
@@ -497,11 +497,8 @@ export default function Home() {
                           </span>
                         )}
                         <p className="text-xs font-bold text-gray-800 leading-snug line-clamp-2 flex-1">{p.name}</p>
-                        <div className="flex items-baseline gap-1.5 mt-1.5">
-                          <span className="font-display text-sm font-bold text-brand tabular-nums">฿{final.toLocaleString()}</span>
-                          {original !== null && (
-                            <span className="text-[10px] text-gray-400 line-through">฿{original.toLocaleString()}</span>
-                          )}
+                        <div className="mt-1.5">
+                          <ProductPrice price={final} original={original} />
                         </div>
                         <Button
                           size="sm"

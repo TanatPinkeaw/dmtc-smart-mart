@@ -59,7 +59,7 @@ export function MemberGroupsPanel() {
       </div>
 
       {groups.map(g => (
-        <div key={g.id} className="bg-white border border-brand-border rounded-2xl p-4 shadow-sm">
+        <div key={g.id} className="bg-white border border-brand-border rounded-3xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="font-bold text-gray-800">{g.name} <span className="text-[11px] text-gray-400 font-normal">({g.code})</span></p>

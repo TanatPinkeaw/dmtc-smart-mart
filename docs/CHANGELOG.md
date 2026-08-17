@@ -4,7 +4,51 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): ขยายภาษาแบรนด์ไปหน้า member + รวม empty state เป็น EmptyState กลาง (commit `47d09cb`)
+## [2026-08-17] — feat(frontend): รวมการ์ดสินค้า/รูป/ราคาเป็น ProductCard/ProductImage/ProductPrice กลาง (POS + preorder + Home)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **การ์ดสินค้าหน้าตาเปลี่ยนนิดหน่อย** (ตั้งใจรวมเป็นภาษาเดียว): การ์ดกริด POS + หน้าจอง + แถวโปร/ยอดนิยม + การ์ดยอดขายดีบน Home ใช้คอมโพเนนต์กลางตัวเดียว — โค้งมน 3xl เท่ากัน, ราคา font-display + tabular + ขีดฆ่า, กล่องรูปมี placeholder ตอนไม่มีรูป — logic/ราคาที่คิดจริง/ปุ่มทุกปุ่มไม่แตะ
+3. เปลือกการ์ดบางกล่อง (RewardModal ของรางวัล / กลุ่มสมาชิกใน Settings ×2 / กล่องบน Home) ปรับ 2xl → 3xl ให้ตรงมาตรฐาน — ไม่กระทบการใช้งาน
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **ProductCard กลาง** (frontend) | สร้าง `components/ui/ProductCard.tsx` — เดิม POS กับหน้าจองเขียนการ์ดซ้ำ ~150 บรรทัด; รวมเป็นตัวเดียว (แถบ brand บน + รูป + ชื่อ + badge สถานะ + ราคา + chip ส่วนลด/สต๊อก + ปุ่มเพิ่ม + ช่องแก้ราคา POS ผ่าน prop `priceOverrideInput`) |
+| **ProductImage/ProductPrice** (frontend) | `ui/ProductImage.tsx` (กล่องรูป + placeholder PackagePlus) + `ui/ProductPrice.tsx` (font-display + tabular + ขีดฆ่า + tone สีตามสถานะ) — อพยพ PromoPopularRow (PriceLine เดิม) + Home การ์ดยอดขายดี |
+| **เทส contract** (frontend) | `uiConsistencyContract.test.ts` +4 กฎ: ProductGrid ×2 ต้อง import ProductCard, Home/PromoPopularRow ต้องใช้ ProductImage/ProductPrice, ห้าม `<img w-full h-full object-cover>` เขียนเอง (ยกเว้น avatar Home), ห้ามราคาเขียนเองใน Home — ทดสอบด้วย probe จริงแล้วจับ fail (1 ตัว) |
+
+**Rollback:** revert แล้ว rebuild frontend — ไม่มีผลต่อ data
+
+---
+
+## [2026-08-17] — fix(backend): POST /api/orders 500 ทุกใบ — usePhoneForPoints ReferenceError
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Restart backend อย่างเดียวพอ** — ไม่มี SQL/env ใหม่ ไม่ต้อง rebuild frontend
+2. บัคนี้กำลัง active อยู่ (ทุกออเดอร์ — เงินสด/QR — ตก 500) — ควร deploy ทันที
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **server.js** (backend) | `resolveOrderPoints()` ส่ง `usePhoneForPoints` (camelCase) ที่ไม่เคยประกาศ — destructure รับ `use_phone_for_points` (snake_case จาก client) → ReferenceError → 500 ทุกออเดอร์ ตั้งแต่ commit `354dbb3`; แก้โดย mapping `usePhoneForPoints: use_phone_for_points` |
+| **preorderPolicy.test.js** (backend) | +1 เทส กฎใหม่: ไล่ identifier bare ใน `resolveOrderPoints({...})` ต้องอยู่ใน `const { ... } = req.body` ของ handler เดียวกัน (จับ pattern call site ที่พัง — เทสเดิมเช็คแค่ `pointsPolicy.usePhoneForPoints` ที่บรรทัดถูกอยู่แล้ว) — ทดสอบแล้ว: revert เป็นเวอร์ชันพัง → เทสแดง → คืน fix → เขียว |
+
+**Rollback:** revert แล้ว restart backend — ไม่มีผลต่อ data
+
+---
+
+## [2026-08-17] — feat(frontend): รวมการ์ดสินค้า/รูป/ราคาเป็น ProductCard/ProductImage/ProductPrice กลาง + ขยายภาษาแบรนด์ไปหน้า member + รวม empty state เป็น EmptyState กลาง (commit `47d09cb`)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **ภาษาเดียวกับ Home/PreOrder ไปหน้า member**: Profile/Notifications ได้ชายคาหยักใต้แถบหัว + ชื่อเป็นฟอนต์ Prompt; โมดัลประวัติออเดอร์ (MyOrders/OrderDetail/UploadSlip/CartPanel) ชื่อเป็น Prompt + ยอดรวมเลข tabular — icons/ภาพ/ลอจิกไม่แตะ
+3. **Empty state ทั่วแอปเปลี่ยนหน้าตา** (เฉพาะตอน "ไม่มีข้อมูล"): รวม ~14 จุดที่เขียนเองคนละแบบเป็น `EmptyState` (ไอคอนในกล่อง brand-bg + title + hint) — ข้อความ/ความหมายเดิมทุกจุด
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 

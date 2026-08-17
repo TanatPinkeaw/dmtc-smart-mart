@@ -251,3 +251,48 @@ describe('skeleton — ใช้ ui/Skeleton (SkeletonLine/SkeletonListRow) ห�
     }
   });
 });
+
+describe('การ์ดสินค้า — ต้องใช้ ui/ProductCard + ui/ProductImage + ui/ProductPrice (กลาง)', () => {
+  const CARD_FILES = [
+    'components/preorder/ProductGrid.tsx',
+    'components/pos/ProductGrid.tsx',
+  ];
+  const IMG_FILES = [
+    'components/preorder/PromoPopularRow.tsx',
+    'components/preorder/ProductGrid.tsx',
+    'components/pos/ProductGrid.tsx',
+    'pages/Home.tsx',
+  ];
+
+  test('ProductGrid ทั้ง 2 (preorder/POS) ต้อง import ProductCard จาก ui/ProductCard', () => {
+    for (const f of CARD_FILES) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { ProductCard } from '../ui/ProductCard'"),
+        `${f} ต้องใช้ ui/ProductCard (การ์ดกริด 2 หน้าต้องเป็นตัวเดียวกัน — เดิมเขียนซ้ำ ~150 บรรทัด)`);
+      assert.ok(!src.includes('aspect-square bg-brand-bg rounded-lg'),
+        `${f} ห้ามเขียนกล่องรูปสินค้าเอง — ใช้ <ProductImage> จาก ui/ProductImage`);
+    }
+  });
+
+  test('Home/PromoPopularRow ต้อง import ProductImage + ProductPrice (ห้ามเขียนกล่องรูป/ราคาเอง)', () => {
+    for (const f of ['pages/Home.tsx', 'components/preorder/PromoPopularRow.tsx']) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes('ProductImage'), `${f} ต้องใช้ <ProductImage> จาก ui/ProductImage`);
+      assert.ok(src.includes('ProductPrice'), `${f} ต้องใช้ <ProductPrice> จาก ui/ProductPrice`);
+    }
+  });
+
+  test('ไม่มีกล่องรูปสินค้า <img ... object-cover> เขียนเองในไฟล์ที่อพยพแล้ว (ยกเว้น avatar Home)', () => {
+    for (const f of IMG_FILES) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(!/<img[^>]*w-full h-full object-cover/.test(src),
+        `${f} ห้ามเขียน <img> กล่องรูปสินค้าเอง — ใช้ <ProductImage> (รองรับ placeholder ตอนไม่มีรูป)`);
+    }
+  });
+
+  test('Home ไม่มีราคาเขียนเอง (font-display text-* font-bold text-brand tabular-nums)', () => {
+    const src = readFileSync(join(BASE, 'pages/Home.tsx'), 'utf8');
+    assert.ok(!/font-display text-(sm|xs|base) font-bold text-brand tabular-nums/.test(src),
+      'Home ห้ามเขียน span ราคาเอง — ใช้ <ProductPrice> (ขีดฆ่า/สีตามสถานะมาตรฐานเดียว)');
+  });
+});
