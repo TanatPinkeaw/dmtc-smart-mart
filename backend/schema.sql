@@ -174,6 +174,7 @@ CREATE TABLE `sales` (
   KEY `cashier_id` (`cashier_id`),
   KEY `member_id` (`member_id`),
   KEY `promotion_id` (`promotion_id`),
+  KEY `idx_sales_status_created` (`status`,`created_at`),
   CONSTRAINT `sales_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`id`),
   CONSTRAINT `sales_ibfk_2` FOREIGN KEY (`member_id`) REFERENCES `users` (`id`),
   CONSTRAINT `sales_ibfk_3` FOREIGN KEY (`promotion_id`) REFERENCES `promotions` (`id`) ON DELETE SET NULL
@@ -243,6 +244,8 @@ CREATE TABLE `orders` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   KEY `user_id` (`user_id`),
+  KEY `idx_orders_status_created` (`status`,`created_at`),
+  KEY `idx_orders_ready_at` (`ready_at`),
   CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `order_items` (
@@ -297,6 +300,7 @@ CREATE TABLE `audit_logs` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_action` (`action`),
   KEY `idx_user_id` (`user_id`),
+  KEY `idx_audit_user_action_created` (`user_id`,`action`,`created_at`),
   CONSTRAINT `audit_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `schedules` (

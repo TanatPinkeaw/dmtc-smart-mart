@@ -4175,15 +4175,24 @@ app.get('/api/orders', async (req, res) => {
 
     const [orders] = await pool.query(query, params);
 
-    // ดึงรายการสินค้าข้างในออเดอร์มาให้ด้วยเลย
-    for (let order of orders) {
-      const [items] = await pool.query(`
+    // 🐛 FIX (N+1) — เดิมยิง query ทีละออเดอร์ในลูป: ออเดอร์ N ใบ = N query ทุกครั้งที่โหลด
+    // (OrderManagement poll ทุก 5 วิ + หน้า MyOrders/OrderDetail). ดึง items ทั้งหมดครั้งเดียว
+    // ด้วย IN แล้ว group ใน JS — 1 query เสมอ ไม่ว่า N เท่าไร
+    if (orders.length > 0) {
+      const orderIds = orders.map(o => o.id);
+      const [allItems] = await pool.query(`
         SELECT oi.*, p.name as product_name, p.image_url 
         FROM order_items oi 
         JOIN products p ON oi.product_id = p.id 
-        WHERE oi.order_id = ?
-      `, [order.id]);
-      order.items = items;
+        WHERE oi.order_id IN (${orderIds.map(() => '?').join(',')})
+        ORDER BY oi.id
+      `, orderIds);
+      const itemsByOrder = new Map();
+      for (const it of allItems) {
+        if (!itemsByOrder.has(it.order_id)) itemsByOrder.set(it.order_id, []);
+        itemsByOrder.get(it.order_id).push(it);
+      }
+      for (const order of orders) order.items = itemsByOrder.get(order.id) || [];
     }
 
     res.json(orders);
@@ -5435,13 +5444,18 @@ server.listen(PORT, '0.0.0.0', () => {
            AND o.ready_at IS NOT NULL AND o.ready_at <= (NOW() - INTERVAL ? HOUR)`,
         [PICKUP_REMINDER_THRESHOLD_HOURS]
       );
+      const sentIds = [];
       for (const o of staleOrders) {
         if (!o.line_user_id) continue; // ไม่ได้ผูกบัญชี LINE — ข้ามเงียบๆ (fail-soft เหมือนจุดอื่น)
         const text = `🏃‍♂️ ก๊อกๆ! ออเดอร์ #${o.id} ของคุณเตรียมเสร็จเรียบร้อยแล้วน้า อย่าลืมแวะมารับที่ร้าน DMTC Mart นะครับ รออยู่น้าค้าบ ✨`;
         const sent = await pushLineMessage(o.line_user_id, [{ type: 'text', text }])
           .catch(err => { console.error(`❌ [CRON] ส่ง pickup reminder ไม่สำเร็จ (order #${o.id}):`, err.message); return false; });
         // ⭐️ ตั้ง sent flag เฉพาะตอนส่งสำเร็จจริง — ถ้าพัง (เช่น LINE API ล่มชั่วคราว) ปล่อยให้ลองใหม่ชั่วโมงถัดไป
-        if (sent) await pool.query('UPDATE orders SET pickup_reminder_sent = 1 WHERE id = ?', [o.id]);
+        if (sent) sentIds.push(o.id);
+      }
+      // 🐛 FIX (N+1) — เดิม UPDATE ทีละออเดอร์ในลูป — batch ครั้งเดียวด้วย IN แทน
+      if (sentIds.length > 0) {
+        await pool.query(`UPDATE orders SET pickup_reminder_sent = 1 WHERE id IN (${sentIds.map(() => '?').join(',')})`, sentIds);
       }
       if (staleOrders.length > 0) console.log(`🏃 [CRON] เตือนมารับของแล้ว ${staleOrders.length} ออเดอร์`);
     } catch (e) { console.error('❌ pickup reminder cron ล้มเหลว:', e.message); }

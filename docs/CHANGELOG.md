@@ -4,6 +4,20 @@
 
 ---
 
+## [2026-08-17] — perf(backend): แก้ N+1 ใน GET /api/orders + cron pickup reminder + เพิ่ม index orders/sales/audit_logs
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+1. **Restart backend เท่านั้น** — index ถูกเพิ่มอัตโนมัติตอน boot (db.js initDB รัน ALTER TABLE ADD INDEX แบบ idempotent — ปลอดภัยรันซ้ำ, ER_DUP_KEYNAME ข้ามเอง) ไม่ต้องรัน SQL เอง
+2. **N+1 — GET /api/orders**: เดิมยิง query ทีละออเดอร์ในลูป (ออเดอร์ N ใบ = N query ทุก 5 วิ ที่ OrderManagement poll) → ตอนนี้ดึง items ทั้งหมดครั้งเดียว `IN (...)` + group ใน JS — 1 query เสมอ. พฤติกรรม API เหมือนเดิม (`order.items` เปลี่ยนจาก undefined → `[]` ตอนไม่มีสินค้า — frontend ใช้ `items?.` หมด ปลอดภัย)
+3. **N+1 — cron pickup reminder**: เดิม UPDATE ทีละออเดอร์ → batch `IN (...)` ครั้งเดียว
+4. **Index ใหม่ 4 ตัว** (ช่วย pending-count, รายงาน, log viewer, cron): `orders (status, created_at)` · `orders (ready_at)` · `sales (status, created_at)` · `audit_logs (user_id, action, created_at)` — schema.sql อัปเดตให้ตรงแล้ว (doc + CI fresh-install)
+
+### 🧪 เทส
+- `serverGuardRails` ขยายเป็น **24 เช็ค** (+D N+1 batch, +E index ใน db.js+schema.sql) — probe จับ fail จริง (คืน N+1 → แดง 1 ตัว → คืนเขียว) — runner **12/12 ชุดผ่าน**
+
+---
+
 ## [2026-08-17] — fix(backend+frontend): ล่าบัค 4 จุด — แยกลิมิต sync-offline, clamp page/limit audit-logs, โชว์ "—" แทน 0 ปลอม, ลบ dead socket (commit `61e50dd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

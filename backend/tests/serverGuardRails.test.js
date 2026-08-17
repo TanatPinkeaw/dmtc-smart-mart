@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════════
-// 📄 tests/serverGuardRails.test.js — กันบัคที่ล่าพบรอบ 2026-08-17 กลับมา (static contract)
+// 📄 tests/serverGuardRails.test.js — กันบัคที่ล่าพบ (static contract, ไม่ต้องต่อ DB)
 // ─────────────────────────────────────────────────────────────────────────────────────
 // ทำอะไร / ทำไมมีไฟล์นี้:
-//   ล่าบัคพบ 3 จุดที่แก้ไปแล้วใน server.js — ไฟล์นี้ล็อกให้ไม่กลับมาเป็น regression:
+//   ล่าบัคพบหลายจุดที่แก้ไปแล้วใน server.js — ไฟล์นี้ล็อกให้ไม่กลับมาเป็น regression:
 //     A) MEDIUM — /api/sales/sync-offline ใช้ checkoutLimiter ตัวเดียวกับ /checkout (30 ครั้ง/นาที
 //        prod): คิวออฟไลน์ replay บิลค้าง >30 ใบ โดน 429 → queueProcessor ตัดทิ้งถาวร = บิลหลุด.
 //        ต้องใช้ limiter แยก (syncOfflineLimiter) + skipFailedRequests + max มากกว่า checkout
@@ -10,7 +10,10 @@
 //        ?limit=100000000 → query ยักษ์. ต้อง clamp (page ≥ 1, limit 1–200)
 //     C) NIT — socket.on('request_shift_report')  dead code (ไม่มีฝั่งไหน listen) + emit string
 //        'error' แทน object — ต้องไม่มีกลับมา
-//   ไม่ต้องต่อ DB — อ่าน source server.js แล้วเช็ค pattern (แบบเดียวกับ cronTimezone/undefinedIdentifiers)
+//     D) N+1 — GET /api/orders เดิมยิง query ทีละออเดอร์ในลูป (OrderManagement poll ทุก 5 วิ),
+//        cron pickup reminder เดิม UPDATE ทีละออเดอร์ — ต้อง batch (IN + placeholders)
+//     E) Index — orders/sales/audit_logs ต้องมี index ใน db.js initDB (runtime) + schema.sql (doc/CI)
+//   ไม่ต้องต่อ DB — อ่าน source แล้วเช็ค pattern (แบบเดียวกับ cronTimezone/undefinedIdentifiers)
 // ═══════════════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const path = require('path');
@@ -52,6 +55,32 @@ check('ไม่มี parseInt(limit) ใน params.push', !/params\.push\(pars
 console.log('C) dead socket ถูกถอน:');
 check("ไม่มี socket.on('request_shift_report')", !/socket\.on\('request_shift_report'/.test(serverSrc));
 check("ไม่มี socket.emit('shift_report_ack')", !/socket\.emit\('shift_report_ack'/.test(serverSrc));
+
+console.log('D) N+1 ถูก batch (กัน regression):');
+// GET /api/orders — window จาก route ถึง route ถัดไป ต้องดึง items batch IN ไม่ยิงในลูป
+const ordersIdx = serverSrc.indexOf("app.get('/api/orders'");
+const ordersWindow = serverSrc.slice(ordersIdx, serverSrc.indexOf("app.put('/api/orders/:id/status'", ordersIdx));
+check('ดึง items ทุกออเดอร์ batch IN (orderIds.map placeholders)', /oi\.order_id IN \(\$\{orderIds\.map\(\(\) => '\?'\)\.join\(','\)\}\)/.test(ordersWindow));
+check('ไม่เหลือ for-loop ยิง query ใน /orders', !/for\s*\([^)]*\)\s*\{[^}]*pool\.query/.test(ordersWindow));
+// pickup reminder cron — UPDATE ต้อง batch IN
+const cronIdx = serverSrc.indexOf('pickup_reminder_sent = 1');
+const cronBlock = serverSrc.slice(cronIdx - 700, cronIdx + 700);
+check('cron batch UPDATE IN (sentIds)', /UPDATE orders SET pickup_reminder_sent = 1 WHERE id IN \(\$\{sentIds\.map\(\(\) => '\?'\)\.join\(','\)\}\)/.test(cronBlock));
+check('cron ไม่เหลือ UPDATE ทีละ id (= ?)', !/UPDATE orders SET pickup_reminder_sent = 1 WHERE id = \?/.test(cronBlock));
+
+console.log('E) index อยู่ใน db.js initDB (runtime) + schema.sql (doc/CI):');
+const dbSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'config', 'db.js'), 'utf8');
+const schemaSrc = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
+const idxDefs = [
+  ['idx_sales_status_created', 'sales'],
+  ['idx_orders_status_created', 'orders'],
+  ['idx_orders_ready_at', 'orders'],
+  ['idx_audit_user_action_created', 'audit_logs'],
+];
+for (const [idx, table] of idxDefs) {
+  check(`${idx} อยู่ใน db.js (ALTER + ER_DUP_KEYNAME guard)`, new RegExp('ADD INDEX ' + idx + '\\s*\\(').test(dbSrc) && dbSrc.includes("idxErr.code !== 'ER_DUP_KEYNAME'"));
+  check(`${idx} อยู่ใน schema.sql (${table})`, new RegExp('KEY `' + idx + '`').test(schemaSrc));
+}
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} serverGuardRails: ${pass} ผ่าน, ${fail} ไม่ผ่าน`);
 process.exit(fail ? 1 : 0);

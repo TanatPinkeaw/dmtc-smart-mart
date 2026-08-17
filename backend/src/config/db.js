@@ -321,6 +321,14 @@ const initDB = async () => {
         FOREIGN KEY (user_id) REFERENCES users(id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+    // ⭐️ Defensive patch (index): log viewer filter `user_id + action + DATE(created_at)` พร้อมกันบ่อย —
+    // เดิม index แยก 3 ตัว ใช้ได้ทีละตัว — composite ตัวเดียวครอบทั้ง 3 (โต๊ะนี้ใหญ่สุดในระบบ)
+    try {
+      await connection.query(`ALTER TABLE audit_logs ADD INDEX idx_audit_user_action_created (user_id, action, created_at)`);
+      console.log("🔧 เพิ่ม index audit_logs (user_id, action, created_at) ที่ขาดไปให้แล้ว");
+    } catch (idxErr) {
+      if (idxErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE audit_logs (idx_audit_user_action_created) ล้มเหลว:", idxErr.message);
+    }
 
     // ==========================================
     // MODULE: Schedules / Attendance (หมวด 7 — ตารางเวลา + เช็คมาสาย)
@@ -378,6 +386,14 @@ const initDB = async () => {
       console.log("🔧 เพิ่มคอลัมน์ sales.shift_id ที่ขาดไปให้แล้ว");
     } catch (alterErr) {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE sales (shift_id) ล้มเหลว:", alterErr.message);
+    }
+    // ⭐️ Defensive patch (index): รายงานประจำวัน/สัปดาห์ filter `status='COMPLETED' AND DATE(created_at)`
+    // บ่อย — composite (status, created_at) ตัดแถวด้วย status ก่อน กัน full scan ตาราง sales โตขึ้นเรื่อยๆ
+    try {
+      await connection.query(`ALTER TABLE sales ADD INDEX idx_sales_status_created (status, created_at)`);
+      console.log("🔧 เพิ่ม index sales (status, created_at) ที่ขาดไปให้แล้ว");
+    } catch (idxErr) {
+      if (idxErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE sales (idx_sales_status_created) ล้มเหลว:", idxErr.message);
     }
     // ⭐️ Defensive patch: เก็บรายละเอียดนับเงินแยกแบงก์/เหรียญ (หมวด D) — เก็บเป็น JSON ไม่ต้องเปลี่ยน schema หลัก
     try {
@@ -444,6 +460,21 @@ const initDB = async () => {
       console.log("🔧 เพิ่มคอลัมน์ orders.pickup_reminder_sent ที่ขาดไปให้แล้ว");
     } catch (alterErr) {
       if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error("⚠️ ALTER TABLE orders (pickup_reminder_sent) ล้มเหลว:", alterErr.message);
+    }
+    // ⭐️ Defensive patch (index): pending-count + หน้า OrderManagement filter `status` + `ORDER BY created_at`
+    // (โพลล์ทุก 5 วิ) และ cron pickup reminder filter `status='READY' AND ready_at <= ...` — เดิมไม่มี index
+    // บน status/ready_at = full scan orders ทุกครั้งที่โหลดหน้า
+    try {
+      await connection.query(`ALTER TABLE orders ADD INDEX idx_orders_status_created (status, created_at)`);
+      console.log("🔧 เพิ่ม index orders (status, created_at) ที่ขาดไปให้แล้ว");
+    } catch (idxErr) {
+      if (idxErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE orders (idx_orders_status_created) ล้มเหลว:", idxErr.message);
+    }
+    try {
+      await connection.query(`ALTER TABLE orders ADD INDEX idx_orders_ready_at (ready_at)`);
+      console.log("🔧 เพิ่ม index orders (ready_at) ที่ขาดไปให้แล้ว");
+    } catch (idxErr) {
+      if (idxErr.code !== 'ER_DUP_KEYNAME') console.error("⚠️ ALTER TABLE orders (idx_orders_ready_at) ล้มเหลว:", idxErr.message);
     }
 
     // ⭐️ Defensive patch: โปรโมชั่น BOGO/ซื้อครบแถม + จำกัดสิทธิ์การใช้
