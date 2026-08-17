@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — Fix(deploy): backend Dockerfile node:18-alpine → node:20-alpine — sharp 0.35 ต้อง Node ≥ 20.9 (deploy ล้มตอน boot "Could not load sharp... Requires >=20.9.0")
+## [2026-08-17] — Fix(deploy): backend Dockerfile node:18-alpine → node:20-alpine — sharp 0.35 ต้อง Node ≥ 20.9 (deploy ล้มตอน boot "Could not load sharp... Requires >=20.9.0") (commit `2978003`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
