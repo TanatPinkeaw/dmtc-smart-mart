@@ -2,6 +2,7 @@
 //    ทำอะไร: การ์ดสินค้า + badge/ราคาหลังลด (โปร/ใกล้หมดอายุ ผ่าน effectiveUnitPrice ตรงกับ POS+backend)
 import { PackagePlus, PackageSearch } from 'lucide-react';
 import { effectiveUnitPrice, itemLevelDiscountPercent } from '../../utils/money';
+import { EmptyState } from '../ui/EmptyState';
 
 interface Category { id: number; name: string; }
 interface Product { id: number; name: string; price: string | number; image_url: string; stock: number; category_id: number | null; }
@@ -44,12 +45,10 @@ export function ProductGrid({ categories, selectedCategory, onSelectCategory, pr
 
       {/* ⭐️ Phase 2 — empty state: ค้นหา/หมวดหมู่ไม่มีสินค้าตรงเงื่อนไข (แทนพื้นที่ว่างเปล่าไม่บอกอะไรเลย) */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center text-gray-400 py-16 gap-2">
-          <PackageSearch size={40} className="opacity-40" />
-          <p className="text-sm font-medium">
-            {productSearch.trim() ? `ไม่พบสินค้าที่ตรงกับ "${productSearch.trim()}"` : 'ไม่พบสินค้าในหมวดหมู่นี้'}
-          </p>
-        </div>
+        <EmptyState
+          icon={<PackageSearch size={26} />}
+          title={productSearch.trim() ? `ไม่พบสินค้าที่ตรงกับ "${productSearch.trim()}"` : 'ไม่พบสินค้าในหมวดหมู่นี้'}
+        />
       ) : (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {filtered.map((product) => {

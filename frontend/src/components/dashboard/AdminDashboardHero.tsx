@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { ArrowUpRight, ArrowDownRight, TrendingUp, ShoppingBag, Package, XCircle } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatBangkokTime } from '../../utils/timezone';
+import { EmptyState } from '../ui/EmptyState';
 
 // ⭐️ Design-ref — โครงหน้า Dashboard ผู้จัดการ อ้างอิงจาก AdminDashboardScreen.tsx (Figma Make)
 // สถิติ + กราฟ ใช้ข้อมูลจริงจาก backend เท่านั้น (ไม่ fabricate เทรนด์ที่ไม่มีข้อมูลย้อนหลังรองรับ)
@@ -96,7 +97,7 @@ export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSum
             <p className="text-xs text-gray-400 font-medium mt-0.5">ย้อนหลัง 7 วัน (รวมวันนี้)</p>
           </div>
           {weeklySales.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-12">กำลังโหลดข้อมูล...</p>
+            <EmptyState compact title="กำลังโหลดข้อมูล..." />
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <AreaChart data={weeklySales} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -122,7 +123,7 @@ export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSum
             <p className="text-xs text-gray-400 font-medium mt-0.5">จำนวนที่ขายได้</p>
           </div>
           {topProducts.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-12">ยังไม่มีข้อมูลวันนี้</p>
+            <EmptyState compact title="ยังไม่มีข้อมูลวันนี้" />
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={topProducts.slice(0, 5)} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
@@ -140,7 +141,7 @@ export function AdminDashboardHero({ summary, comparison, lowStockCount, voidSum
       <div className={card}>
         <h3 className="font-extrabold text-gray-900 text-sm mb-2">ออเดอร์ล่าสุด</h3>
         {recentOrders.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 py-8">ยังไม่มีออเดอร์วันนี้</p>
+          <EmptyState compact title="ยังไม่มีออเดอร์วันนี้" />
         ) : (
           <div className="divide-y divide-brand-border">
             {recentOrders.slice(0, 6).map((o) => (

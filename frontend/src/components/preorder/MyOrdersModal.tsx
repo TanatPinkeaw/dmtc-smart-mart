@@ -1,8 +1,9 @@
 // 📄 components/preorder/MyOrdersModal.tsx — popup ประวัติการสั่งจองของสมาชิก (กด "ประวัติของฉัน")
 //    ทำอะไร: ลิสต์ออเดอร์ของตัวเอง + สถานะ (badge) + กดดูรายละเอียด/ส่งสลิปใหม่/ยกเลิก
-import { X, RotateCw } from 'lucide-react';
+import { X, RotateCw, Receipt } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 import { StatusBadge } from '../ui/StatusBadge';
+import { EmptyState } from '../ui/EmptyState';
 
 // สี/class badge มาจาก ui/StatusBadge (map กลาง) — ตรงนี้เก็บแค่ label เต็มแบบ member view
 const STATUS_LABEL: Record<string, string> = {
@@ -45,33 +46,33 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
       {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
       <div className="bg-white rounded-3xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0 shadow-sm">
-          <h2 className="font-semibold text-lg text-white">ประวัติการสั่งจองของฉัน</h2>
+          <h2 className="font-semibold font-display text-lg text-white">ประวัติการสั่งจองของฉัน</h2>
           <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
         </div>
         <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
           {/* ⭐️ Phase 3 — ลำดับความสำคัญ: กำลังโหลด (ยังไม่มีข้อมูลเก่า) > โหลดพังไม่มีข้อมูลเก่า >
               ว่างจริงๆ > มีข้อมูล (โชว์ต่อแม้ background refresh ล่าสุดจะพัง ดีกว่าล้างของเดิมทิ้ง) */}
           {loading && myOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-gray-400 py-16 gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
-              <p className="text-sm font-medium">กำลังโหลดประวัติการสั่งจอง...</p>
-            </div>
+            <EmptyState icon={<span className="block animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />} title="กำลังโหลดประวัติการสั่งจอง..." />
           ) : error && myOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-gray-400 py-16 gap-3">
-              <p className="text-sm font-medium text-red-500">โหลดประวัติการสั่งจองไม่สำเร็จ</p>
-              <button onClick={onRetry} className="flex items-center gap-1.5 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-4 py-2 rounded-full active:scale-95 transition-all duration-150">
-                <RotateCw size={14} /> ลองใหม่
-              </button>
-            </div>
+            <EmptyState
+              tone="error"
+              title="โหลดประวัติการสั่งจองไม่สำเร็จ"
+              action={
+                <button onClick={onRetry} className="flex items-center gap-1.5 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-4 py-2 rounded-full active:scale-95 transition-all duration-150">
+                  <RotateCw size={14} /> ลองใหม่
+                </button>
+              }
+            />
           ) : myOrders.length === 0 ? (
-            <p className="text-center text-gray-400 py-10">ยังไม่มีประวัติการสั่งจอง</p>
+            <EmptyState icon={<Receipt size={26} />} title="ยังไม่มีประวัติการสั่งจอง" />
           ) : (
             myOrders.map(order => (
               <div key={order.id} className="bg-white p-4 rounded-3xl border border-brand-border shadow-md hover:shadow-lg hover:border-brand-mid transition-all cursor-pointer"
                 onClick={() => onSelectOrder(order)}>
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="font-bold text-lg text-gray-800">ออเดอร์ #{order.id}</h3>
+                    <h3 className="font-display font-bold text-lg text-gray-800">ออเดอร์ #{order.id}</h3>
                     <p className="text-xs text-gray-500 mt-1">{formatBangkokTime(order.created_at)}</p>
                   </div>
                   <StatusBadge status={order.status} size="md" label={STATUS_LABEL[order.status]} />
@@ -91,7 +92,7 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
                 )}
 
                 <div className="flex justify-between items-center border-t border-gray-200 pt-3">
-                  <span className="font-bold text-brand text-base">฿{Number(order.total_amount).toFixed(2)}</span>
+                  <span className="font-display font-bold text-brand text-base tabular-nums">฿{Number(order.total_amount).toFixed(2)}</span>
                   <span className="text-xs text-gray-500">แตะเพื่อดูละเอียด →</span>
                 </div>
 

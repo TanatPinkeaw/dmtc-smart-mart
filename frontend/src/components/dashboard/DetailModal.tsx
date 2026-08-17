@@ -2,6 +2,7 @@
 //    ทำอะไร: กดการ์ดสรุปแล้วเด้ง modal โชว์รายการเต็ม (เช่น รายบิล/รายพนักงาน) — หน้าตาล้วน
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
 import { formatBangkokTime } from '../../utils/timezone';
 
 interface DetailModalData {
@@ -31,7 +32,7 @@ export function DetailModal({
   return (
     <Modal onClose={onClose} widthClassName="max-w-lg" title={detailModal.title}>
         <div className="p-4 space-y-2">
-          {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีสินค้าสต๊อกใกล้หมด</p> :
+          {detailModal.type === 'lowstock' && (lowStock.length === 0 ? <EmptyState compact title="ไม่มีสินค้าสต๊อกใกล้หมด" /> :
             lowStock.map((p: LowStockItem) => (
               <div key={p.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-100 rounded-xl">
                 <div><p className="text-sm font-semibold text-gray-900">{p.name}</p><p className="text-xs text-gray-400">{p.barcode || '-'}</p></div>
@@ -45,21 +46,21 @@ export function DetailModal({
               <p className="text-xs text-gray-400 mt-2">ดูรายการได้ที่หน้า "ประวัติการขาย" ในตั้งค่า</p>
             </div>
           )}
-          {detailModal.type === 'anomalies' && (shiftAnomalies.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะที่ผิดปกติ</p> :
+          {detailModal.type === 'anomalies' && (shiftAnomalies.length === 0 ? <EmptyState compact title="ไม่มีกะที่ผิดปกติ" /> :
             shiftAnomalies.map((s: ShiftRow) => (
               <div key={s.id} className="flex justify-between items-center p-3 bg-purple-50 border border-purple-100 rounded-xl">
                 <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">{formatBangkokTime(s.closed_at ?? '')}</p></div>
                 <span className={`font-bold text-lg ${Number(s.difference) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{Number(s.difference) > 0 ? '+' : ''}{Number(s.difference).toFixed(2)}</span>
               </div>
             )))}
-          {detailModal.type === 'openshifts' && (openShifts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะที่ค้างอยู่</p> :
+          {detailModal.type === 'openshifts' && (openShifts.length === 0 ? <EmptyState compact title="ไม่มีกะที่ค้างอยู่" /> :
             openShifts.map((s: ShiftRow) => (
               <div key={s.id} className="flex justify-between items-center p-3 bg-blue-50 border border-blue-100 rounded-xl">
                 <div><p className="text-sm font-semibold text-gray-900">{s.cashier_name}</p><p className="text-xs text-gray-400">เปิดกะ {formatBangkokTime(s.opened_at ?? '')}</p></div>
                 <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">เปิดอยู่</span>
               </div>
             )))}
-          {detailModal.type === 'pending_approval' && (pendingApprovalShifts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ไม่มีกะรออนุมัติ</p> :
+          {detailModal.type === 'pending_approval' && (pendingApprovalShifts.length === 0 ? <EmptyState compact title="ไม่มีกะรออนุมัติ" /> :
             pendingApprovalShifts.map((s: ShiftRow) => (
               <div key={s.id} className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
                 <div className="flex justify-between items-start">

@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Bell, Search, Clock, CheckCircle2 } from 'lucide-react';
+import { EmptyState } from '../components/ui/EmptyState';
 import api from '../api';
 import { useSocket } from '../hooks/useSocket';
 import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
@@ -139,13 +140,13 @@ export default function Notifications() {
   return (
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title) แทนหัวข้อใหญ่แบบเดิม
     <div className="min-h-screen bg-brand-bg pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shadow-md">
+      {/* Header — ⭐️ ชายคาหยัก (awning-edge) ภาษาเดียวกับ Home/PreOrder */}
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shadow-md awning-edge">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
             <Bell size={16} className="text-white" />
           </div>
-          <h1 className="text-lg font-semibold text-white truncate">การแจ้งเตือน</h1>
+          <h1 className="text-lg font-semibold font-display text-white truncate">การแจ้งเตือน</h1>
         </div>
         {unread > 0 && (
           <div className="shrink-0 flex items-center gap-2">
@@ -162,7 +163,8 @@ export default function Notifications() {
         )}
       </div>
 
-      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+      {/* pt-5 เผื่อชายคาหยัก (awning) ยื่นลงมา 12px */}
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-5 pb-4 sm:pb-6">
         {/* ⭐️ FIX: กรอบค้นหา — ใส่พื้นหลังขาว + เงา ให้เป็นกล่องแยกชัดเจนเหมือนกรอบแท็บหมวดหมู่หน้า POS/จอง */}
         <div className="relative mb-4 bg-white border border-brand-border rounded-full p-2.5 shadow-md">
           <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -185,13 +187,7 @@ export default function Notifications() {
               ))}
             </div>
           ) : filteredNotis.length === 0 ? (
-            <div className="py-16 flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-brand-bg rounded-2xl flex items-center justify-center mb-3">
-                <Bell size={24} className="text-brand-mid" />
-              </div>
-              <p className="text-sm font-medium text-gray-600">ไม่มีการแจ้งเตือน</p>
-              <p className="text-xs text-gray-400 mt-1">50 รายการล่าสุดจะแสดงที่นี่</p>
-            </div>
+            <EmptyState icon={<Bell size={24} />} title="ไม่มีการแจ้งเตือน" hint="50 รายการล่าสุดจะแสดงที่นี่" />
           ) : (
             <ul className="divide-y divide-gray-50">
               {filteredNotis.map(noti => (

@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, TrendingUp, Wallet, Coins, Download, PiggyBank } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
+import { EmptyState } from '../components/ui/EmptyState';
 import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -137,7 +138,7 @@ export default function AccountingSummary() {
                 </h2>
               </div>
               {!data || data.categoryBreakdown.length === 0 ? (
-                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลการขายในช่วงวันที่นี้</p>
+                <EmptyState compact title="ไม่มีข้อมูลการขายในช่วงวันที่นี้" />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left whitespace-nowrap text-sm">
@@ -174,7 +175,7 @@ export default function AccountingSummary() {
                 </h2>
               </div>
               {!data || data.productBreakdown.length === 0 ? (
-                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลการขายในช่วงวันที่นี้</p>
+                <EmptyState compact title="ไม่มีข้อมูลการขายในช่วงวันที่นี้" />
               ) : (
                 <div className="overflow-x-auto max-h-96 overflow-y-auto">
                   <table className="w-full text-left whitespace-nowrap text-sm">
@@ -211,7 +212,7 @@ export default function AccountingSummary() {
                 </h2>
               </div>
               {!data || data.supplierPayouts.length === 0 ? (
-                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีสินค้าฝากขายที่ขายได้ในช่วงวันที่นี้</p>
+                <EmptyState compact title="ไม่มีสินค้าฝากขายที่ขายได้ในช่วงวันที่นี้" />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left whitespace-nowrap text-sm">

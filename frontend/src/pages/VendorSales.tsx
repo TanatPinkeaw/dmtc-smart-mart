@@ -10,6 +10,7 @@ import { useSocket } from '../hooks/useSocket';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { PageHeader } from '../components/layout/PageHeader';
 import { SkeletonListRow } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
 
 interface VendorSummary {
   vendor_id: number; student_id: string; full_name: string;
@@ -70,12 +71,8 @@ export default function VendorSales() {
         <div className="p-4 sm:p-6">
 
         {!summary || items.length === 0 ? (
-          <div className="bg-white border border-brand-border rounded-3xl shadow-md py-16 flex flex-col items-center text-center">
-            <div className="w-14 h-14 bg-brand-bg rounded-3xl flex items-center justify-center mb-3">
-              <Package size={24} className="text-brand-mid" />
-            </div>
-            <p className="text-sm font-medium text-gray-600">ยังไม่มีสินค้าฝากขาย</p>
-            <p className="text-xs text-gray-400 mt-1">ยังไม่มียอดขายเข้ามา</p>
+          <div className="bg-white border border-brand-border rounded-3xl shadow-md">
+            <EmptyState icon={<Package size={24} />} title="ยังไม่มีสินค้าฝากขาย" hint="ยังไม่มียอดขายเข้ามา" />
           </div>
         ) : (
           <>

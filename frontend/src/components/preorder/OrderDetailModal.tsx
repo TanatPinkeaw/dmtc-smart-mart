@@ -257,7 +257,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
           {/* Total Amount */}
           <div className="bg-brand-bg border border-brand-border rounded-xl p-4">
             <p className="text-gray-700 text-xs sm:text-sm font-medium mb-1">ยอดรวมทั้งสิ้น</p>
-            <p className="text-2xl sm:text-3xl font-bold text-brand">
+            <p className="font-display text-2xl sm:text-3xl font-bold text-brand tabular-nums">
               ฿{Number(selectedOrder.total_amount).toFixed(2)}
             </p>
           </div>

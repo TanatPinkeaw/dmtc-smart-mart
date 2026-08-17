@@ -201,6 +201,37 @@ describe('label ฟอร์ม — ต้องใช้ ui/FieldLabel (เด�
   });
 });
 
+describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเขียน py-16 flex-col / text-gray-400 py- เขียนเองในไฟล์ที่อพยพแล้ว)', () => {
+  const EMPTY_ADOPTED = [
+    'components/preorder/MyOrdersModal.tsx', 'components/preorder/ProductGrid.tsx',
+    'components/preorder/CartPanel.tsx', 'pages/Notifications.tsx', 'pages/VendorSales.tsx',
+    'pages/AccountingSummary.tsx', 'components/dashboard/DetailModal.tsx',
+    'components/dashboard/StatCards.tsx', 'components/dashboard/AdminDashboardHero.tsx',
+  ];
+
+  test('ไฟล์ที่อพยพแล้ว import EmptyState จาก ui/EmptyState', () => {
+    for (const f of EMPTY_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { EmptyState } from '../ui/EmptyState'") ||
+                src.includes("import { EmptyState } from '../../components/ui/EmptyState'") ||
+                src.includes("import { EmptyState } from '../components/ui/EmptyState'"),
+        `${f} ต้อง import EmptyState จาก ui/EmptyState`);
+    }
+  });
+
+  test('ไม่มี empty state เขียนเอง (py-16 flex-col / text-gray-400 py- / p-6 text-center text-gray-400)', () => {
+    for (const f of EMPTY_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(!/py-16 flex flex-col items-center/.test(src),
+        `${f} ห้ามเขียน empty state แบบกล่อง (py-16 flex-col) เอง — ใช้ <EmptyState>`);
+      assert.ok(!/text-center text-(sm|xs) text-gray-400 py-/.test(src),
+        `${f} ห้ามเขียน empty state แบบข้อความ (text-gray-400 py-) เอง — ใช้ <EmptyState compact>`);
+      assert.ok(!src.includes('text-center text-gray-400 text-sm'),
+        `${f} ห้ามเขียน empty state แบบข้อความ (text-center text-gray-400 text-sm) เอง — ใช้ <EmptyState compact>`);
+    }
+  });
+});
+
 describe('skeleton — ใช้ ui/Skeleton (SkeletonLine/SkeletonListRow) ห้ามกล่อง animate-pulse เขียนเองในไฟล์ที่อพยพแล้ว', () => {
   const SKELETON_ADOPTED = [
     'pages/BackupManagement.tsx', 'pages/VendorSales.tsx',

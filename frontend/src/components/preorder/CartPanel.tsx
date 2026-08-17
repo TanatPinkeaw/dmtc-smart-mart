@@ -3,6 +3,7 @@
 //    หน้าตาล้วน logic อยู่ pages/PreOrder.tsx ; ต่างจาก POS ตรงต้องแนบสลิปตอนจ่าย QR
 import { ShoppingCart, Plus, Minus, X, CheckCircle, Upload, ChevronUp, ChevronDown } from 'lucide-react';
 import { FieldLabel } from '../ui/FieldLabel';
+import { EmptyState } from '../ui/EmptyState';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 
@@ -61,14 +62,14 @@ export function CartPanel({
   return (
     <div className={`${isCartOpen ? 'fixed inset-0 z-[60] flex animate-fade-in' : 'hidden'} md:flex md:relative md:w-1/3 flex-col bg-white border-l border-brand-border shadow-xl`}>
       <div className="p-4 bg-gradient-to-r from-brand to-brand-dark text-white flex justify-between items-center shadow-sm">
-        <h2 className="text-lg font-semibold flex items-center gap-2"><ShoppingCart size={20} /> ตะกร้าของฉัน</h2>
+        <h2 className="text-lg font-semibold font-display flex items-center gap-2"><ShoppingCart size={20} /> ตะกร้าของฉัน</h2>
         <button onClick={onCloseCart} className="md:hidden p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
       </div>
 
       {/* รายการในตะกร้า */}
       <div className="flex-1 overflow-y-auto p-4 bg-brand-bg space-y-3">
         {cart.length === 0 ? (
-          <div className="min-h-[100px] flex flex-col items-center justify-center text-gray-400 opacity-50"><ShoppingCart size={32} className="mb-1.5" /> <p className="text-xs">ยังไม่มีสินค้า</p></div>
+          <EmptyState compact icon={<ShoppingCart size={22} />} title="ยังไม่มีสินค้า" />
         ) : (
           cart.map((item) => (
             <div key={item.id} className="bg-white p-3 rounded-2xl shadow-sm border border-l-4 border-brand-border border-l-brand flex flex-col gap-2">
@@ -93,7 +94,7 @@ export function CartPanel({
       <div className="bg-brand-bg border-t border-brand-border rounded-t-3xl shadow-[0_-4px_16px_rgba(241,43,107,0.10)] shrink-0">
         {/* ⭐️ มือถือ: แถบสรุป + ปุ่มยุบ/ขยายแผงชำระเงิน — จอสั้นจะได้เห็นรายการสินค้าเต็มๆ แล้วค่อยกดขยายตอนจะจ่าย */}
         <div className="md:hidden flex items-center justify-between gap-2 px-4 py-2 border-b border-brand-border">
-          <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-bold text-brand">฿{finalTotal.toFixed(2)}</span></div>
+          <div className="text-sm"><span className="text-gray-500">ยอดสุทธิ </span><span className="font-display font-bold text-brand tabular-nums">฿{finalTotal.toFixed(2)}</span></div>
           <button onClick={onTogglePay} className="flex items-center gap-1 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-3 py-1.5 rounded-full active:scale-95 transition-all duration-150">
             {payOpen ? <><ChevronDown size={14} /> ย่อลง</> : <><ChevronUp size={14} /> ชำระเงิน</>}
           </button>

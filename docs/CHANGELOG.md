@@ -4,6 +4,26 @@
 
 ---
 
+## [2026-08-17] — feat(frontend): ขยายภาษาแบรนด์ไปหน้า member + รวม empty state เป็น EmptyState กลาง (ยังไม่ push)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **ภาษาเดียวกับ Home/PreOrder ไปหน้า member**: Profile/Notifications ได้ชายคาหยักใต้แถบหัว + ชื่อเป็นฟอนต์ Prompt; โมดัลประวัติออเดอร์ (MyOrders/OrderDetail/UploadSlip/CartPanel) ชื่อเป็น Prompt + ยอดรวมเลข tabular — icons/ภาพ/ลอจิกไม่แตะ
+3. **Empty state ทั่วแอปเปลี่ยนหน้าตา** (เฉพาะตอน "ไม่มีข้อมูล"): รวม ~14 จุดที่เขียนเองคนละแบบเป็น `EmptyState` (ไอคอนในกล่อง brand-bg + title + hint) — ข้อความ/ความหมายเดิมทุกจุด
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **ภาษาแบรนด์หน้า member** (frontend) | Profile/Notifications: ชายคาหยัก (`.awning-edge`) ใต้แถบหัว + ชื่อ `font-display`; Profile ชื่อจริงเป็น `font-display text-ink`; MyOrdersModal/OrderDetailModal/UploadSlipModal/CartPanel: ชื่อหัวข้อ `font-display` + ยอดรวม `tabular-nums` |
+| **EmptyState กลาง** (frontend) | สร้าง `components/ui/EmptyState.tsx` (icon + title + hint + action + compact/tone) — อพยพ 14 จุด: MyOrdersModal (โหลด/error/ว่าง), ProductGrid, Notifications, VendorSales, CartPanel, AccountingSummary ×3, DetailModal ×4, StatCards, AdminDashboardHero ×3 |
+| **เทส contract** (frontend) | `uiConsistencyContract.test.ts` +2 กฎ: ไฟล์ที่อพยพแล้วต้อง import `EmptyState` + ห้ามเขียน empty state เอง (py-16 flex-col / text-gray-400 py- / p-6 text-center) — ทดสอบด้วย probe จริงแล้วจับ fail (1 ตัว) |
+
+**Rollback:** revert แล้ว rebuild frontend — ไม่มีผลต่อ data
+
+---
+
 ## [2026-08-17] — feat(frontend): ขยายภาษาเดียวกัน (ชายคา/SectionTitle/Prompt) ไปหน้า PreOrder (commit `8d3dceb`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)

@@ -1,6 +1,7 @@
 // 📄 components/dashboard/StatCards.tsx — แถวการ์ดตัวเลขสรุป (ยอดขาย/บิล/เงินสด/QR) บน Dashboard
 //    ทำอะไร: รับตัวเลขสรุปมาโชว์เป็นการ์ดสีตามประเภท — หน้าตาล้วน
 import { TrendingUp, Receipt, Banknote, CreditCard, Package } from 'lucide-react';
+import { EmptyState } from '../ui/EmptyState';
 
 const card = "relative overflow-hidden bg-white border border-brand-border rounded-3xl shadow-md";
 const accentBar = <div className="absolute top-0 inset-x-0 h-1.5 bg-brand" />;
@@ -81,7 +82,7 @@ export function StatCards({ summary, topProducts }: StatCardsProps) {
           <h2 className="text-sm font-semibold text-gray-900">10 อันดับสินค้าขายดี</h2>
         </div>
         <div className="flex-1 overflow-y-auto space-y-2 min-h-[240px]">
-          {topProducts.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ยังไม่มีข้อมูลวันนี้</p> :
+          {topProducts.length === 0 ? <EmptyState compact title="ยังไม่มีข้อมูลวันนี้" /> :
             topProducts.map((p, i) => (
               <div key={p.product_id} className="flex items-center justify-between px-2 py-2 hover:bg-brand-bg rounded-xl transition-colors duration-150">
                 <div className="flex items-center gap-3">

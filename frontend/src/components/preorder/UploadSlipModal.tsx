@@ -48,7 +48,7 @@ export function UploadSlipModal({ orderId, rejectReason, onClose, onUploaded }: 
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0">
-          <h2 className="font-semibold text-base text-white">ส่งสลิปใหม่ — ออเดอร์ #{orderId}</h2>
+          <h2 className="font-semibold font-display text-base text-white">ส่งสลิปใหม่ — ออเดอร์ #{orderId}</h2>
           <button
             onClick={onClose}
             disabled={uploading}

@@ -58,10 +58,11 @@ export default function Profile() {
     <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-lg mx-auto">
 
-        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
-        <PageHeader icon={User} title="บัญชีของฉัน" />
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) + ชายคาหยัก (awning) ภาษาเดียวกับ Home */}
+        <PageHeader icon={User} title="บัญชีของฉัน" className="awning-edge" />
 
-        <div className="p-4 sm:p-6">
+        {/* pt-5 เผื่อชายคาหยัก (awning) ยื่นลงมา 12px */}
+        <div className="px-4 sm:px-6 pt-5 pb-4 sm:pb-6">
         {/* Identity card — รูปโปรไฟล์ + ชื่อ + สิทธิ์ */}
         <div className="bg-white border border-brand-border rounded-3xl shadow-sm p-5 mb-4 flex flex-col items-center">
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
@@ -85,7 +86,7 @@ export default function Profile() {
           </button>
           <p className="text-xs text-gray-400 font-medium mb-3">แตะรูปเพื่อเปลี่ยน</p>
 
-          <p className="font-extrabold text-gray-900">{user.full_name}</p>
+          <p className="font-display font-bold text-ink">{user.full_name}</p>
           <p className="text-xs text-gray-400 mt-0.5">{user.student_id || user.username}</p>
           <div className="mt-2 flex items-center justify-center gap-2">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-brand-bg text-brand border border-brand-mid">{user.role}</span>
