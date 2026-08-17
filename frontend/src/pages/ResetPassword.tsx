@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
+import { FieldLabel } from '../components/ui/FieldLabel';
 import api from '../api';
 import customSwal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -92,7 +93,7 @@ export default function ResetPassword() {
           {tokenState === 'valid' && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสผ่านใหม่</label>
+                <FieldLabel>รหัสผ่านใหม่</FieldLabel>
                 <div className="relative">
                   <input
                     type={showPw ? 'text' : 'password'} required value={password}

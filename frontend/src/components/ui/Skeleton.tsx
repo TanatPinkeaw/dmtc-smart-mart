@@ -22,3 +22,8 @@ export const SkeletonDashboardStat = () => (
     <SkeletonLine width="w-2/3" height="h-3" />
   </div>
 );
+
+// แถบรายการ (list row) — ใช้แทนกล่อง loading ซ้ำๆ ในลิสต์/ตาราง/การ์ดแถวเดียว
+export const SkeletonListRow = ({ height = 'h-20', className = '' }: { height?: string; className?: string }) => (
+  <div className={`bg-white border border-brand-border rounded-3xl animate-pulse ${height} ${className}`} />
+);

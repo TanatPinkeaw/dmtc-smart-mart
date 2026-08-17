@@ -55,6 +55,24 @@ describe('ตาราง — หัวตาราง (thead) ต้องเ�
     assert.deepEqual(offenders, [],
       `เจอ thead แบบ brand-bg — มาตรฐานคือ bg-gray-50 text-gray-600 text-xs:\n${offenders.join('\n')}`);
   });
+
+  test('thead ทุกตารางต้อง bg-gray-50 text-gray-600 text-xs (ห้าม text-sm/p-4 — เดิม OrderManagement ใหญ่กว่า)', () => {
+    const offenders = ALL_UI.filter(f => {
+      const src = readFileSync(f, 'utf8');
+      return /<thead className="/.test(src) && !src.includes('<thead className="bg-gray-50 text-gray-600 text-xs');
+    });
+    assert.deepEqual(offenders, [],
+      `เจอ thead ที่ไม่ใช้มาตรฐาน bg-gray-50 text-gray-600 text-xs (ต้องตรงเป๊ะ — text-sm/p-4 ไม่เอา):\n${offenders.join('\n')}`);
+  });
+
+  test('ไม่มี th ใช้ padding p-4 (เดิม OrderManagement p-4 — มาตรฐานคือ p-3)', () => {
+    const offenders = ALL_UI.filter(f => {
+      const src = readFileSync(f, 'utf8');
+      return src.includes('<th className="p-4');
+    });
+    assert.deepEqual(offenders, [],
+      `เจอ th padding p-4 — มาตรฐานหัวตารางคือ p-3 border-b:\n${offenders.join('\n')}`);
+  });
 });
 
 describe('ช่องกรอก — inputCls ต้อง import จาก ui/fieldStyles (ห้ามนิยามเองในหน้า)', () => {
@@ -118,6 +136,87 @@ describe('โมดัล — shell ต้องใช้ ui/Modal (ห้าม
       // shell เก่า: fixed inset-0 ครอบ div เอง — ถ้ากลับไปเขียน = แถบหัว/ปุ่มปิดเพี้ยน
       assert.ok(!src.includes('<div className="fixed inset-0'),
         `${f} ไม่ควรมี shell modal เขียนเอง (fixed inset-0) — ใช้ <Modal> จาก ui/Modal`);
+    }
+  });
+});
+
+describe('badge สถานะ — ต้องใช้ ui/StatusBadge (map สีกลาง เดิม 3 จุดสีต่างกัน)', () => {
+  const BADGE_ADOPTED = [
+    'pages/OrderManagement.tsx',
+    'components/preorder/MyOrdersModal.tsx',
+    'components/preorder/OrderDetailModal.tsx',
+  ];
+
+  test('3 ไฟล์ต้อง import StatusBadge จาก ui/StatusBadge', () => {
+    for (const f of BADGE_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { StatusBadge } from '../ui/StatusBadge'") ||
+                src.includes("import { StatusBadge } from '../../components/ui/StatusBadge'") ||
+                src.includes("import { StatusBadge } from '../components/ui/StatusBadge'"),
+        `${f} ต้องใช้ <StatusBadge> จาก ui/StatusBadge (map สีกลาง)`);
+    }
+  });
+
+  test('ไม่มี badge สีเขียนเอง (ternary bg-*-100 / map STATUS_BADGE / switch สี) ใน 3 ไฟล์', () => {
+    for (const f of BADGE_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(!src.includes('STATUS_BADGE'), `${f} ห้ามมี const STATUS_BADGE เขียนเอง — สีต้องมาจาก ui/StatusBadge`);
+      assert.ok(!src.includes("getStatusBadge"), `${f} ห้ามมี getStatusBadge เขียนเอง — ใช้ <StatusBadge>`);
+      assert.ok(!/\? 'bg-(blue|yellow|orange|green|red|purple)-100/.test(src),
+        `${f} ห้าม ternary กำหนดสี badge เอง — สีสถานะต้องมาจาก ui/StatusBadge ที่เดียว`);
+    }
+  });
+});
+
+describe('label ฟอร์ม — ต้องใช้ ui/FieldLabel (เดิม ~6 แบบ text-xs gray-500/600/bold + sm gray-700)', () => {
+  const LABEL_ADOPTED = [
+    'pages/Login.tsx', 'pages/ForgotPassword.tsx', 'pages/ResetPassword.tsx', 'pages/Register.tsx',
+    'pages/Inventory.tsx', 'pages/AttendanceManagement.tsx',
+    'components/auth/ChangePasswordModal.tsx', 'components/dashboard/CloseShiftModal.tsx',
+    'components/pos/RegisterMemberModal.tsx', 'components/preorder/CartPanel.tsx',
+    'components/settings/LoyaltySettingsPanel.tsx', 'components/preorder/OrderDetailModal.tsx',
+  ];
+
+  test('ไฟล์ที่อพยพแล้ว import FieldLabel จาก ui/FieldLabel', () => {
+    for (const f of LABEL_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { FieldLabel } from '../ui/FieldLabel'") ||
+                src.includes("import { FieldLabel } from '../../components/ui/FieldLabel'") ||
+                src.includes("import { FieldLabel } from '../components/ui/FieldLabel'"),
+        `${f} ต้อง import FieldLabel จาก ui/FieldLabel`);
+    }
+  });
+
+  test('ไม่มี label ฟอร์ม class เขียนเอง (block text-xs/sm font ...) ในไฟล์ที่อพยพแล้ว', () => {
+    for (const f of LABEL_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      const lines = src.split('\n');
+      const offenders = lines
+        .map((l, i) => ({ l, i }))
+        .filter(({ l }) => l.includes('<label') && /className=".block text-(xs|sm) font/.test(l))
+        .map(({ l, i }) => `  ${i + 1}: ${l.trim()}`);
+      assert.deepEqual(offenders, [],
+        `${f} ห้ามเขียน label ฟอร์ม class เอง — ใช้ <FieldLabel> (size xs/sm):\n${offenders.join('\n')}`);
+    }
+  });
+});
+
+describe('skeleton — ใช้ ui/Skeleton (SkeletonLine/SkeletonListRow) ห้ามกล่อง animate-pulse เขียนเองในไฟล์ที่อพยพแล้ว', () => {
+  const SKELETON_ADOPTED = [
+    'pages/BackupManagement.tsx', 'pages/VendorSales.tsx',
+    'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx',
+  ];
+
+  test('ไฟล์ที่อพยพแล้ว import Skeleton จาก ui/Skeleton และไม่มีกล่อง loading เขียนเอง', () => {
+    for (const f of SKELETON_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("from '../components/ui/Skeleton'") || src.includes("from '../ui/Skeleton'"),
+        `${f} ต้อง import SkeletonLine/SkeletonListRow จาก ui/Skeleton`);
+      // pattern กล่อง skeleton เขียนเอง (แถบ/บล็อก loading) — structure skeleton เฉพาะ (avatar+line) ไม่นับ
+      assert.ok(!/bg-brand-border\/40 rounded/.test(src),
+        `${f} ห้ามเขียนกล่อง skeleton เอง (bg-brand-border/40 rounded) — ใช้ SkeletonLine/SkeletonListRow`);
+      assert.ok(!/h-(20|24) bg-white border border-brand-border rounded-3xl animate-pulse/.test(src),
+        `${f} ห้ามเขียน SkeletonListRow เอง — ใช้ <SkeletonListRow> จาก ui/Skeleton`);
     }
   });
 });

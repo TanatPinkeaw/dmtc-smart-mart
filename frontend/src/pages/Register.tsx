@@ -11,6 +11,7 @@ import { type ErrorLike } from '../utils/errorMessage';
 import { performLogout } from '../utils/logout';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import { MobileBottomNav } from '../components/layout/MobileBottomNav';
+import { FieldLabel } from '../components/ui/FieldLabel';
 import { MobileMenuDrawer } from '../components/layout/MobileMenuDrawer';
 import { Button } from '../components/ui/Button';
 
@@ -320,7 +321,7 @@ export default function Register() {
                 <p className="text-sm text-red-500 font-medium -mt-1">{errorMsg}</p>
               )}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5">รหัสนักศึกษา / รหัสประจำตัว</label>
+                <FieldLabel size="xs">รหัสนักศึกษา / รหัสประจำตัว</FieldLabel>
                 <input
                   type="text"
                   value={studentId}
@@ -331,7 +332,7 @@ export default function Register() {
                 {fieldError.studentId && <p className="text-xs text-red-500 mt-1 ml-2">{fieldError.studentId}</p>}
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5">ชื่อ - นามสกุล</label>
+                <FieldLabel size="xs">ชื่อ - นามสกุล</FieldLabel>
                 <input
                   type="text"
                   value={fullName}
@@ -342,7 +343,7 @@ export default function Register() {
                 {fieldError.fullName && <p className="text-xs text-red-500 mt-1 ml-2">{fieldError.fullName}</p>}
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5">เบอร์โทรศัพท์</label>
+                <FieldLabel size="xs">เบอร์โทรศัพท์</FieldLabel>
                 <input
                   type="tel"
                   inputMode="numeric"

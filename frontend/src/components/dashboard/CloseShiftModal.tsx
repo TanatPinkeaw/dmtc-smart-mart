@@ -4,6 +4,7 @@ import { Camera } from 'lucide-react';
 import { inputCls } from '../ui/fieldStyles';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { FieldLabel } from '../ui/FieldLabel';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
 
@@ -67,7 +68,7 @@ export function CloseShiftModal({
                   <p className="text-2xl font-bold text-brand">฿{actualCash.toLocaleString()}</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">สาเหตุส่วนต่าง (ถ้ามี)</label>
+                  <FieldLabel size="xs">สาเหตุส่วนต่าง (ถ้ามี)</FieldLabel>
                   <select value={discrepancyCategory} onChange={e => onDiscrepancyCategoryChange(e.target.value)} className={`${inputCls} w-full`}>
                     <option value="">— ไม่ระบุ —</option>
                     <option value="SHORT_CHANGE">ทอนผิด</option>
@@ -78,7 +79,7 @@ export function CloseShiftModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">หมายเหตุเพิ่มเติม (ถ้าส่วนต่างเกิน ±20 บาท ระบบบังคับให้กรอก)</label>
+                  <FieldLabel size="xs">หมายเหตุเพิ่มเติม (ถ้าส่วนต่างเกิน ±20 บาท ระบบบังคับให้กรอก)</FieldLabel>
                   <input type="text" value={closeNote} onChange={e => onCloseNoteChange(e.target.value)} placeholder="เช่น ทอนผิดตอนเช้า" className={inputCls} />
                 </div>
                 {/* Photo */}

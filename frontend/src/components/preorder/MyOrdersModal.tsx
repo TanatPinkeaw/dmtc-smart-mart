@@ -2,17 +2,9 @@
 //    ทำอะไร: ลิสต์ออเดอร์ของตัวเอง + สถานะ (badge) + กดดูรายละเอียด/ส่งสลิปใหม่/ยกเลิก
 import { X, RotateCw } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
+import { StatusBadge } from '../ui/StatusBadge';
 
-const STATUS_BADGE: Record<string, string> = {
-  PENDING_VERIFY: 'bg-blue-100 text-blue-700',
-  WAITING_CASH: 'bg-yellow-100 text-yellow-700',
-  PREPARING: 'bg-orange-100 text-orange-700',
-  READY: 'bg-green-100 text-green-700',
-  COMPLETED: 'bg-gray-100 text-gray-500',
-  CANCELLED: 'bg-red-100 text-red-600',
-  SLIP_REJECTED: 'bg-red-100 text-red-700',
-  REFUND_REQUESTED: 'bg-purple-100 text-purple-700',
-};
+// สี/class badge มาจาก ui/StatusBadge (map กลาง) — ตรงนี้เก็บแค่ label เต็มแบบ member view
 const STATUS_LABEL: Record<string, string> = {
   PENDING_VERIFY: '⏳ รอตรวจสลิป',
   WAITING_CASH: '💵 รอชำระเงิน',
@@ -82,9 +74,7 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
                     <h3 className="font-bold text-lg text-gray-800">ออเดอร์ #{order.id}</h3>
                     <p className="text-xs text-gray-500 mt-1">{formatBangkokTime(order.created_at)}</p>
                   </div>
-                  <span className={`px-3 py-1.5 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap ${STATUS_BADGE[order.status] || 'bg-gray-100 text-gray-600'}`}>
-                    {STATUS_LABEL[order.status] || order.status}
-                  </span>
+                  <StatusBadge status={order.status} size="md" label={STATUS_LABEL[order.status]} />
                 </div>
 
                 <div className="text-sm text-gray-600 mb-3 space-y-1.5 bg-gray-50 p-2.5 rounded-lg">

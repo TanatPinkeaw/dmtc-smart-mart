@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Save, Coins } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { FieldLabel } from '../ui/FieldLabel';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -66,13 +67,13 @@ export function LoyaltySettingsPanel() {
         <p className="text-xs text-gray-400 mb-4">แก้แล้วมีผลทันทีทุกเครื่อง POS ไม่ต้องรีสตาร์ท</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">ได้ 1 แต้ม ทุกๆ (บาท)</label>
+            <FieldLabel>ได้ 1 แต้ม ทุกๆ (บาท)</FieldLabel>
             <input type="number" min="1" value={earn} onChange={e => setEarn(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors" />
             <p className="text-[11px] text-gray-400 mt-1">เช่น 20 = ซื้อครบ 20 บาท ได้ 1 แต้ม</p>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">1 แต้ม = ส่วนลด (บาท)</label>
+            <FieldLabel>1 แต้ม = ส่วนลด (บาท)</FieldLabel>
             <input type="number" min="0" step="0.01" value={redeem} onChange={e => setRedeem(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl border border-brand-border bg-brand-bg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand focus:bg-white transition-colors" />
             <p className="text-[11px] text-gray-400 mt-1">เช่น 1 = 1 แต้ม แลกส่วนลดได้ 1 บาท</p>

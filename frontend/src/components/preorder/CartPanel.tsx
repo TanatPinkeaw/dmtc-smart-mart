@@ -2,6 +2,7 @@
 //    ทำอะไร: รายการตะกร้า, กรอกเบอร์สะสมแต้ม, แลกแต้ม, เลือกเงินสด/QR (PromptPay) + แนบสลิป, สรุปยอด, ยืนยันจอง —
 //    หน้าตาล้วน logic อยู่ pages/PreOrder.tsx ; ต่างจาก POS ตรงต้องแนบสลิปตอนจ่าย QR
 import { ShoppingCart, Plus, Minus, X, CheckCircle, Upload, ChevronUp, ChevronDown } from 'lucide-react';
+import { FieldLabel } from '../ui/FieldLabel';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 
@@ -135,7 +136,7 @@ export function CartPanel({
           {/* ช่องกรอกเบอร์สะสมแต้ม + ปุ่มตรวจสอบ (เฉพาะ MEMBER) */}
           {pointsEnabled && (
             <div>
-              <label className="block text-xs font-bold text-gray-600 mb-1">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</label>
+              <FieldLabel size="xs">เบอร์โทรศัพท์ (เพื่อสะสมแต้ม)</FieldLabel>
               <div className="flex gap-2">
                 <input type="tel" placeholder="ถ้าไม่ใส่จะไม่ได้รับแต้ม" value={phoneNumber} onChange={e => onPhoneNumberChange(e.target.value)} className="flex-1 p-2.5 bg-white border border-brand-border rounded-lg text-sm shadow-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
                 <button type="button" onClick={onVerifyPhone} disabled={verifying} className="shrink-0 bg-white text-brand-dark border border-brand-border px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-95 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">

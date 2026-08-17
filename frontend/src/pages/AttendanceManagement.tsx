@@ -6,9 +6,11 @@
 import { useState, useEffect } from 'react';
 import { ClipboardCheck, RefreshCw, Edit2, Camera, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SkeletonLine, SkeletonListRow } from '../components/ui/Skeleton';
 import { inputCls } from '../components/ui/fieldStyles';
 import { Modal } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
+import { FieldLabel } from '../components/ui/FieldLabel';
 import api from '../api';
 import Swal from '../swal';
 import { BRAND } from '../theme';
@@ -134,22 +136,22 @@ export default function AttendanceManagement() {
         <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
           {/* Desktop */}
           <table className="hidden sm:table w-full text-left">
-            <thead>
-              <tr className="border-b border-brand-border bg-brand-bg">
+            <thead className="bg-gray-50 text-gray-600 text-xs">
+              <tr className="border-b">
                 {['พนักงาน','เข้างาน','ออกงาน','รูป','หมายเหตุ',''].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-xs font-semibold text-gray-500">{h}</th>
+                  <th key={h} className="p-3 border-b font-semibold">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody>
               {loading ? (
                 Array.from({length:4}).map((_,i) => (
-                  <tr key={i}><td colSpan={6} className="px-4 py-3"><div className="h-4 bg-brand-border/40 rounded-lg animate-pulse w-3/4" /></td></tr>
+                  <tr key={i}><td colSpan={6} className="px-4 py-3"><SkeletonLine width="w-3/4" /></td></tr>
                 ))
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">ไม่พบข้อมูล{filterDate ? ` วันที่ ${filterDate}` : ''}</td></tr>
               ) : filtered.map(r => (
-                <tr key={`${r.source}-${r.id}`} className="hover:bg-brand-bg transition-colors duration-150">
+                <tr key={`${r.source}-${r.id}`} className="border-b last:border-0 hover:bg-brand-bg">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${r.source === 'SHIFT' ? 'bg-brand-bg text-brand border border-brand-mid' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
@@ -181,7 +183,7 @@ export default function AttendanceManagement() {
 
           {/* Mobile cards */}
           <div className="sm:hidden divide-y divide-gray-50">
-            {loading ? <div className="p-4 space-y-3">{Array.from({length:3}).map((_,i) => <div key={i} className="h-20 bg-brand-border/40 rounded-xl animate-pulse" />)}</div>
+            {loading ? <div className="p-4 space-y-3">{Array.from({length:3}).map((_,i) => <SkeletonListRow key={i} />)}</div>
             : filtered.length === 0 ? <p className="p-8 text-center text-sm text-gray-400">ไม่พบข้อมูล</p>
             : filtered.map(r => (
               <div key={`${r.source}-${r.id}`} className="p-4 hover:bg-brand-bg transition-colors duration-150">
@@ -236,9 +238,9 @@ export default function AttendanceManagement() {
       {editing && (
         <Modal onClose={() => setEditing(null)} title={`แก้ไขเวลา: ${editing.full_name}`}>
             <form onSubmit={handleSaveEdit} className="space-y-3 p-5">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาเข้างาน</label><input type="datetime-local" value={editForm.check_in} onChange={e => setEditForm({ ...editForm, check_in: e.target.value })} className={`${inputCls} w-full`} /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1">เวลาออกงาน</label><input type="datetime-local" value={editForm.check_out} onChange={e => setEditForm({ ...editForm, check_out: e.target.value })} className={`${inputCls} w-full`} /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1">หมายเหตุ</label><input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="เช่น ลืมลงชื่อออก..." className={`${inputCls} w-full`} /></div>
+              <div><FieldLabel size="xs">เวลาเข้างาน</FieldLabel><input type="datetime-local" value={editForm.check_in} onChange={e => setEditForm({ ...editForm, check_in: e.target.value })} className={`${inputCls} w-full`} /></div>
+              <div><FieldLabel size="xs">เวลาออกงาน</FieldLabel><input type="datetime-local" value={editForm.check_out} onChange={e => setEditForm({ ...editForm, check_out: e.target.value })} className={`${inputCls} w-full`} /></div>
+              <div><FieldLabel size="xs">หมายเหตุ</FieldLabel><input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="เช่น ลืมลงชื่อออก..." className={`${inputCls} w-full`} /></div>
               <div className="flex gap-2 pt-1">
                 <Button type="button" variant="secondary" className="flex-1" onClick={() => setEditing(null)}>ยกเลิก</Button>
                 <Button type="submit" className="flex-1">บันทึก</Button>

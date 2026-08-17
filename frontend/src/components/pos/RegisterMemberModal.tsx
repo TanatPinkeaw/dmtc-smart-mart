@@ -4,6 +4,7 @@ import { UserPlus, X } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { FieldLabel } from '../ui/FieldLabel';
 
 interface RegForm { student_id: string; full_name: string; phone_number: string; }
 
@@ -31,7 +32,7 @@ export function RegisterMemberModal({ regForm, onRegFormChange, regLoading, onSu
       <form onSubmit={onSubmit} className="p-5 space-y-3">
         {FIELDS.map(f => (
           <div key={f.key}>
-            <label className="block text-xs font-medium text-gray-500 mb-1">{f.label}</label>
+            <FieldLabel size="xs">{f.label}</FieldLabel>
             <Input type={f.type} required placeholder={f.placeholder} value={regForm[f.key]} onChange={e => onRegFormChange({ ...regForm, [f.key]: e.target.value })} />
           </div>
         ))}

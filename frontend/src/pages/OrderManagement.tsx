@@ -2,7 +2,7 @@
 //    ทำอะไร: ลิสต์ออเดอร์พรีออเดอร์แยกตามสถานะ + ตรวจสลิป (ผ่าน/ไม่ผ่าน) + เลื่อนสถานะจนจบ (COMPLETED)
 //    + realtime เด้งออเดอร์ใหม่/สลิปใหม่ ; เป็นคู่ฝั่ง staff ของหน้า PreOrder (ลูกค้า)
 import { useState, useEffect } from 'react';
-import { PackageSearch, CheckCircle, Clock, Eye, AlertCircle, X, Search, User, Phone, Wallet } from 'lucide-react';
+import { PackageSearch, CheckCircle, Clock, Eye, X, Search, User, Phone, Wallet } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
 import { useSocket } from '../hooks/useSocket';
@@ -11,6 +11,7 @@ import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import AuthImage from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 import { Button } from '../components/ui/Button';
+import { StatusBadge } from '../components/ui/StatusBadge';
 import { openAuthImage } from '../utils/openAuthImage';
 
 interface StaffOrderItem { id: number; product_name: string; quantity: number; price?: number | string; subtotal?: number | string; image_url?: string; }
@@ -166,20 +167,6 @@ export default function OrderManagement() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'WAITING_CASH': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><Clock size={14}/> รอจ่ายเงินสดหน้าร้าน</span>;
-      case 'PENDING_VERIFY': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><AlertCircle size={14}/> รอตรวจสลิป</span>;
-      case 'PREPARING': return <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><PackageSearch size={14}/> กำลังเตรียมของ</span>;
-      case 'READY': return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><CheckCircle size={14}/> ของพร้อมรับ</span>;
-      case 'COMPLETED': return <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold w-fit">สำเร็จแล้ว</span>;
-      case 'CANCELLED': return <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-bold w-fit">ยกเลิก</span>;
-      case 'SLIP_REJECTED': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold w-fit">⚠️ รอสลิปใหม่</span>;
-      case 'REFUND_REQUESTED': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold w-fit">💰 รอคืนเงิน</span>;
-      default: return <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold w-fit">{status}</span>;
-    }
-  };
-
   // ⭐️ ฟังก์ชันเปลี่ยนคำในปุ่มตามสถานะของบิล
   const getButtonActionText = (status: string) => {
     switch (status) {
@@ -280,7 +267,7 @@ export default function OrderManagement() {
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
                     <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><Clock size={11} /> {formatBangkokTime(order.created_at)}</p>
                   </div>
-                  {getStatusBadge(order.status)}
+                  {<StatusBadge status={order.status} size="sm" />}
                 </div>
 
                 <div className="space-y-2 mb-3">
@@ -335,7 +322,7 @@ export default function OrderManagement() {
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
                     <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><Clock size={11} /> อัปโหลดสลิป {new Date(order.created_at).toLocaleString('th-TH')}</p>
                   </div>
-                  {getStatusBadge(order.status)}
+                  {<StatusBadge status={order.status} size="sm" />}
                 </div>
 
                 <div className="flex items-center gap-2 mb-3">
@@ -376,7 +363,7 @@ export default function OrderManagement() {
                     <h3 className="font-bold text-gray-800 text-lg">ออเดอร์ #{order.id}</h3>
                     <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><Clock size={11} /> รอสลิปใหม่ {new Date(order.created_at).toLocaleString('th-TH')}</p>
                   </div>
-                  {getStatusBadge(order.status)}
+                  {<StatusBadge status={order.status} size="sm" />}
                 </div>
 
                 <div className="flex items-center gap-2 mb-3">
@@ -420,7 +407,7 @@ export default function OrderManagement() {
             <div key={`m-${order.id}`} className="bg-white border border-brand-border rounded-xl p-4 shadow-sm">
               <div className="flex justify-between items-start mb-2 gap-2">
                 <h3 className="font-bold text-gray-800">#{order.id}</h3>
-                {getStatusBadge(order.status)}
+                {<StatusBadge status={order.status} size="sm" />}
               </div>
               <p className="text-sm text-gray-600 mb-1">{order.customer_name}</p>
               {order.slip_verification_status === 'VERIFIED' && <span className="text-[10px] font-bold text-green-600">✅ ตรวจสลิปแล้ว</span>}
@@ -435,26 +422,26 @@ export default function OrderManagement() {
         <div className="hidden sm:block bg-white rounded-3xl shadow-sm border border-brand-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left whitespace-nowrap">
-              <thead className="bg-gray-50 text-gray-600 text-sm">
+              <thead className="bg-gray-50 text-gray-600 text-xs">
                 <tr>
-                  <th className="p-4 border-b">เลขที่บิล</th>
-                  <th className="p-4 border-b">ชื่อลูกค้า</th>
-                  <th className="p-4 border-b">ยอดรวม</th>
-                  <th className="p-4 border-b">สถานะ</th>
-                  <th className="p-4 border-b text-center">ดูบิล</th>
+                  <th className="p-3 border-b">เลขที่บิล</th>
+                  <th className="p-3 border-b">ชื่อลูกค้า</th>
+                  <th className="p-3 border-b">ยอดรวม</th>
+                  <th className="p-3 border-b">สถานะ</th>
+                  <th className="p-3 border-b text-center">ดูบิล</th>
                 </tr>
               </thead>
               <tbody>
                 {completedOrders.map(order => (
                   <tr key={order.id} className="border-b last:border-0 hover:bg-brand-bg">
-                    <td className="p-4 font-bold">#{order.id}</td>
-                    <td className="p-4 text-sm">{order.customer_name}</td>
-                    <td className="p-4 font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</td>
-                    <td className="p-4">
-                      {getStatusBadge(order.status)}
+                    <td className="p-3 font-bold">#{order.id}</td>
+                    <td className="p-3 text-sm">{order.customer_name}</td>
+                    <td className="p-3 font-bold text-brand">฿{Number(order.total_amount).toFixed(2)}</td>
+                    <td className="p-3">
+                      {<StatusBadge status={order.status} size="sm" />}
                       {order.slip_verification_status === 'VERIFIED' && <span className="ml-1 text-[10px] font-bold text-green-600">✅ ตรวจสลิปแล้ว</span>}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       <button onClick={() => setSelectedOrder(order)} className="text-brand hover:text-brand-dark font-bold text-sm bg-brand-bg px-3 py-1.5 rounded-lg">ดูบิล</button>
                     </td>
                   </tr>
@@ -482,7 +469,7 @@ export default function OrderManagement() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="font-bold text-gray-700">สถานะปัจจุบัน:</h3>
-                  {getStatusBadge(selectedOrder.status)}
+                  {<StatusBadge status={selectedOrder.status} size="sm" />}
                 </div>
 
                 <h3 className="font-bold text-gray-700 mb-3">รายการสินค้า</h3>

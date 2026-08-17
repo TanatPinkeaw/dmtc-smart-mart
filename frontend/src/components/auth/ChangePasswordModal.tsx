@@ -5,6 +5,7 @@ import Swal from '../../swal';
 import api from '../../api';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { validatePasswordStrength } from '../../validators/passwordValidator';
+import { FieldLabel } from '../ui/FieldLabel';
 import { KeyRound } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -77,7 +78,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
         <form onSubmit={handleChangePassword} className="p-5 space-y-4">
           {/* Current Password */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600">รหัสผ่านปัจจุบัน</label>
+            <FieldLabel size="xs">รหัสผ่านปัจจุบัน</FieldLabel>
             <input
               type="password"
               value={form.current_password}
@@ -90,7 +91,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
 
           {/* New Password */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600">รหัสผ่านใหม่</label>
+            <FieldLabel size="xs">รหัสผ่านใหม่</FieldLabel>
             <input
               type="password"
               value={form.new_password}
@@ -104,7 +105,7 @@ export function ChangePasswordModal({ userId, onClose, forceChange = false }: Ch
 
           {/* Confirm Password */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600">ยืนยันรหัสผ่านใหม่</label>
+            <FieldLabel size="xs">ยืนยันรหัสผ่านใหม่</FieldLabel>
             <input
               type="password"
               value={form.confirm_password}

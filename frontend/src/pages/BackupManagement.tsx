@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Database, RefreshCw, RotateCcw, Cloud, CloudOff } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SkeletonListRow } from '../components/ui/Skeleton';
 import Swal from '../swal';
 import api from '../api';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -133,7 +134,7 @@ export default function BackupManagement() {
         {isLoadingBackups ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-20 bg-white border border-brand-border rounded-3xl animate-pulse" />
+              <SkeletonListRow key={i} />
             ))}
           </div>
         ) : backups.length === 0 ? (

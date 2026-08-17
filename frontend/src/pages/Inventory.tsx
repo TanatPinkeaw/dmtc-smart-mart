@@ -11,6 +11,7 @@ import { useSocket } from '../hooks/useSocket';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { Button } from '../components/ui/Button';
+import { FieldLabel } from '../components/ui/FieldLabel';
 
 interface Product { id: number; barcode: string; name: string; stock: number; cost: number; }
 interface Supplier { id: number; name: string; }
@@ -125,7 +126,7 @@ export default function Inventory() {
 
         {/* Supplier */}
         <div className="px-4 py-3 border-b border-brand-border shrink-0">
-          <label className="block text-xs font-medium text-gray-500 mb-1">ซัพพลายเออร์</label>
+          <FieldLabel size="xs">ซัพพลายเออร์</FieldLabel>
           <select value={selectedSupplier} onChange={e => setSelectedSupplier(Number(e.target.value))} className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand transition-colors duration-150">
             <option value="">-- ไม่ระบุ --</option>
             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

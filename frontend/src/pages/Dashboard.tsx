@@ -23,7 +23,7 @@ import { Section } from '../components/dashboard/Section';
 import { StatCards } from '../components/dashboard/StatCards';
 import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
-import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
+import { SkeletonCard, SkeletonDashboardStat, SkeletonListRow } from '../components/ui/Skeleton';
 import { DetailModal } from '../components/dashboard/DetailModal';
 
 // ⭐️ FIX: แปลงรหัสสถานะ pre-order (PENDING_VERIFY ฯลฯ) เป็นคำไทยที่พนักงานเข้าใจง่าย
@@ -197,7 +197,7 @@ export default function Dashboard() {
   if (loading) return (
     <div className="min-h-screen bg-brand-bg p-4 md:p-6 pb-24">
       <div className="max-w-7xl mx-auto space-y-5">
-        <div className="h-20 bg-brand-border/40 rounded-2xl animate-pulse" />
+        <SkeletonListRow />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonDashboardStat key={i} />)}

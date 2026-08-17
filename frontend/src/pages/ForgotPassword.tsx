@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { KeyRound, ArrowLeft } from 'lucide-react';
+import { FieldLabel } from '../components/ui/FieldLabel';
 import { Button } from '../components/ui/Button';
 import api from '../api';
 
@@ -60,7 +61,7 @@ export default function ForgotPassword() {
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสนักศึกษา</label>
+                <FieldLabel>รหัสนักศึกษา</FieldLabel>
                 <input
                   type="text" required value={studentId} onChange={e => setStudentId(e.target.value)}
                   placeholder="รหัสนักศึกษา"
@@ -68,7 +69,7 @@ export default function ForgotPassword() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">เบอร์โทรศัพท์</label>
+                <FieldLabel>เบอร์โทรศัพท์</FieldLabel>
                 <input
                   type="tel" required value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
                   placeholder="0812345678"

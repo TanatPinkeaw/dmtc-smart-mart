@@ -9,6 +9,7 @@ import api from '../api';
 import { useSocket } from '../hooks/useSocket';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SkeletonListRow } from '../components/ui/Skeleton';
 
 interface VendorSummary {
   vendor_id: number; student_id: string; full_name: string;
@@ -53,7 +54,7 @@ export default function VendorSales() {
       <div className="max-w-2xl mx-auto">
         <PageHeader icon={PiggyBank} title="ยอดฝากขายของฉัน" subtitle="สรุปยอดและเงินที่สหกรณ์จะโอนคืน" />
         <div className="p-4 sm:p-6 space-y-4">
-          {[1,2,3].map(i => <div key={i} className="h-24 bg-white border border-brand-border rounded-3xl animate-pulse" />)}
+          {[1,2,3].map(i => <SkeletonListRow key={i} height="h-24" />)}
         </div>
       </div>
     </div>

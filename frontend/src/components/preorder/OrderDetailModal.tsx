@@ -9,6 +9,18 @@ import { getErrorMessage } from '../../utils/errorMessage';
 import { formatBangkokTime } from '../../utils/timezone';
 import AuthImage from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 import { Button } from '../ui/Button';
+import { StatusBadge } from '../ui/StatusBadge';
+import { FieldLabel } from '../ui/FieldLabel';
+
+// label แบบ member view (เต็มกว่าของ staff) — สี/class มาจาก StatusBadge กลาง
+const DETAIL_STATUS_LABEL: Record<string, string> = {
+  PENDING_VERIFY: '⏳ รอตรวจสลิป',
+  WAITING_CASH: '💵 รอชำระเงิน',
+  PREPARING: '📦 กำลังเตรียมของ',
+  READY: '✅ พร้อมรับสินค้า',
+  CANCELLED: '❌ ยกเลิกแล้ว',
+  SLIP_REJECTED: '⚠️ สลิปผิด',
+};
 
 // ⭐️ Construct slip image path from created_at date + filename
 // รูปใหม่เก็บเป็น URL/พาธเต็ม (https://cloudinary... หรือ /uploads/...) → คืนตรงๆ
@@ -112,23 +124,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
               ในมุมมองประวัติออเดอร์ที่รู้อยู่แล้วว่าสำเร็จ (สถานะอื่นที่ยังต้องติดตามยังโชว์ตามปกติ) */}
           {selectedOrder.status !== 'COMPLETED' && (
           <div className="flex justify-center">
-            <span className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-sm transition-transform duration-150 ${
-              selectedOrder.status === 'PENDING_VERIFY' ? 'bg-blue-100 text-blue-800' :
-              selectedOrder.status === 'WAITING_CASH' ? 'bg-yellow-100 text-yellow-800' :
-              selectedOrder.status === 'PREPARING' ? 'bg-orange-100 text-orange-800' :
-              selectedOrder.status === 'READY' ? 'bg-green-100 text-green-800' :
-              selectedOrder.status === 'COMPLETED' ? 'bg-gray-100 text-gray-700' :
-              selectedOrder.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-              selectedOrder.status === 'SLIP_REJECTED' ? 'bg-red-100 text-red-700' :
-              'bg-gray-100 text-gray-600'
-            }`}>
-              {selectedOrder.status === 'PENDING_VERIFY' && '⏳ รอตรวจสลิป'}
-              {selectedOrder.status === 'WAITING_CASH' && '💵 รอชำระเงิน'}
-              {selectedOrder.status === 'PREPARING' && '📦 กำลังเตรียมของ'}
-              {selectedOrder.status === 'READY' && '✅ พร้อมรับสินค้า'}
-              {selectedOrder.status === 'CANCELLED' && '❌ ยกเลิกแล้ว'}
-              {selectedOrder.status === 'SLIP_REJECTED' && '⚠️ สลิปผิด'}
-            </span>
+            <StatusBadge status={selectedOrder.status} size="lg" label={DETAIL_STATUS_LABEL[selectedOrder.status]} className="shadow-sm" />
           </div>
           )}
 
@@ -270,10 +266,7 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
               (SLIP_REJECTED ให้ส่งสลิปใหม่แทน — หลังๆ กดยกเลิกแล้ว backend ตอบ 500 "ติดต่อพนักงาน") */}
           {['PENDING_VERIFY', 'WAITING_CASH'].includes(selectedOrder.status) && (
             <div className="space-y-2.5 pt-2">
-              <label className="block text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-                🔍 เหตุผลในการยกเลิก
-                <span className="text-red-500 font-bold">*</span>
-              </label>
+              <FieldLabel size="xs" required>🔍 เหตุผลในการยกเลิก</FieldLabel>
               <textarea
                 placeholder="ระบุเหตุผลการยกเลิก เช่น เปลี่ยนใจ, ส่วนลดน้อยเกินไป, ฯลฯ"
                 value={refundReason}

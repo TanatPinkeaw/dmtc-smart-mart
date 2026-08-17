@@ -11,6 +11,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { FieldLabel } from '../components/ui/FieldLabel';
 import api, { setCsrfToken, setBearerToken } from '../api';
 import Swal from '../swal';
 import { getCurrentUser } from '../utils/getCurrentUser';
@@ -229,7 +230,7 @@ export default function Login() {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">ชื่อผู้ใช้งาน</label>
+              <FieldLabel>ชื่อผู้ใช้งาน</FieldLabel>
               <input
                 type="text" required value={username} onChange={e => setUsername(e.target.value)}
                 placeholder="Username / รหัสนักศึกษา" disabled={isRateLimited}
@@ -238,7 +239,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสผ่าน</label>
+              <FieldLabel>รหัสผ่าน</FieldLabel>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}

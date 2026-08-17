@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-08-17] — feat(frontend): รวม primitive UI ที่เหลือ (badge สถานะ / field label / skeleton / ตาราง) (ยังไม่ push)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
+
+1. **Rebuild frontend อย่างเดียวพอ** — ไม่แตะ backend ไม่มี SQL/env ใหม่ ไม่ต้อง restart backend
+2. **หน้าตาเปลี่ยนเล็กน้อย** (ข้อมูล/ลอจิกไม่เปลี่ยน): ป้ายสถานะออเดอร์สี/ขนาดรวมเป็นแบบเดียว — **SLIP_REJECTED เปลี่ยนจากแดงเป็นเหลือง** (semantic "ต้องส่งสลิปใหม่" เหมือน WAITING_CASH — เดิม member view แดง vs staff view เหลือง); label ฟอร์มรวม 2 ขนาด, skeleton loading ใช้ component กลาง, หัวตาราง OrderManagement/Attendance รวมเป็นมาตรฐานเดียว
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Badge สถานะ** (frontend) | สร้าง `components/ui/StatusBadge.tsx` (map สีกลางเดียว + 3 ขนาด sm/md/lg + ไอคอนตามสถานะ) — อพยพ 3 จุดที่ copy-paste สีต่างกัน (OrderManagement / MyOrdersModal / OrderDetailModal); กันใครแก้สีเฉพาะจุดแล้วเพี้ยน |
+| **Label ฟอร์ม** (frontend) | สร้าง `components/ui/FieldLabel.tsx` (size xs/sm + `required`) — อพยพ ~24 จุด 12 ไฟล์ (เดิม ~6 แบบ: text-xs gray-500/600/bold + text-sm gray-700) |
+| **Skeleton** (frontend) | เพิ่ม `SkeletonListRow` ใน `ui/Skeleton` + อพยพ 5 จุดที่ hand-roll เอง (Attendance ×2 / Backup / Dashboard / VendorSales — rounded ต่างกัน lg/xl/2xl/3xl); structure skeleton เฉพาะบริบท (Home/Notifications/PreOrder) คงไว้ |
+| **ตาราง** (frontend) | thead OrderManagement (`text-sm`/`p-4`) + Attendance (`bg-brand-bg`/`px-4 py-2.5`) → มาตรฐาน `bg-gray-50 text-gray-600 text-xs p-3` — 7 ตารางทั้งแอปเป็นแบบเดียวกัน |
+| **เทส contract** (frontend) | `uiConsistencyContract.test.ts` +6 กฎ: thead ต้องตรงมาตรฐานเป๊ะ + ห้าม `th p-4` / badge 3 ไฟล์ต้องใช้ `StatusBadge` + ห้าม ternary สีเขียนเอง / label 12 ไฟล์ต้องใช้ `FieldLabel` / skeleton 4 ไฟล์ต้องใช้ `ui/Skeleton` — ทดสอบด้วยไฟล์ปลอมแล้วจับ fail จริง (thead 3 กฎแดง) |
+
+**Rollback:** revert แล้ว rebuild frontend — ไม่มีผลต่อ data
+
+---
+
 ## [2026-08-17] — feat(frontend): ดีไซน์หน้า Home ใหม่ (DNA แบรนด์: ชายคา + ตั๋วรับของ + ฟอนต์ Prompt) (commit `42de03f`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
