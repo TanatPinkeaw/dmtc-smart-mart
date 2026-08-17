@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — Backend: อพยพ response 4xx เขียนเองครบ 162 จุดเข้า utils/http (badRequest/unauthorized/forbidden/notFound/conflict/gone) — เหลือ raw 4xx 0 จุด
+## [2026-08-17] — Backend: อพยพ response 4xx เขียนเองครบ 162 จุดเข้า utils/http (badRequest/unauthorized/forbidden/notFound/conflict/gone) — เหลือ raw 4xx 0 จุด (commit `e4b8bfd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -25,7 +25,7 @@
 
 ---
 
-## [2026-08-17] — UI: สแกน segmented control/checkbox/toggle รอบสุดท้าย — สร้าง ui/SegmentedControl (box + pill) + อพยพปุ่มวิธีจ่าย QR/เงินสด ×2 + pill ช่วงเวลา/มุมมอง ×2 — ล็อก contract
+## [2026-08-17] — UI: สแกน segmented control/checkbox/toggle รอบสุดท้าย — สร้าง ui/SegmentedControl (box + pill) + อพยพปุ่มวิธีจ่าย QR/เงินสด ×2 + pill ช่วงเวลา/มุมมอง ×2 — ล็อก contract (commit `e4b8bfd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -47,7 +47,7 @@
 
 ---
 
-## [2026-08-17] — UI: สแกน NON-ADOPTED ด้านตาราง/badge/skeleton — ตาราง+badge สะอาดอยู่แล้ว (ล็อกทั่วแอป) + อพยพ skeleton ของ Home เข้า Skeleton กลาง
+## [2026-08-17] — UI: สแกน NON-ADOPTED ด้านตาราง/badge/skeleton — ตาราง+badge สะอาดอยู่แล้ว (ล็อกทั่วแอป) + อพยพ skeleton ของ Home เข้า Skeleton กลาง (commit `e4b8bfd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -68,7 +68,7 @@
 
 ---
 
-## [2026-08-17] — UI: อพยพโมดัล member ที่เหลือ 3 ตัว (MyOrders/OrderDetail/UploadSlip) เข้า ui/Modal + ช่องกรองวันที่เข้า filterCls — MODAL_ADOPTED ครบ 9 ตัว
+## [2026-08-17] — UI: อพยพโมดัล member ที่เหลือ 3 ตัว (MyOrders/OrderDetail/UploadSlip) เข้า ui/Modal + ช่องกรองวันที่เข้า filterCls — MODAL_ADOPTED ครบ 9 ตัว (commit `e4b8bfd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
@@ -92,7 +92,7 @@
 
 ---
 
-## [2026-08-17] — UI: สแกนปุ่ม NON-ADOPTED ครบ — อพยพ 5 จุด (AccountingSummary/MemberGroupsPanel + ปุ่ม bg-brand ทึบใน ADOPTED ที่กฎเดิมจับไม่ถึง) + กฎ flat-brand ใหม่
+## [2026-08-17] — UI: สแกนปุ่ม NON-ADOPTED ครบ — อพยพ 5 จุด (AccountingSummary/MemberGroupsPanel + ปุ่ม bg-brand ทึบใน ADOPTED ที่กฎเดิมจับไม่ถึง) + กฎ flat-brand ใหม่ (commit `e4b8bfd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
