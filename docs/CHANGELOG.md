@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): รวมแถบล่างเป็น MobileBottomNav ตัวเดียวทุกหน้า (commit `<ยังไม่ push — เติมหลัง commit>`)
+## [2026-08-17] — feat(frontend): รวมแถบล่างเป็น MobileBottomNav ตัวเดียวทุกหน้า (commit `133b7f2`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
