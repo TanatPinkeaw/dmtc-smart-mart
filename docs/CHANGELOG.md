@@ -4,6 +4,32 @@
 
 ---
 
+## [2026-08-17] — security: เคลียร์ vuln ทั้ง 2 ฝั่งเป็น 0 (backend 6→0, frontend 5→0) + รวม Dashboard/OrderManagement เข้า PageHeader/EmptyState
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+1. **Restart backend + rebuild frontend** — เป็น dependency bump + UI เท่านั้น ไม่มี SQL/env ใหม่ ไม่ต้องรันอะไรเอง
+2. **backend deps**: `sharp` 0.33.5 → **0.35.3** (โค้ดใช้แค่ `.metadata()` — API มั่นคง ไม่กระทบ; Node 24 รองรับ) + เพิ่ม `overrides.uuid=^11.1.1` (exceljs ยัง 4.4.0 — ใช้ `uuid.v4` ที่ advisory นี้ไม่กระทบ) + `npm audit fix` ไล่ brace-expansion/ip-address/socket.io-parser → **`npm audit` = 0 vulnerabilities**
+3. **frontend deps**: `react-router-dom` 7.18.1 → **7.18.2** (patch — ไม่ใช่ major bump ที่เคยเลื่อนไว้), nanoid/socket.io-parser/brace-expansion audit fix → **0 vulnerabilities**
+4. **UI (visual เท่านั้น — ข้อมูล/ลอจิก/ปุ่มไม่แตะ)**: แถบหัว Dashboard + OrderManagement เปลี่ยนเป็น `PageHeader` ตัวกลาง (หน้าเดียวกันทั้งแอป) — health dot/ปุ่มกลับ POS/ชื่อพนักงานของ Dashboard คงเดิม ผ่าน slot ใหม่ `afterTitle`/`actions`; กล่อง "ไม่มีข้อมูล" ของ OrderManagement 4 จุด (รอดำเนินการ/รอสลิป/รอสลิปใหม่/เสร็จแล้ว) ใช้ `EmptyState` กลาง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **PageHeader** (frontend) | เพิ่ม slot `afterTitle` (เนื้อหาต่อท้าย title ในแถวเดียวกัน — สำหรับ health dot ของ Dashboard) — `subtitle` ยังอยู่ใต้ title เหมือนเดิม |
+| **Dashboard** (frontend) | เดิมเขียน anatomy แถบหัวเอง (gradient + icon box + title + health dot + ปุ่มกลับ POS + ชื่อ) → `<PageHeader>` ตัวเดียว: health dot ผ่าน `afterTitle`, ปุ่มกลับ POS + ชื่อ ผ่าน `actions` — หน้าตา/เงื่อนไขโชว์เหมือนเดิมเป๊ะ |
+| **OrderManagement** (frontend) | แถบหัว → `<PageHeader>`; empty state เขียนเอง 4 จุด → `<EmptyState>` กลาง (ไอคอนในกล่อง brand-bg แทน CheckCircle ลอย — มาตรฐานเดียวกับทั้งแอป) |
+| **deps** (backend) | sharp 0.35.3 + `overrides.uuid=^11.1.1` + audit fix → 0 vuln |
+| **deps** (frontend) | react-router-dom 7.18.2 + nanoid/socket.io-parser/brace-expansion patch → 0 vuln |
+| **เทส contract** (frontend) | `pageHeaderContract` +8 หน้า (Dashboard/OrderManagement/BackupManagement/AccountingSummary/AttendanceManagement/Schedules/Settings/VendorSales ต้อง import PageHeader + ห้ามแถบ gradient เขียนเอง); `uiConsistencyContract` +OrderManagement ใน `EMPTY_ADOPTED` |
+
+### 🧪 เทส
+- backend: `npm run test:unit` — **12/12 ชุดผ่าน** หลัง bump sharp/uuid (รวม exceljs export ตรวจด้วย)
+- frontend: **135 เทสผ่าน** (118 + 17 component) + `typecheck` + `build` ผ่าน
+
+---
+
 ## [2026-08-17] — perf(backend): แก้ N+1 ใน GET /api/orders + cron pickup reminder + เพิ่ม index orders/sales/audit_logs (commit `f140e5e`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

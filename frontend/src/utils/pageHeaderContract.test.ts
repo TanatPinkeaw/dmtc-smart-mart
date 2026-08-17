@@ -56,6 +56,36 @@ describe('PageHeader — แถบหัวหน้ามาตรฐาน (an
   });
 });
 
+describe('หน้า staff ที่อพยพแล้ว — ต้องใช้ PageHeader (กันแก้กลับเป็น anatomy เขียนเอง)', () => {
+  // ⭐️ ไฟล์ที่อพยพเป็น PageHeader แล้ว — ถ้าใครแก้กลับเป็นแถบ gradient เขียนเอง = เทสแดง
+  const HEADER_ADOPTED = [
+    'pages/Dashboard.tsx',
+    'pages/OrderManagement.tsx',
+    'pages/BackupManagement.tsx',
+    'pages/AccountingSummary.tsx',
+    'pages/AttendanceManagement.tsx',
+    'pages/Schedules.tsx',
+    'pages/Settings.tsx',
+    'pages/VendorSales.tsx',
+  ];
+
+  test('ไฟล์ที่อพยพแล้ว import PageHeader จาก layout/PageHeader', () => {
+    for (const f of HEADER_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { PageHeader } from '../components/layout/PageHeader'"),
+        `${f} ต้องใช้ <PageHeader> จาก components/layout/PageHeader (แถบหัวหน้าต้องเป็นตัวเดียวกันทั้งแอป)`);
+    }
+  });
+
+  test('ไฟล์ที่อพยพแล้วไม่มีแถบ gradient เขียนเอง (bg-gradient-to-r from-brand + px-4 py-3.5 + w-8 h-8 bg-white/20)', () => {
+    for (const f of HEADER_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(!/bg-gradient-to-r from-brand[^\n]*px-4 py-3\.5/.test(src),
+        `${f} ห้ามเขียนแถบหัว gradient เอง — ใช้ <PageHeader>`);
+    }
+  });
+});
+
 describe('ทุกหน้า/คอมโพเนนต์ — ห้าม header แบบเก่ากลับมา (2 แบบ)', () => {
   // กันใครไปแก้ header หน้าใดหน้าหนึ่งกลับเป็น "การ์ดมน" รูปแบบเดิมโดยไม่รู้ตัว
   test('ไม่มี wrapper header การ์ดมน (flex items-center + gradient + rounded-3xl)', () => {

@@ -25,6 +25,7 @@ import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero';
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
 import { SkeletonCard, SkeletonDashboardStat, SkeletonListRow } from '../components/ui/Skeleton';
 import { DetailModal } from '../components/dashboard/DetailModal';
+import { PageHeader } from '../components/layout/PageHeader';
 
 // ⭐️ FIX: แปลงรหัสสถานะ pre-order (PENDING_VERIFY ฯลฯ) เป็นคำไทยที่พนักงานเข้าใจง่าย
 const ORDER_STATUS_LABELS: Record<string, string> = {
@@ -217,32 +218,32 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-brand-bg pb-24">
 
-      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (flush — คง health dot + ปุ่มกลับ POS ไว้) */}
+      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader — คง health dot ผ่าน afterTitle + ปุ่มกลับ POS ผ่าน actions) */}
       <div className="max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 shadow-md gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
-            <LayoutDashboard size={16} className="text-white" />
-          </div>
-          <h1 className="text-lg font-semibold text-white">สรุปยอดขายประจำวัน</h1>
-          {/* ⭐️ F10 — Health check status dot: เขียว=ปกติ, แดง=เซิร์ฟเวอร์/DB มีปัญหา, เทา=ยังไม่เช็ค */}
+      <PageHeader
+        icon={LayoutDashboard}
+        title="สรุปยอดขายประจำวัน"
+        afterTitle={
+          /* ⭐️ F10 — Health check status dot: เขียว=ปกติ, แดง=เซิร์ฟเวอร์/DB มีปัญหา, เทา=ยังไม่เช็ค */
           <span
             title={healthOk === null ? 'กำลังตรวจสอบสถานะระบบ...' : healthOk ? 'ระบบทำงานปกติ' : 'เซิร์ฟเวอร์/ฐานข้อมูลมีปัญหา'}
             className={`w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white/60 ${
               healthOk === null ? 'bg-gray-300' : healthOk ? 'bg-green-400' : 'bg-red-400 animate-pulse'
             }`}
           />
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* ⭐️ ปุ่มกลับหน้า POS โชว์เฉพาะ CASHIER — ADMIN/MANAGER เข้าหน้า POS ไม่ได้ (route ก็กันไว้) */}
-          {isCashier && (
-            <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-white hover:bg-white/25 bg-white/15 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-              <ArrowLeft size={14} /> กลับไปหน้า POS
-            </button>
-          )}
-          <span className="text-xs text-white/90 font-medium hidden sm:block">{user.full_name}</span>
-        </div>
-      </div>
+        }
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* ⭐️ ปุ่มกลับหน้า POS โชว์เฉพาะ CASHIER — ADMIN/MANAGER เข้าหน้า POS ไม่ได้ (route ก็กันไว้) */}
+            {isCashier && (
+              <button onClick={() => navigate('/pos')} className="flex items-center gap-1.5 text-white hover:bg-white/25 bg-white/15 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <ArrowLeft size={14} /> กลับไปหน้า POS
+              </button>
+            )}
+            <span className="text-xs text-white/90 font-medium hidden sm:block">{user.full_name}</span>
+          </div>
+        }
+      />
 
       <div className="p-4 md:p-6">
       {/* 🐛 FIX — เดิม widget ที่ดึงไม่สำเร็จโชว์ว่าง/0 เงียบๆ — แจ้งชัดว่าบางข้อมูลไม่ได้อัปเดต */}

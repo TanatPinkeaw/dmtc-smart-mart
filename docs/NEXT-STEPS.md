@@ -57,7 +57,10 @@
 ### 5. Security/hardening ที่ตั้งใจเลื่อนไว้ก่อน (ต้องตัดสินใจว่าจะทำเมื่อไหร่)
 - **`DB_SSL_CA`** ยังไม่ตั้ง (`null`) — เชื่อมต่อ Aiven เข้ารหัสอยู่แล้วแต่ไม่ verify cert เป็นการตัดสินใจตั้งใจไว้ก่อนเพื่อลดความยุ่งยากตอน deploy ถ้าพร้อมแล้วค่อยกลับมาตั้ง CA จริง
 - **`JWT_SECRET` / `SETUP_KEY`** — ต้องเช็คว่าเป็นค่าจริงแบบสุ่มปลอดภัยหรือยังเป็นค่า placeholder จาก dev ก่อน go-live จริงต้องหมุน (rotate) ใหม่
-- **npm audit**: `postcss` / `nanoid` / `brace-expansion` (frontend) แก้แล้ว ✅ เสร็จ (2026-07-26, Phase 1, `npm audit fix` ไม่ breaking, build ผ่าน); `react-router` (frontend) กับ `sharp` (backend) ยังเหลือ เป็น high-severity แต่ fix ต้อง breaking change (`react-router-dom@7.11.0` ตาม dry-run) เลื่อนไว้ Phase 5
+- **npm audit** — ✅ เคลียร์หมดแล้ว (2026-08-17): ทั้ง backend และ frontend = **0 vulnerabilities**
+  - backend: `sharp` 0.33.5 → **0.35.3** (โค้ดใช้แค่ `.metadata()` — ไม่กระทบ; Node 24 รองรับ) + `overrides.uuid=^11.1.1` (exceljs ยัง 4.4.0 — ใช้ `uuid.v4` ที่ advisory นี้ไม่กระทบ) + audit fix ไล่ brace-expansion/ip-address/socket.io-parser
+  - frontend: `react-router-dom` 7.18.1 → **7.18.2** (patch — ไม่ใช่ major bump ที่เคยเลื่อนไว้), nanoid/socket.io-parser/brace-expansion audit fix
+  - exceljs transitive vuln (uuid) ที่เคยอยู่ใน watch-list — ปิดได้ด้วย override โดยไม่ต้องลดเวอร์ชัน exceljs
 
 ### 6. โครงสร้างพื้นฐานที่ขาด — ✅ ปิดแล้วใน Phase 3 (2026-07-26)
 เดิมพบว่าไม่มี automated test / ไม่มี CI / ไม่มี schema รวมที่เดียว — ทั้งหมดแก้ใน Phase 3 แล้ว (ดูหัวข้อ Phase 3 ด้านบน) ยังไม่มี `migrations/` โฟลเดอร์แบบมี version history เต็มรูปแบบ (schema.sql เป็น snapshot ปัจจุบัน ไม่ใช่ migration ทีละขั้น) — พอสำหรับตอนนี้ ถ้าโปรเจกต์โตขึ้นมากค่อยพิจารณา migration tool จริงจัง (เช่น Knex/Flyway) ทีหลัง

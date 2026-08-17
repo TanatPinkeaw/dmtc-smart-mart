@@ -12,6 +12,8 @@ import { formatBangkokTime } from '../utils/timezone'; // ⭐️ Sprint 2 — B8
 import AuthImage from '../components/common/AuthImage'; // ⭐️ SECURITY FIX #1 — โหลดสลิปผ่าน JWT
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader } from '../components/layout/PageHeader';
 import { openAuthImage } from '../utils/openAuthImage';
 
 interface StaffOrderItem { id: number; product_name: string; quantity: number; price?: number | string; subtotal?: number | string; image_url?: string; }
@@ -199,14 +201,8 @@ export default function OrderManagement() {
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title), ช่องค้นหาเป็น
     // bg-brand-bg แบบเดียวกัน และแท็บเปลี่ยนจากขีดเส้นใต้เป็นแบบเม็ดยา (pill) ในกรอบขาวเหมือนแท็บหมวดหมู่
     <div className="bg-brand-bg min-h-screen pb-24">
-      <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shadow-md">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <PackageSearch size={16} className="text-white" />
-          </div>
-          <h1 className="text-lg font-semibold text-white truncate">จัดการออเดอร์สั่งจอง</h1>
-        </div>
-      </div>
+      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+      <PageHeader icon={PackageSearch} title="จัดการออเดอร์สั่งจอง" />
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {/* ⭐️ กล่องค้นหา */}
@@ -252,10 +248,11 @@ export default function OrderManagement() {
         </h2>
 
         {activeOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
-            <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
-            <p>{searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ใหม่ในขณะนี้'}</p>
-          </div>
+          <EmptyState
+            icon={<CheckCircle size={28} />}
+            title={searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ใหม่ในขณะนี้'}
+            className="bg-white border border-brand-border rounded-3xl shadow-sm mb-8"
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {activeOrders.map(order => (
@@ -309,10 +306,11 @@ export default function OrderManagement() {
           <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span> ออเดอร์รอตรวจสลิป
         </h2>
         {pendingSlipOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
-            <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
-            <p>ไม่มีสลิปรอตรวจสอบในขณะนี้</p>
-          </div>
+          <EmptyState
+            icon={<CheckCircle size={28} />}
+            title="ไม่มีสลิปรอตรวจสอบในขณะนี้"
+            className="bg-white border border-brand-border rounded-3xl shadow-sm mb-8"
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {pendingSlipOrders.map(order => (
@@ -350,10 +348,11 @@ export default function OrderManagement() {
           <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span> ออเดอร์รอสลิปใหม่
         </h2>
         {rejectedSlipOrders.length === 0 ? (
-          <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 mb-8 shadow-sm">
-            <CheckCircle size={48} className="mx-auto mb-3 opacity-30"/>
-            <p>ไม่มีสลิปที่ถูกปฏิเสธในขณะนี้</p>
-          </div>
+          <EmptyState
+            icon={<CheckCircle size={28} />}
+            title="ไม่มีสลิปที่ถูกปฏิเสธในขณะนี้"
+            className="bg-white border border-brand-border rounded-3xl shadow-sm mb-8"
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {rejectedSlipOrders.map(order => (
@@ -399,10 +398,11 @@ export default function OrderManagement() {
             อ่านยาก เพิ่ม card list สำหรับ mobile (< sm) ตรงนี้ */}
         <div className="sm:hidden space-y-3 mb-8">
           {completedOrders.length === 0 ? (
-            <div className="bg-white p-8 rounded-3xl border border-brand-border text-center text-gray-400 shadow-sm">
-              <CheckCircle size={40} className="mx-auto mb-3 opacity-30" />
-              <p>{searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ที่เสร็จสมบูรณ์'}</p>
-            </div>
+            <EmptyState
+              icon={<CheckCircle size={28} />}
+              title={searchTerm ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีออเดอร์ที่เสร็จสมบูรณ์'}
+              className="bg-white border border-brand-border rounded-3xl shadow-sm"
+            />
           ) : completedOrders.map(order => (
             <div key={`m-${order.id}`} className="bg-white border border-brand-border rounded-xl p-4 shadow-sm">
               <div className="flex justify-between items-start mb-2 gap-2">

@@ -11,12 +11,13 @@ interface PageHeaderProps {
   icon: LucideIcon;
   title: string;
   subtitle?: string; // ข้อความรองใต้ title (เช่น Settings/VendorSales)
+  afterTitle?: ReactNode; // เนื้อหาต่อท้าย title ในแถวเดียวกัน (เช่น health dot ของ Dashboard)
   actions?: ReactNode; // เนื้อหาด้านขวาของแถบ (ปุ่ม/chips ฯลฯ)
   onBack?: () => void; // โชว์ปุ่มย้อนกลับหน้าซ้ายสุด
   className?: string; // คลาสพิเศษเพิ่ม เช่น sticky/print override
 }
 
-export function PageHeader({ icon: Icon, title, subtitle, actions, onBack, className }: PageHeaderProps) {
+export function PageHeader({ icon: Icon, title, subtitle, afterTitle, actions, onBack, className }: PageHeaderProps) {
   return (
     <div className={`bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md ${className ?? ''}`}>
       <div className="flex items-center gap-2.5 min-w-0">
@@ -33,7 +34,10 @@ export function PageHeader({ icon: Icon, title, subtitle, actions, onBack, class
           <Icon size={16} className="text-white" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-white truncate">{title}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-white truncate">{title}</h1>
+            {afterTitle}
+          </div>
           {subtitle && <p className="text-xs text-white/80 truncate">{subtitle}</p>}
         </div>
       </div>

@@ -207,6 +207,7 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
     'components/preorder/CartPanel.tsx', 'pages/Notifications.tsx', 'pages/VendorSales.tsx',
     'pages/AccountingSummary.tsx', 'components/dashboard/DetailModal.tsx',
     'components/dashboard/StatCards.tsx', 'components/dashboard/AdminDashboardHero.tsx',
+    'pages/OrderManagement.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import EmptyState จาก ui/EmptyState', () => {
