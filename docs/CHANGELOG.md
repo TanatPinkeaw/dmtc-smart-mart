@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — CI guard: backend/Dockerfile node version ต้องตรงกับ engines.node — กัน Dockerfile หลุดแบบ sharp (node:18) ซ้ำ
+## [2026-08-17] — CI guard: backend/Dockerfile node version ต้องตรงกับ engines.node — กัน Dockerfile หลุดแบบ sharp (node:18) ซ้ำ (commit `9f394ce`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
