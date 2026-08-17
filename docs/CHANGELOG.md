@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — refactor(backend): รวม requireRole/validateRequest เข้า middleware/guards.js ที่เดียว — ลบ copy ซ้ำ 4 จุด (commit pending-hash)
+## [2026-08-17] — refactor(backend): รวม requireRole/validateRequest เข้า middleware/guards.js ที่เดียว — ลบ copy ซ้ำ 4 จุด (commit `95a853c`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
