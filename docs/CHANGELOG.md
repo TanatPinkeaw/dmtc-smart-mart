@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — feat(frontend): รวม UI เป็นระบบเดียว (PageHeader + primitive + ปุ่ม/โมดัล) (commit `<ยังไม่ push — เติมหลัง commit>`)
+## [2026-08-17] — feat(frontend): รวม UI เป็นระบบเดียว (PageHeader + primitive + ปุ่ม/โมดัล) (commit `8abe0bd`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy (เช็คทีละข้อ)
 
