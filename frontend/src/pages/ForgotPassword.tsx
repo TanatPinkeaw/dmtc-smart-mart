@@ -76,19 +76,15 @@ export default function ForgotPassword() {
                   className="w-full px-4 py-3 rounded-full border border-brand-border bg-brand-bg text-sm font-medium text-gray-800 placeholder:text-gray-400 transition-colors duration-150 focus:outline-none focus:border-brand focus:bg-white"
                 />
               </div>
-              <button
-                type="submit" disabled={loading}
-                className="w-full py-3.5 mt-1 rounded-full text-white font-bold text-sm transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-                  enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+              <Button
+                type="submit"
+                size="lg"
+                disabled={loading}
+                loading={loading}
+                className="w-full mt-1"
               >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    กำลังส่งคำขอ...
-                  </span>
-                ) : 'ขอรีเซ็ตรหัสผ่าน'}
-              </button>
+                {loading ? 'กำลังส่งคำขอ...' : 'ขอรีเซ็ตรหัสผ่าน'}
+              </Button>
             </form>
           )}
         </div>

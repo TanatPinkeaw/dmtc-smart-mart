@@ -17,6 +17,8 @@ import { BRAND } from '../theme';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { performLogout } from '../utils/logout'; // 🐛 FIX — ออกจากระบบต้องเพิกถอน session ฝั่ง backend ด้วย
+import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/layout/PageHeader';
 import { CloseShiftModal, type ShiftSummary } from '../components/dashboard/CloseShiftModal';
 
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 1];
@@ -31,21 +33,24 @@ function ShiftCard({ fullName, onHome, onLogout, children }: {
   return (
     <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-white border border-brand-border rounded-3xl shadow-sm overflow-hidden">
-        {/* Brand strip */}
-        <div className="bg-gradient-to-r from-brand to-brand-dark px-5 py-4 flex items-center gap-3">
-          <ShoppingBag size={22} className="text-white" />
-          <div>
-            <p className="text-white font-bold text-sm">DMTC Mart</p>
-            <p className="text-pink-200 text-xs">{fullName}</p>
-          </div>
-          {/* ⭐️ ทางกลับหน้า Home กลาง — หน้านี้ไม่มี Sidebar/bottom nav (standalone เหมือนหน้า login) */}
-          <button onClick={onHome} className="ml-auto p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="กลับหน้าหลัก">
-            <Home size={16} className="text-white" />
-          </button>
-          <button onClick={onLogout} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
-            <LogOut size={16} className="text-white" />
-          </button>
-        </div>
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader — ชื่อพนักงานเป็น subtitle, ปุ่มกลับหน้า Home + สลับบัญชี เป็น actions; shadow-none กันเงาโผล่ในกล่องการ์ด) */}
+        <PageHeader
+          icon={ShoppingBag}
+          title="DMTC Mart"
+          subtitle={fullName}
+          className="shadow-none"
+          actions={
+            <>
+              {/* ⭐️ ทางกลับหน้า Home กลาง — หน้านี้ไม่มี Sidebar/bottom nav (standalone เหมือนหน้า login) */}
+              <button onClick={onHome} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="กลับหน้าหลัก">
+                <Home size={16} className="text-white" />
+              </button>
+              <button onClick={onLogout} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-150" title="สลับบัญชี">
+                <LogOut size={16} className="text-white" />
+              </button>
+            </>
+          }
+        />
         <div className="p-5">{children}</div>
       </div>
     </div>
@@ -219,11 +224,9 @@ export default function Shift() {
         }
       </label>
 
-      <button onClick={handleManagerCheckIn} disabled={checkInLoading}
-        className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-          enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
+      <Button onClick={handleManagerCheckIn} loading={checkInLoading} className="w-full py-3.5">
         {checkInLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อเข้างาน'}
-      </button>
+      </Button>
     </ShiftCard>
   );
 
@@ -247,11 +250,9 @@ export default function Shift() {
         }
       </label>
 
-      <button onClick={handleManagerCheckOut} disabled={checkOutLoading}
-        className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed
-          enabled:bg-gradient-to-br enabled:from-red-500 enabled:to-red-600 disabled:bg-brand-border disabled:opacity-70">
+      <Button variant="danger" onClick={handleManagerCheckOut} loading={checkOutLoading} className="w-full py-3.5">
         {checkOutLoading ? 'กำลังลงชื่อ...' : 'ลงชื่อออกงาน'}
-      </button>
+      </Button>
     </ShiftCard>
   );
 
@@ -323,11 +324,9 @@ export default function Shift() {
           </label>
         </div>
 
-        <button type="submit" disabled={loading}
-          className="w-full py-3.5 text-white font-bold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2
-            enabled:bg-gradient-to-br enabled:from-brand enabled:to-brand-dark disabled:bg-brand-border disabled:opacity-70">
+        <Button type="submit" loading={loading} className="w-full py-3.5">
           <Banknote size={16} /> {loading ? 'กำลังเปิดกะ...' : 'เริ่มขายสินค้า'}
-        </button>
+        </Button>
       </form>
     </ShiftCard>
   );

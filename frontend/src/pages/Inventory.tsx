@@ -12,6 +12,8 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { Button } from '../components/ui/Button';
 import { FieldLabel } from '../components/ui/FieldLabel';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader } from '../components/layout/PageHeader';
 
 interface Product { id: number; barcode: string; name: string; stock: number; cost: number; }
 interface Supplier { id: number; name: string; }
@@ -70,16 +72,16 @@ export default function Inventory() {
   };
 
   return (
-    <div className="flex h-full bg-gray-50 relative">
+    <div className="flex flex-col h-full bg-brand-bg relative">
 
+      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) */}
+      <PageHeader icon={Boxes} title="รับสินค้าเข้าคลัง" />
+
+      <div className="flex flex-1 min-h-0">
       {/* ── Product list ──────────────────────────────────────────────────────── */}
       <div className="w-full md:w-3/5 flex flex-col h-full border-r border-brand-border">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 shrink-0 space-y-3 shadow-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center"><Boxes size={16} className="text-white" /></div>
-            <h1 className="text-lg font-semibold text-white">รับสินค้าเข้าคลัง</h1>
-          </div>
+        {/* ⭐️ ช่องค้นหา — เดิมอยู่ในแถบ gradient ย้ายออกมาเป็นกล่องขาวใต้แถบหัว (แบบเดียวกับหน้า OrderManagement) */}
+        <div className="p-4 pb-0 shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input type="text" placeholder="ค้นหาสินค้า / บาร์โค้ด..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -136,11 +138,13 @@ export default function Inventory() {
         {/* Items */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {receiveList.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center py-12">
-              <PackagePlus size={36} className="text-brand-mid mb-3" />
-              <p className="text-sm text-gray-500">เลือกสินค้าจากด้านซ้าย</p>
-              <p className="text-xs text-gray-400 mt-1">เพื่อนำเข้าคลัง</p>
-            </div>
+            <EmptyState
+              compact
+              icon={<PackagePlus size={20} />}
+              title="เลือกสินค้าจากด้านซ้าย"
+              hint="เพื่อนำเข้าคลัง"
+              className="h-full"
+            />
           ) : receiveList.map(item => (
             <div key={item.id} className="bg-brand-bg border border-l-4 border-brand-border border-l-brand rounded-xl p-3 space-y-2 shadow-sm">
               <div className="flex justify-between items-start">
@@ -176,6 +180,7 @@ export default function Inventory() {
             <Truck size={16} /> {loading ? 'กำลังบันทึก...' : 'บันทึกเข้าคลัง'}
           </Button>
         </div>
+      </div>
       </div>
     </div>
   );

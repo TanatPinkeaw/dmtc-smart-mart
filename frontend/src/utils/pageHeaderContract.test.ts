@@ -33,8 +33,10 @@ function listTsFiles(dir: string): string[] {
   return out;
 }
 
+// ⭐️ path.join กัน Windows separator (\\ ) ต่างจาก '/' — ใช้ endsWith(join(...)) ให้ถูกทั้ง 2 OS
+const PAGE_HEADER_REL = join('components', 'layout', 'PageHeader.tsx');
 const SCAN_FILES = listTsFiles(BASE).filter(f =>
-  !/\.test\.tsx?$/.test(f) && !f.endsWith('components/layout/PageHeader.tsx'),
+  !/\.test\.tsx?$/.test(f) && !f.endsWith(PAGE_HEADER_REL),
 );
 
 describe('PageHeader — แถบหัวหน้ามาตรฐาน (anatomy ตัวเดียว)', () => {
@@ -43,6 +45,15 @@ describe('PageHeader — แถบหัวหน้ามาตรฐาน (an
       'PageHeader ต้องใช้แถบ gradient flush เดียวกับ POS/PreOrder (px-4 py-3.5)');
     assert.ok(!PAGE_HEADER_SRC.includes('rounded-3xl'),
       'PageHeader ห้ามใส่ rounded-3xl — แถบหัวหน้าต้องลอยชิดขอบ ไม่ใช่การ์ดมน');
+  });
+
+  test('icon เป็น prop บังคับ (interface ต้อง icon: LucideIcon — ห้าม icon?)', () => {
+    assert.ok(PAGE_HEADER_SRC.includes('icon: LucideIcon;'),
+      'PageHeaderProps.icon ต้องเป็น required (icon: LucideIcon)');
+    assert.ok(!PAGE_HEADER_SRC.includes('icon?:'),
+      'PageHeader ห้ามทำให้ icon เป็น optional — ทุกแถบหัวหน้าต้องมีไอคอน');
+    assert.ok(!/icon:\s*(any|ReactNode)/.test(PAGE_HEADER_SRC),
+      'icon ต้องเป็น LucideIcon (ไม่ใช่ any/ReactNode) — แถบหัวหน้า icon ต้องเป็น lucide ตัวเดียวกันทั้งแอป');
   });
 
   test('icon box w-8 + icon size 16 + title text-lg (ไม่ใช่ w-9+/text-xl แบบเก่า)', () => {
@@ -67,6 +78,13 @@ describe('หน้า staff ที่อพยพแล้ว — ต้อง�
     'pages/Schedules.tsx',
     'pages/Settings.tsx',
     'pages/VendorSales.tsx',
+    'pages/Shift.tsx',
+    'pages/Summary.tsx',
+    'pages/ReceiptPage.tsx',
+    'pages/Inventory.tsx',
+    'pages/Notifications.tsx',
+    'pages/POS.tsx',
+    'pages/PreOrder.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import PageHeader จาก layout/PageHeader', () => {
@@ -82,6 +100,16 @@ describe('หน้า staff ที่อพยพแล้ว — ต้อง�
       const src = readFileSync(join(BASE, f), 'utf8');
       assert.ok(!/bg-gradient-to-r from-brand[^\n]*px-4 py-3\.5/.test(src),
         `${f} ห้ามเขียนแถบหัว gradient เอง — ใช้ <PageHeader>`);
+    }
+  });
+
+  test('ทุก <PageHeader> ที่ใช้ต้องส่ง icon (กันหน้าไหนลืม icon แล้วแถบหัวเพี้ยน)', () => {
+    for (const f of HEADER_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      const usages = (src.match(/<PageHeader\b/g) || []).length;
+      const icons = (src.match(/icon=\{(?:[A-Za-z_]\w*)\}/g) || []).length;
+      assert.ok(icons >= usages,
+        `${f} ใช้ <PageHeader> ${usages} จุด แต่มี icon= แค่ ${icons} — ทุกแถบหัวหน้าต้องมี icon (เช่น icon={PackageSearch})`);
     }
   });
 });
@@ -116,5 +144,15 @@ describe('ทุกหน้า/คอมโพเนนต์ — ห้าม 
     );
     assert.deepEqual(offenders, [],
       `เจอ title header แบบเก่า (text-xl font-semibold text-white) — มาตรฐานคือ text-lg:\n${offenders.join('\n')}`);
+  });
+
+  // แถบหัวหน้าหน้า (px-4 py-3.5) ต้องมาจาก PageHeader เท่านั้น — header แผง/การ์ดใช้ py-3 (เล็กกว่า)
+  // ได้ (Inventory receive panel, CartPanel ×2) แต่แถบขนาด py-3.5 = แถบหัวหน้า ต้องเป็นตัวกลางตัวเดียว
+  test('ไม่มีแถบหัวหน้าเขียนเอง (bg-gradient-to-r from-brand + px-4 py-3.5) นอก PageHeader', () => {
+    const offenders = SCAN_FILES.filter(f =>
+      /bg-gradient-to-r from-brand[^\n]*px-4 py-3\.5/.test(readFileSync(f, 'utf8')),
+    );
+    assert.deepEqual(offenders, [],
+      `เจอแถบหัวหน้าเขียนเอง (px-4 py-3.5) — ต้องใช้ <PageHeader> (ทุกหน้าต้องแถบเดียวกับตัวกลาง):\n${offenders.join('\n')}`);
   });
 });

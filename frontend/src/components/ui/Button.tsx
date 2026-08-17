@@ -1,9 +1,10 @@
-// 📄 components/ui/Button.tsx — ปุ่มมาตรฐานของแอป (variant: primary/secondary/danger/ghost, ขนาด sm/md/lg,
-//    มี loading spinner ในตัว) ใช้ซ้ำแทนการเขียน <button> ใหม่ทุกที่ ให้หน้าตาปุ่มเหมือนกันทั้งระบบ
+// 📄 components/ui/Button.tsx — ปุ่มมาตรฐานของแอป (variant: primary/secondary/danger/ghost +
+//    สีตามสถานะ warning/success/purple/orange/info, ขนาด sm/md/lg, มี loading spinner ในตัว)
+//    ใช้ซ้ำแทนการเขียน <button> ใหม่ทุกที่ ให้หน้าตาปุ่มเหมือนกันทั้งระบบ
 import { Loader2 } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'warning' | 'success' | 'purple' | 'orange' | 'info';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,6 +19,12 @@ const variantClasses: Record<ButtonVariant, string> = {
   secondary: 'bg-white border border-brand-border text-brand hover:bg-brand-bg font-bold',
   danger: 'bg-red-500 hover:bg-red-600 text-white font-bold',
   ghost: 'bg-transparent hover:bg-brand-bg text-gray-700',
+  // ⭐️ ปุ่มสีตามสถานะ (semantic — สื่อความหมายของ action เช่น ขอสลิปใหม่/คืนเงิน/ยืนยัน/ปิดบิล)
+  warning: 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white font-bold',
+  success: 'bg-gradient-to-br from-green-500 to-green-600 text-white font-bold',
+  purple: 'bg-gradient-to-br from-purple-500 to-purple-600 text-white font-bold',
+  orange: 'bg-gradient-to-br from-orange-500 to-orange-600 text-white font-bold',
+  info: 'bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

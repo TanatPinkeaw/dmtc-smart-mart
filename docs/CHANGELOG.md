@@ -4,6 +4,92 @@
 
 ---
 
+## [2026-08-17] — UI: ปุ่มสีตามสถานะรวมเข้า Button (variant warning/success/purple/orange/info) + loading state เข้า Skeleton + contract เข้มขึ้น (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Button** (frontend) | เพิ่ม variant สีตามสถานะ: `warning` (เหลือง — ขอสลิปใหม่/รับงาน), `success` (เขียว — พร้อมรับ), `purple` (ม่วง — คืนเงิน/ปิดบิล), `orange` (ส้ม — ยืนยันเงินสด), `info` (น้ำเงิน — ตรวจสลิป) — ปุ่มสถานะทั้งหมดออกจาก `<button>` เขียนเอง |
+| **OrderManagement** (frontend) | ปุ่ม gradient เขียนเอง 9 จุด (รับงาน/ยืนยันสลิป/ขอสลิปใหม่/คืนเงิน/ยกเลิก/ตรวจสลิปใหม่/ยืนยันเงินสด/พร้อมรับ/ปิดบิล) → `<Button>` variant เดียวกัน — สี/ความหมายเดิม (บางปุ่มโค้งมน sm แทน rounded-xl เล็กน้อย) |
+| **ปุ่มอันตรายอื่นๆ** (frontend) | Settings "ยกเลิกบิล (Void)", Home "ส่งสลิปด่วน", OrderDetailModal "ยกเลิกออเดอร์" (spinner เข้า `loading` ของ Button), ForgotPassword submit (disabled/enabled class เขียนเอง → `disabled` + `loading` ในตัว), CloseShiftModal (จากรอบก่อน) → `<Button variant="danger">`/primary |
+| **Loading state** (frontend) | ข้อความ "กำลังโหลด..." (py-10 text-gray-400) ใน RewardModal/LoyaltySettingsPanel/MemberGroupsPanel → `SkeletonLine` กลาง; RewardModal ยังอพยพ error → `<EmptyState tone="error">` + ว่าง → `<EmptyState>` (เดิมเขียน py-12 flex-col เอง) |
+| **เทส contract** (frontend) | `uiConsistencyContract` — กฎปุ่ม gradient **เข้มขึ้น**: ไล่ทุก `<button>` ดู 400 ตัวอักษรถัดไปว่ามี `bg-gradient-to-br` (จับ tag หลายบรรทัด + gradient สีอื่นที่ไม่ใช่แบรนด์ — ไล่พบอีก 3 จุดที่หลุด: Home/ForgotPassword/OrderDetailModal) + `SKELETON_ADOPTED` +3 ไฟล์ + `EMPTY_ADOPTED` +RewardModal; `pageHeaderContract` — icon ต้อง required (`icon: LucideIcon` ห้าม `icon?`) + ทุก `<PageHeader>` ต้องส่ง icon |
+
+### 🧪 เทส
+- frontend: **138 เทสผ่าน** (121 + 17 component — contract 30 ตัว) + `typecheck` + `build` ผ่าน
+
+---
+
+## [2026-08-17] — UI: อพยพแถบหัว POS/PreOrder/Notifications เข้า PageHeader + ปุ่ม CloseShift/Notifications เข้า Button — แถบหัวหน้าเขียนเองหมดทั้งแอป (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **PageHeader** (frontend) | เพิ่ม slot `titleClassName` (คลาสต่อท้าย title — หน้า member ใช้ `font-display` Prompt คงเดิม) — anatomy/layout ไม่เปลี่ยน |
+| **POS** (frontend) | แถบหัวที่เขียนเอง (ต้นฉบับที่เอามาทำ PageHeader) → `<PageHeader icon={ShoppingCart} title="POS ขายสินค้า">` — ชื่อพนักงานฝั่งขวาย้ายเข้า slot `actions` หน้าตา/เงื่อนไขโชว์เหมือนเดิมเป๊ะ |
+| **PreOrder** (frontend) | แถบหัว → `<PageHeader>` + `className="awning-edge"` (ชายคาหยักคงเดิม) + `titleClassName="font-display"` + ปุ่ม "ประวัติของฉัน" ผ่าน `actions` |
+| **Notifications** (frontend) | แถบหัว sticky + ชายคาหยัก + ตัวนับ "ยังไม่อ่าน"/ปุ่ม "อ่านทั้งหมด" → `<PageHeader>` (sticky/awning ผ่าน `className`, ปุ่มผ่าน `actions`) |
+| **ปุ่ม** (frontend) | CloseShiftModal "ยืนยันการปิดกะ" (แดง gradient เขียนเอง) → `<Button variant="danger">`; Notifications "ส่งสลิปใหม่" → `<Button variant="danger" size="sm">` |
+| **เทส contract** (frontend) | `pageHeaderContract` +POS/PreOrder/Notifications ใน `HEADER_ADOPTED` (**15 หน้า**) + กฎใหม่ทั้ง src: **ห้ามแถบหัวหน้าเขียนเอง (`bg-gradient-to-r from-brand` + `px-4 py-3.5`) นอก PageHeader** — header แผง/การ์ด py-3 ยังได้ (CartPanel/Inventory receive panel); `uiConsistencyContract` +Notifications ใน `BUTTON_ADOPTED` |
+
+### 🧪 เทส
+- frontend: **136 เทสผ่าน** (119 + 17 component — contract 28 ตัว) + `typecheck` + `build` ผ่าน
+
+**ที่ตั้งใจไม่แตะ (ข้อยกเว้น — เป็นองค์ประกอบเฉพาะ ไม่ใช่แถบหัวหน้า):** header แผง CartPanel ×2 / Inventory receive panel (py-3), drawer MobileMenuDrawer (py-4), การ์ด Register member card / PendingShiftClosesWidget, แบนเนอร์โปร pos/ProductGrid + PromoPopularRow, hero Home (awing ใหญ่ ไม่ใช่แถบ), FAB กลม (POS/PreOrder/Inventory/MobileBottomNav), ปุ่มสถานะสีของ OrderManagement (เหลือง/ม่วง/เขียว — สีสื่อสถานะเหมือนปุ่ม checkout ตามวิธีจ่าย), ปุ่ม export เขียว/เทาของ Settings
+
+---
+
+## [2026-08-17] — UI: อพยพ Inventory (หน้าคลังสุดท้าย) เข้า PageHeader + EmptyState — ครบทุกหน้า staff (commit pending-hash)
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Inventory** (frontend) | แถบหัวที่เขียนเอง (gradient + icon box + title) → `<PageHeader icon={Boxes}>` เต็มความกว้าง; ช่องค้นหาที่ย้ายจากแถบ gradient ออกมาเป็นกล่องขาวใต้แถบหัว (แบบเดียวกับ OrderManagement); แผงรับของฝั่งขวายังเป็น 2 แผง workspace เดิม (header แผง `py-3` คงไว้ — เป็น panel header ไม่ใช่หน้า) |
+| **Inventory — empty state** (frontend) | กล่อง "ยังไม่มีรายการ" ในแผงรับของ → `<EmptyState compact>` (เลือกสินค้าจากด้านซ้าย / เพื่อนำเข้าคลัง) |
+| **Inventory — พื้นหลัง** (frontend) | `bg-gray-50` → `bg-brand-bg` (ครอบครัวเดียวกับทั้งแอป) |
+| **เทส contract** (frontend) | `pageHeaderContract` +Inventory ใน `HEADER_ADOPTED` (12 หน้า); `uiConsistencyContract` +Inventory ใน `EMPTY_ADOPTED` (อยู่ใน `BUTTON_ADOPTED`/`LABEL_ADOPTED` อยู่แล้ว) |
+
+### 🧪 เทส
+- frontend: **135 เทสผ่าน** (118 + 17 component — contract 27 ตัว ครอบ 12 หน้า) + `typecheck` + `build` ผ่าน
+
+---
+
+## [2026-08-17] — UI: อพยพหน้า staff ที่เหลือ (Shift/Summary/ReceiptPage) เข้า PageHeader + primitives กลางครบทุกหน้า
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **PageHeader** (frontend) | เพิ่ม print override ในตัว (แถบ/icon box/icon/title → ขาว+เทาเมื่อพิมพ์, ปุ่มย้อนกลับ `print:hidden`) — งานพิมพ์ได้แถบไม่กินหมึก ไม่มีผลบนหน้าจอ |
+| **Summary** (frontend) | แถบหัวที่เขียนเอง → `<PageHeader>` (print output คงเดิมเป๊ะผ่าน print override ในตัว); empty state เขียนเอง 3 จุด → `<EmptyState compact>` (การ์ดสรุปรายได้/กำไร + ตารางค่าจ้างมือถือ) — แถวว่างในตาราง desktop ยังเป็น `<td>` ตามเดิม (EmptyState ใส่ในตารางไม่ได้) |
+| **ReceiptPage** (frontend) | เพิ่มแถบหัว `<PageHeader>` (หน้าใบเสร็จ + หน้า fallback "ไม่พบข้อมูลใบเสร็จ") — `print:hidden` กันแถบไปโผล่ในใบเสร็จที่พิมพ์ |
+| **Shift** (frontend) | แถบ brand strip ในกล่องการ์ด → `<PageHeader>` (ชื่อพนักงานเป็น `subtitle`, ปุ่มกลับหน้า Home/สลับบัญชี เป็น `actions`, `shadow-none` กันเงาโผล่ในกล่อง) + ปุ่ม CTA 3 จุด (ลงชื่อเข้า/ออกงาน, เริ่มขาย) → `<Button>` (loading spinner ในตัว) |
+| **เทส contract** (frontend) | `pageHeaderContract` +Shift/Summary/ReceiptPage ใน `HEADER_ADOPTED` (11 หน้า); `uiConsistencyContract` +Summary ใน `EMPTY_ADOPTED`/`SKELETON_ADOPTED` +Shift ใน `BUTTON_ADOPTED` |
+
+### 🧪 เทส
+- frontend: **135 เทสผ่าน** (118 + 17 component — contract 27 ตัว ครอบ 11 หน้า) + `typecheck` + `build` ผ่าน
+
+---
+
 ## [2026-08-17] — security: เคลียร์ vuln ทั้ง 2 ฝั่งเป็น 0 (backend 6→0, frontend 5→0) + รวม Dashboard/OrderManagement เข้า PageHeader/EmptyState (commit `fca6723`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

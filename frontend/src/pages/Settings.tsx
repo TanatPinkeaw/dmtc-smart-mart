@@ -1381,7 +1381,7 @@ export default function Settings() {
             <span className="font-bold text-brand-dark text-sm">ยอดรวมทั้งสิ้น</span><span className="text-xl md:text-2xl font-bold text-brand">฿{Number(viewingBillInfo.total_amount).toFixed(2)}</span>
           </div>
           {viewingBillInfo.status !== 'VOIDED' && (
-            <button onClick={() => handleVoidBill(viewingBillInfo.id)} className="w-full bg-gradient-to-br from-red-500 to-red-600 text-white font-bold py-3 rounded-full transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2"><Trash2 size={18} /> ยกเลิกบิล (Void)</button>
+            <Button variant="danger" size="lg" className="w-full" onClick={() => handleVoidBill(viewingBillInfo.id)}><Trash2 size={18} /> ยกเลิกบิล (Void)</Button>
           )}
         </CustomModal>
       )}

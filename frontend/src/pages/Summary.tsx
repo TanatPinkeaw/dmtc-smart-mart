@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  BarChart3, ArrowLeft, TrendingUp, Receipt, Users, UserPlus, PackageX,
+  BarChart3, TrendingUp, Receipt, Users, UserPlus, PackageX,
   ClipboardList, XCircle, Clock, AlertTriangle, Pencil, Check, X as XIcon, Wallet,
   Percent, Coins, PiggyBank,
 } from 'lucide-react';
@@ -15,6 +15,8 @@ import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader } from '../components/layout/PageHeader';
 
 interface Overview {
   month: string;
@@ -173,16 +175,8 @@ export default function Summary() {
 
   return (
     <div className="min-h-screen bg-brand-bg">
-      {/* ⭐️ แถบหัวหน้ามาตรฐาน (flush แบบ PageHeader — คงปุ่มกลับ + print override) */}
-      <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex items-center gap-2.5 shrink-0 shadow-md print:bg-none print:shadow-none print:p-0">
-        <button onClick={() => navigate(-1)} className="print:hidden p-1.5 -ml-1.5 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-          <ArrowLeft size={18} />
-        </button>
-        <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0 print:bg-transparent">
-          <BarChart3 size={16} className="text-white print:text-gray-800" />
-        </div>
-        <h1 className="text-lg font-semibold text-white truncate print:text-gray-800">สรุปข้อมูล</h1>
-      </div>
+      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader — print override อยู่ในตัวแล้ว: งานพิมพ์จะได้แถบขาว + ตัวหนังสือเทา ไม่เปลืองหมึก) */}
+      <PageHeader icon={BarChart3} title="สรุปข้อมูล" onBack={() => navigate(-1)} />
 
       <div className="p-4 md:p-6">
 
@@ -208,9 +202,12 @@ export default function Summary() {
           <div className="mb-8">
             <h2 className="text-sm font-bold text-gray-700 mb-3 px-1">สรุปรายได้ &amp; กำไรของเดือนที่เลือก</h2>
             {!selectedMonthProfit ? (
-              <div className="bg-white border border-brand-border rounded-3xl p-6 text-center text-sm text-gray-400 shadow-sm">
-                ยังไม่มีข้อมูลการขายในเดือนนี้
-              </div>
+              <EmptyState
+                compact
+                icon={<BarChart3 size={20} />}
+                title="ยังไม่มีข้อมูลการขายในเดือนนี้"
+                className="bg-white border border-brand-border rounded-3xl shadow-sm"
+              />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {monthlyFinanceCards.map((c, i) => (
@@ -255,7 +252,7 @@ export default function Summary() {
             </div>
 
             {!profit || profit.monthly.length === 0 ? (
-              <p className="p-6 text-center text-gray-400 text-sm">ยังไม่มีข้อมูลการขาย</p>
+              <EmptyState compact icon={<Coins size={20} />} title="ยังไม่มีข้อมูลการขาย" />
             ) : profitView === 'overall' ? (
               // ⭐️ Update — การ์ดนี้ผูกกับ "เดือนที่เลือก" จาก month picker ด้านบนแล้ว (เดิม hardcode
               //   เป็น profit.overall = ยอดรวมทั้งหมดตลอดกาล ไม่ขยับตาม picker เลย ทำให้ตัวเลขไม่ตรงกับ
@@ -343,7 +340,7 @@ export default function Summary() {
                 อ่านยาก โดยเฉพาะตอนแก้อัตราค่าจ้าง ปุ่มเล็กเกินไปกดยาก */}
             <div className="sm:hidden divide-y divide-gray-100">
               {payroll.length === 0 ? (
-                <p className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลพนักงานในเดือนนี้</p>
+                <EmptyState compact icon={<Users size={20} />} title="ไม่มีข้อมูลพนักงานในเดือนนี้" />
               ) : payroll.map(row => (
                 <div key={`m-${row.user_id}`} className="p-4">
                   <div className="flex justify-between items-start mb-2">
@@ -400,7 +397,7 @@ export default function Summary() {
                 </thead>
                 <tbody>
                   {payroll.length === 0 && (
-                    <tr><td colSpan={6} className="p-6 text-center text-gray-400 text-sm">ไม่มีข้อมูลพนักงานในเดือนนี้</td></tr>
+                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">ไม่มีข้อมูลพนักงานในเดือนนี้</td></tr>
                   )}
                   {payroll.map(row => (
                     <tr key={row.user_id} className="border-b last:border-0 hover:bg-brand-bg text-sm">

@@ -8,6 +8,8 @@ import { useState, useEffect } from 'react';
 import { Gift } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { SkeletonLine } from '../ui/Skeleton';
+import { EmptyState } from '../ui/EmptyState';
 import api from '../../api';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { canAffordReward } from '../../utils/rewardCart'; // ⭐️ ลอจิกแต้มพอ/ไม่พอ (pure — เทสต์ได้)
@@ -43,15 +45,15 @@ export function RewardModal({ memberPoints, onClose, onRedeem }: RewardModalProp
     >
       <div className="p-4">
           {loading ? (
-            <p className="text-center text-gray-400 py-10 text-sm">กำลังโหลด...</p>
-          ) : error ? (
-            <p className="text-center text-red-500 py-10 text-sm">{error}</p>
-          ) : rewards.length === 0 ? (
-            <div className="py-12 flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-brand-bg rounded-2xl flex items-center justify-center mb-3"><Gift size={24} className="text-brand-mid" /></div>
-              <p className="text-sm font-medium text-gray-600">ยังไม่มีของรางวัล</p>
-              <p className="text-xs text-gray-400 mt-1">ตั้งค่าสินค้าเป็นของรางวัลได้ที่หน้าจัดการสินค้า</p>
+            <div className="space-y-3">
+              <SkeletonLine width="w-1/3" height="h-4" />
+              <SkeletonLine width="w-full" height="h-3" />
+              <SkeletonLine width="w-4/5" height="h-3" />
             </div>
+          ) : error ? (
+            <EmptyState tone="error" icon={<Gift size={24} />} title={error} />
+          ) : rewards.length === 0 ? (
+            <EmptyState icon={<Gift size={24} />} title="ยังไม่มีของรางวัล" hint="ตั้งค่าสินค้าเป็นของรางวัลได้ที่หน้าจัดการสินค้า" />
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {rewards.map(r => {

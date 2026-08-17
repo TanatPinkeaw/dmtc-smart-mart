@@ -100,18 +100,32 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
     'pages/Settings.tsx', 'pages/Register.tsx', 'pages/Home.tsx', 'pages/Login.tsx',
     'pages/ForgotPassword.tsx', 'pages/ResetPassword.tsx', 'pages/Profile.tsx',
     'pages/OrderManagement.tsx', 'pages/Inventory.tsx', 'pages/AttendanceManagement.tsx',
+    'pages/Shift.tsx', 'pages/Notifications.tsx',
     'components/common/ErrorBoundary.tsx', 'components/settings/LoyaltySettingsPanel.tsx',
     'components/preorder/OrderDetailModal.tsx', 'components/dashboard/DetailModal.tsx',
     'components/dashboard/CloseShiftModal.tsx', 'components/pos/RewardModal.tsx',
   ];
 
-  test('ไม่มีปุ่ม gradient เขียนเอง (<button ... bg-gradient-to-br from-brand) ในไฟล์ที่อพยพแล้ว', () => {
-    const offenders = BUTTON_ADOPTED.filter(f => {
+  test('ไม่มีปุ่ม gradient เขียนเอง (<button ... bg-gradient-to-br) ในไฟล์ที่อพยพแล้ว', () => {
+    // ⭐️ ไล่ทุก <button> (รวม tag หลายบรรทัด — className อยู่คนละบรรทัดกับ <button>) ดู 400 ตัวอักษรถัดไป
+    // ว่ามี bg-gradient-to-br ไหม — ต้องใช้ <Button> variant (primary/secondary/danger/ghost/
+    // warning/success/purple/orange/info) หรือปุ่มสีทึบ/ไม่มี gradient
+    const offenders: string[] = [];
+    for (const f of BUTTON_ADOPTED) {
       const src = readFileSync(join(BASE, f), 'utf8');
-      return src.split('\n').some(line => line.includes('<button') && line.includes('bg-gradient-to-br from-brand'));
-    });
+      let idx = 0;
+      while ((idx = src.indexOf('<button', idx)) !== -1) {
+        if (src[idx + 7] !== '/') { // ข้าม </button>
+          const win = src.slice(idx, idx + 400);
+          if (win.includes('bg-gradient-to-br')) {
+            offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}`);
+          }
+        }
+        idx += 7;
+      }
+    }
     assert.deepEqual(offenders, [],
-      `เจอปุ่ม gradient เขียนเองในไฟล์ที่ควรใช้ ui/Button — ต้องใช้ <Button> (variant primary):\n${offenders.join('\n')}`);
+      `เจอปุ่ม gradient เขียนเองในไฟล์ที่ควรใช้ ui/Button — ต้องใช้ <Button> (variant กลาง):\n${offenders.join('\n')}`);
   });
 
   test('Button.tsx ต้องมี variant primary = gradient แบรนด์ (มาตรฐานปุ่มหลัก)', () => {
@@ -207,7 +221,8 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
     'components/preorder/CartPanel.tsx', 'pages/Notifications.tsx', 'pages/VendorSales.tsx',
     'pages/AccountingSummary.tsx', 'components/dashboard/DetailModal.tsx',
     'components/dashboard/StatCards.tsx', 'components/dashboard/AdminDashboardHero.tsx',
-    'pages/OrderManagement.tsx',
+    'pages/OrderManagement.tsx', 'pages/Summary.tsx', 'pages/Inventory.tsx',
+    'components/pos/RewardModal.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import EmptyState จาก ui/EmptyState', () => {
@@ -236,7 +251,9 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
 describe('skeleton — ใช้ ui/Skeleton (SkeletonLine/SkeletonListRow) ห้ามกล่อง animate-pulse เขียนเองในไฟล์ที่อพยพแล้ว', () => {
   const SKELETON_ADOPTED = [
     'pages/BackupManagement.tsx', 'pages/VendorSales.tsx',
-    'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx',
+    'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx', 'pages/Summary.tsx',
+    'components/pos/RewardModal.tsx',
+    'components/settings/LoyaltySettingsPanel.tsx', 'components/settings/MemberGroupsPanel.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import Skeleton จาก ui/Skeleton และไม่มีกล่อง loading เขียนเอง', () => {

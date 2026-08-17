@@ -21,6 +21,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus'; // ⭐️ Sprint 2 �
 import OfflineBanner from '../components/common/OfflineBanner'; // ⭐️ Sprint 2 — B6
 import { saveOfflineSale, getOfflineSalesCount, type OfflineSale } from '../utils/offlineSalesDb'; // ⭐️ POS ออฟไลน์
 import { syncOfflineSales } from '../utils/syncOfflineSales'; // ⭐️ POS ออฟไลน์
+import { PageHeader } from '../components/layout/PageHeader';
 import { ProductGrid } from '../components/pos/ProductGrid';
 import { CartPanel } from '../components/pos/CartPanel';
 import { RegisterMemberModal } from '../components/pos/RegisterMemberModal';
@@ -511,21 +512,16 @@ export default function POS() {
 
       {/* ── Left: Products ─────────────────────────────────────────────────── */}
       <div className="w-full md:w-3/5 flex flex-col h-full">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
-              <ShoppingCart size={16} className="text-white" />
-            </div>
-            <h1 className="text-lg font-semibold text-white">POS ขายสินค้า</h1>
-          </div>
-          <div className="flex items-center gap-2">
+        {/* Header — ⭐️ FIX: ปุ่มปิดกะเดิมอยู่ตรงนี้ด้วย — ตามคำขอผู้ใช้ ย้ายให้เหลือจุดเดียวที่หน้า Dashboard */}
+        <PageHeader
+          icon={ShoppingCart}
+          title="POS ขายสินค้า"
+          actions={
             <span className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-white bg-white/15 border border-white/20 px-3 py-1.5 rounded-full">
               <User size={13} /> {user.full_name || 'CASHIER'}
             </span>
-            {/* ⭐️ FIX: ปุ่มปิดกะเดิมอยู่ตรงนี้ด้วย — ตามคำขอผู้ใช้ ย้ายให้เหลือจุดเดียวที่หน้า Dashboard */}
-          </div>
-        </div>
+          }
+        />
 
         <ProductGrid
           categories={categories}

@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import { Bell, Search, Clock, CheckCircle2 } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/layout/PageHeader';
 import api from '../api';
 import { useSocket } from '../hooks/useSocket';
 import { UploadSlipModal } from '../components/preorder/UploadSlipModal';
@@ -141,15 +143,13 @@ export default function Notifications() {
     // ⭐️ FIX: ปรับให้เหมือนหน้า POS/จอง — header เป็นแถบขาวกะทัดรัด (icon box + title) แทนหัวข้อใหญ่แบบเดิม
     <div className="min-h-screen bg-brand-bg pb-24">
       {/* Header — ⭐️ ชายคาหยัก (awning-edge) ภาษาเดียวกับ Home/PreOrder */}
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shadow-md awning-edge">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <Bell size={16} className="text-white" />
-          </div>
-          <h1 className="text-lg font-semibold font-display text-white truncate">การแจ้งเตือน</h1>
-        </div>
-        {unread > 0 && (
-          <div className="shrink-0 flex items-center gap-2">
+      <PageHeader
+        icon={Bell}
+        title="การแจ้งเตือน"
+        titleClassName="font-display"
+        className="sticky top-0 z-10 awning-edge"
+        actions={unread > 0 ? (
+          <>
             <span className="text-xs font-bold text-white bg-white/15 border border-white/20 px-3 py-1.5 rounded-full">
               {unread} ยังไม่อ่าน
             </span>
@@ -159,9 +159,9 @@ export default function Notifications() {
             >
               อ่านทั้งหมด
             </button>
-          </div>
-        )}
-      </div>
+          </>
+        ) : undefined}
+      />
 
       {/* pt-5 เผื่อชายคาหยัก (awning) ยื่นลงมา 12px */}
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-5 pb-4 sm:pb-6">
@@ -207,12 +207,14 @@ export default function Notifications() {
                       const order = getRejectedOrderFor(noti.message);
                       if (!order) return null;
                       return (
-                        <button
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="mt-2.5"
                           onClick={(e) => { e.stopPropagation(); setSlipOrder(order); }}
-                          className="mt-2.5 px-4 py-2 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-xs font-bold transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
                         >
                           ส่งสลิปใหม่
-                        </button>
+                        </Button>
                       );
                     })()}
                   </div>

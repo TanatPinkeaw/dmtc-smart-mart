@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Save, Coins } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { FieldLabel } from '../ui/FieldLabel';
+import { SkeletonLine } from '../ui/Skeleton';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -58,7 +59,13 @@ export function LoyaltySettingsPanel() {
     }
   };
 
-  if (loading) return <p className="text-center text-gray-400 py-10 text-sm">กำลังโหลด...</p>;
+  if (loading) return (
+    <div className="space-y-3 py-6">
+      <SkeletonLine width="w-1/3" height="h-4" />
+      <SkeletonLine width="w-full" height="h-3" />
+      <SkeletonLine width="w-4/5" height="h-3" />
+    </div>
+  );
 
   return (
     <div className="animate-fade-in max-w-2xl space-y-6">

@@ -15,30 +15,31 @@ interface PageHeaderProps {
   actions?: ReactNode; // เนื้อหาด้านขวาของแถบ (ปุ่ม/chips ฯลฯ)
   onBack?: () => void; // โชว์ปุ่มย้อนกลับหน้าซ้ายสุด
   className?: string; // คลาสพิเศษเพิ่ม เช่น sticky/print override
+  titleClassName?: string; // คลาสพิเศษเพิ่มบน title (เช่น font-display หน้า member)
 }
 
-export function PageHeader({ icon: Icon, title, subtitle, afterTitle, actions, onBack, className }: PageHeaderProps) {
+export function PageHeader({ icon: Icon, title, subtitle, afterTitle, actions, onBack, className, titleClassName }: PageHeaderProps) {
   return (
-    <div className={`bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md ${className ?? ''}`}>
+    <div className={`bg-gradient-to-r from-brand to-brand-dark px-4 py-3.5 flex justify-between items-center shrink-0 shadow-md print:bg-none print:shadow-none print:p-0 ${className ?? ''}`}>
       <div className="flex items-center gap-2.5 min-w-0">
         {onBack && (
           <button
             onClick={onBack}
             aria-label="กลับ"
-            className="p-1.5 -ml-1.5 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="p-1.5 -ml-1.5 rounded-xl hover:bg-white/20 text-white active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white print:hidden"
           >
             <ArrowLeft size={18} />
           </button>
         )}
-        <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-          <Icon size={16} className="text-white" />
+        <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center shrink-0 print:bg-transparent">
+          <Icon size={16} className="text-white print:text-gray-800" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-white truncate">{title}</h1>
+            <h1 className={`text-lg font-semibold text-white truncate print:text-gray-800 ${titleClassName ?? ''}`}>{title}</h1>
             {afterTitle}
           </div>
-          {subtitle && <p className="text-xs text-white/80 truncate">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-white/80 truncate print:text-gray-600">{subtitle}</p>}
         </div>
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}

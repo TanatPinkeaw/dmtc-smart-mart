@@ -3,9 +3,10 @@
 import { useRef, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toPng } from 'html-to-image';
-import { Printer, Download, ArrowLeft } from 'lucide-react';
+import { Printer, Download, ArrowLeft, Receipt } from 'lucide-react';
 import { ReceiptSlip, type ReceiptData, type StoreInfo } from '../components/pos/ReceiptSlip';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/layout/PageHeader';
 import { getCurrentUser } from '../utils/getCurrentUser';
 
 // มือถือ (iOS/LINE browser) ไม่รองรับ link.download → ใช้ open tab แทน
@@ -49,12 +50,15 @@ export default function ReceiptPage() {
     const user = getCurrentUser();
     const fallback = user?.role === 'MEMBER' ? '/pre-order' : '/pos';
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <p className="text-gray-500 text-lg">ไม่พบข้อมูลใบเสร็จ</p>
-          <Button variant="secondary" onClick={() => navigate(fallback)}>
-            <ArrowLeft size={16} /> กลับ
-          </Button>
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <PageHeader icon={Receipt} title="ใบเสร็จ" onBack={() => navigate(-1)} className="print:hidden" />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="text-center space-y-4">
+            <p className="text-gray-500 text-lg">ไม่พบข้อมูลใบเสร็จ</p>
+            <Button variant="secondary" onClick={() => navigate(fallback)}>
+              <ArrowLeft size={16} /> กลับ
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -62,6 +66,8 @@ export default function ReceiptPage() {
 
   return (
     <>
+      {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader — print:hidden กันแถบไปโผล่ในใบเสร็จที่พิมพ์) */}
+      <PageHeader icon={Receipt} title="ใบเสร็จ" onBack={() => navigate(-1)} className="print:hidden" />
       <div className="min-h-screen bg-gray-100 py-6 px-4 flex flex-col items-center print:bg-white print:p-0">
         {/* Receipt slip */}
         <div className="shadow-lg rounded-lg overflow-hidden print:shadow-none print:rounded-none">

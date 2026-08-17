@@ -295,15 +295,16 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
               </Button>
             )}
             {['PENDING_VERIFY', 'WAITING_CASH'].includes(selectedOrder.status) && (
-              <button
+              <Button
+                variant="danger"
+                size="lg"
+                className="flex-1"
                 onClick={() => onCancelOrder(selectedOrder, refundReason)}
                 disabled={!refundReason.trim() || cancelling}
-                className="flex-1 px-4 py-3 bg-gradient-to-br from-red-500 to-red-600 active:scale-[0.98] text-white font-bold rounded-full transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
+                loading={cancelling}
               >
-                {cancelling ? (
-                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> กำลังยกเลิก...</>
-                ) : 'ยกเลิกออเดอร์'}
-              </button>
+                {cancelling ? 'กำลังยกเลิก...' : 'ยกเลิกออเดอร์'}
+              </Button>
             )}
           </div>
         </div>

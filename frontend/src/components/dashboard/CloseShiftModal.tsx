@@ -93,9 +93,9 @@ export function CloseShiftModal({
                     }
                   </label>
                 </div>
-                <button type="submit" disabled={closeLoading} className="w-full py-3 bg-gradient-to-br from-red-500 to-red-600 text-white font-semibold text-sm rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
+                <Button type="submit" variant="danger" disabled={closeLoading} className="w-full">
                   {closeLoading ? 'กำลังตรวจสอบ...' : 'ยืนยันการปิดกะ'}
-                </button>
+                </Button>
               </form>
             </div>
           </>

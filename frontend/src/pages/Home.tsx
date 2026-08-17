@@ -385,12 +385,13 @@ export default function Home() {
                 <p className="text-[11px] text-gray-400 font-medium">ยอดรวม</p>
                 <p className="font-display text-xl font-bold text-ink tabular-nums">฿{Number(openOrder.total_amount).toLocaleString()}</p>
                 {openOrder.status === 'SLIP_REJECTED' ? (
-                  <button
+                  <Button
+                    variant="danger"
+                    className="mt-3 w-full"
                     onClick={() => setSlipOrder(openOrder)}
-                    className="mt-3 w-full py-2.5 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-sm font-bold transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
                   >
                     ส่งสลิปด่วน
-                  </button>
+                  </Button>
                 ) : (
                   <button
                     onClick={() => goTo('/pre-order?view=orders')}

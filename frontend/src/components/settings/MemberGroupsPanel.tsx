@@ -4,6 +4,7 @@
 //   เช่น อาจารย์ได้ลด 10% เฉพาะหมวด "เครื่องเขียน" — override ส่วนลด default ของกลุ่มเฉพาะหมวดนั้น
 import { useState, useEffect } from 'react';
 import { Users, Plus, Trash2 } from 'lucide-react';
+import { SkeletonLine } from '../ui/Skeleton';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -49,7 +50,13 @@ export function MemberGroupsPanel() {
     catch (err) { Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) }); }
   };
 
-  if (loading) return <p className="text-center text-gray-400 py-10 text-sm">กำลังโหลด...</p>;
+  if (loading) return (
+    <div className="space-y-3 py-6">
+      <SkeletonLine width="w-1/3" height="h-4" />
+      <SkeletonLine width="w-full" height="h-3" />
+      <SkeletonLine width="w-4/5" height="h-3" />
+    </div>
+  );
 
   return (
     <div className="animate-fade-in max-w-3xl space-y-5">

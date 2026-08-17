@@ -542,9 +542,9 @@ export default function OrderManagement() {
                   {isUnclaimed && <span>⚡ ยังไม่มีพนักงานรับงาน</span>}
                   {selectedOrder.assigned_name && !isMine && <span>{isTaken ? '🔒 ' : '👤 '}{selectedOrder.assigned_name} รับงานนี้แล้ว</span>}
                   {(isUnclaimed) && (
-                    <button onClick={() => handleClaim(selectedOrder.id)} disabled={claiming} className="bg-gradient-to-br from-yellow-400 to-yellow-500 text-yellow-900 px-3 py-1 rounded-xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50">
+                    <Button variant="warning" size="sm" onClick={() => handleClaim(selectedOrder.id)} disabled={claiming}>
                       {claiming ? '...' : '✋ รับงานนี้'}
-                    </button>
+                    </Button>
                   )}
                 </div>
               );
@@ -561,20 +561,22 @@ export default function OrderManagement() {
                 {/* QR: ตรวจสลิป */}
                 {selectedOrder.status === 'PENDING_VERIFY' && (
                   <>
-                    <button
+                    <Button
+                      variant="info"
+                      size="lg"
+                      className="w-full"
                       onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')}
                       disabled={loading}
-                      className="w-full bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold py-3 rounded-full transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       ✅ ยืนยันสลิปถูกต้อง → เริ่มเตรียมของ
-                    </button>
+                    </Button>
                     <div className="border border-red-100 rounded-xl p-3 space-y-2">
                       <p className="text-xs font-bold text-red-600">สลิปผิด / มีปัญหา (จำเป็น อย่างน้อย 5 ตัวอักษร):</p>
                       <textarea rows={2} placeholder="ระบุเหตุผล..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-red-500 resize-none"/>
                       <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'SLIP_REJECTED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white font-bold py-2 rounded-xl transition-all duration-150 active:scale-[0.98] text-xs disabled:opacity-40 disabled:cursor-not-allowed">↩️ ขอสลิปใหม่</button>
-                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'REFUND_REQUESTED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-gradient-to-br from-purple-500 to-purple-600 text-white font-bold py-2 rounded-xl transition-all duration-150 active:scale-[0.98] text-xs disabled:opacity-40 disabled:cursor-not-allowed">💰 คืนเงิน</button>
-                        <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading || rejectReason.trim().length < 5} className="bg-gradient-to-br from-red-500 to-red-600 text-white font-bold py-2 rounded-xl transition-all duration-150 active:scale-[0.98] text-xs disabled:opacity-40 disabled:cursor-not-allowed">🚫 ยกเลิก</button>
+                        <Button variant="warning" size="sm" onClick={() => handleUpdateStatus(selectedOrder.id, 'SLIP_REJECTED', true)} disabled={loading || rejectReason.trim().length < 5}>↩️ ขอสลิปใหม่</Button>
+                        <Button variant="purple" size="sm" onClick={() => handleUpdateStatus(selectedOrder.id, 'REFUND_REQUESTED', true)} disabled={loading || rejectReason.trim().length < 5}>💰 คืนเงิน</Button>
+                        <Button variant="danger" size="sm" onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading || rejectReason.trim().length < 5}>🚫 ยกเลิก</Button>
                       </div>
                     </div>
                   </>
@@ -584,7 +586,7 @@ export default function OrderManagement() {
                 {selectedOrder.status === 'SLIP_REJECTED' && (
                   <>
                     <p className="text-sm font-bold text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">⚠️ รอลูกค้าส่งสลิปใหม่ — พอลูกค้าส่งสลิปใหม่มาให้กดตรวจสอบ</p>
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'PENDING_VERIFY')} disabled={loading} className="w-full bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-bold py-3 rounded-full transition-all duration-150 active:scale-[0.98]">🔍 ตรวจสลิปใหม่</button>
+                    <Button variant="info" size="lg" className="w-full" onClick={() => handleUpdateStatus(selectedOrder.id, 'PENDING_VERIFY')} disabled={loading}>🔍 ตรวจสลิปใหม่</Button>
                     <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-full hover:bg-gray-300 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิกบิล</button>
                   </>
                 )}
@@ -592,7 +594,7 @@ export default function OrderManagement() {
                 {/* CASH: ยืนยัน order */}
                 {selectedOrder.status === 'WAITING_CASH' && (
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')} disabled={loading} className="flex-1 bg-gradient-to-br from-orange-500 to-orange-600 text-white font-bold py-3 rounded-full transition-all duration-150 active:scale-[0.98]">✅ ยืนยัน → เริ่มเตรียมของ</button>
+                    <Button variant="orange" size="lg" className="flex-1" onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')} disabled={loading}>✅ ยืนยัน → เริ่มเตรียมของ</Button>
                     <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="bg-gray-400 text-white font-bold px-4 py-3 rounded-full hover:bg-gray-500 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิก</button>
                   </div>
                 )}
@@ -600,9 +602,9 @@ export default function OrderManagement() {
                 {/* เตรียมของเสร็จ — ⭐️ FIX: เอาปุ่ม "ยกเลิกบิล" ออก เพราะ backend บล็อกยกเลิกออเดอร์สถานะ
                     PREPARING/READY ไว้แล้ว (เริ่มเตรียมสินค้าไปแล้ว) กดไปก็เจอ error ทุกครั้ง ปุ่มนี้ไม่มีประโยชน์ */}
                 {selectedOrder.status === 'PREPARING' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'READY')} disabled={loading} className="w-full bg-gradient-to-br from-green-500 to-green-600 text-white font-bold py-3 rounded-full flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98]">
+                  <Button variant="success" size="lg" className="w-full" onClick={() => handleUpdateStatus(selectedOrder.id, 'READY')} disabled={loading}>
                     <CheckCircle size={20}/> เตรียมของเสร็จ → แจ้งลูกค้ามารับ
-                  </button>
+                  </Button>
                 )}
 
                 {/* ลูกค้ามารับ */}
@@ -619,7 +621,7 @@ export default function OrderManagement() {
             {selectedOrder.status === 'REFUND_REQUESTED' && (
               <div className="p-4 border-t border-purple-100 bg-purple-50 shrink-0">
                 <p className="text-sm font-bold text-purple-700 mb-2">💰 รอคืนเงิน — ลูกค้าต้องนำหลักฐานการโอนมาที่ร้าน</p>
-                <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED')} disabled={loading} className="w-full bg-gradient-to-br from-purple-600 to-purple-700 text-white font-bold py-3 rounded-full transition-all duration-150 active:scale-[0.98]">✅ คืนเงินสดแล้ว → ปิดบิล</button>
+                <Button variant="purple" size="lg" className="w-full" onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED')} disabled={loading}>✅ คืนเงินสดแล้ว → ปิดบิล</Button>
               </div>
             )}
             
