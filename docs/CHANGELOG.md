@@ -4,7 +4,7 @@
 
 ---
 
-## [2026-08-17] — perf(backend): แก้ N+1 ใน GET /api/orders + cron pickup reminder + เพิ่ม index orders/sales/audit_logs
+## [2026-08-17] — perf(backend): แก้ N+1 ใน GET /api/orders + cron pickup reminder + เพิ่ม index orders/sales/audit_logs (commit `f140e5e`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy
 
