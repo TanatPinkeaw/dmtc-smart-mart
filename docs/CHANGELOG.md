@@ -4,6 +4,26 @@
 
 ---
 
+## [2026-08-17] — Env/security: ตั้ง DB_SSL_CA ครบ — คู่มือใน DEMO-DEPLOY.md (ขั้น B.5) + config.js fail-fast ถ้า CA format เพี้ยน
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **ตั้ง env `DB_SSL_CA` ที่ Render** (ขั้นตอนใน docs/DEMO-DEPLOY.md ขั้น B.5 — เอา CA cert จาก Aiven console มาวางแล้ว redeploy) — ตั้งแล้ว boot log จะไม่มี warning `[BOOT WARNING] DB_SSL_CA`
+- ⚠️ ตั้งแล้ว format ผิด = backend ไม่บูต (fail fast ตั้งใจ) — error บอกชัดว่าต้องเป็น PEM หรือ base64 ของ PEM
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **config.js** (backend) | เพิ่ม validation: ถ้าตั้ง `DB_SSL_CA` ต้องเป็น PEM ครบ (`BEGIN`+`END CERTIFICATE`) หรือ base64 ของ PEM — ไม่ใช่ = `❌` + exit(1) กัน mysql2 เด้ง error SSL งงๆ กลาง boot; ไม่ตั้ง = เหมือนเดิม (warning เดิม) |
+| **docs/DEMO-DEPLOY.md** | section ใหม่ **ขั้น B.5 — ตั้ง DB_SSL_CA**: เอา CA cert จากไหน (Aiven console → Download CA Certificate) · วาง PEM ตรงๆ หรือ base64 (`base64 -w0` / PowerShell) · ตรวจผล (log ไม่มี warning) · format ผิด error ชัด; อัปเดตสรุป env + note ท้าย |
+| **docs/NEXT-STEPS.md** | รายการค้าง DB_SSL_CA → เหลือแค่ลงมือวางค่า (ขั้นตอนครบใน DEMO-DEPLOY.md) |
+
+### 🧪 เทส
+- backend: probe config.js 6 กรณีผ่าน (PEM ถูก / base64 ถูก / ไม่ตั้ง / PEM ตัดครึ่ง / base64 ปลอม / ข้อความมั่ว — 3 หลัง fail fast ถูกต้อง) + test:unit **12/12 ผ่าน**
+
+---
+
 ## [2026-08-17] — Fix(deploy): backend Dockerfile node:18-alpine → node:20-alpine — sharp 0.35 ต้อง Node ≥ 20.9 (deploy ล้มตอน boot "Could not load sharp... Requires >=20.9.0") (commit `2978003`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

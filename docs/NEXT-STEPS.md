@@ -56,7 +56,7 @@
 เดิม `"test:api": "node test-suite.js"` ไฟล์ `test-suite.js` ไม่มีอยู่จริง ลบ script นี้ออกจาก `backend/package.json` แล้ว
 
 ### 5. Security/hardening ที่ตั้งใจเลื่อนไว้ก่อน (ต้องตัดสินใจว่าจะทำเมื่อไหร่)
-- **`DB_SSL_CA`** ยังไม่ตั้ง (`null`) — เชื่อมต่อ Aiven เข้ารหัสอยู่แล้วแต่ไม่ verify cert เป็นการตัดสินใจตั้งใจไว้ก่อนเพื่อลดความยุ่งยากตอน deploy ถ้าพร้อมแล้วค่อยกลับมาตั้ง CA จริง
+- **`DB_SSL_CA`** — ขั้นตอนตั้งครบแล้วใน **docs/DEMO-DEPLOY.md (ขั้น B.5)** + code validate format (fail fast ถ้าค่าเพี้ยน — กัน error SSL งงๆ) — **เหลือแค่ลงมือ**: เอา CA cert จาก Aiven console ไปวางใน Render → Environment → `DB_SSL_CA` แล้วดู log ว่า warning หาย (ทำตามขั้น B.5 ได้เลย)
 - **`JWT_SECRET` / `SETUP_KEY`** — ต้องเช็คว่าเป็นค่าจริงแบบสุ่มปลอดภัยหรือยังเป็นค่า placeholder จาก dev ก่อน go-live จริงต้องหมุน (rotate) ใหม่
 - **npm audit** — ✅ เคลียร์หมดแล้ว (2026-08-17): ทั้ง backend และ frontend = **0 vulnerabilities**
   - backend: `sharp` 0.33.5 → **0.35.3** (โค้ดใช้แค่ `.metadata()` — ไม่กระทบ; Node 24 รองรับ) + `overrides.uuid=^11.1.1` (exceljs ยัง 4.4.0 — ใช้ `uuid.v4` ที่ advisory นี้ไม่กระทบ) + audit fix ไล่ brace-expansion/ip-address/socket.io-parser

@@ -73,6 +73,26 @@ if (IS_PRODUCTION && process.env.DB_SSL === 'true' && !process.env.DB_SSL_CA) {
   console.error('⚠️⚠️⚠️ [BOOT WARNING] DB_SSL=true แต่ไม่ได้ตั้ง DB_SSL_CA — การเชื่อมต่อจะเข้ารหัสแต่ไม่ verify cert (เสี่ยง MITM) ตั้ง DB_SSL_CA ด้วย CA cert จาก cloud provider ด่วน ⚠️⚠️⚠️');
 }
 
+// ⭐️ ตั้ง DB_SSL_CA แล้วแต่ format เพี้ยน (ตัด/คัดลอกไม่ครบ) → fail fast กัน mysql2 เด้ง error SSL งงๆ กลาง boot
+// รองรับ 2 แบบ (ดู db.js): PEM เต็ม (มี BEGIN/END CERTIFICATE) หรือ base64 ของ PEM (กันปัญหา newline ใน env)
+if (process.env.DB_SSL_CA) {
+  const caVal = process.env.DB_SSL_CA;
+  let caOk;
+  if (caVal.includes('BEGIN CERTIFICATE')) {
+    caOk = caVal.includes('END CERTIFICATE');
+  } else {
+    try {
+      caOk = Buffer.from(caVal, 'base64').toString('utf8').includes('BEGIN CERTIFICATE');
+    } catch {
+      caOk = false;
+    }
+  }
+  if (!caOk) {
+    console.error('❌ config.js: DB_SSL_CA ตั้งไว้แต่ format ไม่ถูกต้อง — ต้องเป็น PEM (-----BEGIN CERTIFICATE----- ... -----END CERTIFICATE-----) หรือ base64 ของ PEM ดูวิธีตั้งใน docs/DEMO-DEPLOY.md (หัวข้อ DB_SSL_CA)');
+    process.exit(1);
+  }
+}
+
 // ⭐️ Render ตั้ง process.env.RENDER ให้อัตโนมัติ ถ้าเจอว่ารันบน Render แต่ NODE_ENV ดันไม่ใช่
 // 'production' (ลืมตั้งใน dashboard) trust proxy ใน server.js จะไม่ทำงาน — เตือนดังๆ ให้เห็นใน log
 const IS_RENDER = !!process.env.RENDER;

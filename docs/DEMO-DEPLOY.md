@@ -116,6 +116,30 @@ FRONTEND_URL  = https://localhost      (ค่าชั่วคราว เด
 
 ---
 
+## ขั้น B.5 — ตั้ง DB_SSL_CA (verify cert ของ Aiven — ปิด warning เรื่อง MITM)
+
+Aiven บังคับ SSL อยู่แล้ว (`DB_SSL=true`) แต่ตอนนี้ยัง **ไม่ verify cert** — ถ้าคนร้ายดัก network ได้ก็ปลอมตัวเป็นเซิร์ฟเวอร์ได้ (boot log จะขึ้น warning แดง `DB_SSL_CA`) ขั้นนี้เอาค่า **CA certificate** ของ Aiven มาใส่ให้ backend ยืนยัน cert จริงของ Aiven ได้:
+
+1. เข้า Aiven → service MySQL ของเรา → แท็บ **Overview** → หัวข้อ **Connection information** → กด **Download CA Certificate** (ไฟล์ `cacert.pem`)
+2. เปิดไฟล์ `cacert.pem` — เนื้อหาจะขึ้นต้น/จบประมาณนี้ (ทั้งบรรทัด รวม `-----BEGIN`/`-----END`):
+   ```
+   -----BEGIN CERTIFICATE-----
+   MIIB...
+   -----END CERTIFICATE-----
+   ```
+3. เอาเนื้อหานั้นไปตั้งที่ **Render → service backend → Environment** → **Add Environment Variable**:
+   ```
+   DB_SSL_CA = <วาง PEM ทั้งหมดรวม -----BEGIN/END----- หรือ base64 ของไฟล์นั้น>
+   ```
+   - วาง PEM ตรงๆ ได้เลย (Render รองรับค่าข้ามบรรทัด)
+   - ถ้ากลัวปัญหา newline/copy หลุด ให้ base64 ก่อน: `base64 -w0 cacert.pem` (Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("cacert.pem"))`) แล้ววางผลลัพธ์บรรทัดเดียว
+4. **Save Changes** → Render redeploy อัตโนมัติ
+5. ดู **Logs** หลังบูต: ต้อง**ไม่มี** warning `DB_SSL_CA` — ถ้ามี error `❌ DB_SSL_CA ตั้งไว้แต่ format ไม่ถูกต้อง` แปลว่า copy หลุด (ตัด/เพิ่มบรรทัด) กลับไปตั้งใหม่จากข้อ 2
+
+> ⚠️ ตั้ง `DB_SSL_CA` แล้วแต่ format เพี้ยน = backend จะ **ไม่บูต** (fail fast ป้องกัน error SSL งงๆ) — error บอกชัดว่าต้องเป็น PEM หรือ base64 ของ PEM
+
+---
+
 ## ขั้น C — เอา Frontend ขึ้น Vercel
 
 1. เข้า https://vercel.com → **Sign up** (ล็อกอินด้วย GitHub)
@@ -197,6 +221,7 @@ DB_USER=avnadmin
 DB_PASSWORD=<Aiven password>
 DB_NAME=defaultdb
 DB_SSL=true
+DB_SSL_CA=<CA cert ของ Aiven — PEM หรือ base64 ดูขั้น B.5>
 CLOUDINARY_CLOUD_NAME=<Cloudinary>
 CLOUDINARY_API_KEY=<Cloudinary>
 CLOUDINARY_API_SECRET=<Cloudinary>
@@ -241,4 +266,4 @@ git push origin main
 
 - Demo นี้เปิดสาธารณะบนอินเทอร์เน็ต — **อย่าใส่ข้อมูลนักเรียนจริง/ข้อมูลการเงินจริง** ใช้ข้อมูลตัวอย่างพอ
 - ตอนใช้งานจริงในวิทยาลัย ให้ใช้ `docs/DEPLOY.md` (ลงเครื่องในโรงเรียน วง LAN ปิด ปลอดภัยกว่า)
-- ค่า `DB_SSL_CA` (ใน db.js) ตั้งเพิ่มได้ถ้าอยาก verify cert ของ Aiven แบบเต็ม (เอา CA cert จาก Aiven มาใส่) — demo ไม่ตั้งก็ได้ ยังเข้ารหัสอยู่
+- ค่า `DB_SSL_CA` — ตั้งแล้วตาม **ขั้น B.5** (verify cert ของ Aiven แบบเต็ม — หลังตั้งแล้ว boot log จะไม่มี warning `DB_SSL_CA`) format ผิดจะ fail fast ตอนบูตพร้อม error บอกชัด (ดูขั้น B.5)
