@@ -4,6 +4,116 @@
 
 ---
 
+## [2026-08-17] — Backend: อพยพ response 4xx เขียนเองครบ 162 จุดเข้า utils/http (badRequest/unauthorized/forbidden/notFound/conflict/gone) — เหลือ raw 4xx 0 จุด
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Restart backend เท่านั้น** — JSON ตอบกลับเหมือนเดิมเป๊ะ ({ error } + field พิเศษ spread ไว้ key เดิม) ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรัน migration
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **utils/http.js** (backend) | เพิ่ม helper 4 ตัว: `unauthorized` (401) · `forbidden` (403) · `conflict` (409) · `gone` (410) — คู่กับ `badRequest`/`notFound`/`serverError` เดิม; `sendError` ปรับให้ object details **spread ไว้ที่ top-level** (key เดิมคงอยู่ — เช่น `{ code: 'MUST_CHANGE_PASSWORD' }` / `{ detail }` / `{ requirements }` / `{ issues }` / `{ conflicted_products }`) ส่วน primitive ยังเป็น `{ error, details }` — frontend ที่อ่าน `data.code === 'MUST_CHANGE_PASSWORD'` (api.ts) ทำงานต่อ |
+| **server.js + 7 controllers** (backend) | อพยพ `res.status(4xx).json({ error: ... })` เขียนเอง **162 จุด** → helper: badRequest 93 · unauthorized 16 · forbidden 15 · notFound 32 · conflict 5 · gone 1 — รวม single-line 140 (สคริปต์ regex) + multi-line/field พิเศษ/ค่า non-literal 22 (มือ) — JSON `{ error }` เดิมเป๊ะทุกจุด |
+| **เทส contract** (backend) | serverGuardRails **49 → 59 เช็ค** — section I ใหม่ 10 เช็ค: helper 4 ตัวต้องมีใน http.js · badRequest/notFound ถูกใช้จริง (ไม่ใช่ของตาย) · server.js + controllers 7 ไฟล์ **ห้ามเหลือ raw `res.status(4xx).json`** · webhook `res.status(401).end()` ต้องอยู่ (LINE protocol) · แก้เช็ค G ให้ตรง sendError ใหม่ · preorderPolicy เทส 403 อัปเดตรับ `forbidden(res` |
+
+### 🧪 เทส
+- backend: **test:unit 12/12 ชุดผ่าน** (serverGuardRails 59 เช็ค) + `node --check` ทุกไฟล์ + probe ยืนยัน JSON shape
+
+**ข้อยกเว้นที่ตั้งใจไม่แตะ:** `src/middleware/guards.js` ยังเขียน `res.status(403)`/`res.status(400)` เอง — เป็น**ตำแหน่งนิยามกลาง**ของ middleware (contract section F ล็อกไว้แล้ว ไม่ใช่ที่ copy ซ้ำ) · `lineWebhookController` `res.status(401).end()` — LINE webhook ต้องตอบ raw status · response สำเร็จ (`res.json({ success: true, ... })`) — shape ต่างกันตาม endpoint (message+affected / csrfToken / path+dims / backup) ไม่ใช่ pattern คู่ที่รวมได้
+
+---
+
+## [2026-08-17] — UI: สแกน segmented control/checkbox/toggle รอบสุดท้าย — สร้าง ui/SegmentedControl (box + pill) + อพยพปุ่มวิธีจ่าย QR/เงินสด ×2 + pill ช่วงเวลา/มุมมอง ×2 — ล็อก contract
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **SegmentedControl** (frontend) | component กลางใหม่ `ui/SegmentedControl` — ปุ่มกลุ่มเลือก (radio-like) เลือกได้ 1 ตัว: variant `box` (ปุ่ม border-2 2 ช่อง — วิธีจ่ายเงิน) / `pill` (ปุ่มกลมเล็กในถาด bg-brand-bg — ช่วงเวลา/มุมมอง); สี selected เฉพาะ option ต่างกันได้ผ่าน `selectedClassName` (QR น้ำเงิน); semantic `role="radiogroup"/"radio"` + `aria-checked` + `ariaLabel` |
+| **pos + preorder CartPanel** (frontend) | ปุ่มวิธีจ่าย QR/เงินสด (copy กัน 2 ไฟล์ ~12 บรรทัด) → `<SegmentedControl variant="box">` — CASH = แบรนด์ / QR = น้ำเงิน (selectedClassName) หน้าตาเดิมเป๊ะ; side-effect ตอนเปลี่ยนวิธี (pos เคลียร์/เติมช่องเงินรับมา) ไปไว้ใน onChange |
+| **Dashboard + Summary** (frontend) | ปุ่ม pill ช่วงเวลา Peak Hours + มุมมองกำไร (container เดียวกันเป๊ะ) → `<SegmentedControl variant="pill">` — normalize เล็กน้อย: Dashboard text-[10px]→text-xs (12px เท่ากับ Summary — ตรงกับหัวการ์ด), Summary px-3→px-2.5; Dashboard ยัง disabled ตอนโหลด + Summary ยัง `print:hidden` |
+| **เทส contract** (frontend) | section ใหม่ `SEGMENTED_ADOPTED` 3 เช็ค (4 ไฟล์: pos/preorder CartPanel + Dashboard/Summary): ต้อง import ui/SegmentedControl + ห้ามเขียนเอง (selected QR ใน ternary `? 'border-blue-600 bg-blue-50` / container pill `bg-brand-bg ... rounded-full p-0.5` / ปุ่ม `<button ... border-2`) + เทสล็อก component มี variant box/pill + radiogroup/radio |
+
+### 🧪 เทส
+- frontend: **158 เทสผ่าน** (141 + 17 component — contract section ใหม่ 3 เช็ค) + `typecheck` + `build` ผ่าน
+
+**ผลสแกน checkbox/radio/toggle — ไม่มีอะไรต้องอพยพเพิ่ม:** สวิตช์เปิดปิด (`role="switch"`/`peer-checked`) **ไม่มีในแอปเลย**; checkbox มีแค่ 2 จุดใน Settings (native `accent-brand` — มาตรฐาน browser พอใช้ได้ ไม่ต้องมี component); ปุ่มกลุ่มเลือกที่เหลือเป็น exception ตั้งใจ — **แถบหมวดสินค้า ProductGrid ×2** (ชิปใหญ่ในแถวเลื่อน + icon — anatomy ต่างจาก box/pill และ 2 ไฟล์ใช้สไตล์เดียวกันอยู่แล้ว) + **แท็บออเดอร์ OrderManagement** (ปุ่มสูง px-3 py-2 — tab bar คนละ pattern)
+
+---
+
+## [2026-08-17] — UI: สแกน NON-ADOPTED ด้านตาราง/badge/skeleton — ตาราง+badge สะอาดอยู่แล้ว (ล็อกทั่วแอป) + อพยพ skeleton ของ Home เข้า Skeleton กลาง
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **Home skeleton** (frontend) | skeleton เขียนเอง 3 จุด → primitive กลาง: ตั๋วรับของ (การ์ด 2 เส้น) → `<SkeletonCard>` · การ์ดโปรโมชัน (กล่อง w-64 h-24) → `<SkeletonListRow height="h-24">` · การ์ดสินค้าขายดี (กล่องรูป + 2 เส้น) → เปลือกการ์ดคงไว้ (โครงเฉพาะ) + กล่องใน → `<SkeletonLine>` (ภาพ/ชื่อ/ราคา) |
+| **Skeleton** (frontend) | `SkeletonLine` เพิ่ม prop `className` (ต่อท้ายได้ — กันเขียนกล่อง bg-brand-border/40 เองในหน้า) |
+| **เทส contract** (frontend) | `SKELETON_ADOPTED` +Home (9 ไฟล์) + เทสล็อก SkeletonLine ต้องมี className — contract **49 ตัว** |
+
+### 🧪 เทส
+- frontend: **155 เทสผ่าน** (138 + 17 component — contract 49 ตัว) + `typecheck` + `build` ผ่าน
+
+**ผลสแกนตาราง/badge — สะอาดอยู่แล้ว ไม่ต้องอพยพ:** ตาราง — BackupManagement/Summary ใช้ thead มาตรฐาน (กฎ global ครอบ ALL_UI อยู่แล้ว), ตารางใน POS.tsx เป็น HTML string สำหรับพิมพ์ใบแจ้ง (class= ไม่ใช่ React); badge — ที่เหลือเป็น **role/source pill** (Summary บทบาท ADMIN/purple-100, Attendance แหล่งที่มา SHIFT/LIFF, Home badge บนตั๋ว/เมนู) — StatusBadge กลางเป็น map สถานะ **ออเดอร์** โดยเฉพาะ (คนละโดเมน — ข้ามแบบตั้งใจตามที่บันทึกไว้รอบก่อน); skeleton อื่น — `animate-pulse` ของ OfflineBanner (เอฟเฟกต์กะพริบขาดเน็ต), AuthImage (placeholder รูป), health dot Dashboard (สถานะ) — เป็น effect/สถานะ ไม่ใช่ loading skeleton
+
+---
+
+## [2026-08-17] — UI: อพยพโมดัล member ที่เหลือ 3 ตัว (MyOrders/OrderDetail/UploadSlip) เข้า ui/Modal + ช่องกรองวันที่เข้า filterCls — MODAL_ADOPTED ครบ 9 ตัว
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **MyOrdersModal** (frontend) | shell เขียนเอง (fixed inset-0 + หัว gradient) → `<Modal title widthClassName="sm:max-w-3xl">` — ปุ่ม "ลองใหม่" ของ EmptyState error → `<Button variant="secondary">`; ประวัติ/โหลด/ว่าง เหมือนเดิม |
+| **OrderDetailModal** (frontend) | shell → `<Modal>` — หัว 2 บรรทัด (ออเดอร์ #id + เวลา) คงไว้ผ่าน slot `title` (ReactNode) — สลิป/สถานะ/ปุ่มยกเลิกเหมือนเดิม |
+| **UploadSlipModal** (frontend) | shell → `<Modal title={\`ส่งสลิปใหม่ — ออเดอร์ #id\`}>` — ต่างเล็กน้อย: ปุ่มปิด X ไม่มี disabled ระหว่างอัปโหลด (Modal กลางไม่มี prop นี้ — อัปโหลดเร็ว พอยอมรับได้) |
+| **Modal** (frontend) | title h3 เพิ่ม `font-display` (Prompt) — หัวโมดัลทั้งหมด (staff + member) เป็นฟอนต์หัวข้อภาษาเดียวกับทั้งแอป |
+| **filterCls** (frontend) | เพิ่ม `filterCls` ใน `ui/fieldStyles` (พื้นขาว + เงา — ช่องกรองวันที่/ค้นหา ต่างจาก inputCls ฟอร์ม brand-bg) — อพยพช่อง month ของ Summary + ช่วงวันที่ของ AccountingSummary (เดิม copy string ซ้ำกันเป๊ะ 2 ไฟล์) |
+| **เทส contract** (frontend) | `MODAL_ADOPTED` +3 (MyOrders/OrderDetail/UploadSlip — รวม 9 ตัว ห้าม shell fixed inset-0 เขียนเอง); เทสใหม่: Modal title ต้องมี font-display; section ใหม่: Summary/AccountingSummary ต้อง import filterCls + ห้ามเขียนช่องกรองวันที่เอง — contract **47 ตัว** |
+
+### 🧪 เทส
+- frontend: **154 เทสผ่าน** (137 + 17 component — contract 47 ตัว) + `typecheck` + `build` ผ่าน
+
+**ผลสแกน NON-ADOPTED — ที่ตั้งใจไม่แตะ:** หัวกล่องพับ/กางได้ `Section.tsx` (การ์ดหัวข้อ w-full rounded-3xl — ไม่ใช่โมดัล), lightbox `PhotoLightbox`/preview ใบเสร็จ ReceiptPage (ตัวแสดงภาพเต็มจอ — คนละ pattern), แผงด้านข้าง CartPanel ×2 (workspace panel ไม่ใช่ modal), FAB, input เฉพาะบริบท (แก้ราคาในตาราง POS `px-2 py-1` / ช่องค้นหา / file input hidden — ไม่ใช่ช่องฟอร์มมาตรฐาน)
+
+---
+
+## [2026-08-17] — UI: สแกนปุ่ม NON-ADOPTED ครบ — อพยพ 5 จุด (AccountingSummary/MemberGroupsPanel + ปุ่ม bg-brand ทึบใน ADOPTED ที่กฎเดิมจับไม่ถึง) + กฎ flat-brand ใหม่
+
+### 🔴 สิ่งที่ต้องทำตอน deploy
+
+- **Rebuild frontend เท่านั้น** — visual 100% ไม่มี SQL/env/logic เปลี่ยน ไม่ต้องรันอะไรเอง
+
+### เปลี่ยนหลักใน commit นี้
+
+| ส่วน | อะไร |
+|---|---|
+| **AccountingSummary** (frontend) | ปุ่ม "Export Excel" (outline เขียนเอง — สแกน NON-ADOPTED เจอ) → `<Button variant="secondary">` — +เข้า `BUTTON_ADOPTED` |
+| **MemberGroupsPanel** (frontend) | ปุ่ม "เพิ่มกฎ" (bg-brand ทึบ flat เขียนเอง) → `<Button>` primary — +เข้า `BUTTON_ADOPTED` |
+| **ปุ่ม bg-brand ทึบในไฟล์ ADOPTED** (frontend) | กฎเดิมจับแค่ gradient/สีทึบ 50/outline — **สี custom bg-brand (flat) หลุดได้**: pos CartPanel "ค้นหา"/"ใช้โค้ด" (loading spinner จาก `loading` prop แทนข้อความ '...'), Settings "ค้นหา" → `<Button>` primary ครบ |
+| **เทส contract** (frontend) | กฎใหม่: ไล่ทุก `<button>` ใน BUTTON_ADOPTED ว่ามี `bg-brand` + `text-white` (flat primary เขียนเอง) — **ยกเว้น FAB ลอย (fixed)** เช่น ปุ่ม "รายการรับของ" มือถือของ Inventory — BUTTON_ADOPTED 27 ไฟล์ — contract **44 ตัว** |
+
+### 🧪 เทส
+- frontend: **151 เทสผ่าน** (134 + 17 component — contract 44 ตัว) + `typecheck` + `build` ผ่าน
+
+**ผลสแกน NON-ADOPTED — ที่ตั้งใจไม่แตะ:** FAB กลม POS/PreOrder (gradient — exception เดิม), หัวกล่องพับเก็บ/กางได้ `Section.tsx` (การ์ดหัวข้อ w-full rounded-3xl — ไม่ใช่ปุ่ม action), ปุ่มลอยมือถือ "รายการรับของ" Inventory (fixed — กฎใหม่ยกเว้นให้)
+
+---
+
 ## [2026-08-17] — UI: ปุ่ม outline ขาว (bg-white border) เข้า Button ครบ — secondary (แบรนด์) + variant ใหม่ outline-danger (แดง quiet) + ล็อก contract (commit `41fa1a8`)
 
 ### 🔴 สิ่งที่ต้องทำตอน deploy

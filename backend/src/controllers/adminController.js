@@ -14,7 +14,7 @@
 // ALLOW_DATA_RESET=true บน deployment นั้นๆ อย่างจงใจเท่านั้น (ไม่ใช่ default ที่เปิดเอง)
 const pool = require('../config/db');
 const config = require('../config/config');
-const { serverError } = require('../utils/http');
+const { serverError, notFound, conflict } = require('../utils/http');
 
 function isResetAllowed() {
   return process.env.ALLOW_DATA_RESET === 'true' || !config.IS_PRODUCTION;
@@ -83,9 +83,7 @@ async function unlinkAllLine(req, res) {
   // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
   // ทั่วไปที่ไม่บอกสาเหตุจริง ทำให้ดูเหมือนปุ่มกดแล้วไม่มีอะไรเกิดขึ้น
   if (!isResetAllowed()) {
-    return res.status(404).json({
-      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
-    });
+    return notFound(res, 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้');
   }
   try {
     const [result] = await pool.query("UPDATE users SET line_user_id = NULL WHERE role = 'MEMBER'");
@@ -117,9 +115,7 @@ async function resetMembers(req, res) {
   // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
   // ทั่วไปที่ไม่บอกสาเหตุจริง ทำให้ดูเหมือนปุ่มกดแล้วไม่มีอะไรเกิดขึ้น
   if (!isResetAllowed()) {
-    return res.status(404).json({
-      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
-    });
+    return notFound(res, 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้');
   }
   // ⭐️ รับทั้ง deleteWorkHistory (ชื่อใหม่) และ deleteAttendance (ชื่อเดิม เผื่อ frontend รุ่นเก่า cache อยู่)
   const deleteWorkHistory = req.body?.deleteWorkHistory === true || req.body?.deleteAttendance === true;
@@ -172,10 +168,7 @@ async function resetMembers(req, res) {
     // constraint/ตารางที่ชนอยู่แล้ว — ใช้ไล่ดูใน log ได้ทันทีว่าตารางไหนบล็อกจริง โดยไม่ต้องเดา
     console.error('[resetMembers] FK/DB error:', error.code, error.message);
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
-      return res.status(409).json({
-        error: 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีข้อมูลอ้างอิงอื่นที่ระบบยังจัดการอัตโนมัติไม่ได้ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)',
-        detail: error.message,
-      });
+      return conflict(res, 'ลบไม่สำเร็จบางส่วน — มีสมาชิกที่มีข้อมูลอ้างอิงอื่นที่ระบบยังจัดการอัตโนมัติไม่ได้ ต้องลบข้อมูลอ้างอิงเหล่านั้นก่อน (หรือใช้ /reset/member-points + /reset/unlink-line แทนถ้าแค่อยากเทสต์ซ้ำ)', { detail: error.message });
     }
     serverError(res);
   } finally {
@@ -190,9 +183,7 @@ async function resetMemberPoints(req, res) {
   // อ่านเฉพาะ err.response.data.error เหมือน route อื่นทั้งระบบ ผิด field แล้วจะ fallback เป็นข้อความ
   // ทั่วไปที่ไม่บอกสาเหตุจริง ทำให้ดูเหมือนปุ่มกดแล้วไม่มีอะไรเกิดขึ้น
   if (!isResetAllowed()) {
-    return res.status(404).json({
-      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
-    });
+    return notFound(res, 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้');
   }
   try {
     const [result] = await pool.query("UPDATE users SET points = 0 WHERE role = 'MEMBER'");
@@ -236,9 +227,7 @@ async function findProductHistoryBlockers(conn) {
 
 async function resetProducts(req, res) {
   if (!isResetAllowed()) {
-    return res.status(404).json({
-      error: 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้',
-    });
+    return notFound(res, 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้');
   }
   const deleteTransactionHistory = req.body?.deleteTransactionHistory === true;
   const skipBlocked = req.body?.skipBlocked === true;
@@ -306,10 +295,7 @@ async function resetProducts(req, res) {
     await conn.rollback();
     console.error('[resetProducts] FK/DB error:', error.code, error.message);
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
-      return res.status(409).json({
-        error: 'ลบไม่สำเร็จบางส่วน — มีข้อมูลอ้างอิงอื่นที่ระบบยังจัดการอัตโนมัติไม่ได้',
-        detail: error.message,
-      });
+      return conflict(res, 'ลบไม่สำเร็จบางส่วน — มีข้อมูลอ้างอิงอื่นที่ระบบยังจัดการอัตโนมัติไม่ได้', { detail: error.message });
     }
     serverError(res);
   } finally {

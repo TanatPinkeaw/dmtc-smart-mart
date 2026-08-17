@@ -1,7 +1,7 @@
 // 📄 components/preorder/OrderDetailModal.tsx — popup รายละเอียดออเดอร์จอง 1 ใบ (จากประวัติ)
 //    ทำอะไร: โชว์รายการสินค้า/ยอด/สถานะ/สลิป + ปุ่มดูใบเสร็จ (ถ้าจบแล้ว) — ส่วนส่งสลิปใหม่ใช้ UploadSlipModal
 import { useState } from 'react';
-import { X, FileText } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import Swal from '../../swal';
@@ -11,6 +11,7 @@ import AuthImage from '../common/AuthImage'; // ⭐️ SECURITY FIX #1 — โ�
 import { Button } from '../ui/Button';
 import { StatusBadge } from '../ui/StatusBadge';
 import { FieldLabel } from '../ui/FieldLabel';
+import { Modal } from '../ui/Modal';
 
 // label แบบ member view (เต็มกว่าของ staff) — สี/class มาจาก StatusBadge กลาง
 const DETAIL_STATUS_LABEL: Record<string, string> = {
@@ -97,29 +98,21 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
   return (
     // ⭐️ FIX: z-50 เดิมเท่ากับ bottom nav (z-50 ใน Layout.tsx) — เพราะ nav อยู่หลัง <main> ใน DOM ทำให้
     // แม้ backdrop คลุมเต็มจอ nav ก็ยังโผล่ทับด้านบนอยู่ (ตามภาพที่แจ้ง) ยกเป็น z-[80] ให้อยู่เหนือ nav แน่นอน
-    <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <Modal
+      onClose={onClose}
+      title={
+        <div className="flex-1 min-w-0">
+          <p className="truncate">ออเดอร์ #{selectedOrder.id}</p>
+          <p className="text-white/80 text-xs mt-0.5 font-normal">{formatBangkokTime(selectedOrder.created_at)}</p>
+        </div>
+      }
+    >
       {/* ⭐️ FIX: ปรับให้เหมือนสไตล์การ์ด/หัวข้อหน้า POS — แบนขึ้น ตัดไล่สีออก ใช้ theme token ตรงๆ
           เดิม max-h-[90vh] บนมือถือจริง vh นับรวมแถบ URL bar ทำให้ modal โดนตัดปุ่มด้านล่าง เปลี่ยนเป็น dvh */}
       {/* ⭐️ FIX: เดิมไม่มี overflow-hidden — header สีชมพูมุมตรง (ไม่ได้ใส่ rounded-t) เลยล้นทับมุมโค้ง
           ของการ์ดแม่ (rounded-2xl) ทำให้ขอบบนดูเหลี่ยม ไม่มน ใส่ overflow-hidden ให้ครอบตัดตามการ์ดแม่ */}
-      <div className="bg-white rounded-3xl shadow-xl max-w-md w-full max-h-[85dvh] flex flex-col overflow-hidden animate-fade-in">
-        {/* Header - Sticky */}
-        <div className="shrink-0 bg-gradient-to-r from-brand to-brand-dark px-4 py-3 flex justify-between items-center gap-3 shadow-sm">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-white font-bold text-base truncate">ออเดอร์ #{selectedOrder.id}</h2>
-            <p className="text-white/80 text-xs mt-0.5">{formatBangkokTime(selectedOrder.created_at)}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 p-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors duration-150"
-            aria-label="ปิด"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4">
           {/* ⭐️ FIX: เอาคำว่า "สำเร็จแล้ว" ออก — ซ่อนป้ายสถานะทั้งอันตอน COMPLETED เพราะดูซ้ำซ้อน
               ในมุมมองประวัติออเดอร์ที่รู้อยู่แล้วว่าสำเร็จ (สถานะอื่นที่ยังต้องติดตามยังโชว์ตามปกติ) */}
           {selectedOrder.status !== 'COMPLETED' && (
@@ -308,7 +301,6 @@ export function OrderDetailModal({ selectedOrder, storeInfo, refundReason, onRef
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

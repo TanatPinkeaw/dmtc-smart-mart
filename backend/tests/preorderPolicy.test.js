@@ -339,7 +339,7 @@ describe('D. source contract — server.js ใช้ preorderPolicy จริง
     const src = handlerWindow("app.post('/api/orders',", '// 3. API ดึงรายการออเดอร์');
     assert.ok(src.includes('resolveOrderPoints('), 'handler ต้องใช้ resolveOrderPoints (นโยบายกลาง)');
     assert.ok(src.includes('pointsPolicy.blockedRedeem'), 'ต้องเช็ค blockedRedeem');
-    assert.ok(/res\.status\(403\)/.test(src), 'staff ขอแลกแต้มต้องตอบ 403');
+    assert.ok(/res\.status\(403\)|forbidden\(res/.test(src), 'staff ขอแลกแต้มต้องตอบ 403 (ผ่าน helper forbidden)');
     const beginIdx = src.indexOf('beginTransaction');
     const blockIdx = src.indexOf('blockedRedeem');
     assert.ok(beginIdx > 0 && blockIdx > 0 && blockIdx < beginIdx, 'blockedRedeem ต้องถูกเช็คก่อน beginTransaction (ไม่มี side effect)');

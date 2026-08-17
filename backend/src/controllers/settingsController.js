@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ ไม่เปลี่ยน path/พฤติกรรม (mount /api/settings)
 const pool = require('../config/db');
-const { serverError } = require('../utils/http');
+const { serverError, badRequest } = require('../utils/http');
 
 // GET /api/settings/store — ข้อมูลร้านทั้งแถว (เปิดให้ทุก role ที่ล็อกอิน ใช้โชว์หัวใบเสร็จ ฯลฯ)
 async function getStore(req, res) {
@@ -69,14 +69,14 @@ async function updateLoyalty(req, res) {
   const { points_earn_amount_per_point, points_redeem_value_per_point } = req.body;
   const earn = Number(points_earn_amount_per_point);
   const redeem = Number(points_redeem_value_per_point);
-  if (!Number.isFinite(earn) || earn <= 0) return res.status(400).json({ error: 'จำนวนบาทต่อ 1 แต้ม ต้องเป็นตัวเลขมากกว่า 0' });
-  if (!Number.isFinite(redeem) || redeem <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้ม ต้องเป็นตัวเลขมากกว่า 0' });
+  if (!Number.isFinite(earn) || earn <= 0) return badRequest(res, 'จำนวนบาทต่อ 1 แต้ม ต้องเป็นตัวเลขมากกว่า 0');
+  if (!Number.isFinite(redeem) || redeem <= 0) return badRequest(res, 'มูลค่าต่อแต้ม ต้องเป็นตัวเลขมากกว่า 0');
   // 🐛 FIX — column เก็บได้ 4 ตำแหน่งทศนิยม (DECIMAL(10,4)) ค่าที่ละเอียดกว่านั้นจะถูกปัดเหลือ 0 แบบ
   // เงียบๆ ตอน UPDATE (ไม่มี error ใดๆ) ทำให้แอดมินคิดว่าบันทึกค่าหนึ่งไปแต่ระบบใช้จริงเป็นอีกค่า
   // (ตกไปใช้ default 1 บาท/แต้มแทน เพราะ 0 ไม่ผ่านเช็ค >0 ใน getLoyaltyRates) — ปัดเองตรงนี้ก่อน แล้ว
   // เช็คว่าปัดแล้วยังไม่เป็น 0 ถ้าเป็น 0 คือค่าที่กรอกมาละเอียดเกินกว่าระบบรองรับ ให้ error ชัดเจนแทน
   const redeemRounded = Math.round(redeem * 10000) / 10000;
-  if (redeemRounded <= 0) return res.status(400).json({ error: 'มูลค่าต่อแต้มละเอียดเกินไป (รองรับสูงสุด 4 ตำแหน่งทศนิยม เช่น 0.0001)' });
+  if (redeemRounded <= 0) return badRequest(res, 'มูลค่าต่อแต้มละเอียดเกินไป (รองรับสูงสุด 4 ตำแหน่งทศนิยม เช่น 0.0001)');
   try {
     await pool.query(
       'UPDATE settings SET points_earn_amount_per_point = ?, points_redeem_value_per_point = ? WHERE id = 1',

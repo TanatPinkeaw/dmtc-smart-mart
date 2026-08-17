@@ -16,6 +16,8 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { SkeletonCard, SkeletonDashboardStat } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
+import { filterCls } from '../components/ui/fieldStyles';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { PageHeader } from '../components/layout/PageHeader';
 
 interface Overview {
@@ -185,7 +187,7 @@ export default function Summary() {
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand"
+          className={filterCls}
         />
       </div>
 
@@ -245,10 +247,17 @@ export default function Summary() {
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
                 <Coins size={18} className="text-brand" /> สรุปรายได้ &amp; กำไร (แยกกำไรจาก GP)
               </h2>
-              <div className="flex bg-brand-bg border border-brand-border rounded-full p-0.5 print:hidden">
-                <button onClick={() => setProfitView('overall')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'overall' ? 'bg-brand text-white' : 'text-gray-500'}`}>เดือนที่เลือก</button>
-                <button onClick={() => setProfitView('monthly')} className={`px-3 py-1 rounded-full text-xs font-semibold transition ${profitView === 'monthly' ? 'bg-brand text-white' : 'text-gray-500'}`}>รายเดือน</button>
-              </div>
+              <SegmentedControl
+                variant="pill"
+                className="print:hidden"
+                ariaLabel="มุมมองสรุปรายได้"
+                value={profitView}
+                onChange={setProfitView}
+                options={[
+                  { value: 'overall', label: 'เดือนที่เลือก' },
+                  { value: 'monthly', label: 'รายเดือน' },
+                ]}
+              />
             </div>
 
             {!profit || profit.monthly.length === 0 ? (

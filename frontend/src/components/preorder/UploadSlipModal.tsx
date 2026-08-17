@@ -10,7 +10,8 @@
 // backend จะรีเซ็ตสถานะ SLIP_REJECTED กลับเป็น PENDING_VERIFY ให้เองหลังอัปสำเร็จ
 
 import { useState } from 'react';
-import { X, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
+import { Modal } from '../ui/Modal';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -45,20 +46,7 @@ export function UploadSlipModal({ orderId, rejectReason, onClose, onUploaded }: 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0">
-          <h2 className="font-semibold font-display text-base text-white">ส่งสลิปใหม่ — ออเดอร์ #{orderId}</h2>
-          <button
-            onClick={onClose}
-            disabled={uploading}
-            className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="ปิด"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
+    <Modal title={`ส่งสลิปใหม่ — ออเดอร์ #${orderId}`} onClose={onClose}>
         <div className="p-5 space-y-4">
           {rejectReason && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-3">
@@ -89,7 +77,6 @@ export function UploadSlipModal({ orderId, rejectReason, onClose, onUploaded }: 
             </div>
           </label>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -20,7 +20,7 @@
 const pool = require('../config/db');
 const crypto = require('crypto');
 const config = require('../config/config');
-const { serverError } = require('../utils/http');
+const { serverError, badRequest, unauthorized } = require('../utils/http');
 const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
 
 const LINE_VERIFY_URL = 'https://api.line.me/oauth2/v2.1/verify';
@@ -59,7 +59,7 @@ async function lineLogin(req, res) {
   if (config.LINE_LIFF_CHANNEL_ID && id_token) {
     lineUserId = await verifyLiffIdToken(id_token);
     if (!lineUserId) {
-      return res.status(401).json({ error: 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาลองใหม่' });
+      return unauthorized(res, 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาลองใหม่');
     }
   } else if (!config.LINE_LIFF_CHANNEL_ID) {
     // ยังไม่ได้ config LINE_LIFF_CHANNEL_ID — fallback เหมือน code เดิม พร้อม log เตือน
@@ -69,11 +69,11 @@ async function lineLogin(req, res) {
     lineUserId = bodyLineUserId;
   } else {
     // LINE_LIFF_CHANNEL_ID ตั้งไว้แล้วแต่ id_token ไม่มา → LIFF app ไม่มี openid scope
-    return res.status(401).json({ error: 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาตรวจสอบ LIFF scope (openid) ใน LINE Developers Console' });
+    return unauthorized(res, 'ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาตรวจสอบ LIFF scope (openid) ใน LINE Developers Console');
   }
 
   if (!lineUserId || !String(lineUserId).trim()) {
-    return res.status(400).json({ error: 'ไม่พบข้อมูล LINE user id' });
+    return badRequest(res, 'ไม่พบข้อมูล LINE user id');
   }
 
   try {
@@ -84,7 +84,7 @@ async function lineLogin(req, res) {
     if (users.length === 0) {
       // "LINE account not linked" — 401 (frontend api.ts ใส่ /auth/line-login ไว้ใน NO_REFRESH_PATHS
       // แล้ว จึงไม่ไป auto-refresh/force-logout ตอนเจอ 401 จาก endpoint นี้)
-      return res.status(401).json({ error: 'บัญชี LINE นี้ยังไม่ได้ผูกกับสมาชิกในระบบ กรุณาสมัคร/ผูกบัญชีก่อน' });
+      return unauthorized(res, 'บัญชี LINE นี้ยังไม่ได้ผูกกับสมาชิกในระบบ กรุณาสมัคร/ผูกบัญชีก่อน');
     }
 
     const user = users[0];

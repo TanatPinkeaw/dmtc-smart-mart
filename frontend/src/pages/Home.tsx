@@ -14,6 +14,7 @@ import { Button } from '../components/ui/Button';
 import { SectionTitle } from '../components/ui/SectionTitle';
 import { ProductImage } from '../components/ui/ProductImage';
 import { ProductPrice } from '../components/ui/ProductPrice';
+import { SkeletonCard, SkeletonLine, SkeletonListRow } from '../components/ui/Skeleton';
 import Swal from '../swal';
 import { getCurrentUserOrRedirect } from '../utils/getCurrentUser';
 import { BRAND } from '../theme';
@@ -368,10 +369,7 @@ export default function Home() {
       {!isStaff && (loadingOrder || openOrder) && (
         <div className="px-5 -mt-16 relative z-10 max-w-lg mx-auto">
           {loadingOrder ? (
-            <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 animate-pulse">
-              <div className="h-3.5 bg-brand-border/40 rounded-lg w-1/3 mb-2.5" />
-              <div className="h-3 bg-brand-border/40 rounded-lg w-2/3" />
-            </div>
+            <SkeletonCard />
           ) : openOrder && (
             // 🎫 ตั๋วรับของ — แถบหัวตั๋ว + เส้นประตัด เหมือนตั๋วรับของที่เคาน์เตอร์ (signature)
             <div className="bg-white border border-brand-border rounded-3xl shadow-md overflow-hidden">
@@ -458,7 +456,7 @@ export default function Home() {
           <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide">
             {loadingPromos
               ? [1, 2].map(i => (
-                  <div key={i} className="shrink-0 w-64 h-24 bg-white border border-brand-border rounded-3xl shadow-sm animate-pulse" />
+                  <SkeletonListRow key={i} height="h-24" className="shrink-0 w-64 shadow-sm" />
                 ))
               : promos.map(p => (
                   <div key={p.id} className="snap-start shrink-0 w-64 bg-gradient-to-br from-brand to-brand-dark rounded-2xl shadow-md p-4 text-white">
@@ -490,9 +488,9 @@ export default function Home() {
             {loadingBest
               ? [1, 2, 3].map(i => (
                   <div key={i} className="shrink-0 w-36 bg-white border border-brand-border rounded-3xl shadow-sm p-2.5 animate-pulse">
-                    <div className="w-full h-24 bg-brand-border/40 rounded-xl mb-2" />
-                    <div className="h-3 bg-brand-border/40 rounded w-3/4 mb-1.5" />
-                    <div className="h-3 bg-brand-border/40 rounded w-1/2" />
+                    <div className="mb-2"><SkeletonLine width="w-full" height="h-24" /></div>
+                    <SkeletonLine width="w-3/4" height="h-3" className="mb-1.5" />
+                    <SkeletonLine width="w-1/2" height="h-3" />
                   </div>
                 ))
               : bestSellers.map(p => {

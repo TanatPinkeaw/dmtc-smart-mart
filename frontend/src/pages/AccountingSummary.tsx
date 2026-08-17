@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, TrendingUp, Wallet, Coins, Download, PiggyBank } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Button } from '../components/ui/Button';
+import { filterCls } from '../components/ui/fieldStyles';
 import api from '../api';
 import Swal from '../swal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -96,16 +98,17 @@ export default function AccountingSummary() {
 
         {/* Date range + export */}
         <div className="flex flex-wrap items-center gap-2 mb-6">
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand" />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={filterCls} />
           <span className="text-gray-400 text-sm">ถึง</span>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand" />
-          <button
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={filterCls} />
+          <Button
+            variant="secondary"
+            className="ml-auto"
             onClick={handleExport}
             disabled={exporting || loading}
-            className="ml-auto flex items-center gap-1.5 bg-white border border-brand-border text-brand rounded-full px-4 py-2 text-sm font-bold shadow-sm hover:bg-brand-bg active:scale-[0.98] transition-all duration-150 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <Download size={16} /> {exporting ? 'กำลัง Export...' : 'Export Excel'}
-          </button>
+          </Button>
         </div>
 
         {loading ? (

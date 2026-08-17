@@ -119,7 +119,7 @@ check('validateRequest set req.validatedBody + req.body (sanitize)', /req\.valid
 console.log('G) error response ใช้ utils/http.js ตัวกลาง (serverError — กัน copy 500 ซ้ำ):');
 const httpSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'http.js'), 'utf8');
 check('http.js มี serverError (500 ข้อความกลาง)', /function serverError\(res/.test(httpSrc));
-check('http.js sendError คืน { error } + details เฉพาะเมื่อส่ง', /function sendError\(res/.test(httpSrc) && httpSrc.includes('{ error: message, details }') && httpSrc.includes('{ error: message }'));
+check('http.js sendError คืน { error } + spread object details (key เดิมคงอยู่) / details primitive', /function sendError\(res/.test(httpSrc) && httpSrc.includes('const body = { error: message }') && httpSrc.includes('Object.assign(body, details)') && httpSrc.includes('body.details = details'));
 const raw500 = (serverSrc.match(/res\.status\(500\)\.json\(\{ error: 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่ภายหลัง'\}\);/g) || []).length;
 check('server.js ไม่เหลือ raw 500 ข้อความกลาง (ต้อง serverError(res))', raw500 === 0);
 check('server.js ใช้ serverError(res) แล้ว', serverSrc.includes('serverError(res)'));
@@ -145,6 +145,28 @@ check('server.js ไม่เหลือ full_name query raw (ต้อง getU
 check('server.js ไม่เหลือ role query raw (ต้อง getUserRole)', !/(?:pool|conn)\.query\('SELECT role FROM users WHERE id = \?'/.test(serverSrc));
 check('server.js ไม่เหลือ points FOR UPDATE raw (ต้อง lockUserPoints)', !/conn\.query\('SELECT points FROM users WHERE id = \?' FOR UPDATE'/.test(serverSrc));
 check('server.js import queries จาก utils/queries', /require\('\.\/src\/utils\/queries'\)/.test(serverSrc));
+
+console.log('I) 4xx response ใช้ utils/http.js ตัวกลาง (badRequest/unauthorized/forbidden/notFound/conflict/gone):');
+check('http.js มี unauthorized (401)', /function unauthorized\(res/.test(httpSrc));
+check('http.js มี forbidden (403)', /function forbidden\(res/.test(httpSrc));
+check('http.js มี conflict (409)', /function conflict\(res/.test(httpSrc));
+check('http.js มี gone (410)', /function gone\(res/.test(httpSrc));
+// helper ต้องถูกใช้จริง (ไม่ใช่ของตาย):
+const ctrl4xxSrcs = ctrlWith500.map(c => fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', c + '.js'), 'utf8')).join('\n');
+check('badRequest ถูกใช้จริง (server.js + controllers)', /badRequest\(/.test(serverSrc) && /badRequest\(/.test(ctrl4xxSrcs));
+check('notFound ถูกใช้จริง (server.js + controllers)', /notFound\(/.test(serverSrc) && /notFound\(/.test(ctrl4xxSrcs));
+check('unauthorized/forbidden/conflict/gone ถูกใช้จริงใน server.js', ['unauthorized(', 'forbidden(', 'conflict(', 'gone('].every(h => serverSrc.includes(h)));
+// ห้าม raw 4xx json เขียนเอง (guards.js = ตำแหน่งนิยามกลาง + lineWebhook .end() = LINE protocol — ข้อยกเว้น):
+const raw4xx = (serverSrc.match(/res\.status\(4[0-9][0-9]\)\.json/g) || []).length;
+check('server.js ไม่เหลือ raw res.status(4xx).json (ต้องผ่าน helper)', raw4xx === 0);
+let ctrlNoRaw4xx = true;
+for (const c of ctrlWith500) {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', c + '.js'), 'utf8');
+  const raw = (src.match(/res\.status\(4[0-9][0-9]\)\.json/g) || []).length;
+  if (raw > 0) { ctrlNoRaw4xx = false; console.log('    ✗', c, 'raw4xx=', raw); }
+}
+check('controllers ทั้ง 7 ไฟล์ไม่เหลือ raw res.status(4xx).json (ต้องผ่าน helper)', ctrlNoRaw4xx);
+check('lineWebhook res.status(401).end() ยังอยู่ (LINE webhook ต้องตอบ raw status)', /res\.status\(401\)\.end\(\)/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'lineWebhookController.js'), 'utf8')));
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} serverGuardRails: ${pass} ผ่าน, ${fail} ไม่ผ่าน`);
 process.exit(fail ? 1 : 0);

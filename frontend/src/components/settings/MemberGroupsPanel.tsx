@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, Trash2 } from 'lucide-react';
 import { SkeletonLine } from '../ui/Skeleton';
+import { Button } from '../ui/Button';
 import api from '../../api';
 import Swal from '../../swal';
 import { getErrorMessage } from '../../utils/errorMessage';
@@ -99,9 +100,7 @@ export function MemberGroupsPanel() {
               value={ruleForm[g.id]?.discount_percent || ''}
               onChange={e => setRuleForm(prev => ({ ...prev, [g.id]: { ...(prev[g.id] || { category_id: '' }), discount_percent: e.target.value } }))}
               className="w-24 px-3 py-2 rounded-xl border border-brand-border bg-white text-sm font-bold text-right focus:outline-none focus:ring-2 focus:ring-brand" />
-            <button onClick={() => addRule(g.id)} className="inline-flex items-center gap-1 bg-brand hover:bg-brand-dark text-white text-sm font-bold px-4 py-2 rounded-xl active:scale-95 transition-all">
-              <Plus size={14} /> เพิ่มกฎ
-            </button>
+            <Button onClick={() => addRule(g.id)}><Plus size={14} /> เพิ่มกฎ</Button>
           </div>
         </div>
       ))}

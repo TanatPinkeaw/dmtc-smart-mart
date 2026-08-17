@@ -12,7 +12,7 @@
 // module กลางเดียวกับที่ server.js ใช้ (pool, money utils) กัน logic เพี้ยนไปคนละแบบ
 const pool = require('../config/db');
 const { toSatang, fromSatang } = require('../utils/money');
-const { serverError } = require('../utils/http');
+const { serverError, badRequest, forbidden, notFound } = require('../utils/http');
 const { sendDailyReport } = require('../scripts/dailyReport'); // ⭐️ Sprint 1 — D4
 const reportsExport = require('../services/reports-export'); // ⭐️ Phase 4 Part 2 — executive summary export
 
@@ -246,7 +246,7 @@ async function vendorSales(req, res) {
 
     if (req.user.role !== 'ADMIN') {
       if (!vendor_id || Number(vendor_id) !== req.user.id) {
-        return res.status(403).json({ error: "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น" });
+        return forbidden(res, "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น");
       }
     }
 
@@ -284,10 +284,10 @@ async function vendorSales(req, res) {
 async function vendorSalesDetail(req, res) {
   try {
     const { vendor_id } = req.query;
-    if (!vendor_id) return res.status(400).json({ error: 'ต้องระบุ vendor_id' });
+    if (!vendor_id) return badRequest(res, 'ต้องระบุ vendor_id');
 
     if (req.user.role !== 'ADMIN' && Number(vendor_id) !== req.user.id) {
-      return res.status(403).json({ error: "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น" });
+      return forbidden(res, "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น");
     }
 
     const [rows] = await pool.query(`
@@ -678,7 +678,7 @@ async function myHours(req, res) {
     const userId = req.user.id;
 
     const [users] = await pool.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
-    if (users.length === 0) return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้' });
+    if (users.length === 0) return notFound(res, 'ไม่พบข้อมูลผู้ใช้');
     const me = users[0];
 
     const [[shiftRow]] = await pool.query(
@@ -795,7 +795,7 @@ async function dailySend(req, res) {
 async function exportSalesCsv(req, res) {
   const { start_date, end_date, format = 'csv' } = req.query;
   if (format !== 'excel' && format !== 'csv') {
-    return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });
+    return badRequest(res, 'format ต้องเป็น excel หรือ csv เท่านั้น');
   }
 
   // แปลง array-of-rows -> CSV string (ใส่ " ครอบทุกช่อง กัน , ในข้อมูล)
@@ -997,7 +997,7 @@ async function exportSalesCsv(req, res) {
 async function executiveExport(req, res) {
   const { startDate, endDate, format = 'excel' } = req.query;
   if (format !== 'excel' && format !== 'csv') {
-    return res.status(400).json({ error: 'format ต้องเป็น excel หรือ csv เท่านั้น' });
+    return badRequest(res, 'format ต้องเป็น excel หรือ csv เท่านั้น');
   }
   try {
     const rows = await reportsExport.fetchLineItems(pool, startDate, endDate);

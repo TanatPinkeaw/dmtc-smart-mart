@@ -5,6 +5,7 @@ import { ShoppingCart, Plus, Minus, X, CheckCircle, Upload, ChevronUp, ChevronDo
 import { FieldLabel } from '../ui/FieldLabel';
 import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Button';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 
@@ -171,15 +172,17 @@ export function CartPanel({
             </div>
           )}
 
-          {/* ⭐️ FIX: เลือกวิธีจ่ายเงิน — เดิม text-sm ยาวเกิน ตัวหนังสือชนกันในปุ่มแคบบนมือถือ ลดขนาด + leading-tight */}
-          <div className="flex gap-2">
-            <button onClick={() => onSetPaymentMethod('CASH')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${paymentMethod === 'CASH' ? 'border-brand bg-white text-brand-dark shadow-sm' : 'border-gray-200 text-gray-400 bg-white/50'}`}>
-              💵 จ่ายเงินสดหน้าร้าน
-            </button>
-            <button onClick={() => onSetPaymentMethod('QR')} className={`flex-1 py-2 px-1 rounded-lg font-bold text-xs sm:text-sm leading-tight border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 bg-white/50'}`}>
-              📱 สแกนจ่าย
-            </button>
-          </div>
+          {/* เลือกวิธีจ่ายเงิน — box variant ของ SegmentedControl (CASH = แบรนด์ / QR = น้ำเงิน) */}
+          <SegmentedControl
+            variant="box"
+            ariaLabel="วิธีจ่ายเงิน"
+            value={paymentMethod}
+            onChange={(v) => onSetPaymentMethod(v)}
+            options={[
+              { value: 'CASH', label: '💵 จ่ายเงินสดหน้าร้าน', className: 'font-bold text-xs sm:text-sm leading-tight' },
+              { value: 'QR', label: '📱 สแกนจ่าย', className: 'font-bold text-xs sm:text-sm leading-tight', selectedClassName: 'border-blue-600 bg-blue-50 text-blue-700', focusRingClassName: 'focus-visible:ring-blue-500 focus-visible:ring-offset-1' },
+            ]}
+          />
 
           {/* โซนอัปโหลดสลิป (แสดงเฉพาะตอนสแกนจ่าย) — ⭐️ Sprint 2 — B9: Enhanced with validation */}
           {paymentMethod === 'QR' && (

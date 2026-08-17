@@ -107,6 +107,7 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
     'components/pos/CartPanel.tsx', 'components/preorder/CartPanel.tsx',
     'components/auth/ChangePasswordModal.tsx', 'components/dashboard/PendingShiftClosesWidget.tsx',
     'components/Layout.tsx', 'components/preorder/MyOrdersModal.tsx', 'pages/Schedules.tsx',
+    'pages/AccountingSummary.tsx', 'components/settings/MemberGroupsPanel.tsx',
   ];
 
   test('ไม่มีปุ่ม gradient เขียนเอง (<button ... bg-gradient-to-br) ในไฟล์ที่อพยพแล้ว', () => {
@@ -184,6 +185,33 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
       'Button ต้องมี outline-danger (bg-white border-red-200 text-red-600 hover:bg-red-50) — ปุ่มอันตรายแบบไม่ทึบ');
   });
 
+  test('ไม่มีปุ่ม bg-brand ทึบ (flat) เขียนเองในไฟล์ที่อพยพแล้ว (primary ต้อง gradient ผ่าน Button)', () => {
+    // ⭐️ กฎ gradient/สีทึบ/outline จับ bg-brand ทึบไม่ถึง (สี custom ไม่ในรายการ) — เจอจริง:
+    //   pos CartPanel "ค้นหา"/"ใช้โค้ด", Settings "ค้นหา", MemberGroupsPanel "เพิ่มกฎ"
+    //   primary (พื้นแบรนด์) ต้องใช้ <Button variant="primary"> (gradient) — ยกเว้น FAB ลอย (fixed)
+    const FLAT_BRAND = /(^| )bg-brand(?=[ \n])/;
+    const offenders: string[] = [];
+    for (const f of BUTTON_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      let idx = 0;
+      while ((idx = src.indexOf('<button', idx)) !== -1) {
+        if (src[idx + 7] !== '/') { // ข้าม </button>
+          const win = src.slice(idx, idx + 400);
+          const cm = win.match(/className=(["'`])([^"'`]*)\1/);
+          if (cm) {
+            const c = cm[2];
+            if (FLAT_BRAND.test(c) && c.includes('text-white') && !c.includes('fixed')) {
+              offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}`);
+            }
+          }
+        }
+        idx += 7;
+      }
+    }
+    assert.deepEqual(offenders, [],
+      `เจอปุ่ม bg-brand ทึบเขียนเอง (flat แทน gradient primary) — ใช้ <Button variant="primary"> (ยกเว้น FAB ลอย fixed):\n${offenders.join('\n')}`);
+  });
+
   test('Button.tsx ต้องมี variant primary = gradient แบรนด์ (มาตรฐานปุ่มหลัก)', () => {
     const button = readFileSync(join(BASE, 'components/ui/Button.tsx'), 'utf8');
     assert.ok(button.includes("primary: 'bg-gradient-to-br from-brand to-brand-dark text-white font-bold'"),
@@ -241,7 +269,15 @@ describe('โมดัล — shell ต้องใช้ ui/Modal (ห้าม
     'pages/Settings.tsx', 'pages/AttendanceManagement.tsx',
     'components/pos/RewardModal.tsx', 'components/dashboard/DetailModal.tsx',
     'components/dashboard/CloseShiftModal.tsx', 'components/auth/ChangePasswordModal.tsx',
+    'components/preorder/MyOrdersModal.tsx', 'components/preorder/OrderDetailModal.tsx',
+    'components/preorder/UploadSlipModal.tsx',
   ];
+
+  test('Modal title ต้องเป็น font-display (Prompt — หัวข้อโมดัลภาษาเดียวทั้งแอป)', () => {
+    const modal = readFileSync(join(BASE, 'components/ui/Modal.tsx'), 'utf8');
+    assert.ok(/<h3 className="[^"]*font-display/.test(modal),
+      'Modal title (h3) ต้องมี font-display — หัวข้อโมดัลทั้งหมดต้องเป็น Prompt ตามภาษาแบรนด์');
+  });
 
   test('ไฟล์ที่อพยพแล้ว import Modal จาก ui/Modal และไม่มี shell fixed inset-0 เขียนเอง', () => {
     for (const f of MODAL_ADOPTED) {
@@ -279,6 +315,27 @@ describe('badge สถานะ — ต้องใช้ ui/StatusBadge (map �
       assert.ok(!src.includes("getStatusBadge"), `${f} ห้ามมี getStatusBadge เขียนเอง — ใช้ <StatusBadge>`);
       assert.ok(!/\? 'bg-(blue|yellow|orange|green|red|purple)-100/.test(src),
         `${f} ห้าม ternary กำหนดสี badge เอง — สีสถานะต้องมาจาก ui/StatusBadge ที่เดียว`);
+    }
+  });
+});
+
+describe('ช่องกรองวันที่/ค้นหา — ต้องใช้ filterCls จาก ui/fieldStyles (พื้นขาว + เงา — ต่างจาก inputCls ฟอร์ม)', () => {
+  const FILTER_ADOPTED = ['pages/Summary.tsx', 'pages/AccountingSummary.tsx'];
+
+  test('ไฟล์ที่อพยพแล้ว import filterCls จาก ui/fieldStyles', () => {
+    for (const f of FILTER_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(src.includes("import { filterCls } from '../components/ui/fieldStyles'"),
+        `${f} ต้อง import filterCls จาก ui/fieldStyles`);
+    }
+  });
+
+  test('ไม่มีช่องกรองวันที่เขียนเอง (bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm)', () => {
+    const pattern = 'bg-white border border-brand-border rounded-full px-3 py-2 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-brand';
+    for (const f of FILTER_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(!src.includes(pattern),
+        `${f} ห้ามเขียนช่องกรองวันที่เอง — ใช้ className={filterCls} จาก ui/fieldStyles`);
     }
   });
 });
@@ -427,7 +484,14 @@ describe('skeleton — ใช้ ui/Skeleton (SkeletonLine/SkeletonListRow) ห�
     'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx', 'pages/Summary.tsx',
     'components/pos/RewardModal.tsx',
     'components/settings/LoyaltySettingsPanel.tsx', 'components/settings/MemberGroupsPanel.tsx',
+    'pages/Home.tsx',
   ];
+
+  test('SkeletonLine ต้องรับ className (ต่อท้ายได้ — กัน margin/ความกว้างตามบริบทเขียนเอง)', () => {
+    const skeleton = readFileSync(join(BASE, 'components/ui/Skeleton.tsx'), 'utf8');
+    assert.ok(/className = ''/.test(skeleton),
+      'SkeletonLine ต้องมี prop className — กันเขียนกล่อง bg-brand-border/40 เองในหน้า');
+  });
 
   test('ไฟล์ที่อพยพแล้ว import Skeleton จาก ui/Skeleton และไม่มีกล่อง loading เขียนเอง', () => {
     for (const f of SKELETON_ADOPTED) {
@@ -485,5 +549,56 @@ describe('การ์ดสินค้า — ต้องใช้ ui/Product
     const src = readFileSync(join(BASE, 'pages/Home.tsx'), 'utf8');
     assert.ok(!/font-display text-(sm|xs|base) font-bold text-brand tabular-nums/.test(src),
       'Home ห้ามเขียน span ราคาเอง — ใช้ <ProductPrice> (ขีดฆ่า/สีตามสถานะมาตรฐานเดียว)');
+  });
+});
+
+describe('segmented control — ปุ่มกลุ่มเลือกต้องใช้ ui/SegmentedControl (ห้ามเขียนเอง)', () => {
+  // ปุ่มวิธีจ่ายเงิน (pos + preorder — เดิม copy กัน 2 ไฟล์) + ปุ่ม pill ช่วงเวลา/มุมมอง
+  const SEGMENTED_ADOPTED = [
+    'components/pos/CartPanel.tsx',
+    'components/preorder/CartPanel.tsx',
+    'pages/Dashboard.tsx',
+    'pages/Summary.tsx',
+  ];
+
+  test('SEGMENTED_ADOPTED — ทุกไฟล์ต้อง import ui/SegmentedControl', () => {
+    for (const f of SEGMENTED_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      assert.ok(/from ['"].*ui\/SegmentedControl['"]/.test(src),
+        `${f} ต้องใช้ <SegmentedControl> จาก ui/SegmentedControl (เดิมปุ่มวิธีจ่าย copy กัน 2 ไฟล์)`);
+    }
+  });
+
+  test('ไม่มีปุ่ม segmented เขียนเองในไฟล์ที่อพยพแล้ว (selected QR / container pill / ปุ่ม border-2)', () => {
+    const offenders: string[] = [];
+    for (const f of SEGMENTED_ADOPTED) {
+      const src = readFileSync(join(BASE, f), 'utf8');
+      if (/\? 'border-blue-600 bg-blue-50/.test(src)) {
+        offenders.push(`  ${f}: selected QR เขียนเองใน ternary (border-blue-600 bg-blue-50) — ใช้ selectedClassName ของ option`);
+      }
+      if (/bg-brand-bg border border-brand-border rounded-full p-0\.5/.test(src)) {
+        offenders.push(`  ${f}: container pill เขียนเอง (bg-brand-bg ... rounded-full p-0.5) — ใช้ variant="pill"`);
+      }
+      let idx = 0;
+      while ((idx = src.indexOf('<button', idx)) !== -1) {
+        if (src[idx + 7] !== '/') {
+          const win = src.slice(idx, idx + 300);
+          if (win.includes('border-2')) {
+            offenders.push(`  ${f}:${src.slice(0, idx).split('\n').length}: ปุ่ม border-2 เขียนเอง — ใช้ variant="box"`);
+          }
+        }
+        idx += 7;
+      }
+    }
+    assert.deepEqual(offenders, [],
+      `เจอ segmented control เขียนเองในไฟล์ที่ควรใช้ ui/SegmentedControl:\n${offenders.join('\n')}`);
+  });
+
+  test('SegmentedControl — มี variant box + pill และ semantic radio/radiogroup', () => {
+    const src = readFileSync(join(BASE, 'components/ui/SegmentedControl.tsx'), 'utf8');
+    assert.ok(/variant\?: 'box' \| 'pill'/.test(src), 'ต้องมี variant box + pill');
+    assert.ok(src.includes('role="radiogroup"'), 'container ต้องเป็น radiogroup');
+    assert.ok(src.includes('role="radio"'), 'ปุ่มต้องเป็น radio');
+    assert.ok(src.includes('aria-checked'), 'ต้องมี aria-checked');
   });
 });

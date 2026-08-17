@@ -26,6 +26,7 @@ import { StatCards } from '../components/dashboard/StatCards';
 import { AdminDashboardHero } from '../components/dashboard/AdminDashboardHero'; // ⭐️ Design-ref — AdminDashboardScreen.tsx
 import { AlertCardsGrid } from '../components/dashboard/AlertCardsGrid';
 import { SkeletonCard, SkeletonDashboardStat, SkeletonListRow } from '../components/ui/Skeleton';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { DetailModal } from '../components/dashboard/DetailModal';
 import { PageHeader } from '../components/layout/PageHeader';
 
@@ -318,18 +319,18 @@ export default function Dashboard() {
                   <h3 className="text-xs font-semibold text-gray-700">
                     Peak Hours — ยอดขายรายชั่วโมง{hourlyPeriod !== 'today' && ' (เฉลี่ยต่อวัน)'}
                   </h3>
-                  <div className="flex bg-brand-bg border border-brand-border rounded-full p-0.5">
-                    {(['today', '7d', '30d'] as const).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => handleHourlyPeriodChange(p)}
-                        disabled={hourlyLoading}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition disabled:opacity-50 ${hourlyPeriod === p ? 'bg-brand text-white' : 'text-gray-500'}`}
-                      >
-                        {p === 'today' ? 'วันนี้' : p === '7d' ? '7 วัน' : '30 วัน'}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl
+                    variant="pill"
+                    ariaLabel="ช่วงเวลายอดขายรายชั่วโมง"
+                    value={hourlyPeriod}
+                    onChange={handleHourlyPeriodChange}
+                    disabled={hourlyLoading}
+                    options={[
+                      { value: 'today', label: 'วันนี้' },
+                      { value: '7d', label: '7 วัน' },
+                      { value: '30d', label: '30 วัน' },
+                    ]}
+                  />
                 </div>
                 {peakHour !== null && hourly.some(h => Number(h.total) > 0) && (
                   <p className="text-[10px] text-brand font-semibold mb-3">

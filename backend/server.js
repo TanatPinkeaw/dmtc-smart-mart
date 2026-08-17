@@ -39,7 +39,7 @@ const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
 const { slipUpload, shiftPhotoUpload, profilePhotoUpload } = require('./src/config/multer');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
 const { saveImage } = require('./src/config/cloudinary');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
 const { requireRole, validateRequest } = require('./src/middleware/guards');  // ⭐️ guards รวมไว้ที่เดียว (server.js ไม่นิยามเอง)
-const { serverError } = require('./src/utils/http');  // ⭐️ 500 ข้อความกลาง (เดิม copy 146 จุด)
+const { serverError, badRequest, unauthorized, forbidden, notFound, conflict, gone } = require('./src/utils/http');  // ⭐️ response กลาง (500/400/401/403/404/409/410)
 const { getOrderItems, getUserFullName, getUserRole, lockUserPoints } = require('./src/utils/queries');  // ⭐️ SQL ซ้ำรวมไว้ที่เดียว (เดิม copy 14 จุด)
 
 // ⭐️ Sprint 1 — B4: ผ่อนปรน rate limit ตอน dev/UAT (ค่าเดิม 5/15min แน่นเกินไปสำหรับ manual test
@@ -575,7 +575,7 @@ function requireSetupKey(req, res, next) {
   const expected = Buffer.from(config.SETUP_KEY);
   const isMatch = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
   if (!isMatch) {
-    return res.status(403).json({ error: 'setup key ไม่ถูกต้อง' });
+    return forbidden(res, 'setup key ไม่ถูกต้อง');
   }
   next();
 }
@@ -606,7 +606,7 @@ function authenticateToken(req, res, next) {
   // ⭐️ F4 — Debug token verification
   if (!token) {
     console.warn(`[AUTH] No token found for ${req.method} ${req.path}`);
-    return res.status(401).json({ error: 'ไม่ได้รับอนุญาต กรุณาเข้าสู่ระบบ' });
+    return unauthorized(res, 'ไม่ได้รับอนุญาต กรุณาเข้าสู่ระบบ');
   }
 
   jwt.verify(token, JWT_SECRET, async (err, payload) => {
@@ -614,10 +614,10 @@ function authenticateToken(req, res, next) {
       // ⭐️ Task 8 — แยก 401 (หมดอายุ ต้อง login ใหม่) ออกจาก 403 (token ผิด/ปลอม)
       if (err.name === 'TokenExpiredError') {
         console.warn(`[AUTH] Token expired for ${req.method} ${req.path}`);
-        return res.status(401).json({ error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+        return unauthorized(res, 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
       }
       console.error(`[AUTH] Token verification failed for ${req.method} ${req.path}: ${err.message}`);
-      return res.status(403).json({ error: 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
+      return forbidden(res, 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่');
     }
     // ⭐️ Security — access token ปกติ (generateAccessToken) ไม่มี claim `type` เลย
     // token ที่มี type คือ token เฉพาะทาง ห้ามเอามาใช้แทน access token กับ REST:
@@ -626,12 +626,12 @@ function authenticateToken(req, res, next) {
     // ถ้าไม่กันตรงนี้ socket token ที่หลุดจาก XSS จะยิง REST API แทน user ได้ทันที
     if (payload.type) {
       console.warn(`[AUTH] Rejected '${payload.type}' token used as access token for ${req.method} ${req.path}`);
-      return res.status(403).json({ error: 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
+      return forbidden(res, 'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่');
     }
     try {
       if (await isTokenRevoked(payload)) {
         console.warn(`[AUTH] Revoked token used for ${req.method} ${req.path}, user_id=${payload.id}`);
-        return res.status(401).json({ error: 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบใหม่' });
+        return unauthorized(res, 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบใหม่');
       }
     } catch (revokeErr) {
       console.error('[AUTH] Revocation check failed:', revokeErr.message);
@@ -659,7 +659,7 @@ function requireCsrf(req, res, next) {
 
   const headerToken = req.headers['x-csrf-token'];
   if (!req.user?.csrf || !headerToken || req.user.csrf !== headerToken) {
-    return res.status(403).json({ error: 'CSRF token ไม่ถูกต้องหรือหายไป กรุณารีเฟรชหน้าเว็บแล้วลองใหม่' });
+    return forbidden(res, 'CSRF token ไม่ถูกต้องหรือหายไป กรุณารีเฟรชหน้าเว็บแล้วลองใหม่');
   }
   next();
 }
@@ -699,7 +699,7 @@ function requirePasswordChange(req, res, next) {
   if (!req.user?.must_change_password) return next();
   const exempt = req.path.endsWith('/change-password') || req.path === '/api/auth/logout' || req.path === '/api/auth/csrf-token';
   if (exempt) return next();
-  return res.status(403).json({ error: 'ต้องเปลี่ยนรหัสผ่านก่อนใช้งาน', code: 'MUST_CHANGE_PASSWORD' });
+  return forbidden(res, 'ต้องเปลี่ยนรหัสผ่านก่อนใช้งาน', { code: 'MUST_CHANGE_PASSWORD' });
 }
 
 app.get('/api/health', async (req, res) => {
@@ -797,7 +797,7 @@ app.get('/api/categories', async (req, res) => {
 
 app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { name } = req.body;
-  if (!name) return res.status(400).json({ error: "กรุณาระบุชื่อหมวดหมู่" });
+  if (!name) return badRequest(res, "กรุณาระบุชื่อหมวดหมู่");
 
   // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างหมวดหมู่ซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
   const idempotencyKey = req.headers['idempotency-key'];
@@ -834,7 +834,7 @@ app.get('/api/categories/export', requireRole('ADMIN', 'MANAGER'), async (req, r
 // ⭐️ Import หมวดหมู่ CSV — มี id = UPDATE ชื่อ (แก้ของเดิม), ไม่มี id/id ว่าง = INSERT ใหม่ (เพิ่ม)
 // มี id แต่หา id นั้นไม่เจอ = ข้ามแถวนั้นไปเงียบๆ (กันพิมพ์ id ผิดแล้วสร้างแถวใหม่โดยไม่ตั้งใจ)
 app.post('/api/categories/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'กรุณาเลือกไฟล์ CSV' });
+  if (!req.file) return badRequest(res, 'กรุณาเลือกไฟล์ CSV');
   const results = [];
   fs.createReadStream(req.file.path)
     .pipe(csv())
@@ -1089,7 +1089,7 @@ app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(produ
     res.status(201).json({ id: result.insertId, message: "เพิ่มสินค้าสำเร็จ" });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: "บาร์โค้ดนี้ซ้ำกับในระบบแล้ว" });
+      return badRequest(res, "บาร์โค้ดนี้ซ้ำกับในระบบแล้ว");
     }
     console.error('[500]', error.message);
 
@@ -1119,7 +1119,7 @@ app.get('/api/products/export', requireRole('ADMIN', 'MANAGER'), async (req, res
 // ⭐️ Import สินค้า CSV — มี id ที่มีจริง = UPDATE (แก้ไข, เฉพาะ 6 คอลัมน์ที่ export ไป ฟิลด์อื่นไม่แตะ)
 // ไม่มี id/id หาไม่เจอ = INSERT ใหม่ — barcode ซ้ำจะโดน DB unique constraint reject แถวนั้น (ข้าม ไม่ทำทั้งไฟล์พัง)
 app.post('/api/products/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'กรุณาเลือกไฟล์ CSV' });
+  if (!req.file) return badRequest(res, 'กรุณาเลือกไฟล์ CSV');
   const results = [];
   fs.createReadStream(req.file.path)
     .pipe(csv())
@@ -1171,7 +1171,7 @@ app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(pr
   try {
     // ⭐️ Sprint 2: Validate expiry_date if provided
     if (expiry_date && new Date(expiry_date) < new Date()) {
-      return res.status(400).json({ error: 'วันหมดอายุไม่สามารถเป็นวันที่ผ่านมาแล้ว' });
+      return badRequest(res, 'วันหมดอายุไม่สามารถเป็นวันที่ผ่านมาแล้ว');
     }
 
     // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log (รวม cost เผื่อ client ไม่ส่ง cost มา จะได้ไม่ทับเป็น 0)
@@ -1219,11 +1219,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body; // หน้าเว็บส่งช่อง username มา เราจะเอาไปเทียบกับ student_id
   try {
     const [users] = await pool.query('SELECT * FROM users WHERE student_id = ? AND is_active = TRUE', [username]);
-    if (users.length === 0) return res.status(401).json({ error: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง" });
+    if (users.length === 0) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
 
     const user = users[0];
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ error: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง" });
+    if (!isMatch) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
 
     // ⭐️ NEW — บอก frontend ว่าคนนี้ "กำลังเข้างานอยู่" หรือเปล่า เพื่อตั้งโหมดใช้งานให้อัตโนมัติตอนล็อกอิน
     //   (CASHIER = มีกะที่ยังเปิดค้างอยู่ / ADMIN = ลงชื่อเข้างานวันนี้แล้วยังไม่ได้ลงชื่อออก)
@@ -1277,23 +1277,23 @@ app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
     const refreshToken = req.cookies?.refresh_token;
 
     if (!refreshToken) {
-      return res.status(401).json({ error: 'ไม่พบ refresh token' });
+      return unauthorized(res, 'ไม่พบ refresh token');
     }
 
     const decoded = verifyRefreshToken(refreshToken);
     if (!decoded) {
-      return res.status(401).json({ error: 'Refresh token ไม่ถูกต้องหรือหมดอายุ' });
+      return unauthorized(res, 'Refresh token ไม่ถูกต้องหรือหมดอายุ');
     }
 
     // ⭐️ Security remediation — reject refresh with a revoked/blacklisted refresh token
     if (await isTokenRevoked(decoded)) {
-      return res.status(401).json({ error: 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบใหม่' });
+      return unauthorized(res, 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบใหม่');
     }
 
     // Fetch user to get fresh data
     const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [decoded.id]);
     if (users.length === 0) {
-      return res.status(401).json({ error: 'ไม่พบผู้ใช้งาน' });
+      return unauthorized(res, 'ไม่พบผู้ใช้งาน');
     }
 
     // ⭐️ Security remediation — rotate: revoke the refresh token just used, issue a fresh one
@@ -1312,7 +1312,7 @@ app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
 
     res.json({ success: true, csrfToken });
   } catch (err) {
-    res.status(401).json({ error: err.message });
+    unauthorized(res, err.message);
   }
 });
 
@@ -1377,7 +1377,7 @@ app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (r
 
 app.get('/api/users/search', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   const { q } = req.query;
-  if (!q) return res.status(400).json({ error: "กรุณาระบุคำค้นหา" });
+  if (!q) return badRequest(res, "กรุณาระบุคำค้นหา");
 
   try {
     // ค้นหาทั้งจาก student_id และ phone_number + แนบข้อมูลกลุ่มสมาชิก (ให้ POS โชว์ badge สิทธิ์ลด)
@@ -1388,7 +1388,7 @@ app.get('/api/users/search', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (
        WHERE u.student_id = ? OR u.phone_number = ?`,
       [q, q]
     );
-    if (rows.length === 0) return res.status(404).json({ error: "ไม่พบข้อมูลสมาชิก" });
+    if (rows.length === 0) return notFound(res, "ไม่พบข้อมูลสมาชิก");
 
     const member = rows[0];
     // rule รายหมวดหมู่ของกลุ่มนี้ (ให้ POS คำนวณ preview ต่อชิ้นได้ตรงกับ backend)
@@ -1415,13 +1415,13 @@ app.get('/api/users/search', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (
 // ก่อนสั่งจอง) กันไม่ให้กลายเป็นช่องทาง enumerate เบอร์โทร→แต้ม/ข้อมูลส่วนตัวคนอื่นเหมือน endpoint เดิม
 app.post('/api/users/verify-phone', async (req, res) => {
   const { phone_number } = req.body;
-  if (!phone_number) return res.status(400).json({ error: 'กรุณาระบุเบอร์โทรศัพท์' });
+  if (!phone_number) return badRequest(res, 'กรุณาระบุเบอร์โทรศัพท์');
 
   try {
     if (req.user.role === 'MEMBER') {
       const [ownRows] = await pool.query('SELECT phone_number FROM users WHERE id = ?', [req.user.id]);
       if (ownRows[0]?.phone_number !== phone_number) {
-        return res.status(403).json({ error: 'สิทธิ์ไม่เพียงพอ' });
+        return forbidden(res, 'สิทธิ์ไม่เพียงพอ');
       }
     }
 
@@ -1449,7 +1449,7 @@ app.get('/api/users/me', async (req, res) => {
       'SELECT id, student_id, full_name, phone_number, points, role, profile_image_url FROM users WHERE id = ?',
       [req.user.id]
     );
-    if (rows.length === 0) return res.status(404).json({ error: "ไม่พบข้อมูลผู้ใช้" });
+    if (rows.length === 0) return notFound(res, "ไม่พบข้อมูลผู้ใช้");
     res.json(rows[0]);
   } catch (error) {
     console.error('[500]', error.message);
@@ -1461,7 +1461,7 @@ app.get('/api/users/me', async (req, res) => {
 app.post('/api/users/register', registerLimiter, validateRequest(userRegisterValidator), async (req, res) => {
   const { student_id, full_name, phone_number } = req.body;
   if (!student_id || !full_name || !phone_number) {
-    return res.status(400).json({ error: "กรุณากรอกข้อมูลให้ครบถ้วน" });
+    return badRequest(res, "กรุณากรอกข้อมูลให้ครบถ้วน");
   }
 
   try {
@@ -1481,7 +1481,7 @@ app.post('/api/users/register', registerLimiter, validateRequest(userRegisterVal
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: "รหัสนักศึกษา หรือ เบอร์โทรศัพท์นี้ มีในระบบแล้ว" });
+      return badRequest(res, "รหัสนักศึกษา หรือ เบอร์โทรศัพท์นี้ มีในระบบแล้ว");
     }
     console.error('[500]', error.message);
 
@@ -1499,7 +1499,7 @@ app.post('/api/users/register', registerLimiter, validateRequest(userRegisterVal
 app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
   const { student_id, phone_number } = req.body;
   if (!student_id || !phone_number) {
-    return res.status(400).json({ error: "กรุณาระบุรหัสนักศึกษาและเบอร์โทรศัพท์" });
+    return badRequest(res, "กรุณาระบุรหัสนักศึกษาและเบอร์โทรศัพท์");
   }
 
   try {
@@ -1549,15 +1549,12 @@ app.get('/api/auth/reset-token/:token', resetPasswordLimiter, async (req, res) =
 app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
   const { reset_token, new_password } = req.body;
 
-  if (!reset_token) return res.status(400).json({ error: "ไม่พบ token" });
+  if (!reset_token) return badRequest(res, "ไม่พบ token");
 
   // ⭐️ Sprint 2 — C4: Validate new password strength
   const passwordCheck = validatePasswordStrength(new_password);
   if (!passwordCheck.valid) {
-    return res.status(400).json({
-      error: 'Password does not meet strength requirements',
-      requirements: passwordCheck.errors
-    });
+    return badRequest(res, 'Password does not meet strength requirements', { requirements: passwordCheck.errors });
   }
 
   try {
@@ -1565,7 +1562,7 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
       'SELECT user_id FROM password_resets WHERE reset_token = ? AND expires_at > NOW() AND used_at IS NULL',
       [reset_token]
     );
-    if (tokens.length === 0) return res.status(400).json({ error: "Token ไม่ถูกต้องหรือหมดอายุแล้ว" });
+    if (tokens.length === 0) return badRequest(res, "Token ไม่ถูกต้องหรือหมดอายุแล้ว");
 
     const userId = tokens[0].user_id;
     const hashedPassword = await bcrypt.hash(new_password, 10);
@@ -1612,7 +1609,7 @@ app.get('/api/admin/password-resets', requireRole('ADMIN'), async (req, res) => 
 app.delete('/api/admin/password-resets/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT user_id FROM password_resets WHERE id = ?', [req.params.id]);
-    if (existing.length === 0) return res.status(404).json({ error: "ไม่พบคำขอนี้ (อาจถูกใช้งานหรือลบไปแล้ว)" });
+    if (existing.length === 0) return notFound(res, "ไม่พบคำขอนี้ (อาจถูกใช้งานหรือลบไปแล้ว)");
 
     await pool.query('DELETE FROM password_resets WHERE id = ?', [req.params.id]);
 
@@ -1637,7 +1634,7 @@ app.put('/api/users/:id/profile', async (req, res) => {
 
   // ⭐️ Task 1 audit — เดิมไม่มีการเช็ค ownership: user คนไหนก็แก้โปรไฟล์ id อื่นได้แค่เปลี่ยน :id ใน URL
   if (req.user.role !== 'ADMIN' && String(req.user.id) !== String(userId)) {
-    return res.status(403).json({ error: "แก้ไขได้เฉพาะโปรไฟล์ของตัวเองเท่านั้น" });
+    return forbidden(res, "แก้ไขได้เฉพาะโปรไฟล์ของตัวเองเท่านั้น");
   }
 
   try {
@@ -1647,7 +1644,7 @@ app.put('/api/users/:id/profile', async (req, res) => {
     let phoneChanged = false;
     if (phone_number) {
       const [existing] = await conn.query('SELECT id FROM users WHERE phone_number = ? AND id != ?', [phone_number, userId]);
-      if (existing.length > 0) { conn.release(); return res.status(400).json({ error: "เบอร์โทรศัพท์นี้ถูกใช้งานโดยบัญชีอื่นแล้ว" }); }
+      if (existing.length > 0) { conn.release(); return badRequest(res, "เบอร์โทรศัพท์นี้ถูกใช้งานโดยบัญชีอื่นแล้ว"); }
 
       const [current] = await conn.query('SELECT phone_number, full_name FROM users WHERE id = ?', [userId]);
       phoneChanged = current.length > 0 && current[0].phone_number !== phone_number;
@@ -1685,9 +1682,9 @@ app.put('/api/users/:id/profile', async (req, res) => {
 app.post('/api/users/:id/profile-photo', uploadLimiter, profilePhotoUpload.single('photo'), async (req, res) => {
   const userId = req.params.id;
   if (req.user.role !== 'ADMIN' && String(req.user.id) !== String(userId)) {
-    return res.status(403).json({ error: "แก้ไขได้เฉพาะโปรไฟล์ของตัวเองเท่านั้น" });
+    return forbidden(res, "แก้ไขได้เฉพาะโปรไฟล์ของตัวเองเท่านั้น");
   }
-  if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
+  if (!req.file) return badRequest(res, "ไม่พบไฟล์รูปภาพ");
 
   try {
     // 🐛 FIX — ตรวจว่าเป็นรูปจริง (sharp parse) + ขนาดสมเหตุผล เหมือนรูปสลิป/เข้างาน (Sprint 2 B9) —
@@ -1760,10 +1757,7 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
     // ⭐️ Sprint 2 — C4: Validate password strength
     const passwordCheck = validatePasswordStrength(password);
     if (!passwordCheck.valid) {
-      return res.status(400).json({
-        error: 'Password does not meet strength requirements',
-        requirements: passwordCheck.errors
-      });
+      return badRequest(res, 'Password does not meet strength requirements', { requirements: passwordCheck.errors });
     }
 
     // เข้ารหัสผ่านก่อนบันทึกลงฐานข้อมูล
@@ -1783,7 +1777,7 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
 
     res.status(201).json({ id: result.insertId, message: "สร้างพนักงานสำเร็จ" });
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "ชื่อผู้ใช้งานนี้มีในระบบแล้ว" });
+    if (error.code === 'ER_DUP_ENTRY') return badRequest(res, "ชื่อผู้ใช้งานนี้มีในระบบแล้ว");
     console.error('[500]', error.message);
 
     serverError(res);
@@ -1793,11 +1787,11 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
 app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
   const { full_name, student_id, phone_number, role, points, is_active } = req.body;
   if (!full_name || !full_name.trim() || !student_id || !student_id.trim() || !role) {
-    return res.status(400).json({ error: 'กรุณาระบุชื่อ, รหัสนักศึกษา และบทบาทให้ครบถ้วน' });
+    return badRequest(res, 'กรุณาระบุชื่อ, รหัสนักศึกษา และบทบาทให้ครบถ้วน');
   }
   try {
     const [existingRows] = await pool.query('SELECT is_active, student_id, line_user_id FROM users WHERE id = ?', [req.params.id]);
-    if (existingRows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+    if (existingRows.length === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
 
     // 🐛 FIX — สมาชิกที่ผูกบัญชี LINE แล้ว (line_user_id ไม่ null) ห้ามแก้ student_id: สมัครผ่าน LIFF
     // ตอนแรกจะสร้าง student_id คู่กับ line_user_id ไว้แน่นแล้ว (memberController.registerViaLine)
@@ -1826,7 +1820,7 @@ app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     res.json({ message: "อัปเดตข้อมูลผู้ใช้งานสำเร็จ", user: rows[0] });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: 'รหัสนักศึกษาหรือเบอร์โทรนี้มีผู้ใช้งานอื่นใช้อยู่แล้ว' });
+      return badRequest(res, 'รหัสนักศึกษาหรือเบอร์โทรนี้มีผู้ใช้งานอื่นใช้อยู่แล้ว');
     }
     console.error('[500]', error.message);
 
@@ -1842,34 +1836,31 @@ app.put('/api/users/:id/change-password', async (req, res) => {
   try {
     // Verify ownership (user can only change their own password)
     if (!user_id || parseInt(id) !== user_id) {
-      return res.status(403).json({ error: 'Cannot change other user passwords' });
+      return forbidden(res, 'Cannot change other user passwords');
     }
 
     // Get user
     const [users] = await pool.query('SELECT password, password_hash FROM users WHERE id = ?', [id]);
     if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return notFound(res, 'User not found');
     }
 
     // Verify current password (support both 'password' and 'password_hash' columns for compatibility)
     const userPassword = users[0].password_hash || users[0].password;
     const currentMatch = await bcrypt.compare(current_password, userPassword);
     if (!currentMatch) {
-      return res.status(401).json({ error: 'Current password incorrect' });
+      return unauthorized(res, 'Current password incorrect');
     }
 
     // Validate new password strength
     const passwordCheck = validatePasswordStrength(new_password);
     if (!passwordCheck.valid) {
-      return res.status(400).json({
-        error: 'New password does not meet strength requirements',
-        requirements: passwordCheck.errors
-      });
+      return badRequest(res, 'New password does not meet strength requirements', { requirements: passwordCheck.errors });
     }
 
     // Confirm passwords match
     if (new_password !== confirm_password) {
-      return res.status(400).json({ error: 'Passwords do not match' });
+      return badRequest(res, 'Passwords do not match');
     }
 
     // Hash and update
@@ -1905,7 +1896,7 @@ app.put('/api/users/update-role', requireRole('ADMIN'), validateRequest(updateRo
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "ไม่พบรหัสนักศึกษานี้ในระบบ" });
+      return notFound(res, "ไม่พบรหัสนักศึกษานี้ในระบบ");
     }
 
     await pool.query(
@@ -1938,7 +1929,7 @@ app.delete('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
 app.put('/api/users/:id/reactivate', requireRole('ADMIN'), async (req, res) => {
   try {
     const [result] = await pool.query('UPDATE users SET is_active = TRUE WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+    if (result.affectedRows === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
     await pool.query(
       'INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
       ['REACTIVATE_USER', req.user.id, 'USER', req.params.id, JSON.stringify({ target_user_id: req.params.id })]
@@ -1957,19 +1948,19 @@ app.put('/api/users/:id/reactivate', requireRole('ADMIN'), async (req, res) => {
 const { findWorkHistoryBlockers, cleanupUserReferences } = require('./src/controllers/adminController');
 app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) => {
   const targetId = Number(req.params.id);
-  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'id ไม่ถูกต้อง' });
-  if (targetId === req.user.id) return res.status(400).json({ error: 'ลบบัญชีตัวเองไม่ได้' });
+  if (!Number.isInteger(targetId)) return badRequest(res, 'id ไม่ถูกต้อง');
+  if (targetId === req.user.id) return badRequest(res, 'ลบบัญชีตัวเองไม่ได้');
   const deleteWorkHistory = req.body?.deleteWorkHistory === true;
 
   const conn = await pool.getConnection();
   try {
     const [userRows] = await conn.query('SELECT id, role FROM users WHERE id = ?', [targetId]);
-    if (userRows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
+    if (userRows.length === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
 
     // ⭐️ กันลบ ADMIN คนสุดท้ายทิ้ง = ล็อกตัวเองออกจากระบบถาวร
     if (userRows[0].role === 'ADMIN') {
       const [[{ cnt }]] = await conn.query("SELECT COUNT(*) AS cnt FROM users WHERE role = 'ADMIN' AND is_active = TRUE");
-      if (cnt <= 1) return res.status(400).json({ error: 'ลบ ADMIN คนสุดท้ายไม่ได้ — ต้องมีผู้ดูแลระบบเหลืออย่างน้อย 1 คน' });
+      if (cnt <= 1) return badRequest(res, 'ลบ ADMIN คนสุดท้ายไม่ได้ — ต้องมีผู้ดูแลระบบเหลืออย่างน้อย 1 คน');
     }
 
     // ⭐️ ประวัติทำงาน staff (attendance/shifts/schedules, NOT NULL) — ถ้ามีและยังไม่ยืนยัน ให้ถามก่อน
@@ -1996,7 +1987,7 @@ app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) =>
     await conn.rollback();
     console.error('[hardDeleteUser] FK/DB error:', error.code, error.message);
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
-      return res.status(409).json({ error: 'ลบไม่สำเร็จ — ยังมีข้อมูลอ้างอิงที่ระบบจัดการอัตโนมัติไม่ได้', detail: error.message });
+      return conflict(res, 'ลบไม่สำเร็จ — ยังมีข้อมูลอ้างอิงที่ระบบจัดการอัตโนมัติไม่ได้', { detail: error.message });
     }
     serverError(res);
   } finally {
@@ -2007,11 +1998,11 @@ app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) =>
 app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
   const { rows, dry_run } = req.body;
   if (!Array.isArray(rows) || rows.length === 0) {
-    return res.status(400).json({ error: "รายชื่อจาก CSV ว่างเปล่า ยกเลิกการซิงค์เพื่อความปลอดภัย" });
+    return badRequest(res, "รายชื่อจาก CSV ว่างเปล่า ยกเลิกการซิงค์เพื่อความปลอดภัย");
   }
 
   const usernames = rows.map(r => r.username).filter(Boolean);
-  if (usernames.length === 0) return res.status(400).json({ error: "ไม่พบ username ในไฟล์" });
+  if (usernames.length === 0) return badRequest(res, "ไม่พบ username ในไฟล์");
 
   try {
     const placeholders = usernames.map(() => '?').join(',');
@@ -2083,9 +2074,9 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
   // เสมอ; ADMIN ยังเปิดให้ cashier คนอื่นได้ตามปกติ (จัดการกะ)
   const cashier_id = req.user.role === 'ADMIN' ? bodyCashierId : req.user.id;
   if (!cashier_id || opening_cash === undefined) {
-    return res.status(400).json({ error: "กรุณาระบุรหัสแคชเชียร์และเงินตั้งต้น" });
+    return badRequest(res, "กรุณาระบุรหัสแคชเชียร์และเงินตั้งต้น");
   }
-  if (!open_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนเปิดกะ" });
+  if (!open_photo) return badRequest(res, "กรุณาถ่ายรูปยืนยันสถานที่ก่อนเปิดกะ");
 
   try {
     // ⭐️ Sprint 2 — B8: Check no open shift for this cashier today (Bangkok timezone)
@@ -2101,7 +2092,7 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
     );
 
     if (existing.length > 0) {
-      return res.status(400).json({ error: "แคชเชียร์คนนี้มีกะที่เปิดอยู่แล้วในวันนี้ (เวลาประเทศไทย) ต้องปิดกะเดิมก่อน" });
+      return badRequest(res, "แคชเชียร์คนนี้มีกะที่เปิดอยู่แล้วในวันนี้ (เวลาประเทศไทย) ต้องปิดกะเดิมก่อน");
     }
 
     // ⭐️ Sprint 2 — B6: Store idempotency_key
@@ -2131,9 +2122,9 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
 // เท่านั้น และ CASHIER ดูได้แค่ของตัวเอง (ADMIN ดูของใครก็ได้ เผื่อใช้ตรวจสอบ)
 app.get('/api/shifts/last-closed', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id } = req.query;
-  if (!cashier_id) return res.status(400).json({ error: "กรุณาระบุ cashier_id" });
+  if (!cashier_id) return badRequest(res, "กรุณาระบุ cashier_id");
   if (req.user.role !== 'ADMIN' && Number(cashier_id) !== req.user.id) {
-    return res.status(403).json({ error: "ดูได้เฉพาะยอดปิดกะของตัวเองเท่านั้น" });
+    return forbidden(res, "ดูได้เฉพาะยอดปิดกะของตัวเองเท่านั้น");
   }
   try {
     const [rows] = await pool.query(
@@ -2153,7 +2144,7 @@ app.get('/api/shifts/last-closed', requireRole('CASHIER', 'ADMIN'), async (req, 
 app.get('/api/shifts/current', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id } = req.query;
   if (req.user.role !== 'ADMIN' && Number(cashier_id) !== req.user.id) {
-    return res.status(403).json({ error: "ดูได้เฉพาะกะของตัวเองเท่านั้น" });
+    return forbidden(res, "ดูได้เฉพาะกะของตัวเองเท่านั้น");
   }
   try {
     // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
@@ -2176,8 +2167,8 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
   const { cashier_id: bodyCashierId, actual_cash, note, cash_breakdown, close_photo, discrepancy_category } = req.body;
   // 🐛 FIX — ไม่เชื่อ cashier_id จาก body: CASHIER ปิดได้เฉพาะกะตัวเอง (JWT); ADMIN ปิดให้คนอื่นได้
   const cashier_id = req.user.role === 'ADMIN' ? bodyCashierId : req.user.id;
-  if (!cashier_id) return res.status(400).json({ error: "กรุณาระบุรหัสแคชเชียร์" });
-  if (!close_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนปิดกะ" });
+  if (!cashier_id) return badRequest(res, "กรุณาระบุรหัสแคชเชียร์");
+  if (!close_photo) return badRequest(res, "กรุณาถ่ายรูปยืนยันสถานที่ก่อนปิดกะ");
 
   try {
     // 🐛 FIX — เลือกกะที่เปิดล่าสุด (เดิมไม่มี ORDER BY — ถ้ามีกะ OPEN ค้างข้ามวันหลายใบ จะปิดผิดใบ)
@@ -2187,7 +2178,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
     );
 
     if (shifts.length === 0) {
-      return res.status(404).json({ error: "ไม่พบกะที่กำลังเปิดอยู่สำหรับแคชเชียร์คนนี้" });
+      return notFound(res, "ไม่พบกะที่กำลังเปิดอยู่สำหรับแคชเชียร์คนนี้");
     }
 
     const currentShift = shifts[0];
@@ -2215,7 +2206,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
     // tolerance ส่วนต่างเงินสด ±20 บาทถือว่าปกติ เกินกว่านี้บังคับกรอก note อธิบาย
     const CASH_DIFF_TOLERANCE = 20;
     if (Math.abs(difference) > CASH_DIFF_TOLERANCE && !(note && note.trim())) {
-      return res.status(400).json({ error: `ส่วนต่างเงินสด ${difference > 0 ? 'เกิน' : 'ขาด'} ฿${Math.abs(difference).toFixed(2)} เกินเกณฑ์ปกติ (±${CASH_DIFF_TOLERANCE}) กรุณาระบุหมายเหตุอธิบายก่อนปิดกะ` });
+      return badRequest(res, `ส่วนต่างเงินสด ${difference > 0 ? 'เกิน' : 'ขาด'} ฿${Math.abs(difference).toFixed(2)} เกินเกณฑ์ปกติ (±${CASH_DIFF_TOLERANCE}) กรุณาระบุหมายเหตุอธิบายก่อนปิดกะ`);
     }
 
     // ⭐️ Sprint 2 — D1: ALL closes now go to PENDING_CLOSE (dual-control workflow)
@@ -2287,22 +2278,22 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, 
   const approverId = req.user.id;
 
   if (!approval_notes || !approval_notes.trim()) {
-    return res.status(400).json({ error: "กรุณาระบุหมายเหตุการอนุมัติ" });
+    return badRequest(res, "กรุณาระบุหมายเหตุการอนุมัติ");
   }
   if (!password) {
-    return res.status(400).json({ error: "กรุณาระบุรหัสผ่านสำหรับยืนยันตัวตน" });
+    return badRequest(res, "กรุณาระบุรหัสผ่านสำหรับยืนยันตัวตน");
   }
 
   try {
     // Verify password of approver
     const [users] = await pool.query("SELECT password FROM users WHERE id = ?", [approverId]);
     if (users.length === 0) {
-      return res.status(401).json({ error: "ไม่พบผู้ใช้นี้" });
+      return unauthorized(res, "ไม่พบผู้ใช้นี้");
     }
 
     const passwordMatch = await bcrypt.compare(password, users[0].password);
     if (!passwordMatch) {
-      return res.status(401).json({ error: "รหัสผ่านไม่ถูกต้อง" });
+      return unauthorized(res, "รหัสผ่านไม่ถูกต้อง");
     }
 
     // Verify shift exists and is PENDING_CLOSE
@@ -2311,12 +2302,12 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, 
       [shiftId]
     );
     if (shifts.length === 0) {
-      return res.status(404).json({ error: "ไม่พบกะนี้" });
+      return notFound(res, "ไม่พบกะนี้");
     }
 
     const shift = shifts[0];
     if (shift.status !== 'PENDING_CLOSE') {
-      return res.status(400).json({ error: `กะนี้ไม่ได้อยู่ในสถานะรออนุมัติ (ปัจจุบัน: ${shift.status})` });
+      return badRequest(res, `กะนี้ไม่ได้อยู่ในสถานะรออนุมัติ (ปัจจุบัน: ${shift.status})`);
     }
 
     // Approve close: PENDING_CLOSE → CLOSED
@@ -2362,7 +2353,7 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, r
   const rejectorId = req.user.id;
 
   if (!reason || !reason.trim()) {
-    return res.status(400).json({ error: "กรุณาระบุเหตุผลในการปฏิเสธ" });
+    return badRequest(res, "กรุณาระบุเหตุผลในการปฏิเสธ");
   }
 
   try {
@@ -2372,12 +2363,12 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, r
       [shiftId]
     );
     if (shifts.length === 0) {
-      return res.status(404).json({ error: "ไม่พบกะนี้" });
+      return notFound(res, "ไม่พบกะนี้");
     }
 
     const shift = shifts[0];
     if (shift.status !== 'PENDING_CLOSE') {
-      return res.status(400).json({ error: `กะนี้ไม่ได้อยู่ในสถานะรออนุมัติ (ปัจจุบัน: ${shift.status})` });
+      return badRequest(res, `กะนี้ไม่ได้อยู่ในสถานะรออนุมัติ (ปัจจุบัน: ${shift.status})`);
     }
 
     // Reject close: PENDING_CLOSE → OPEN (reopen for cashier correction)
@@ -2449,15 +2440,15 @@ app.get('/api/shifts/pending', requireRole('ADMIN', 'MANAGER'), async (req, res)
 app.post('/api/schedules', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { cashier_id, work_date, expected_start, expected_end } = req.body;
   if (!cashier_id || !work_date || !expected_start || !expected_end) {
-    return res.status(400).json({ error: "กรุณาระบุ cashier_id, work_date, expected_start, expected_end ให้ครบ" });
+    return badRequest(res, "กรุณาระบุ cashier_id, work_date, expected_start, expected_end ให้ครบ");
   }
   try {
     // ⭐️ กันหลังบ้าน — เผื่อมีคนยิง API ตรงๆ ด้วย cashier_id ที่ไม่ใช่ CASHIER/MANAGER (เช่น ADMIN/MEMBER)
     //   ข้าม dropdown /staff-list ที่กรองไว้แล้วฝั่ง UI ต้องเช็คซ้ำที่นี่ด้วย
     const [target] = await getUserRole(pool, cashier_id);
-    if (!target) return res.status(404).json({ error: 'ไม่พบพนักงานคนนี้' });
+    if (!target) return notFound(res, 'ไม่พบพนักงานคนนี้');
     if (!['CASHIER', 'MANAGER'].includes(target.role)) {
-      return res.status(400).json({ error: 'กำหนดตารางเวลาได้เฉพาะพนักงาน CASHIER หรือ MANAGER เท่านั้น' });
+      return badRequest(res, 'กำหนดตารางเวลาได้เฉพาะพนักงาน CASHIER หรือ MANAGER เท่านั้น');
     }
 
     // ⭐️ upsert แบบ manual (ไม่มี unique key): มีอยู่แล้ว = update, ยังไม่มี = insert
@@ -2481,7 +2472,7 @@ app.post('/api/schedules', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
 app.delete('/api/schedules/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const [result] = await pool.query('DELETE FROM schedules WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบตารางเวลานี้' });
+    if (result.affectedRows === 0) return notFound(res, 'ไม่พบตารางเวลานี้');
     res.json({ message: 'ลบตารางเวลาสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
@@ -2510,7 +2501,7 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req
 // ⭐️ Security remediation — เดิมมีแค่ authenticateToken (global) ไม่มี requireRole เลย ทำให้ MEMBER
 // เรียกตรงได้ทั้งที่หน้า Shift (ที่ใช้ endpoint นี้) จำกัดเฉพาะ ADMIN/CASHIER ฝั่ง frontend เท่านั้น
 app.post('/api/attendance/upload-photo', requireRole('CASHIER', 'MANAGER'), uploadLimiter, shiftPhotoUpload.single('photo'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
+  if (!req.file) return badRequest(res, "ไม่พบไฟล์รูปภาพ");
   try {
     // Get type from query param: ?type=clock-in or ?type=clock-out (default: clock-out)
     const photoType = req.query.type || 'clock-out';
@@ -2535,7 +2526,7 @@ app.post('/api/attendance/upload-photo', requireRole('CASHIER', 'MANAGER'), uplo
 // ⭐️ Update — clock-in/out เปลี่ยนสิทธิ์เป็น CASHIER + MANAGER เท่านั้น (ADMIN ไม่ต้องลงชื่อเข้า-ออกงานอีกต่อไป)
 app.post('/api/attendance/check-in', requireRole('CASHIER', 'MANAGER'), async (req, res) => {
   const { check_in_photo } = req.body;
-  if (!check_in_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อเข้างาน" });
+  if (!check_in_photo) return badRequest(res, "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อเข้างาน");
   try {
     const [openRows] = await pool.query(
       `SELECT id FROM attendance
@@ -2545,7 +2536,7 @@ app.post('/api/attendance/check-in', requireRole('CASHIER', 'MANAGER'), async (r
       [req.user.id]
     );
     // ⭐️ ถ้าลงชื่อเข้างานวันนี้แล้วและยังไม่ได้ออกงาน ห้ามลงชื่อซ้ำ
-    if (openRows.length > 0) return res.status(400).json({ error: "ลงชื่อเข้างานวันนี้ไปแล้ว ยังไม่ได้ลงชื่อออกงาน" });
+    if (openRows.length > 0) return badRequest(res, "ลงชื่อเข้างานวันนี้ไปแล้ว ยังไม่ได้ลงชื่อออกงาน");
 
     const [result] = await pool.query('INSERT INTO attendance (user_id, check_in_photo) VALUES (?, ?)', [req.user.id, check_in_photo]);
     res.status(201).json({ message: "ลงชื่อเข้างานสำเร็จ", id: result.insertId });
@@ -2559,7 +2550,7 @@ app.post('/api/attendance/check-in', requireRole('CASHIER', 'MANAGER'), async (r
 // ⭐️ Sprint 0 — A3: เหตุผลเดียวกับ check-in ด้านบน
 app.put('/api/attendance/check-out', requireRole('CASHIER', 'MANAGER'), async (req, res) => {
   const { check_out_photo } = req.body;
-  if (!check_out_photo) return res.status(400).json({ error: "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อออกงาน" });
+  if (!check_out_photo) return badRequest(res, "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อออกงาน");
   try {
     // ⭐️ เช็คทั้ง CURDATE() (Bangkok หลัง fix tz) และ CONVERT_TZ (กัน row เก่าที่เก็บเป็น UTC)
     const [rows] = await pool.query(
@@ -2570,7 +2561,7 @@ app.put('/api/attendance/check-out', requireRole('CASHIER', 'MANAGER'), async (r
        ORDER BY check_in DESC LIMIT 1`,
       [req.user.id]
     );
-    if (rows.length === 0) return res.status(400).json({ error: "ยังไม่ได้ลงชื่อเข้างานวันนี้" });
+    if (rows.length === 0) return badRequest(res, "ยังไม่ได้ลงชื่อเข้างานวันนี้");
 
     await pool.query('UPDATE attendance SET check_out = NOW(), check_out_photo = ? WHERE id = ?', [check_out_photo, rows[0].id]);
     res.json({ message: "ลงชื่อออกงานสำเร็จ" });
@@ -2725,12 +2716,12 @@ app.post('/api/attendance/auto-checkout-stale', requireRole('ADMIN', 'MANAGER'),
 
 app.post('/api/holidays', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { holiday_date, note } = req.body;
-  if (!holiday_date) return res.status(400).json({ error: "กรุณาระบุวันที่" });
+  if (!holiday_date) return badRequest(res, "กรุณาระบุวันที่");
   try {
     await pool.query('INSERT INTO holidays (holiday_date, note) VALUES (?, ?)', [holiday_date, note || null]);
     res.status(201).json({ message: "เพิ่มวันหยุดสำเร็จ" });
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: "วันที่นี้ถูกตั้งเป็นวันหยุดไปแล้ว" });
+    if (error.code === 'ER_DUP_ENTRY') return badRequest(res, "วันที่นี้ถูกตั้งเป็นวันหยุดไปแล้ว");
     console.error('[500]', error.message);
 
     serverError(res);
@@ -2755,15 +2746,15 @@ app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, 
   try {
     await conn.beginTransaction();
     const [rows] = await conn.query('SELECT id, assigned_to, status FROM orders WHERE id = ? FOR UPDATE', [req.params.id]);
-    if (rows.length === 0) { await conn.rollback(); return res.status(404).json({ error: "ไม่พบออเดอร์" }); }
+    if (rows.length === 0) { await conn.rollback(); return notFound(res, "ไม่พบออเดอร์"); }
 
     const order = rows[0];
-    if (['COMPLETED', 'CANCELLED'].includes(order.status)) { await conn.rollback(); return res.status(400).json({ error: "ออเดอร์นี้ปิดแล้ว" }); }
+    if (['COMPLETED', 'CANCELLED'].includes(order.status)) { await conn.rollback(); return badRequest(res, "ออเดอร์นี้ปิดแล้ว"); }
     if (order.assigned_to && order.assigned_to !== req.user.id) {
       // ดึงชื่อคนที่ล็อคไปแล้ว
       const assignee = await getUserFullName(conn, order.assigned_to);
       await conn.rollback();
-      return res.status(409).json({ error: `ออเดอร์นี้ถูกรับงานโดย ${assignee[0]?.full_name || 'พนักงานท่านอื่น'} แล้ว` });
+      return conflict(res, `ออเดอร์นี้ถูกรับงานโดย ${assignee[0]?.full_name || 'พนักงานท่านอื่น'} แล้ว`);
     }
 
     await conn.query('UPDATE orders SET assigned_to = ? WHERE id = ?', [req.user.id, order.id]);
@@ -2780,13 +2771,13 @@ app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, 
 // ⭐️ ลูกค้าส่งสลิปใหม่ (หลังโดน SLIP_REJECTED)
 app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => {
   const { slip_image } = req.body;
-  if (!slip_image) return res.status(400).json({ error: "กรุณาแนบสลิปใหม่" });
+  if (!slip_image) return badRequest(res, "กรุณาแนบสลิปใหม่");
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const [orders] = await conn.query('SELECT * FROM orders WHERE id = ? AND status = ? FOR UPDATE', [req.params.id, 'SLIP_REJECTED']);
-    if (orders.length === 0) { await conn.rollback(); return res.status(404).json({ error: "ไม่พบออเดอร์หรือสถานะไม่ถูกต้อง" }); }
-    if (orders[0].user_id !== req.user.id) { await conn.rollback(); return res.status(403).json({ error: "ไม่มีสิทธิ์แก้ไขออเดอร์นี้" }); }
+    if (orders.length === 0) { await conn.rollback(); return notFound(res, "ไม่พบออเดอร์หรือสถานะไม่ถูกต้อง"); }
+    if (orders[0].user_id !== req.user.id) { await conn.rollback(); return forbidden(res, "ไม่มีสิทธิ์แก้ไขออเดอร์นี้"); }
     // 🐛 FIX — สต๊อกถูกคืนกลับตอนโดน SLIP_REJECTED แล้ว การส่งสลิปใหม่ต้องตัดสต๊อกกลับคืนทันที
     // ไม่งั้นออเดอร์กลับเป็น PENDING_VERIFY แล้วพนักงานกด PREPARING ต่อจะไม่มีการหักสต๊อกอีก
     // (branch ใน PUT /orders/:id/status เช็ค order.status === 'SLIP_REJECTED' ซึ่งผ่านไปแล้ว) = ของออกโดยไม่หักสต๊อก
@@ -2857,7 +2848,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
   // 🐛 FIX — cashier_id ต้องมาจาก JWT (req.user.id) ห้ามเชื่อจาก body: เดิม cashier ส่ง id คนอื่นได้
   // → บิลเข้ากะ/ชื่อคนอื่น (แอบอ้างหรือโยนความผิดตอนเงินไม่ตรง) — sync-offline ทำถูกแล้ว ตัวนี้ทำตาม
   const cashier_id = req.user.id;
-  if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าสินค้าว่างเปล่า" });
+  if (!items || items.length === 0) return badRequest(res, "ตะกร้าสินค้าว่างเปล่า");
 
   const conn = await pool.getConnection();
 
@@ -2946,10 +2937,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     if (stockIssues.length > 0) {
       await conn.rollback();
       conn.release();
-      return res.status(400).json({
-        error: "สต๊อกไม่เพียงพอสำหรับบางรายการ",
-        issues: stockIssues
-      });
+      return badRequest(res, "สต๊อกไม่เพียงพอสำหรับบางรายการ", { issues: stockIssues });
     }
 
     let totalAmount = fromSatang(totalAmountSatang);
@@ -3030,10 +3018,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     //   ตอนนี้ endpoint นี้เปิดให้เฉพาะ CASHIER แล้ว (ดู requireRole ด้านบน) จึงไม่ต้องเช็ค role ซ้ำ
     if (!shiftId) {
       await conn.rollback();
-      return res.status(400).json({
-        error: 'ยังไม่ได้เปิดกะการขาย กรุณาเปิดกะก่อนเริ่มขายสินค้า',
-        code: 'NO_OPEN_SHIFT',
-      });
+      return badRequest(res, 'ยังไม่ได้เปิดกะการขาย กรุณาเปิดกะก่อนเริ่มขายสินค้า', { code: 'NO_OPEN_SHIFT' });
     }
 
     // 3. สร้างหัวบิลใบเสร็จ (ผูก member_id, promotion_id, discount_amount, points_redeemed, shift_id ลงไป)
@@ -3068,10 +3053,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
     if (raceConditionItems.length > 0) {
       await conn.rollback();
       conn.release();
-      return res.status(409).json({
-        error: "สต๊อกถูกแก้ไขโดยระบบอื่นพร้อมกัน กรุณาลองใหม่",
-        conflicted_products: raceConditionItems
-      });
+      return conflict(res, "สต๊อกถูกแก้ไขโดยระบบอื่นพร้อมกัน กรุณาลองใหม่", { conflicted_products: raceConditionItems });
     }
 
     // ⭐️ 5. หักแต้ม (แลกส่วนลด + แลกของรางวัล) แล้วบวกแต้มสะสมใหม่ (ทุก earnPer บาท = 1 แต้ม
@@ -3470,7 +3452,7 @@ app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res
     res.json({ message: `ยกเลิกบิล #${saleId} สำเร็จ` });
   } catch (error) {
     await conn.rollback();
-    res.status(400).json({ error: error.message });
+    badRequest(res, error.message);
   } finally {
     conn.release();
   }
@@ -3479,7 +3461,7 @@ app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res
 app.post('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { cashier_id, member_id, items } = req.body;
 
-  if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าว่างเปล่า" });
+  if (!items || items.length === 0) return badRequest(res, "ตะกร้าว่างเปล่า");
 
   const conn = await pool.getConnection();
   try {
@@ -3518,7 +3500,7 @@ app.post('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) =>
     res.status(201).json({ message: "พักบิลสำเร็จ", sale_id: saleId });
   } catch (error) {
     await conn.rollback();
-    res.status(400).json({ error: error.message });
+    badRequest(res, error.message);
   } finally {
     conn.release();
   }
@@ -3570,7 +3552,7 @@ app.delete('/api/sales/hold/:id', requireRole('CASHIER', 'ADMIN'), async (req, r
 // ด้วย — ถ้าไม่มีคอลัมน์นี้/ค่าว่าง พฤติกรรมเดิมเป๊ะ (สร้างใหม่=MEMBER, ซ้ำ=ไม่แตะ role เดิม กัน
 // import ซ้ำแล้ว role พนักงานเดิมโดนรีเซ็ตกลับ MEMBER โดยไม่ตั้งใจ)
 app.post('/api/members/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "กรุณาเลือกไฟล์ CSV" });
+  if (!req.file) return badRequest(res, "กรุณาเลือกไฟล์ CSV");
   const VALID_ROLES = ['MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'];
 
   const results = [];
@@ -3659,11 +3641,11 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
   const { hourly_rate } = req.body;
   const rate = Number(hourly_rate);
   if (hourly_rate === undefined || hourly_rate === null || !Number.isFinite(rate) || rate < 0) {
-    return res.status(400).json({ error: 'กรุณาระบุอัตราค่าจ้างต่อชั่วโมงที่ถูกต้อง (ตัวเลข ≥ 0)' });
+    return badRequest(res, 'กรุณาระบุอัตราค่าจ้างต่อชั่วโมงที่ถูกต้อง (ตัวเลข ≥ 0)');
   }
   try {
     const [result] = await pool.query('UPDATE users SET hourly_rate = ? WHERE id = ? AND role IN (\'CASHIER\',\'MANAGER\',\'ADMIN\')', [rate, id]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบพนักงานนี้' });
+    if (result.affectedRows === 0) return notFound(res, 'ไม่พบพนักงานนี้');
     res.json({ message: 'อัปเดตอัตราค่าจ้างสำเร็จ', hourly_rate: rate });
   } catch (error) {
     console.error('[500]', error.message);
@@ -3706,8 +3688,8 @@ app.put('/api/users/:id/group', requireRole('ADMIN', 'MANAGER'), async (req, res
 app.put('/api/users/:id/unlink-line', requireRole('ADMIN'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT line_user_id, full_name FROM users WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'ไม่พบผู้ใช้งานนี้' });
-    if (!rows[0].line_user_id) return res.status(400).json({ error: 'สมาชิกคนนี้ยังไม่ได้ผูกบัญชี LINE' });
+    if (rows.length === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
+    if (!rows[0].line_user_id) return badRequest(res, 'สมาชิกคนนี้ยังไม่ได้ผูกบัญชี LINE');
 
     await pool.query('UPDATE users SET line_user_id = NULL WHERE id = ?', [req.params.id]);
     await pool.query(
@@ -3743,7 +3725,7 @@ app.get('/api/products/rewards', requireRole('CASHIER', 'MANAGER', 'ADMIN'), asy
 app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { adjustment, type, note } = req.body;
   if (adjustment === undefined || !type) {
-    return res.status(400).json({ error: "ข้อมูลไม่ครบ (ต้องมี adjustment และ type)" });
+    return badRequest(res, "ข้อมูลไม่ครบ (ต้องมี adjustment และ type)");
   }
 
   try {
@@ -3754,7 +3736,7 @@ app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "ไม่พบสินค้า" });
+      return notFound(res, "ไม่พบสินค้า");
     }
 
     // หมายเหตุ: ในระบบจริง อาจจะมีการบันทึกลงตาราง stock_history (ประวัติการปรับสต๊อก) ด้วย
@@ -3840,7 +3822,7 @@ app.get('/api/suppliers/export', requireRole('ADMIN', 'MANAGER'), async (req, re
 });
 
 app.post('/api/suppliers/import', requireRole('ADMIN'), uploadLimiter, csvUpload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'กรุณาเลือกไฟล์ CSV' });
+  if (!req.file) return badRequest(res, 'กรุณาเลือกไฟล์ CSV');
   const results = [];
   fs.createReadStream(req.file.path)
     .pipe(csv())
@@ -3878,7 +3860,7 @@ app.delete('/api/suppliers/:id', requireRole('ADMIN', 'MANAGER'), async (req, re
   } catch (error) {
     // ดัก Error กรณีที่ซัพพลายเออร์เจ้านี้เคยส่งของให้เราแล้ว (มีบิลผูกอยู่)
     if (error.code === 'ER_ROW_IS_REFERENCED_2') {
-      return res.status(400).json({ error: "ไม่สามารถลบได้ เนื่องจากซัพพลายเออร์นี้มีประวัติการรับสินค้าในคลังแล้ว" });
+      return badRequest(res, "ไม่สามารถลบได้ เนื่องจากซัพพลายเออร์นี้มีประวัติการรับสินค้าในคลังแล้ว");
     }
     console.error('[500]', error.message);
 
@@ -3888,7 +3870,7 @@ app.delete('/api/suppliers/:id', requireRole('ADMIN', 'MANAGER'), async (req, re
 
 app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const { supplier_id, user_id, items } = req.body;
-  if (!items || items.length === 0) return res.status(400).json({ error: "ไม่มีรายการสินค้า" });
+  if (!items || items.length === 0) return badRequest(res, "ไม่มีรายการสินค้า");
 
   const conn = await pool.getConnection();
   try {
@@ -3975,7 +3957,7 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'), va
   const { items, payment_method, slip_image, use_phone_for_points, redeem_points } = req.body;
   const user_id = req.user.id; // ดึงจากคนที่ล็อกอินอยู่
 
-  if (!items || items.length === 0) return res.status(400).json({ error: "ตะกร้าว่างเปล่า" });
+  if (!items || items.length === 0) return badRequest(res, "ตะกร้าว่างเปล่า");
 
   // ⭐️ นโยบายแต้ม: เฉพาะ MEMBER มีสิทธิ์แต้มสมาชิก — staff จองได้แต่ไม่มีสิทธิ์แลก/สะสม
   // (ดู utils/preorderPolicy.js) — ตอบ 403 ก่อนเริ่ม transaction เลย (ไม่มีการเขียนอะไรทั้งสิ้น)
@@ -3984,7 +3966,7 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'), va
   // (snake_case) → ตัวแปรไม่เคยถูกประกาศ = ReferenceError 500 ทุกออเดอร์ (เงินสด/QR ทุกใบ)
   const pointsPolicy = resolveOrderPoints({ role: req.user.role, usePhoneForPoints: use_phone_for_points, redeem_points });
   if (pointsPolicy.blockedRedeem) {
-    return res.status(403).json({ error: 'บัญชีพนักงานไม่มีสิทธิ์ใช้แต้มสมาชิก (แต้มสงวนสำหรับสมาชิกเท่านั้น)' });
+    return forbidden(res, 'บัญชีพนักงานไม่มีสิทธิ์ใช้แต้มสมาชิก (แต้มสงวนสำหรับสมาชิกเท่านั้น)');
   }
 
   const conn = await pool.getConnection();
@@ -4422,7 +4404,7 @@ app.put('/api/notifications/:id/read', async (req, res) => {
       : 'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?';
     const [result] = await pool.query(query, [req.params.id, req.user.id]);
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'ไม่พบการแจ้งเตือนนี้' });
+      return notFound(res, 'ไม่พบการแจ้งเตือนนี้');
     }
     res.json({ message: 'อ่านแจ้งเตือนแล้ว' });
   } catch (error) {
@@ -4527,7 +4509,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'MANAGE
   const { id } = req.params;
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return badRequest(res, 'No file uploaded');
     }
 
     // ⭐️ ตรวจว่า order มีจริงและเป็นของ user ก่อน
@@ -4536,24 +4518,24 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'MANAGE
       [id, req.user.id]
     );
     if (orders.length === 0) {
-      return res.status(404).json({ error: 'Order not found or does not belong to you' });
+      return notFound(res, 'Order not found or does not belong to you');
     }
 
     const order = orders[0];
     // ⭐️ อนุญาตอัปสลิปเมื่อสถานะ PENDING_VERIFY (สลิปใหม่) หรือ SLIP_REJECTED (ส่งใหม่)
     if (!['PENDING_VERIFY', 'SLIP_REJECTED'].includes(order.status)) {
-      return res.status(400).json({ error: `Order must be in PENDING_VERIFY or SLIP_REJECTED status to upload slip. Current status: ${order.status}` });
+      return badRequest(res, `Order must be in PENDING_VERIFY or SLIP_REJECTED status to upload slip. Current status: ${order.status}`);
     }
 
     // ⭐️ ตรวจ MIME (jpeg, png, gif, webp)
     const allowedPaymentSlipMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedPaymentSlipMimes.includes(req.file.mimetype)) {
-      return res.status(400).json({ error: `Invalid file type: ${req.file.mimetype}. Only JPEG, PNG, GIF, WebP allowed.` });
+      return badRequest(res, `Invalid file type: ${req.file.mimetype}. Only JPEG, PNG, GIF, WebP allowed.`);
     }
 
     // ตรวจขนาดไฟล์ (สลิป ≤ 5 MB)
     if (req.file.size > 5 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File too large (max 5 MB for payment slip)' });
+      return badRequest(res, 'File too large (max 5 MB for payment slip)');
     }
 
     // ตรวจ dimensions จาก buffer (สลิป min 400×300, max 4000×3000)
@@ -4626,7 +4608,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'MANAGE
     res.json({ success: true, path: slipUrl, dimensions });
   } catch (err) {
     console.error(`[upload-slip] ${err.message}`);
-    res.status(400).json({ error: err.message });
+    badRequest(res, err.message);
   }
 });
 
@@ -4641,18 +4623,18 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), upload
 
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return badRequest(res, 'No file uploaded');
     }
 
     // ⭐️ Sprint 2 — B9: ตรวจ MIME (jpeg, png เท่านั้น)
     const allowedPhotoMimes = ['image/jpeg', 'image/png'];
     if (!allowedPhotoMimes.includes(req.file.mimetype)) {
-      return res.status(400).json({ error: `Invalid file type: ${req.file.mimetype}. Only JPEG and PNG allowed for shift photos.` });
+      return badRequest(res, `Invalid file type: ${req.file.mimetype}. Only JPEG and PNG allowed for shift photos.`);
     }
 
     // ตรวจขนาดไฟล์ (≤ 10 MB)
     if (req.file.size > 10 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File too large (max 10 MB)' });
+      return badRequest(res, 'File too large (max 10 MB)');
     }
 
     // ตรวจ dimensions จาก buffer (รูปปิดกะ min 800×600)
@@ -4669,7 +4651,7 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), upload
       isAdmin ? [id] : [id, req.user.id]
     );
     if (shiftRows.length === 0) {
-      return res.status(404).json({ error: isAdmin ? 'ไม่พบกะนี้' : 'ไม่พบกะนี้ หรือคุณไม่มีสิทธิ์อัปโหลดรูปให้กะนี้' });
+      return notFound(res, isAdmin ? 'ไม่พบกะนี้' : 'ไม่พบกะนี้ หรือคุณไม่มีสิทธิ์อัปโหลดรูปให้กะนี้');
     }
 
     // ⭐️ อัปโหลดขึ้น Cloudinary (หรือดิสก์ถ้า dev) → เก็บ URL/พาธเต็มลง close_photo
@@ -4693,7 +4675,7 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), upload
     // เฉพาะ error ตรวจขนาดรูป (ตั้งใจให้ผู้ใช้เห็น) ถึงจะส่งข้อความจริงกลับไป
     console.error('[500]', err.message);
     if (err.message && err.message.startsWith('Image validation failed:')) {
-      return res.status(400).json({ error: err.message.replace(/^Image validation failed:\s*/, '') });
+      return badRequest(res, err.message.replace(/^Image validation failed:\s*/, ''));
     }
     serverError(res);
   }
@@ -4712,7 +4694,7 @@ const UPLOADS_ROOT = path.join(__dirname, 'uploads');
 app.get('/api/media', async (req, res) => {
   try {
     let rel = String(req.query.path || '');
-    if (!rel) return res.status(400).json({ error: 'ต้องระบุ path' });
+    if (!rel) return badRequest(res, 'ต้องระบุ path');
 
     // ตัด prefix '/uploads' ออก (path ใน DB ขึ้นต้นด้วย /uploads/...)
     rel = rel.replace(/^\/+/, '');            // ตัด / นำหน้า
@@ -4721,10 +4703,10 @@ app.get('/api/media', async (req, res) => {
     // ป้องกัน directory traversal — resolve แล้วต้องยังอยู่ใต้ UPLOADS_ROOT เท่านั้น
     const abs = path.normalize(path.join(UPLOADS_ROOT, rel));
     if (!abs.startsWith(UPLOADS_ROOT + path.sep)) {
-      return res.status(400).json({ error: 'path ไม่ถูกต้อง' });
+      return badRequest(res, 'path ไม่ถูกต้อง');
     }
     if (!fs.existsSync(abs)) {
-      return res.status(404).json({ error: 'ไม่พบไฟล์' });
+      return notFound(res, 'ไม่พบไฟล์');
     }
 
     // กันไม่ให้ browser/proxy แคชสลิปไว้แชร์ต่อ (เป็นข้อมูลส่วนตัว)
@@ -4966,7 +4948,7 @@ app.post('/api/admin/backups/create', requireRole('ADMIN'), async (req, res) => 
     const result = await createBackup(pool);
 
     if (!result) {
-      return res.status(400).json({ error: 'Backup already exists for today' });
+      return badRequest(res, 'Backup already exists for today');
     }
 
     res.json({ success: true, backup: result });
@@ -4984,7 +4966,7 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
   const { confirm } = req.body;
 
   if (!confirm) {
-    return res.status(400).json({ error: 'Restore requires explicit confirmation' });
+    return badRequest(res, 'Restore requires explicit confirmation');
   }
 
   try {
@@ -4994,7 +4976,7 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
     );
 
     if (backups.length === 0) {
-      return res.status(404).json({ error: 'Backup not found or not successful' });
+      return notFound(res, 'Backup not found or not successful');
     }
 
     const backup = backups[0];
@@ -5010,10 +4992,7 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
     } catch (restoreErr) {
       if (restoreErr.code === 'BACKUP_FILE_MISSING') {
         console.error(`[restore] ไม่พบไฟล์ backup ทั้งบนดิสก์และ Cloudinary: ${backup.backup_path} (id=${id})`);
-        return res.status(410).json({
-          error: `ไม่พบไฟล์ backup บนเซิร์ฟเวอร์และบน Cloudinary (${backup.backup_path}) — ไฟล์อาจถูกลบไปตอน redeploy/restart และไม่มีสำเนาบนคลาวด์ (สร้างก่อนตั้งค่า Cloudinary) กู้คืนจากไฟล์นี้ไม่ได้แล้ว ต้องใช้ backup อันใหม่กว่า`,
-          code: 'BACKUP_FILE_MISSING',
-        });
+        return gone(res, `ไม่พบไฟล์ backup บนเซิร์ฟเวอร์และบน Cloudinary (${backup.backup_path}) — ไฟล์อาจถูกลบไปตอน redeploy/restart และไม่มีสำเนาบนคลาวด์ (สร้างก่อนตั้งค่า Cloudinary) กู้คืนจากไฟล์นี้ไม่ได้แล้ว ต้องใช้ backup อันใหม่กว่า`, { code: 'BACKUP_FILE_MISSING' });
       }
       throw restoreErr;
     }
@@ -5155,7 +5134,7 @@ app.get('/api/audit-logs/:id', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async 
     );
 
     if (logs.length === 0) {
-      return res.status(404).json({ error: 'Audit log not found' });
+      return notFound(res, 'Audit log not found');
     }
 
     res.json(logs[0]);

@@ -8,7 +8,7 @@
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/member-groups) พฤติกรรม/path เดิม
 const pool = require('../config/db');
 const { buildGroupUpdateSql } = require('../utils/memberGroupUpdate');
-const { serverError } = require('../utils/http');
+const { serverError, badRequest } = require('../utils/http');
 
 // GET /api/member-groups — กลุ่มทั้งหมดพร้อม rules (nest rules เข้าใต้แต่ละกลุ่ม)
 async function list(req, res) {
@@ -30,7 +30,7 @@ async function list(req, res) {
 // POST /api/member-groups — เพิ่มกลุ่ม (code ต้องไม่ซ้ำ — UNIQUE)
 async function create(req, res) {
   const { name, code, default_discount_percent, description } = req.body;
-  if (!name || !code) return res.status(400).json({ error: 'ต้องระบุชื่อและรหัสกลุ่ม' });
+  if (!name || !code) return badRequest(res, 'ต้องระบุชื่อและรหัสกลุ่ม');
   try {
     const [result] = await pool.query(
       'INSERT INTO member_groups (name, code, default_discount_percent, description) VALUES (?, ?, ?, ?)',
@@ -38,7 +38,7 @@ async function create(req, res) {
     );
     res.status(201).json({ id: result.insertId, message: 'เพิ่มกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'รหัสกลุ่มนี้ซ้ำกับที่มีอยู่แล้ว' });
+    if (error.code === 'ER_DUP_ENTRY') return badRequest(res, 'รหัสกลุ่มนี้ซ้ำกับที่มีอยู่แล้ว');
     console.error('[500]', error.message);
     serverError(res);
   }
@@ -51,7 +51,7 @@ async function create(req, res) {
 async function update(req, res) {
   try {
     const upd = buildGroupUpdateSql(req.body, req.params.id);
-    if (!upd) return res.status(400).json({ error: 'ไม่มีข้อมูลที่ต้องการอัปเดต' });
+    if (!upd) return badRequest(res, 'ไม่มีข้อมูลที่ต้องการอัปเดต');
     await pool.query(upd.sql, upd.values);
     res.json({ message: 'อัปเดตกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
@@ -74,7 +74,7 @@ async function remove(req, res) {
 // POST /api/member-groups/:id/rules — เพิ่ม/อัปเดต rule รายหมวดหมู่ (upsert)
 async function addRule(req, res) {
   const { category_id, discount_percent } = req.body;
-  if (!category_id) return res.status(400).json({ error: 'ต้องเลือกหมวดหมู่' });
+  if (!category_id) return badRequest(res, 'ต้องเลือกหมวดหมู่');
   try {
     await pool.query(
       `INSERT INTO group_discount_rules (group_id, category_id, discount_percent) VALUES (?, ?, ?)

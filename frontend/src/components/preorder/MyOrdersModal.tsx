@@ -1,10 +1,11 @@
 // 📄 components/preorder/MyOrdersModal.tsx — popup ประวัติการสั่งจองของสมาชิก (กด "ประวัติของฉัน")
 //    ทำอะไร: ลิสต์ออเดอร์ของตัวเอง + สถานะ (badge) + กดดูรายละเอียด/ส่งสลิปใหม่/ยกเลิก
-import { X, RotateCw, Receipt } from 'lucide-react';
+import { RotateCw, Receipt } from 'lucide-react';
 import { formatBangkokTime } from '../../utils/timezone';
 import { StatusBadge } from '../ui/StatusBadge';
 import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
 
 // สี/class badge มาจาก ui/StatusBadge (map กลาง) — ตรงนี้เก็บแค่ label เต็มแบบ member view
 const STATUS_LABEL: Record<string, string> = {
@@ -43,14 +44,8 @@ interface MyOrdersModalProps {
 
 export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSelectOrder, onResubmitSlip }: MyOrdersModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
-      {/* ⭐️ FIX: vh → dvh กันโดน URL bar มือถือตัด (เหมือน modal รายละเอียดออเดอร์) */}
-      <div className="bg-white rounded-3xl shadow-xl w-full max-w-3xl max-h-[80dvh] flex flex-col overflow-hidden">
-        <div className="p-4 bg-gradient-to-r from-brand to-brand-dark flex justify-between items-center shrink-0 shadow-sm">
-          <h2 className="font-semibold font-display text-lg text-white">ประวัติการสั่งจองของฉัน</h2>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 text-white rounded-lg active:scale-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="ปิด"><X size={20} /></button>
-        </div>
-        <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 bg-gray-50">
+    <Modal title="ประวัติการสั่งจองของฉัน" onClose={onClose} widthClassName="sm:max-w-3xl">
+        <div className="p-4 md:p-6 space-y-4 bg-gray-50">
           {/* ⭐️ Phase 3 — ลำดับความสำคัญ: กำลังโหลด (ยังไม่มีข้อมูลเก่า) > โหลดพังไม่มีข้อมูลเก่า >
               ว่างจริงๆ > มีข้อมูล (โชว์ต่อแม้ background refresh ล่าสุดจะพัง ดีกว่าล้างของเดิมทิ้ง) */}
           {loading && myOrders.length === 0 ? (
@@ -60,9 +55,7 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
               tone="error"
               title="โหลดประวัติการสั่งจองไม่สำเร็จ"
               action={
-                <button onClick={onRetry} className="flex items-center gap-1.5 text-xs font-bold text-brand bg-brand-bg border border-brand-border px-4 py-2 rounded-full active:scale-95 transition-all duration-150">
-                  <RotateCw size={14} /> ลองใหม่
-                </button>
+                <Button variant="secondary" size="sm" onClick={onRetry}><RotateCw size={14} /> ลองใหม่</Button>
               }
             />
           ) : myOrders.length === 0 ? (
@@ -112,7 +105,6 @@ export function MyOrdersModal({ myOrders, loading, error, onRetry, onClose, onSe
             ))
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -17,7 +17,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { serverError } = require('../utils/http');
+const { serverError, badRequest, notFound } = require('../utils/http');
 const { generateAccessToken, generateRefreshToken, setAuthCookies } = require('../utils/authTokens');
 const { pushLineMessage } = require('../services/lineService');
 
@@ -60,7 +60,7 @@ const MEMBER_WITH_GROUP_SELECT = `
 async function checkLineStatus(req, res) {
   const { line_user_id } = req.params;
   if (!line_user_id || !line_user_id.trim()) {
-    return res.status(400).json({ error: 'line_user_id ไม่ถูกต้อง' });
+    return badRequest(res, 'line_user_id ไม่ถูกต้อง');
   }
   try {
     const [rows] = await pool.query(`${MEMBER_WITH_GROUP_SELECT} WHERE u.line_user_id = ? LIMIT 1`, [line_user_id]);
@@ -83,7 +83,7 @@ async function checkLineStatus(req, res) {
 async function lookupMember(req, res) {
   const { identifier } = req.params;
   if (!identifier || !identifier.trim()) {
-    return res.status(400).json({ error: 'กรุณาระบุรหัสนักศึกษา เบอร์โทร หรือ LINE user id' });
+    return badRequest(res, 'กรุณาระบุรหัสนักศึกษา เบอร์โทร หรือ LINE user id');
   }
   try {
     const [rows] = await pool.query(
@@ -91,7 +91,7 @@ async function lookupMember(req, res) {
       [identifier, identifier, identifier]
     );
     if (rows.length === 0) {
-      return res.status(404).json({ error: 'ไม่พบข้อมูลสมาชิก' });
+      return notFound(res, 'ไม่พบข้อมูลสมาชิก');
     }
     return res.json(await attachGroupInfo(rows[0]));
   } catch (error) {
@@ -187,7 +187,7 @@ async function registerViaLine(req, res) {
     if (error.code === 'ER_DUP_ENTRY') {
       // ⭐️ เข้าเงื่อนไข dup ได้ 2 ทาง: (1) race condition สมัคร student_id/phone_number ซ้ำพร้อมกัน
       // (2) line_user_id นี้ผูกกับ user คนอื่นอยู่แล้ว (UNIQUE INDEX idx_line_user_id ใน db.js)
-      return res.status(400).json({ error: 'ข้อมูลนี้มีอยู่ในระบบแล้ว หรือบัญชี LINE นี้ผูกกับสมาชิกอื่นอยู่แล้ว' });
+      return badRequest(res, 'ข้อมูลนี้มีอยู่ในระบบแล้ว หรือบัญชี LINE นี้ผูกกับสมาชิกอื่นอยู่แล้ว');
     }
     console.error('[500] registerViaLine', error.message);
     return serverError(res);

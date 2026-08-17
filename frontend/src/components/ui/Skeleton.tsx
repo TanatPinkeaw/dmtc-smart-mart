@@ -1,7 +1,7 @@
 // 📄 components/ui/Skeleton.tsx — โครงจางๆ (loading placeholder) โชว์ระหว่างรอโหลดข้อมูล แทนจอเปล่า/สปินเนอร์
 //    export SkeletonLine/SkeletonCard/SkeletonDashboardStat ฯลฯ เอาไปวางตำแหน่งที่ข้อมูลจริงจะมาแทน
-export const SkeletonLine = ({ width = 'w-full', height = 'h-4' }: { width?: string; height?: string }) => (
-  <div className={`animate-pulse bg-brand-border/40 rounded-lg ${width} ${height}`} />
+export const SkeletonLine = ({ width = 'w-full', height = 'h-4', className = '' }: { width?: string; height?: string; className?: string }) => (
+  <div className={`animate-pulse bg-brand-border/40 rounded-lg ${width} ${height} ${className}`} />
 );
 
 export const SkeletonCard = () => (

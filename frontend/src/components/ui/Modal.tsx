@@ -31,7 +31,7 @@ export function Modal({ title, onClose, children, widthClassName = 'sm:max-w-md'
       <div className={`relative bg-white rounded-t-3xl sm:rounded-3xl shadow-xl w-full overflow-hidden ${widthClassName}`}>
         {title && (
           <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-brand to-brand-dark rounded-t-3xl md:rounded-t-none shadow-sm">
-            <h3 className="text-base md:text-lg font-semibold text-white flex items-center gap-2">{title}</h3>
+            <h3 className="text-base md:text-lg font-semibold font-display text-white flex items-center gap-2">{title}</h3>
             {!hideClose && (
               <button
                 onClick={onClose}

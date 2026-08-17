@@ -6,6 +6,7 @@ import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Button';
+import { SegmentedControl } from '../ui/SegmentedControl';
 
 interface Product { id: number; barcode: string; name: string; price: string | number; image_url: string; category_id: number | null; stock?: number; }
 interface CartItem extends Product { quantity: number; redeem_reward?: boolean; points_required?: number; }
@@ -156,7 +157,7 @@ export function CartPanel({
                   <UserPlus size={15} />
                 </button>
               </div>
-              <button type="submit" disabled={memberLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">{memberLoading ? '...' : 'ค้นหา'}</button>
+              <Button type="submit" size="sm" loading={memberLoading}>ค้นหา</Button>
             </form>
           ) : (
             <div className="space-y-2">
@@ -207,7 +208,7 @@ export function CartPanel({
               <option value="">-- โปรโมชั่น (ถ้ามี) --</option>
               {promotions.map(p => <option key={p.id} value={p.id}>{p.name} ({p.discount_type === 'PERCENT' ? `ลด ${p.discount_value}%` : `ลด ฿${p.discount_value}`})</option>)}
             </select>
-            <button onClick={onApplyPromo} disabled={!selectedPromoId || promoLoading} className="px-3 py-2 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1">{promoLoading ? '...' : 'ใช้โค้ด'}</button>
+            <Button size="sm" onClick={onApplyPromo} disabled={!selectedPromoId} loading={promoLoading}>ใช้โค้ด</Button>
           </div>
         ) : (
           <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
@@ -236,12 +237,17 @@ export function CartPanel({
           </div>
         </div>
 
-        {/* ⭐️ FIX: ปุ่มเลือกวิธีจ่ายเงิน — ปรับให้ตรงกับสไตล์หน้าจอง (rounded-lg แทน rounded-xl, สีตัวอักษร
-            ตอนเลือกเงินสดเป็น #FF467E ให้เหมือนกันทั้ง 2 หน้า) */}
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => { onSetPaymentMethod('CASH'); onAmountReceivedChange(''); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${paymentMethod === 'CASH' ? 'border-brand bg-white text-brand-dark shadow-sm' : 'border-gray-200 text-gray-400 hover:border-gray-300 bg-white/50'}`}>💵 เงินสด</button>
-          <button onClick={() => { onSetPaymentMethod('QR'); onAmountReceivedChange(finalTotal); }} className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${paymentMethod === 'QR' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>📱 สแกนจ่าย</button>
-        </div>
+        {/* ปุ่มเลือกวิธีจ่ายเงิน — box variant ของ SegmentedControl (CASH = แบรนด์ / QR = น้ำเงิน) */}
+        <SegmentedControl
+          variant="box"
+          ariaLabel="วิธีจ่ายเงิน"
+          value={paymentMethod}
+          onChange={(v) => { onSetPaymentMethod(v); onAmountReceivedChange(v === 'QR' ? finalTotal : ''); }}
+          options={[
+            { value: 'CASH', label: '💵 เงินสด', className: 'text-xs font-semibold' },
+            { value: 'QR', label: '📱 สแกนจ่าย', className: 'text-xs font-semibold', selectedClassName: 'border-blue-600 bg-blue-50 text-blue-700', focusRingClassName: 'focus-visible:ring-blue-500 focus-visible:ring-offset-1' },
+          ]}
+        />
 
         {/* Cash input or QR */}
         {paymentMethod === 'CASH' ? (

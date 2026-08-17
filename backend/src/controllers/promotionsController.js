@@ -9,7 +9,7 @@
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/promotions) พฤติกรรม/path เดิม
 const pool = require('../config/db');
 const { calculatePromotionDiscount, checkPromotionUsageLimit } = require('../services/promotionEngine');
-const { serverError } = require('../utils/http');
+const { serverError, badRequest, notFound } = require('../utils/http');
 // ⭐️ จัดการ request ซ้ำ (idempotency-key) ที่ชน UNIQUE constraint ฝั่ง DB หลัง server restart
 const { isIdempotentDuplicate } = require('../utils/idempotency');
 
@@ -63,7 +63,7 @@ async function create(req, res) {
 
   // ⭐️ BOGO/ซื้อครบแถม ต้องระบุ buy_product_id, buy_qty, free_product_id, free_qty ให้ครบ
   if (discount_type === 'BOGO' && (!buy_product_id || !buy_qty || !free_product_id || !free_qty)) {
-    return res.status(400).json({ error: "โปรโมชั่นแบบซื้อครบแถม ต้องระบุสินค้าที่ต้องซื้อ, จำนวนที่ต้องซื้อ, สินค้าที่แถม, จำนวนที่แถม ให้ครบ" });
+    return badRequest(res, "โปรโมชั่นแบบซื้อครบแถม ต้องระบุสินค้าที่ต้องซื้อ, จำนวนที่ต้องซื้อ, สินค้าที่แถม, จำนวนที่แถม ให้ครบ");
   }
 
   // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างโปรซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
@@ -95,7 +95,7 @@ async function create(req, res) {
 async function remove(req, res) {
   try {
     const [existing] = await pool.query('SELECT id FROM promotions WHERE id = ?', [req.params.id]);
-    if (existing.length === 0) return res.status(404).json({ error: 'ไม่พบโปรโมชั่นนี้' });
+    if (existing.length === 0) return notFound(res, 'ไม่พบโปรโมชั่นนี้');
 
     try {
       await pool.query('DELETE FROM promotions WHERE id = ?', [req.params.id]);
@@ -116,16 +116,16 @@ async function verify(req, res) {
   const { promotion_id, grand_total, items, member_id } = req.body;
   try {
     const [promos] = await pool.query('SELECT * FROM promotions WHERE id = ? AND is_active = TRUE', [promotion_id]);
-    if (promos.length === 0) return res.status(404).json({ error: "ไม่พบโปรโมชั่น หรือโปรโมชั่นหมดอายุแล้ว" });
+    if (promos.length === 0) return notFound(res, "ไม่พบโปรโมชั่น หรือโปรโมชั่นหมดอายุแล้ว");
 
     const promo = promos[0];
 
     const limitError = await checkPromotionUsageLimit(pool.query.bind(pool), promo, member_id || null);
-    if (limitError) return res.status(400).json({ error: limitError });
+    if (limitError) return badRequest(res, limitError);
 
     const discount_amount = await calculatePromotionDiscount(pool.query.bind(pool), promo, grand_total, items);
     if (promo.discount_type === 'BOGO' && discount_amount === 0) {
-      return res.status(400).json({ error: "ตะกร้าไม่ตรงเงื่อนไขโปรโมชั่นนี้ (ซื้อไม่ครบจำนวน หรือไม่มีสินค้าที่แถมในตะกร้า)" });
+      return badRequest(res, "ตะกร้าไม่ตรงเงื่อนไขโปรโมชั่นนี้ (ซื้อไม่ครบจำนวน หรือไม่มีสินค้าที่แถมในตะกร้า)");
     }
     const net_total = grand_total - discount_amount;
 

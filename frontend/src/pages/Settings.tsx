@@ -636,7 +636,7 @@ export default function Settings() {
                     <span className="text-gray-400">-</span>
                     <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent outline-none text-xs md:text-sm font-bold text-gray-700 w-28 md:w-auto" />
                   </div>
-                  <button onClick={fetchSalesHistory} className="bg-brand text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-brand-dark w-full mt-2 lg:mt-0 lg:w-auto text-center">ค้นหา</button>
+                  <Button size="sm" onClick={fetchSalesHistory} className="w-full mt-2 lg:mt-0 lg:w-auto">ค้นหา</Button>
                 </div>
               </div>
 
