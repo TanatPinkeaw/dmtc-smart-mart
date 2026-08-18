@@ -562,7 +562,7 @@ export default function PreOrder() {
           icon={ShoppingBag}
           title="สั่งจองสินค้า (Pre-order)"
           titleClassName="font-display"
-          className="awning-edge"
+          className="sticky top-0 z-10 awning-edge"
           actions={
             /* ⭐️ ปุ่มกดดูประวัติของตัวเอง */
             <button onClick={() => { setShowMyOrders(true); fetchMyOrders(); }} className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-white/15 border border-white/20 hover:bg-white/25 px-3 py-1.5 rounded-full transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
