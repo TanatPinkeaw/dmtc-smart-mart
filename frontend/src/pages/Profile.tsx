@@ -58,8 +58,9 @@ export default function Profile() {
     <div className="min-h-screen bg-brand-bg pb-24">
       <div className="max-w-lg mx-auto">
 
-        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) + ชายคาหยัก (awning) ภาษาเดียวกับ Home */}
-        <PageHeader icon={User} title="บัญชีของฉัน" className="awning-edge" />
+        {/* ⭐️ แถบหัวหน้ามาตรฐานเดียวกับทุกหน้า (PageHeader) + ชายคาหยัก (awning) ภาษาเดียวกับ Home
+            sticky — แถบหัวติดด้านบนตอนเลื่อน */}
+        <PageHeader icon={User} title="บัญชีของฉัน" className="sticky top-0 z-10 awning-edge" />
 
         {/* pt-5 เผื่อชายคาหยัก (awning) ยื่นลงมา 12px */}
         <div className="px-4 sm:px-6 pt-5 pb-4 sm:pb-6">

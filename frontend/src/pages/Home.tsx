@@ -293,7 +293,8 @@ export default function Home() {
     <div className="min-h-dvh bg-brand-bg">
       {/* Header — ⭐️ Design-ref: รวมแถวโลโก้/แถวอวตารเดิมเป็นแถวเดียว (อวตาร+ทักทาย ซ้าย, ออกจากระบบ ขวา) */}
       {/* ⭐️ ชายคาร้าน — ครุยหยักใต้แถบหัว (signature หน้า Home/PreOrder) */}
-      <div className="bg-gradient-to-br from-brand to-brand-dark px-5 pt-16 pb-16 relative awning-edge">
+      {/* ⭐️ sticky — แถบหัวติดด้านบนตอนเลื่อน */}
+      <div className="sticky top-0 z-20 bg-gradient-to-br from-brand to-brand-dark px-5 pt-16 pb-16 awning-edge">
         <div className="flex items-start justify-between relative z-10">
           <div className="flex items-center gap-3 min-w-0">
             <img
@@ -324,10 +325,12 @@ export default function Home() {
         <p className="relative z-10 text-white/70 text-[11px] mt-2.5">เมนูด้านล่างแสดงตามสิทธิ์การใช้งานของคุณ</p>
       </div>
 
-      {/* Stat card (staff only) — ลอยคาบเส้นขอบล่างของ header ตามดีไซน์อ้างอิง สีต่างกันตามประเภทข้อมูล
-          โชว์เมื่อโหลดครบ (สำเร็จหรือไม่) — ค่าที่โหลดไม่ได้ = "—" กันโชว์ 0 ปลอม */}
+      {/* Stat card (staff only) — สีต่างกันตามประเภทข้อมูล โชว์เมื่อโหลดครบ (สำเร็จหรือไม่) —
+          ค่าที่โหลดไม่ได้ = "—" กันโชว์ 0 ปลอม
+          ⭐️ เดิม -mt-16 ลอยคาบขอบล่าง header แต่พอ header เป็น sticky แล้วการ์ดจะถูกบังตอนเลื่อน
+          → ย้ายมาอยู่ใต้ header ปกติ (เลื่อนผ่านใต้ header ได้สะอาด) */}
       {isStaff && staffLoaded && (
-        <div className="px-5 -mt-16 relative z-10">
+        <div className="px-5 mt-4">
           <div className="bg-white border border-brand-border rounded-3xl shadow-md p-4 grid grid-cols-3 divide-x divide-brand-border">
             <div className="text-center px-1">
               <p className="text-base font-extrabold text-brand">{summary ? `฿${Number(summary.total_sales).toLocaleString()}` : '—'}</p>
@@ -365,9 +368,10 @@ export default function Home() {
           หน้าเดิมของสมาชิกมีแค่แบนเนอร์โปรใบเดียว + การ์ดเมนูใบเดียว = เหลือที่ว่างเยอะมาก
           เพิ่ม: สถานะออเดอร์ที่ค้าง → ปุ่มลัด 4 ช่อง → สไลด์โปรโมชั่น → สินค้าขายดี */}
 
-      {/* 1. การ์ดสถานะออเดอร์ที่ยังค้าง — ลอยคาบขอบล่าง header */}
+      {/* 1. การ์ดสถานะออเดอร์ที่ยังค้าง — ⭐️ เดิม -mt-16 ลอยคาบขอบล่าง header แต่พอ header เป็น
+          sticky แล้วการ์ดจะถูกบังตอนเลื่อน → ย้ายมาอยู่ใต้ header ปกติ (เลื่อนผ่านใต้ header ได้สะอาด) */}
       {!isStaff && (loadingOrder || openOrder) && (
-        <div className="px-5 -mt-16 relative z-10 max-w-lg mx-auto">
+        <div className="px-5 mt-4 relative z-10 max-w-lg mx-auto">
           {loadingOrder ? (
             <SkeletonCard />
           ) : openOrder && (
@@ -404,9 +408,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* 2. ปุ่มลัด 4 ช่อง */}
+      {/* 2. ปุ่มลัด 4 ช่อง — ⭐️ เดิม -mt-16 ลอยคาบขอบล่าง header (เมื่อไม่มีออเดอร์ค้าง) แต่พอ header
+          เป็น sticky แล้วปุ่มจะถูกบังตอนเลื่อน → ย้ายมาอยู่ใต้ header ปกติเสมอ */}
       {!isStaff && (
-        <div className={`px-5 max-w-lg mx-auto ${(loadingOrder || openOrder) ? 'mt-4' : '-mt-16 relative z-10'}`}>
+        <div className="px-5 max-w-lg mx-auto mt-4">
           <div className="bg-white border border-brand-border rounded-3xl shadow-md p-3 grid grid-cols-4 gap-1">
             {[
               // ⭐️ FIX — ใช้ navigate() ตรงแทน goTo() สำหรับ 4 ปุ่มนี้ goTo() เดิมก็ navigate(path)

@@ -10,7 +10,11 @@
 /* ⭐️ ชายคาร้าน (signature ของหน้า Home/PreOrder) — ครุยหยักใต้แถบหัว เหมือนชายคาร้านค้าในมอ
    ใช้คลาส .awning-edge กับแถบ gradient หัวหน้า (ต้องไม่ลืมว่า ::after ยื่นออกมา 12px ด้านล่าง
    — เนื้อหาที่ตามมาควรเผื่อระยะ pt ไว้ด้วย) */
-.awning-edge { position: relative; }
+/* 🐛 FIX — เดิม .awning-edge บังคับ position: relative (ไว้เป็น containing block ของ ::after) แต่
+   พอ element ใส่ sticky (ตำแหน่ง utility) ด้วย specificity เท่ากัน + มากีหลังในไฟล์ = relative ชนะ
+   ทำให้ sticky header ไม่ติดด้านบนเลย — ใช้ :not(.sticky) ให้ relative ใช้เฉพาะตอนไม่ได้ sticky
+   (sticky ก็เป็น containing block ให้ ::after ได้เหมือนกัน) */
+.awning-edge:not(.sticky) { position: relative; }
 .awning-edge::after {
   content: '';
   position: absolute;
