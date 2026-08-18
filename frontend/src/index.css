@@ -10,14 +10,7 @@
 /* ⭐️ ชายคาร้าน (signature ของหน้า Home/PreOrder) — ครุยหยักใต้แถบหัว เหมือนชายคาร้านค้าในมอ
    ใช้คลาส .awning-edge กับแถบ gradient หัวหน้า (ต้องไม่ลืมว่า ::after ยื่นออกมา 12px ด้านล่าง
    — เนื้อหาที่ตามมาควรเผื่อระยะ pt ไว้ด้วย) */
-/* 🐛 FIX — เดิม .awning-edge บังคับ position: relative (ไว้เป็น containing block ของ ::after) แต่
-   พอ element ใส่ sticky (ตำแหน่ง utility) ด้วย specificity เท่ากัน + มากีหลังในไฟล์ = relative ชนะ
-   ทำให้ sticky header (PreOrder/Profile/Home/Notifications) ไม่ติดด้านบนเลย — ใช้ :not(.sticky)
-   ให้ relative ใช้เฉพาะตอนไม่ได้ sticky (sticky ก็เป็น containing block ให้ ::after ได้เหมือนกัน) */
-.awning-edge:not(.sticky) { position: relative; }
-/* 🐛 UI FIX — เดิมพื้นของ ::after โปร่งใส พอเลื่อนเนื้อหาขึ้นมา (เช่นช่องค้นหา/การ์ดสินค้า) จะเห็น
-   ทะลุช่องว่างระหว่างหยักชายคา (UI ซ้อนกันไม่สวย) แก้โดยให้พื้นทึบเต็มแถบ — ข้างบนบังเนื้อหาด้านล่าง
-   มิดสนิท ส่วนลายครุยหยักยังเห็นอยู่เพราะหยักเป็นสีเข้มกว่า (#D81B60) ทาบบนพื้นไล่เฉดเดียวกับแถบหัว */
+.awning-edge { position: relative; }
 .awning-edge::after {
   content: '';
   position: absolute;
@@ -27,13 +20,9 @@
   height: 12px;
   overflow: hidden;
   pointer-events: none;
-  /* พื้นทึบไล่เฉดเดียวกับแถบหัว (F12B6B → FF467E) — ต่อชายคาจากหัวแถบไร้รอยต่อ + บังเนื้อหามิด */
-  background-color: #F12B6B;
-  background-image:
-    radial-gradient(circle at 12px 0, #D81B60 11.5px, transparent 13px),
-    linear-gradient(to right, #F12B6B, #FF467E);
-  background-size: 24px 12px, 100% 100%;
-  background-repeat: repeat-x, no-repeat;
+  background-image: radial-gradient(circle at 12px 0, #FF467E 11.5px, transparent 13px);
+  background-size: 24px 12px;
+  background-repeat: repeat-x;
 }
 
 /* ⭐️ Brand/neutral colors now live in tailwind.config.js (theme.extend.colors), not in a v4
