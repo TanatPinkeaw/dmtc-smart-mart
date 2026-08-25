@@ -4,6 +4,9 @@ import { Bell, Store, ClipboardList, LogOut, Home } from 'lucide-react';
 import { NavItem } from './NavItem';
 import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS } from './navConfig';
 
+// ⭐️ ชื่อร้านจาก tenant config (เก็บลง localStorage ตอน login สำเร็จ) — แทนชื่อแบรนด์ hardcoded
+const storeName: string = (() => { try { return localStorage.getItem('store_name') || 'ร้านค้า'; } catch { return 'ร้านค้า'; } })();
+
 interface SidebarProps {
   isStaff: boolean;
   isAdmin: boolean;
@@ -26,10 +29,10 @@ export function Sidebar({
     <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border shadow-sm flex-col shrink-0 z-40">
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-brand-border">
-        <img src="/logo-192.png" alt={storeName || "Store"} className="w-9 h-9 rounded-xl shrink-0 object-contain" />
+        <img src="/logo-192.png" alt={storeName} className="w-9 h-9 rounded-xl shrink-0 object-contain" />
         <div>
-          <p className="text-sm font-bold text-gray-900">{storeName || "Store"}</p>
-          <p className="text-[10px] text-gray-400">สหกรณ์โรงเรียน</p>
+          <p className="text-sm font-bold text-gray-900">{storeName}</p>
+          <p className="text-[10px] text-gray-400">ระบบ POS ร้านค้า</p>
         </div>
       </div>
 

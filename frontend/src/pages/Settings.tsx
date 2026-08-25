@@ -76,23 +76,6 @@ interface SaleRow { id: number; source?: string; total_amount?: number; payment_
 interface BillItem { product_name: string; quantity: number; subtotal: number; }
 
 export default function Settings() {
-  // MULTI-TENANT: Tenant management
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [showTenantModal, setShowTenantModal] = useState(false);
-  const [tenantForm, setTenantForm] = useState({ name: '', slug: '', plan: 'free', line_liff_id: '' });
-
-  const fetchTenants = async () => {
-    try { const res = await api.get('/tenants'); setTenants(res.data); } catch (err) { console.error(err); }
-  };
-
-  const handleCreateTenant = async () => {
-    if (!tenantForm.name || !tenantForm.slug) return Swal.fire({ icon: 'warning', title: 'กรุณากรอกข้อมูลให้ครบ' });
-    try {
-      await api.post('/tenants', tenantForm);
-      Swal.fire({ icon: 'success', title: 'สร้าง Tenant สำเร็จ!' });
-      setShowTenantModal(false); setTenantForm({ name: '', slug: '', plan: 'free', line_liff_id: '' }); fetchTenants();
-    } catch (err: any) { Swal.fire({ icon: 'error', title: 'ไม่สำเร็จ', text: err.response?.data?.error || 'Error' }); }
-  };
 
   const socket = useSocket();
 
@@ -147,7 +130,7 @@ export default function Settings() {
   const currentUser = getCurrentUserOrRedirect(); // ⭐️ Sprint 0 — B2
   // ⭐️ MANAGER เห็นแท็บได้แค่ที่เกี่ยวกับหน้าร้าน — พนักงาน/สิทธิ์, กลุ่มสมาชิก(กฎรายหมวดหมู่), รีเซ็ตรหัสผ่าน สงวนไว้ ADMIN เท่านั้น
   const isAdmin = currentUser.role === 'ADMIN';
-  const ADMIN_ONLY_TABS = ['USERS', 'GROUPS', 'PASSWORD_RESETS', 'TENANTS'] as const;
+  const ADMIN_ONLY_TABS = ['USERS', 'GROUPS', 'PASSWORD_RESETS'] as const;
 
   // ⭐️ กันเผื่อ activeTab หลุดไปเป็นแท็บ ADMIN-only ได้ (เช่น state ค้างจากรีเฟรช) — เด้งกลับ STORE ให้ MANAGER
   useEffect(() => {
@@ -238,7 +221,6 @@ export default function Settings() {
       if (activeTab === 'PRODUCTS') { await fetchProducts(); await fetchCategories(); }
       if (activeTab === 'PROMOTIONS') { await fetchPromotions(); await fetchProducts(); }
       if (activeTab === 'PASSWORD_RESETS' && isAdmin) await fetchPasswordResets();
-      if (activeTab === 'TENANTS' && isAdmin) await fetchTenants();
       await fetchVendors();
     })();
 
@@ -624,7 +606,6 @@ export default function Settings() {
           {isAdmin && <TabButton icon={<Users size={18} />} label="พนักงาน/สิทธิ์" isActive={activeTab === 'USERS'} onClick={() => setActiveTab('USERS')} />}
           {isAdmin && <TabButton icon={<UsersRound size={18} />} label="กลุ่มสมาชิก" isActive={activeTab === 'GROUPS'} onClick={() => setActiveTab('GROUPS')} />}
           {isAdmin && <TabButton icon={<KeyRound size={18} />} label="รีเซ็ตรหัสผ่าน" isActive={activeTab === 'PASSWORD_RESETS'} onClick={() => setActiveTab('PASSWORD_RESETS')} badge={passwordResets.length || undefined} />}
-          <TabButton icon={<Users size={18} />} label="Tenants" isActive={activeTab === "TENANTS"} onClick={() => setActiveTab("TENANTS")} />
         </div>
 
         {/* Content Area */}
