@@ -24,7 +24,7 @@ import POS from './pages/POS';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
-import SuperAdminDashboard from './pages/SuperAdminDashboard'; // ⭐️ SUPER ADMIN: Dashboard 
+import SuperAdmin from './pages/SuperAdmin'; // ⭐️ SUPER ADMIN: Dashboard 
 import Preorder from './pages/PreOrder'; 
 import OrderManagement from './pages/OrderManagement'; // ⭐️ 1. นำเข้าหน้าตรวจสลิป/จัดการออเดอร์
 import Schedules from './pages/Schedules'; // ⭐️ หน้าตั้งตารางเวลาทำงาน (ADMIN)
