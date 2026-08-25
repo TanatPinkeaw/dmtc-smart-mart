@@ -11,6 +11,7 @@
 // (mount ที่ /api/reports ใน server.js) แต่ละ handler ยกมาจาก server.js ตรงๆ dependency require จาก
 // module กลางเดียวกับที่ server.js ใช้ (pool, money utils) กัน logic เพี้ยนไปคนละแบบ
 const pool = require('../config/db');
+const { getStoreName } = require('../utils/storeConfig');
 const { toSatang, fromSatang } = require('../utils/money');
 const { serverError, badRequest, forbidden, notFound } = require('../utils/http');
 const { sendDailyReport } = require('../scripts/dailyReport'); // ⭐️ Sprint 1 — D4
@@ -965,7 +966,7 @@ async function exportSalesCsv(req, res) {
     if (format === 'excel') {
       const ExcelJS = require('exceljs');
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'DMTC Mart';
+      workbook.creator = await getStoreName(req.user?.tenant_id);
       workbook.created = new Date();
       for (const sec of sectionOrder) {
         const sheet = workbook.addWorksheet(sec.sheetName);

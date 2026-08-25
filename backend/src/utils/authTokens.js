@@ -46,7 +46,7 @@ function cookieOptions(path, maxAge) {
 // ทาง JSON response body ให้ frontend เก็บไว้แนบเป็น header ทีหลัง
 function generateAccessToken(user, csrfToken) {
   return jwt.sign(
-    { id: user.id, role: user.role, full_name: user.full_name, must_change_password: !!user.must_change_password, csrf: csrfToken, jti: crypto.randomUUID() },
+    { id: user.id, role: user.role, full_name: user.full_name, must_change_password: !!user.must_change_password, tenant_id: user.tenant_id || null, db_name: user.db_name || null, csrf: csrfToken, jti: crypto.randomUUID() },
     JWT_SECRET,
     { expiresIn: '8h' }
   );

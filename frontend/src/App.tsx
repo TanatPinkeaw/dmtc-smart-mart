@@ -23,7 +23,8 @@ import Shift from './pages/Shift';
 import POS from './pages/POS';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
-import Settings from './pages/Settings'; 
+import Settings from './pages/Settings';
+import SuperAdminDashboard from './pages/SuperAdminDashboard'; // ⭐️ SUPER ADMIN: Dashboard 
 import Preorder from './pages/PreOrder'; 
 import OrderManagement from './pages/OrderManagement'; // ⭐️ 1. นำเข้าหน้าตรวจสลิป/จัดการออเดอร์
 import Schedules from './pages/Schedules'; // ⭐️ หน้าตั้งตารางเวลาทำงาน (ADMIN)
@@ -183,7 +184,8 @@ function App() {
           {/* ⭐️ ปิดช่องโหว่: /settings + /attendance-management เดิมเป็น RequireStaff (CASHIER พิมพ์ URL เข้าได้)
               เปลี่ยนเป็น RequireManager = ADMIN/MANAGER เท่านั้น */}
           <Route path="/attendance-management" element={<RequireManager><AttendanceManagement /></RequireManager>} />
-          <Route path="/settings" element={<RequireManager><Settings /></RequireManager>} />
+          <Route path="/super-admin" element={<SuperAdmin />} />
+        <Route path="/settings" element={<RequireManager><Settings /></RequireManager>} />
           {/* ⭐️ /summary เปิดให้ MANAGER ด้วย แต่ตารางเงินเดือน (payroll) ยังซ่อนเฉพาะ ADMIN ในหน้า Summary เอง */}
           <Route path="/summary" element={<RequireManager><Summary /></RequireManager>} />
           <Route path="/accounting-summary" element={<RequireManager><AccountingSummary /></RequireManager>} />

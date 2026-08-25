@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle, Clock, PackageSearch } from 'lucide-react';
 // ⭐️ map สีกลาง — ห้ามแก้สีเฉพาะจุด ให้แก้ที่นี่ที่เดียว (เทส contract ล็อกการใช้ component กลาง)
 const STATUS_STYLE: Record<string, string> = {
   WAITING_CASH: 'bg-yellow-100 text-yellow-700',
+  WAITING_ACCEPT: 'bg-amber-100 text-amber-700',
   PENDING_VERIFY: 'bg-blue-100 text-blue-700',
   PREPARING: 'bg-orange-100 text-orange-700',
   READY: 'bg-green-100 text-green-700',
@@ -18,6 +19,7 @@ const DEFAULT_STYLE = 'bg-gray-100 text-gray-600';
 
 const STATUS_LABEL: Record<string, string> = {
   WAITING_CASH: 'รอจ่ายเงินสดหน้าร้าน',
+  WAITING_ACCEPT: 'รอพนักงานรับงาน',
   PENDING_VERIFY: 'รอตรวจสลิป',
   PREPARING: 'กำลังเตรียมของ',
   READY: 'ของพร้อมรับ',
@@ -29,6 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   WAITING_CASH: <Clock size={14} />,
+  WAITING_ACCEPT: <Clock size={14} />,
   PENDING_VERIFY: <AlertCircle size={14} />,
   PREPARING: <PackageSearch size={14} />,
   READY: <CheckCircle size={14} />,

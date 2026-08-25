@@ -1,3 +1,25 @@
+
+-- ⭐️ MULTI-TENANT: tenants table — แต่ละ tenant = ร้านค้า/โรงเรียน 1 แห่ง
+CREATE TABLE `tenants` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `logo_url` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `primary_color` varchar(7) COLLATE utf8mb4_unicode_ci DEFAULT '#10b981',
+  `line_channel_id` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `line_liff_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `line_channel_secret` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `domain` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `plan` enum('free','basic','pro','enterprise') COLLATE utf8mb4_unicode_ci DEFAULT 'free',
+  `max_users` int DEFAULT 10,
+  `max_products` int DEFAULT 500,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`),
+  UNIQUE KEY `domain` (`domain`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ⭐️ Canonical schema reference — single source of truth for what the database SHOULD look like.
 --
 -- This file does NOT run automatically and the app never reads it. The actual runtime source of
@@ -41,6 +63,7 @@ CREATE TABLE `users` (
   `group_id` int DEFAULT NULL,
   `line_user_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
+  `tenant_id` int DEFAULT NULL,
   UNIQUE KEY `student_id` (`student_id`),
   UNIQUE KEY `phone_number` (`phone_number`),
   KEY `fk_users_group` (`group_id`)
@@ -51,6 +74,7 @@ CREATE TABLE `categories` (
   `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `idempotency_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
+  `tenant_id` int DEFAULT NULL,
   UNIQUE KEY `idempotency_key` (`idempotency_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `suppliers` (
@@ -89,7 +113,8 @@ CREATE TABLE `settings` (
   `receipt_footer` text COLLATE utf8mb4_unicode_ci,
   `points_earn_amount_per_point` int DEFAULT '20',
   `points_redeem_value_per_point` decimal(10,2) DEFAULT '1.00',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  `tenant_id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `products` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -112,6 +137,7 @@ CREATE TABLE `products` (
   `points_required` int DEFAULT '0',
   `min_stock` int DEFAULT '10',
   PRIMARY KEY (`id`),
+  `tenant_id` int DEFAULT NULL,
   UNIQUE KEY `barcode` (`barcode`),
   KEY `category_id` (`category_id`),
   KEY `vendor_id` (`vendor_id`),
@@ -169,6 +195,7 @@ CREATE TABLE `sales` (
   `client_offline_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `is_offline_sale` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`),
+  `tenant_id` int DEFAULT NULL,
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   UNIQUE KEY `client_offline_id` (`client_offline_id`),
   KEY `cashier_id` (`cashier_id`),
@@ -242,6 +269,7 @@ CREATE TABLE `orders` (
   `ready_at` timestamp NULL DEFAULT NULL,
   `pickup_reminder_sent` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`),
+  `tenant_id` int DEFAULT NULL,
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   KEY `user_id` (`user_id`),
   KEY `idx_orders_status_created` (`status`,`created_at`),

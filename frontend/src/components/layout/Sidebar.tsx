@@ -26,9 +26,9 @@ export function Sidebar({
     <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border shadow-sm flex-col shrink-0 z-40">
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-brand-border">
-        <img src="/logo-192.png" alt="DMTC Mart" className="w-9 h-9 rounded-xl shrink-0 object-contain" />
+        <img src="/logo-192.png" alt={storeName || "Store"} className="w-9 h-9 rounded-xl shrink-0 object-contain" />
         <div>
-          <p className="text-sm font-bold text-gray-900">DMTC Mart</p>
+          <p className="text-sm font-bold text-gray-900">{storeName || "Store"}</p>
           <p className="text-[10px] text-gray-400">สหกรณ์โรงเรียน</p>
         </div>
       </div>

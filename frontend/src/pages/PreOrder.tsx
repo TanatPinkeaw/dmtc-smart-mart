@@ -46,6 +46,7 @@ interface CartItem extends Product { quantity: number; }
 const CUSTOMER_STATUS_MESSAGE: Record<string, { icon: 'info' | 'success' | 'warning'; text: string }> = {
   PENDING_VERIFY:   { icon: 'info',    text: 'ได้รับออเดอร์แล้ว กำลังตรวจสอบสลิปให้นะ 🧾' },
   WAITING_CASH:     { icon: 'info',    text: 'ยืนยันออเดอร์แล้ว รอชำระเงินสดที่ร้านได้เลย' },
+  WAITING_ACCEPT:   { icon: 'info',    text: 'สลิปตรวจสอบแล้ว กำลังรอพนักงานรับงาน 📋' },
   PREPARING:        { icon: 'info',    text: 'ร้านกำลังจัดเตรียมสินค้าให้คุณอยู่ 🛍️' },
   READY:            { icon: 'success', text: 'สินค้าพร้อมแล้ว มารับที่ร้านได้เลย 🎉' },
   COMPLETED:        { icon: 'success', text: 'รับสินค้าเรียบร้อย ขอบคุณที่ใช้บริการนะ 😊' },

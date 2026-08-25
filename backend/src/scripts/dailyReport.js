@@ -10,6 +10,7 @@
 // manually via POST /api/reports/daily/send (ADMIN only) for testing without waiting for 6am.
 
 const pool = require('../config/db');
+const { getStoreName } = require('../utils/storeConfig');
 const { toSatang, fromSatang } = require('../utils/money');
 const { sendMail } = require('../services/mailer');
 const { ADMIN_EMAIL } = require('../config/config');
@@ -138,7 +139,7 @@ function buildReportHtml(data) {
 
   return `
   <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222;">
-    <h2 style="color:#F12B6B;margin-bottom:4px;">รายงานสรุปยอดประจำวัน — DMTC Mart</h2>
+    <h2 style="color:#F12B6B;margin-bottom:4px;">รายงานสรุปยอดประจำวัน — ${storeName}</h2>
     <p style="color:#666;margin-top:0;">วันที่ ${data.date}</p>
 
     <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -168,7 +169,7 @@ function buildReportHtml(data) {
       <tbody>${shiftRows}</tbody>
     </table>
 
-    <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันเวลา 06:00 น. — DMTC Mart</p>
+    <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันเวลา 06:00 น. — ${storeName}</p>
   </div>`;
 }
 
@@ -181,7 +182,7 @@ async function sendDailyReport(targetDateStr) {
   }
   const sent = await sendMail({
     to,
-    subject: `รายงานสรุปยอดประจำวัน ${data.date} — DMTC Mart`,
+    subject: `รายงานสรุปยอดประจำวัน ${data.date} — ${storeName}`,
     html: buildReportHtml(data),
   });
   return { sent, data };

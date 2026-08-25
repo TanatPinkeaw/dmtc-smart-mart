@@ -64,7 +64,7 @@ export const ReceiptSlip = forwardRef<HTMLDivElement, ReceiptSlipProps>(
 
         {/* Store header */}
         <div className="text-center mb-1">
-          <p className="font-bold text-base tracking-wide">{storeInfo?.store_name || 'สหกรณ์วิทยาลัย'}</p>
+          <p className="font-bold text-base tracking-wide">{storeInfo?.store_name || 'ร้านค้า'}</p>
           {storeInfo?.address && <p className="text-[11px] text-gray-500 mt-0.5">{storeInfo.address}</p>}
           {storeInfo?.tax_id && <p className="text-[11px] text-gray-500">เลขผู้เสียภาษี: {storeInfo.tax_id}</p>}
         </div>

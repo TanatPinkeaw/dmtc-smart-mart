@@ -15,6 +15,7 @@
 // endpoint ทั้งคู่อยู่ใน PUBLIC_PATHS (ดู server.js) เพราะเรียกก่อน login เสมอ — LIFF ยังไม่มี JWT
 // ของระบบนี้ตอนเปิดหน้ามาครั้งแรก
 const pool = require('../config/db');
+const { getStoreName } = require('../utils/storeConfig');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { serverError, badRequest, notFound } = require('../utils/http');
@@ -152,7 +153,7 @@ async function registerViaLine(req, res) {
     // การสมัครสมาชิกที่สำเร็จแล้วจริงๆ กลายเป็น error response — pushLineMessage เองก็ fail-soft
     // อยู่แล้ว (คืน false ไม่ throw) แต่กัน unhandled rejection ไว้อีกชั้นด้วย .catch เผื่ออนาคต
     pushLineMessage(line_user_id, [
-      { type: 'text', text: '🎉 ลงทะเบียนสมาชิก DMTC Smart Mart เรียบร้อยแล้ว! สามารถเช็กบัตรสมาชิกและแต้มสะสมผ่านเมนูได้เลยครับ' },
+      { type: 'text', text: `🎉 ลงทะเบียนสมาชิก ${await getStoreName(user.tenant_id)} เรียบร้อยแล้ว! สามารถเช็กบัตรสมาชิกและแต้มสะสมผ่านเมนูได้เลยครับ` },
     ]).catch(err => console.error('[LINE] ส่งข้อความยืนยันสมัครสมาชิกไม่สำเร็จ:', err.message));
 
     // ⭐️ เดิม: ห้ามส่ง raw JWT ออกทาง response body เด็ดขาด (ป้องกัน XSS ขโมย token) ใช้ pattern

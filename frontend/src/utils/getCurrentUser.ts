@@ -20,6 +20,7 @@ export interface User {
   username?: string;
   profile_image_url?: string | null;
   role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'MEMBER';
+  tenant_id?: number | null;
   // field เพิ่มเติมจาก server (เช่น points/group_id) — เป็น unknown บังคับให้โค้ด narrow ก่อนใช้
   [key: string]: unknown;
 }

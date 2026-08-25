@@ -49,7 +49,7 @@ function _uploadToCloudinary(buffer, folder, publicId) {
 //  - Cloudinary ปิด   → เขียนลง uploads/<subfolder>/ แล้วคืน /uploads/<subfolder>/<name><ext>
 async function saveImage(buffer, subfolder, baseName, ext) {
   if (CLOUDINARY_ENABLED) {
-    return await _uploadToCloudinary(buffer, `dmtc-mart/${subfolder}`, baseName);
+    return await _uploadToCloudinary(buffer, `${folder || 'uploads'}/${subfolder}`, baseName);
   }
   const dir = path.join(__dirname, 'uploads', subfolder);
   fs.mkdirSync(dir, { recursive: true });
@@ -77,7 +77,7 @@ function _uploadRawToCloudinary(buffer, folder, publicId) {
 // เพราะไฟล์ backup มีสำเนาบนดิสก์อยู่แล้วเป็นค่าเริ่มต้น ไม่ต้องมีที่เก็บสำรอง)
 async function saveRawFile(buffer, subfolder, publicId) {
   if (!CLOUDINARY_ENABLED) return null;
-  const result = await _uploadRawToCloudinary(buffer, `dmtc-mart/${subfolder}`, publicId);
+  const result = await _uploadRawToCloudinary(buffer, `${folder || 'uploads'}/${subfolder}`, publicId);
   return { publicId: result.public_id, url: result.secure_url };
 }
 

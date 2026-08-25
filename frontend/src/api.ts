@@ -65,7 +65,19 @@ function forceLogout() {
   //   cookie) แล้ว Login.tsx จะ "หยุด" auto-login รอบใหม่ทันที ไม่วิ่งวนไม่จบ — flag อยู่ใน
   //   sessionStorage เพราะต้องรอดข้าม full page reload (window.location.href) ที่ useRef/ตัวแปร JS
   //   หายหมด
-  try { sessionStorage.setItem('liff_loop_breaker', 'true'); } catch { /* storage ถูกบล็อก — ข้าม */ }
+  try { sessionStorage.setItem('liff_loop_breaker', 'true');
+    // Store tenant config for LIFF ID lookup
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.tenant_id) {
+          fetch(`/api/tenants/${user.tenant_id}`).then(r => r.json()).then(config => {
+            localStorage.setItem('tenant_config', JSON.stringify(config));
+          }).catch(() => {});
+        }
+      }
+    } catch {} } catch { /* storage ถูกบล็อก — ข้าม */ }
 
   setBearerToken(null); // ⭐️ session ตายแล้ว — ล้าง bearer token ทิ้งด้วย (ถ้ามี)
 
@@ -102,6 +114,11 @@ async function reauthViaLiff(): Promise<string | null> {
     setBearerToken(data.access_token);
     if (data?.csrfToken) csrfToken = data.csrfToken;
     if (data?.user) localStorage.setItem('user', JSON.stringify(data.user));
+      // Store store_name for UI display
+      try {
+        const tenantConfig = await fetch(`/api/tenants/${data.user.tenant_id || 1}`).then(r => r.json());
+        if (tenantConfig.name) localStorage.setItem('store_name', tenantConfig.name);
+      } catch {}
     return data.access_token;
   } catch {
     return null;

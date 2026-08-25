@@ -51,6 +51,7 @@ const IS_PRODUCTION = config.IS_PRODUCTION;
 // ⭐️ Update — ดึงออกไป src/utils/authTokens.js แล้ว (memberController.js ใหม่ต้องออก token/cookie
 // แบบเดียวกันสำหรับสมัครผ่าน LINE ก็เลยแชร์ logic เดียวกันแทน copy-paste) ดูคำอธิบายเต็มที่ไฟล์นั้น
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken, setAuthCookies, clearAuthCookies } = require('./src/utils/authTokens');
+const { getStoreName } = require('./src/utils/storeConfig');
 // ⭐️ จัดการ request ซ้ำ (idempotency-key) ที่ชน UNIQUE constraint ฝั่ง DB หลัง server restart — ดู utils/idempotency.js
 const { isIdempotentDuplicate, respondIdempotentDuplicate } = require('./src/utils/idempotency');
 const { evaluateRewardItem, checkItemStock, settleRewardPoints } = require('./src/utils/rewardRedemption'); // ⭐️ Part 5 — ลอจิกแลกของรางวัล (pure — เทสได้)
@@ -675,6 +676,8 @@ app.use(requireCsrf);
 app.use('/api/members', require('./src/routes/memberRoutes'));
 // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — บล็อกบน production ในตัว controller เอง (src/controllers/adminController.js)
 app.use('/api/admin/reset', require('./src/routes/adminRoutes'));
+app.use('/api/tenants', require('./src/routes/tenantRoutes'));
+app.use('/api/admin/dashboard', require('./src/routes/adminDashboard'));  // ⭐️ SUPER ADMIN: Dashboard  // ⭐️ MULTI-TENANT: CRUD tenants
 // ⭐️ LINE webhook — ตอบ Rich Menu / ข้อความ + ลงเวลาทำงานผ่าน LINE (src/controllers/lineWebhookController.js)
 // /api/line/webhook อยู่ใน PUBLIC_PATHS แล้ว จึงข้าม JWT/CSRF (กันปลอมด้วย X-Line-Signature แทน)
 app.use('/api/line', require('./src/routes/lineRoutes'));
@@ -937,7 +940,7 @@ async function sendTableExport(res, { filename, sheetName, headers, rows }, form
   if (format === 'excel') {
     const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'DMTC Mart';
+    workbook.creator = await getStoreName(req.user?.tenant_id);
     workbook.created = new Date();
     const sheet = workbook.addWorksheet(sheetName);
     sheet.addRow(headers);
@@ -1207,7 +1210,30 @@ app.delete('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body; // หน้าเว็บส่งช่อง username มา เราจะเอาไปเทียบกับ student_id
   try {
-    const [users] = await pool.query('SELECT * FROM users WHERE student_id = ? AND is_active = TRUE', [username]);
+    // ⭐️ MULTI-TENANT: Query from master DB to get tenant info
+    const masterPool = require('./src/config/tenantRegistry').getMasterPool();
+    const [tenants] = await masterPool.query('SELECT db_name FROM tenants WHERE is_active = TRUE');
+    
+    // Search for user across all tenant databases
+    let userFound = null;
+    let userDbName = null;
+    for (const tenant of tenants) {
+      try {
+        const tenantPool = require('./src/config/tenantDB').getOrCreatePool(tenant.db_name);
+        const [users] = await tenantPool.query('SELECT * FROM users WHERE student_id = ? AND is_active = TRUE', [username]);
+        if (users.length > 0) {
+          userFound = users[0];
+          userDbName = tenant.db_name;
+          break;
+        }
+      } catch (err) {
+        // Skip this tenant if connection fails
+        continue;
+      }
+    }
+    
+    if (!userFound) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
+    const user = userFound;
     if (users.length === 0) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
 
     const user = users[0];
@@ -1245,7 +1271,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     res.json({
       message: "ล็อกอินสำเร็จ",
-      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password, profile_image_url: user.profile_image_url || null },
+      user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role, must_change_password: !!user.must_change_password, profile_image_url: user.profile_image_url || null, tenant_id: user.tenant_id || null, db_name: userDbName },
       csrfToken,
       has_active_work_session: hasActiveWorkSession, // ⭐️ frontend ใช้ตั้ง session_mode (work/shop) อัตโนมัติ
     });
@@ -2697,7 +2723,7 @@ app.get('/api/holidays', async (req, res) => {
 
 // ⭐️ Phase A (refactor) — /api/reports/attendance ย้ายไปที่ reportController.js/reportRoutes.js แล้ว
 
-app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, res) => {
+app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -2714,7 +2740,22 @@ app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER'), async (req, 
     }
 
     await conn.query('UPDATE orders SET assigned_to = ? WHERE id = ?', [req.user.id, order.id]);
+
+    // ⭐️ ถ้าสถานะ WAITING_ACCEPT → เปลี่ยนเป็น PREPARING อัตโนมัติ (พนักงานรับงาน = เริ่มเตรียมของ)
+    let newStatus = null;
+    if (order.status === 'WAITING_ACCEPT') {
+      newStatus = 'PREPARING';
+      await conn.query('UPDATE orders SET status = ? WHERE id = ?', [newStatus, order.id]);
+    }
+
     await conn.commit();
+
+    // ⭐️ ยิง event หลัง commit เสมอ — ให้หน้า OrderManagement + badge + notification รีเฟรชทันที
+    if (newStatus) {
+      req.io.emit('order_status_changed', { order_id: order.id, status: newStatus });
+      req.io.to(`user_${order.user_id}`).emit(`order_update_user_${order.user_id}`, { order_id: order.id, status: newStatus });
+    }
+
     res.json({ message: "รับงานสำเร็จ", assigned_to: req.user.id });
   } catch (error) {
     await conn.rollback();
@@ -4119,10 +4160,10 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
   // ⭐️ F3 (frontend) — รับ notes เป็น alias ของ reject_reason ด้วย เผื่อ frontend ส่งชื่อ field ต่างกันตามบริบท (ตรวจสลิป vs ยกเลิก)
   const { status, reject_reason: rawRejectReason, notes } = req.body;
   const reject_reason = rawRejectReason || notes || null;
-  // status: PENDING_VERIFY → PREPARING → READY → COMPLETED
+  // status: PENDING_VERIFY/WAITING_CASH → WAITING_ACCEPT (รอพนักงานรับ) → PREPARING → READY → COMPLETED
   //         PENDING_VERIFY → SLIP_REJECTED (สลิปผิด, ขอส่งใหม่)
   //         PENDING_VERIFY → REFUND_REQUESTED (โอนแล้วแต่ไม่เอาแล้ว)
-  //         PENDING_VERIFY/any → CANCELLED (สลิปปลอม/ยกเลิก)
+  //         PENDING_VERIFY/WAITING_CASH/WAITING_ACCEPT/any → CANCELLED (สลิปปลอม/ยกเลิก)
 
   const conn = await pool.getConnection();
   try {
@@ -4221,7 +4262,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     // 🐛 FIX — SLIP_REJECTED คืนสต๊อกไปตอน reject แล้ว ถ้าออกจากสถานะนี้กลับสู่สถานะที่ต้องขายของ
     // (ตรวจสลิปใหม่ = PENDING_VERIFY หรือ accept ผ่านหน้าร้าน = PREPARING ตรงๆ) ต้องตัดสต๊อกกลับคืน
     // ไม่งั้นสินค้าหลุดออกโดยไม่หักสต๊อก (ขายเกินได้) — PENDING_VERIFY เคยหลุดเพราะ branch เช็คแค่ PREPARING
-    if (order.status === 'SLIP_REJECTED' && ['PENDING_VERIFY', 'PREPARING'].includes(status)) {
+    if (order.status === 'SLIP_REJECTED' && ['PENDING_VERIFY', 'WAITING_ACCEPT', 'PREPARING'].includes(status)) {
       const items = await getOrderItems(conn, orderId);
       for (const item of items) {
         const [res] = await conn.query('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?', [item.quantity, item.product_id, item.quantity]);
@@ -4248,7 +4289,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     // ⭐️ F3 — จุดที่ "ตรวจสลิปผ่าน" จริงๆ คือ PENDING_VERIFY → PREPARING (ไม่ใช่ตอน COMPLETED ซึ่งคือลูกค้ามารับของ
     // แก้จาก Task 4 เดิมที่ผูก slip_verification_status='VERIFIED' ไว้ผิดจุดที่ COMPLETED)
     // 🐛 FIX — SLIP_REJECTED → PREPARING (accept หน้าร้าน) ก็ต้อง mark VERIFIED ด้วย เดิมหลุด (ยังค้าง REJECTED)
-    if (['PENDING_VERIFY', 'SLIP_REJECTED'].includes(order.status) && status === 'PREPARING') {
+    if (['PENDING_VERIFY', 'SLIP_REJECTED'].includes(order.status) && ['PREPARING', 'WAITING_ACCEPT'].includes(status)) {
       await conn.query(
         `UPDATE orders SET slip_verification_status = 'VERIFIED', slip_verified_by = ?, slip_verified_at = NOW() WHERE id = ?`,
         [req.user.id, orderId]
@@ -4260,6 +4301,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     // ⭐️ FIX: ข้อความแจ้งเตือนลูกค้าเดิมใช้คำทางการ/ระบบเกินไป (เช่น "พนักงานรับเรื่องแล้ว", "เนื่องจาก:")
     // ปรับเป็นภาษาพูดธรรมดาที่คนทั่วไปอ่านแล้วเข้าใจทันที ความหมาย/ตัวแปรเหมือนเดิมทุกจุด
     const statusMessages = {
+      WAITING_ACCEPT: `ออเดอร์ #${orderId} รอพนักงานรับงาน`,
       PREPARING: `ร้านได้รับออเดอร์ #${orderId} แล้ว กำลังจัดเตรียมสินค้าให้คุณ${order.payment_method === 'CASH' ? ' เตรียมเงินสดไว้ได้เลยนะครับ' : ''}`,
       READY: `สินค้าออเดอร์ #${orderId} เตรียมเสร็จแล้ว มารับได้เลยครับ`,
       COMPLETED: `รับสินค้าออเดอร์ #${orderId} เรียบร้อยแล้ว ขอบคุณที่ใช้บริการครับ`,
@@ -4372,7 +4414,7 @@ app.put('/api/notifications/read-all', async (req, res) => {
 // ⭐️ API ดึงจำนวนออเดอร์ที่รอจัดการ (แสดงเลข Badge แดงๆ) — ย้ายมาไว้ก่อน จะได้ลบ route ซ้ำด้านล่างได้สะดวก
 app.get('/api/orders/pending-count', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT COUNT(id) as count FROM orders WHERE status IN ('PENDING_VERIFY', 'WAITING_CASH', 'PREPARING')");
+    const [rows] = await pool.query("SELECT COUNT(id) as count FROM orders WHERE status IN ('PENDING_VERIFY', 'WAITING_CASH', 'WAITING_ACCEPT', 'PREPARING')");
     res.json({ count: rows[0].count || 0 });
   } catch (error) {
     console.error('[500]', error.message);
@@ -4393,7 +4435,7 @@ app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) =>
     if (orders.length === 0) throw new Error("ไม่พบออเดอร์นี้ หรือคุณไม่มีสิทธิ์ยกเลิก");
     const order = orders[0];
 
-    if (!['PENDING_VERIFY', 'WAITING_CASH'].includes(order.status)) {
+    if (!['PENDING_VERIFY', 'WAITING_CASH', 'WAITING_ACCEPT'].includes(order.status)) {
       throw new Error("ไม่สามารถยกเลิกได้ (ระบบกำลังเตรียมของหรือเสร็จแล้ว) กรุณาติดต่อพนักงาน");
     }
 
@@ -5213,13 +5255,13 @@ server.listen(PORT, '0.0.0.0', () => {
         if (config.ENABLE_BACKUP_EMAIL && config.ADMIN_EMAIL) {
           await sendMail({
             to: config.ADMIN_EMAIL,
-            subject: `✅ สำรองข้อมูลสำเร็จ ${result.filename} — DMTC Mart`,
+            subject: `✅ สำรองข้อมูลสำเร็จ ${result.filename} — ${await getStoreName()}`,
             html: `<div style="font-family:sans-serif;">
               <h2>สำรองข้อมูลประจำวันสำเร็จ</h2>
               <p>ไฟล์: <b>${result.filename}</b></p>
               <p>ขนาด: <b>${result.size} MB</b></p>
               <p>สำเนาบนคลาวด์: <b>${result.cloudBacked ? '✅ มี (Cloudinary)' : '⚠️ ไม่มี — อยู่บนดิสก์เซิร์ฟเวอร์เท่านั้น'}</b></p>
-              <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันตี 2 — DMTC Mart</p>
+              <p style="color:#aaa;font-size:11px;margin-top:20px;">อีเมลนี้ส่งอัตโนมัติทุกวันตี 2 — ${await getStoreName()}</p>
             </div>`,
           });
         }
@@ -5233,7 +5275,7 @@ server.listen(PORT, '0.0.0.0', () => {
       if (config.ENABLE_BACKUP_EMAIL && config.ADMIN_EMAIL) {
         await sendMail({
           to: config.ADMIN_EMAIL,
-          subject: `❌ สำรองข้อมูลล้มเหลว — DMTC Mart`,
+          subject: `❌ สำรองข้อมูลล้มเหลว — ${await getStoreName()}`,
           html: `<div style="font-family:sans-serif;">
             <h2>สำรองข้อมูลประจำวันล้มเหลว</h2>
             <p style="color:#c00;">${err.message}</p>
@@ -5345,7 +5387,8 @@ server.listen(PORT, '0.0.0.0', () => {
       const sentIds = [];
       for (const o of staleOrders) {
         if (!o.line_user_id) continue; // ไม่ได้ผูกบัญชี LINE — ข้ามเงียบๆ (fail-soft เหมือนจุดอื่น)
-        const text = `🏃‍♂️ ก๊อกๆ! ออเดอร์ #${o.id} ของคุณเตรียมเสร็จเรียบร้อยแล้วน้า อย่าลืมแวะมารับที่ร้าน DMTC Mart นะครับ รออยู่น้าค้าบ ✨`;
+        const storeName = await getStoreName(o.tenant_id);
+        const text = `🏃‍♂️ ก๊อกๆ! ออเดอร์ #${o.id} ของคุณเตรียมเสร็จเรียบร้อยแล้วน้า อย่าลืมแวะมารับที่ร้าน ${storeName} นะครับ รออยู่น้าค้าบ ✨`;
         const sent = await pushLineMessage(o.line_user_id, [{ type: 'text', text }])
           .catch(err => { console.error(`❌ [CRON] ส่ง pickup reminder ไม่สำเร็จ (order #${o.id}):`, err.message); return false; });
         // ⭐️ ตั้ง sent flag เฉพาะตอนส่งสำเร็จจริง — ถ้าพัง (เช่น LINE API ล่มชั่วคราว) ปล่อยให้ลองใหม่ชั่วโมงถัดไป

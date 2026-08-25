@@ -41,6 +41,7 @@ interface HighlightProduct {
 const OPEN_ORDER_STATUS: Record<string, { label: string; tone: 'warn' | 'info' }> = {
   SLIP_REJECTED:    { label: 'สลิปไม่ผ่าน — ต้องส่งใหม่', tone: 'warn' },
   PENDING_VERIFY:   { label: 'กำลังตรวจสอบสลิป',        tone: 'info' },
+  WAITING_ACCEPT:   { label: 'รอพนักงานรับงาน',            tone: 'info' },
   WAITING_CASH:     { label: 'รอชำระเงินสดที่ร้าน',      tone: 'warn' },
   PREPARING:        { label: 'กำลังเตรียมสินค้า',        tone: 'info' },
   READY:            { label: 'พร้อมรับสินค้าแล้ว',        tone: 'info' },
