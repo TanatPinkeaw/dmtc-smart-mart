@@ -1233,10 +1233,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     }
     
     if (!userFound) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
-    const user = userFound;
-    if (users.length === 0) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
-
-    const user = users[0];
+    // ⭐️ MULTI-TENANT — user มาจาก master-registry loop ด้านบน (userFound + userDbName)
+    //   เดิมค้างโค้ดเก่า 2 บรรทัด (`if (users.length === 0)` + `const user = users[0]`) ทำให้เป็น
+    //   SyntaxError: Identifier 'user' has already been declared → backend บูตไม่ขึ้นเลยทันที
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return unauthorized(res, "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
 

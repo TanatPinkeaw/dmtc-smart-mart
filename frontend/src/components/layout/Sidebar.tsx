@@ -2,7 +2,7 @@
 //    ทำอะไร: รวมกลุ่มลิงก์จาก navConfig (MEMBER/STAFF/STORE/SYSTEM) โชว์เฉพาะที่ role มีสิทธิ์ + ปุ่มออกจากระบบ
 import { Bell, Store, ClipboardList, LogOut, Home } from 'lucide-react';
 import { NavItem } from './NavItem';
-import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS } from './navConfig';
+import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS, ADMIN_ITEMS } from './navConfig';
 
 // ⭐️ ชื่อร้านจาก tenant config (เก็บลง localStorage ตอน login สำเร็จ) — แทนชื่อแบรนด์ hardcoded
 const storeName: string = (() => { try { return localStorage.getItem('store_name') || 'ร้านค้า'; } catch { return 'ร้านค้า'; } })();
@@ -68,6 +68,16 @@ export function Sidebar({
             ))}
             {/* ⭐️ งานระบบ (สำรอง/กู้คืน) เฉพาะ ADMIN */}
             {isAdmin && SYSTEM_ITEMS.map(item => (
+              <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
+            ))}
+          </>
+        )}
+
+        {/* ⭐️ Super Admin — ควบคุม POS ทุกร้าน (multi-tenant) เฉพาะ ADMIN */}
+        {isAdmin && (
+          <>
+            <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ผู้ดูแลระบบ</p></div>
+            {ADMIN_ITEMS.map(item => (
               <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
             ))}
           </>

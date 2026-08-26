@@ -3,7 +3,9 @@
 // ตัวอย่าง: node src/scripts/provisionTenant.js "ร้าน ABC" admin abc123
 
 const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
+// ⭐️ FIX — เดิม require('bcrypt') ซึ่งไม่ได้อยู่ใน dependencies (โปรเจกต์นี้ใช้ bcryptjs ตัวเดียว)
+//   ทำให้ backend crash ตอน boot (MODULE_NOT_FOUND) เพราะ adminDashboard.js require ไฟล์นี้ตั้งแต่ต้น
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 

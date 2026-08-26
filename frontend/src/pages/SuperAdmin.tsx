@@ -19,6 +19,7 @@ import {
   X,
   Check,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import api from '../api';
 import Swal from '../swal';
@@ -85,21 +86,7 @@ export default function SuperAdmin() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({ shop_name: '', admin_username: '', admin_password: '', plan: 'free' });
 
-  // 🔒 เฉพาะ ADMIN เท่านั้น
-  if (user.role !== 'ADMIN') {
-    return (
-      <div className="bg-brand-bg min-h-screen">
-        <PageHeader icon={LayoutDashboard} title="Super Admin" />
-        <EmptyState icon={<LayoutDashboard size={28} />} title="ไม่มีสิทธิ์เข้าถึงหน้านี้" className="m-6" />
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    void (async () => { await fetchTenants(); })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // ⭐️ ประกาศฟังก์ชัน fetch ก่อน useEffect ที่เรียกมัน (กัน "accessed before declaration")
   const fetchTenants = async () => {
     setLoading(true);
     try {
@@ -111,6 +98,24 @@ export default function SuperAdmin() {
       setLoading(false);
     }
   };
+
+  // ⭐️ โหลดรายการร้านค้าครั้งแรกตอน mount — hook ทุกตัวต้องถูกเรียก "ก่อน" return แบบมีเงื่อนไข
+  //   เสมอ (Rules of Hooks) เดิม useEffect ถูกวางหลังเช็คสิทธิ์ ทำให้ eslint react-hooks/rules-of-hooks
+  //   ฟ้อง "useEffect is called conditionally" และ fetchTenants ถูกเรียกก่อนประกาศ
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchTenants();
+  }, []);
+
+  // 🔒 เฉพาะ ADMIN เท่านั้น (เช็คหลัง hooks ทั้งหมดแล้ว — ลำดับการเรียก hook จะเหมือนกันทุก render)
+  if (user.role !== 'ADMIN') {
+    return (
+      <div className="bg-brand-bg min-h-screen">
+        <PageHeader icon={LayoutDashboard} title="Super Admin" />
+        <EmptyState icon={<LayoutDashboard size={28} />} title="ไม่มีสิทธิ์เข้าถึงหน้านี้" className="m-6" />
+      </div>
+    );
+  }
 
   const fetchTenantDetail = async (id: number) => {
     try {
@@ -158,6 +163,26 @@ export default function SuperAdmin() {
       Swal.fire({ icon: 'success', title: `${action}สำเร็จ`, timer: 1400, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'ดำเนินการไม่สำเร็จ', text: getErrorMessage(err) });
+    }
+  };
+
+  const handleDeleteTenant = async (tenant: Tenant) => {
+    const confirm = await Swal.fire({
+      title: `ลบร้าน "${tenant.shop_name}"?`,
+      text: 'ร้านจะถูกซ่อนจากรายการและปิดใช้งานทันที (ข้อมูลใน database ยังเก็บไว้ — soft delete)',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ลบร้านค้า',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#ef4444',
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await api.delete(`/admin/dashboard/tenant/${tenant.id}`);
+      await fetchTenants();
+      Swal.fire({ icon: 'success', title: 'ลบร้านค้าสำเร็จ', timer: 1400, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: getErrorMessage(err) });
     }
   };
 
@@ -401,6 +426,7 @@ export default function SuperAdmin() {
                       </div>
                       <div className="flex items-center gap-1">
                         <button onClick={() => void fetchTenantDetail(tenant.id)} className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors" title="ดูรายละเอียด"><Eye size={18} /></button>
+                        <button onClick={() => void handleDeleteTenant(tenant)} className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="ลบร้านค้า (soft delete)"><Trash2 size={18} /></button>
                         <button onClick={() => void handleToggleTenant(tenant)} className={`p-2 rounded-lg transition-colors ${tenant.is_active ? 'hover:bg-red-50 text-red-600' : 'hover:bg-green-50 text-green-600'}`} title={tenant.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}>
                           {tenant.is_active ? <PowerOff size={18} /> : <Power size={18} />}
                         </button>

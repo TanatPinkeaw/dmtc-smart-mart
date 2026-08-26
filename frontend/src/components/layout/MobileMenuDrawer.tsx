@@ -2,7 +2,7 @@
 //    ทำอะไร: แสดงลิงก์ครบทุกกลุ่มตาม role (ที่แถบล่างใส่ไม่หมด) + ปุ่มออกจากระบบ
 import { X, LogOut, ClipboardList } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { STAFF_ITEMS, STORE_ITEMS_DRAWER, SYSTEM_ITEMS, MEMBER_ITEMS } from './navConfig';
+import { STAFF_ITEMS, STORE_ITEMS_DRAWER, SYSTEM_ITEMS, MEMBER_ITEMS, ADMIN_ITEMS } from './navConfig';
 
 interface MobileMenuDrawerProps {
   isStaff: boolean;
@@ -50,6 +50,12 @@ export function MobileMenuDrawer({ isStaff, isAdmin, isStoreAdmin, pendingOrders
                 </NavLink>
               ))}
               {isAdmin && SYSTEM_ITEMS.map(item => (
+                <NavLink key={item.to} to={item.to} onClick={onClose} className={drawerLinkClass}>
+                  <item.icon size={18} /> {item.label}
+                </NavLink>
+              ))}
+              {/* ⭐️ Super Admin — เฉพาะ ADMIN */}
+              {isAdmin && ADMIN_ITEMS.map(item => (
                 <NavLink key={item.to} to={item.to} onClick={onClose} className={drawerLinkClass}>
                   <item.icon size={18} /> {item.label}
                 </NavLink>

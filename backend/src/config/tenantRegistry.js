@@ -48,7 +48,8 @@ async function initMasterDB() {
         max_products INT DEFAULT 500,
         is_active TINYINT(1) DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_login TIMESTAMP NULL
+        last_login TIMESTAMP NULL,
+        deleted_at TIMESTAMP NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
     
@@ -65,10 +66,27 @@ async function getTenantByDbName(dbName) {
   return rows[0] || null;
 }
 
-// Get all tenants
+// ⭐️ Soft delete support — เติมคอลัมน์ deleted_at ให้ฐานข้อมูลเก่าอัตโนมัติครั้งแรกที่ query
+//    (initMasterDB ไม่ได้ถูกเรียกตอน boot จึงต้อง migrate แบบ lazy + cache ผลไว้ระดับ process)
+let deletedAtMigration = null;
+async function ensureDeletedAtColumn() {
+  if (!deletedAtMigration) {
+    deletedAtMigration = getMasterPool().query('ALTER TABLE `tenants` ADD COLUMN deleted_at TIMESTAMP NULL')
+      .then(() => console.log('✅ tenants.deleted_at ready'))
+      .catch((err) => {
+        if (err && err.code === 'ER_DUP_FIELDNAME') return; // มีคอลัมน์อยู่แล้ว — ปกติ
+        deletedAtMigration = null; // DB ยังไม่พร้อม/พังอื่นๆ — ให้ลองใหม่ request ถัดไป
+        throw err;
+      });
+  }
+  return deletedAtMigration;
+}
+
+// Get all tenants (ตัดร้านที่ถูก soft delete ออก)
 async function getAllTenants() {
+  await ensureDeletedAtColumn();
   const pool = getMasterPool();
-  const [rows] = await pool.query('SELECT * FROM tenants ORDER BY created_at DESC');
+  const [rows] = await pool.query('SELECT * FROM tenants WHERE deleted_at IS NULL ORDER BY created_at DESC');
   return rows;
 }
 
@@ -80,6 +98,18 @@ async function addTenant(shopName, dbName, adminUsername, plan = 'free') {
     [shopName, dbName, adminUsername, plan]
   );
   return result.insertId;
+}
+
+// ⭐️ Soft delete tenant — ซ่อนจากรายการ + ปิดใช้งานทันที (ข้อมูลใน tenant DB ยังอยู่ครบ
+//    กู้คืนได้โดยเคลียร์ deleted_at กลับเป็น NULL)
+async function softDeleteTenant(id) {
+  await ensureDeletedAtColumn();
+  const pool = getMasterPool();
+  const [result] = await pool.query(
+    'UPDATE tenants SET deleted_at = NOW(), is_active = 0 WHERE id = ? AND deleted_at IS NULL',
+    [id]
+  );
+  return result.affectedRows > 0;
 }
 
 // Update tenant last login
@@ -107,6 +137,8 @@ module.exports = {
   getAllTenants,
   addTenant,
   updateLastLogin,
+  softDeleteTenant,
+  ensureDeletedAtColumn,
   getTenantConnection,
   getMasterPool
 };

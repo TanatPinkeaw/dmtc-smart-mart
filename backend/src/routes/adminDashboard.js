@@ -3,7 +3,7 @@
 const express = require('express');
 const { requireRole } = require('../middleware/guards');
 const router = express.Router();
-const { getAllTenants, addTenant, getMasterPool } = require('../config/tenantRegistry');
+const { getAllTenants, addTenant, getMasterPool, softDeleteTenant, ensureDeletedAtColumn } = require('../config/tenantRegistry');
 const { provisionTenant } = require('../scripts/provisionTenant');
 
 // GET /api/admin/dashboard — Overview stats
@@ -81,8 +81,10 @@ router.post('/create', requireRole('ADMIN'), async (req, res) => {
 // PUT /api/admin/dashboard/tenant/:id/toggle — Toggle tenant active status
 router.put('/tenant/:id/toggle', requireRole('ADMIN'), async (req, res) => {
   try {
+    await ensureDeletedAtColumn();
     const pool = getMasterPool();
-    await pool.query('UPDATE tenants SET is_active = NOT is_active WHERE id = ?', [req.params.id]);
+    const [result] = await pool.query('UPDATE tenants SET is_active = NOT is_active WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบ tenant หรือถูกลบไปแล้ว' });
     res.json({ message: 'อัปเดตสถานะสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
@@ -90,11 +92,24 @@ router.put('/tenant/:id/toggle', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
+// DELETE /api/admin/dashboard/tenant/:id — Soft delete (ซ่อนจากรายการ + ปิดใช้งาน, ข้อมูล tenant DB ยังอยู่)
+router.delete('/tenant/:id', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const deleted = await softDeleteTenant(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'ไม่พบ tenant หรือถูกลบไปแล้ว' });
+    res.json({ message: 'ลบร้านค้าสำเร็จ (soft delete — ข้อมูล database ยังเก็บไว้)' });
+  } catch (error) {
+    console.error('[500]', error.message);
+    res.status(500).json({ error: 'ไม่สามารถลบร้านค้าได้' });
+  }
+});
+
 // GET /api/admin/dashboard/tenant/:id — Get tenant details
 router.get('/tenant/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     const pool = getMasterPool();
-    const [[tenant]] = await pool.query('SELECT * FROM tenants WHERE id = ?', [req.params.id]);
+    await ensureDeletedAtColumn();
+    const [[tenant]] = await pool.query('SELECT * FROM tenants WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
     if (!tenant) return res.status(404).json({ error: 'ไม่พบ tenant' });
     
     // Get detailed stats from tenant's database

@@ -2,7 +2,7 @@
 //    export MEMBER_ITEMS/STAFF_ITEMS/STORE_ITEMS_*/SYSTEM_ITEMS — แก้เมนูที่เดียว มีผลทั้ง sidebar และ drawer
 import {
   LayoutDashboard, Boxes, Settings, CalendarClock, BarChart3,
-  ClipboardCheck, ShoppingBag, PiggyBank, Database, FileSpreadsheet, IdCard,
+  ClipboardCheck, ShoppingBag, PiggyBank, Database, FileSpreadsheet, IdCard, ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -41,6 +41,11 @@ export const STORE_ITEMS_SIDEBAR: NavItemDef[] = [
 // ⭐️ งานระบบ — ADMIN เท่านั้น (สำรอง/กู้คืนฐานข้อมูล)
 export const SYSTEM_ITEMS: NavItemDef[] = [
   { to: '/backup', icon: Database, label: 'สำรอง & กู้คืนข้อมูล' },
+];
+
+// ⭐️ SUPER ADMIN — ADMIN เท่านั้น (หน้าควบคุม POS ทุกร้านแบบ multi-tenant)
+export const ADMIN_ITEMS: NavItemDef[] = [
+  { to: '/super-admin', icon: ShieldCheck, label: 'Super Admin' },
 ];
 
 // mobile drawer — ลำดับเดิม (ตั้งค่าอยู่ท้ายสุด ต่างจาก sidebar)
