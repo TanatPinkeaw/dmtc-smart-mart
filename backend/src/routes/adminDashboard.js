@@ -14,7 +14,7 @@ router.get('/', requireRole('ADMIN'), async (req, res) => {
     // Get stats for each tenant
     const enrichedTenants = await Promise.all(tenants.map(async (t) => {
       try {
-        const pool = require('../src/config/tenantDB').getOrCreatePool(t.db_name);
+        const pool = require('../middleware/tenantDB').getOrCreatePool(t.db_name);
         const [[userCount]] = await pool.query('SELECT COUNT(*) as cnt FROM users');
         const [[productCount]] = await pool.query('SELECT COUNT(*) as cnt FROM products');
         const [[orderCount]] = await pool.query('SELECT COUNT(*) as cnt FROM orders');
@@ -38,7 +38,8 @@ router.get('/', requireRole('ADMIN'), async (req, res) => {
       tenants: enrichedTenants
     });
   } catch (error) {
-    console.error('[500]', error.message);
+    // ⭐️ log error.code ด้วย (ER_BAD_DB_ERROR/ER_NO_SUCH_TABLE/EACCES...) — Render logs ชี้สาเหตุได้ทันที
+    console.error(`[ADMIN_DASHBOARD][GET /] ${error.code || 'NO_CODE'}:`, error.message);
     res.status(500).json({ error: 'ไม่สามารถดึงข้อมูล dashboard ได้' });
   }
 });
@@ -73,7 +74,7 @@ router.post('/create', requireRole('ADMIN'), async (req, res) => {
       admin_password: result.adminPassword
     });
   } catch (error) {
-    console.error('[500]', error.message);
+    console.error(`[ADMIN_DASHBOARD][POST /create] ${error.code || 'NO_CODE'}:`, error.message);
     res.status(500).json({ error: 'ไม่สามารถสร้างระบบได้: ' + error.message });
   }
 });
@@ -87,7 +88,7 @@ router.put('/tenant/:id/toggle', requireRole('ADMIN'), async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'ไม่พบ tenant หรือถูกลบไปแล้ว' });
     res.json({ message: 'อัปเดตสถานะสำเร็จ' });
   } catch (error) {
-    console.error('[500]', error.message);
+    console.error(`[ADMIN_DASHBOARD][PUT toggle] ${error.code || 'NO_CODE'}:`, error.message);
     res.status(500).json({ error: 'ไม่สามารถอัปเดตสถานะได้' });
   }
 });
@@ -99,7 +100,7 @@ router.delete('/tenant/:id', requireRole('ADMIN'), async (req, res) => {
     if (!deleted) return res.status(404).json({ error: 'ไม่พบ tenant หรือถูกลบไปแล้ว' });
     res.json({ message: 'ลบร้านค้าสำเร็จ (soft delete — ข้อมูล database ยังเก็บไว้)' });
   } catch (error) {
-    console.error('[500]', error.message);
+    console.error(`[ADMIN_DASHBOARD][DELETE tenant] ${error.code || 'NO_CODE'}:`, error.message);
     res.status(500).json({ error: 'ไม่สามารถลบร้านค้าได้' });
   }
 });
@@ -114,7 +115,7 @@ router.get('/tenant/:id', requireRole('ADMIN'), async (req, res) => {
     
     // Get detailed stats from tenant's database
     try {
-      const tenantPool = require('../src/config/tenantDB').getOrCreatePool(tenant.db_name);
+      const tenantPool = require('../middleware/tenantDB').getOrCreatePool(tenant.db_name);
       const [[users]] = await tenantPool.query('SELECT COUNT(*) as cnt FROM users');
       const [[products]] = await tenantPool.query('SELECT COUNT(*) as cnt FROM products');
       const [[orders]] = await tenantPool.query('SELECT COUNT(*) as cnt FROM orders');
@@ -135,7 +136,7 @@ router.get('/tenant/:id', requireRole('ADMIN'), async (req, res) => {
       res.json({ ...tenant, stats: { users: 0, products: 0, orders: 0, revenue: 0 }, users: [] });
     }
   } catch (error) {
-    console.error('[500]', error.message);
+    console.error(`[ADMIN_DASHBOARD][GET tenant/:id] ${error.code || 'NO_CODE'}:`, error.message);
     res.status(500).json({ error: 'ไม่สามารถดึงข้อมูล tenant ได้' });
   }
 });

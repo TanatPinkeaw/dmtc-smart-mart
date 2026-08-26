@@ -1219,7 +1219,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     let userDbName = null;
     for (const tenant of tenants) {
       try {
-        const tenantPool = require('./src/config/tenantDB').getOrCreatePool(tenant.db_name);
+        // 🐛 FIX — เดิม require('./src/config/tenantDB') แต่ไฟล์จริงอยู่ที่ src/middleware/tenantDB.js
+        //   MODULE_NOT_FOUND โดน catch/continue กลืนทุก tenant → userFound ว่างเสมอ = "login ไม่ได้ทุกบัญชี"
+        const tenantPool = require('./src/middleware/tenantDB').getOrCreatePool(tenant.db_name);
         const [users] = await tenantPool.query('SELECT * FROM users WHERE student_id = ? AND is_active = TRUE', [username]);
         if (users.length > 0) {
           userFound = users[0];
@@ -5240,6 +5242,13 @@ const PORT = config.PORT; // ⭐️ DEPLOY — อ่านจาก .env ได
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`⚡ WebSocket Server is ready!`);
+
+  // ⭐️ MULTI-TENANT — bootstrap master DB (CREATE DATABASE IF NOT EXISTS + ตาราง tenants) รอบเดียวตอน boot.
+  //   เดิม initMasterDB "ไม่เคย" ถูกเรียกเลย → deploy ใหม่/DB หาย = dashboard+login พังทันที (500/401 วน)
+  //   ไม่ fatal: MySQL ยังไม่พร้อม/สิทธิ์ไม่พอ → server ยังบูตต่อ getAllTenants() จะ self-heal ตอน request แรก
+  require('./src/config/tenantRegistry').initMasterDB()
+    .then(() => console.log('✅ Master database initialized'))
+    .catch((err) => console.error(`⚠️ [BOOT] Master DB bootstrap failed (${err.code || 'NO_CODE'}: ${err.message}) — จะลอง self-heal ตอน request แรก`));
 
   // ⭐️ Sprint 2 — C3: Cron backup ทุกวัน 19:00 UTC (ตี 2 เวลาไทย วันถัดไป)
   cron.schedule('0 19 * * *', async () => {

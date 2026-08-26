@@ -83,7 +83,27 @@ async function ensureDeletedAtColumn() {
 }
 
 // Get all tenants (ตัดร้านที่ถูก soft delete ออก)
+// ⭐️ Self-heal — ถ้า master DB/ตาราง tenants ยังไม่ถูกสร้าง (deploy ใหม่, initMasterDB ตอน boot พัง,
+//    หรือ DB โดนลบ) จะลอง bootstrap รอบเดียวแล้ว query ซ้ำ กัน dashboard/login 500 กันหมดทั้งระบบ.
+//    Error อื่นๆ (สิทธิ์ DDL/เน็ตล่ม) ปล่อย throw ผ่านเหมือนเดิม — ห้ามกลืน ต้องเห็นใน Render logs
+let masterBootstrapAttempted = false;
 async function getAllTenants() {
+  try {
+    return await _queryTenants();
+  } catch (err) {
+    if (masterBootstrapAttempted) throw err;
+    masterBootstrapAttempted = true; // ต่อ process ลองได้แค่ครั้งเดียว กัน recursion ไม่จำกัด
+    console.error(`[TENANT_REGISTRY] getAllTenants failed (${err.code || 'NO_CODE'}: ${err.message}) — trying one-shot master DB bootstrap...`);
+    try { await initMasterDB(); } catch (bootErr) {
+      // bootstrap ไม่สำเร็จ (เช่น user ไม่มีสิทธิ์ CREATE DATABASE) — log ไว้แล้วให้ query ด้านล่าง throw ซ้ำเอง
+      console.error(`[TENANT_REGISTRY] bootstrap also failed (${bootErr.code || 'NO_CODE'}: ${bootErr.message})`);
+    }
+    return await _queryTenants();
+  }
+}
+
+// query จริงแยกเป็น helper เพื่อให้ self-heal ยิงซ้ำได้ (ensureDeletedAtColumn + SELECT)
+async function _queryTenants() {
   await ensureDeletedAtColumn();
   const pool = getMasterPool();
   const [rows] = await pool.query('SELECT * FROM tenants WHERE deleted_at IS NULL ORDER BY created_at DESC');
