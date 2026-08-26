@@ -209,6 +209,17 @@ function App() {
           <Route path="/profile" element={<Profile />} /> {/* ⭐️ เดิมเป็น modal — ย้ายมาเป็นหน้าเต็ม */}
         </Route>
 
+        {/* ⭐️ POS Admin — หน้าจัดการร้านแยกตาม tenant (ไม่ต้อง login หลัก) */}
+        <Route path="/pos-admin/login" element={<PosAdminLogin />} />
+        <Route path="/pos-admin" element={<PosAdminLayout />}>
+          <Route path="dashboard" element={<PosAdminDashboard />} />
+          <Route path="products" element={<PosAdminProducts />} />
+          <Route path="categories" element={<PosAdminCategories />} />
+          <Route path="users" element={<PosAdminUsers />} />
+          <Route path="settings" element={<PosAdminSettings />} />
+          <Route path="reports" element={<PosAdminReports />} />
+        </Route>
+
       </Routes>
     </BrowserRouter>
   );
