@@ -38,7 +38,12 @@ const { ipKeyGenerator } = require('express-rate-limit');  // ← เพิ่�
 const sharp = require('sharp');  // ⭐️ Sprint 2 — B9: Image validation
 const { slipUpload, shiftPhotoUpload, profilePhotoUpload } = require('./src/config/multer');  // ⭐️ Sprint 2 — B9: Multer config (organized by folder)
 const { saveImage } = require('./src/config/cloudinary');  // ⭐️ เก็บรูปถาวรบน Cloudinary (memory → cloud)
-const { requireRole, validateRequest } = require('./src/middleware/guards');  // ⭐️ guards รวมไว้ที่เดียว (server.js ไม่นิยามเอง)
+const { requireRole, validateRequest } = require('./src/middleware/guards');
+const { tenantDB, getOrCreatePool: getTenantPool } = require('./src/middleware/tenantDB');
+// ⭐️ Multi-tenant: helper to get the right DB pool for each request
+// req.db = tenant-specific pool (set by tenantDB middleware for authenticated requests)
+// pool = default pool (pos_coop) for auth middleware, health checks, and scripts
+function getDb(req) { return req?.db || pool; }  // ⭐️ guards รวมไว้ที่เดียว (server.js ไม่นิยามเอง)
 const { serverError, badRequest, unauthorized, forbidden, notFound, conflict, gone } = require('./src/utils/http');  // ⭐️ response กลาง (500/400/401/403/404/409/410)
 const { getOrderItems, getUserFullName, getUserRole, lockUserPoints } = require('./src/utils/queries');  // ⭐️ SQL ซ้ำรวมไว้ที่เดียว (เดิม copy 14 จุด)
 const { logAudit } = require('./src/utils/auditLog');  // ⭐️ เขียน audit_logs กลาง (เดิม copy INSERT 24 จุด)
@@ -319,7 +324,7 @@ const csvUpload = multer({
 // Purpose: Get connection, BEGIN TRANSACTION, execute callback(conn), COMMIT on success, ROLLBACK on error
 // Usage: await withTransaction(pool, async (conn) => { /* your DB operations */ })
 async function withTransaction(pool, callback) {
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
     await callback(conn);
@@ -545,7 +550,8 @@ const PUBLIC_PATHS = [
   '/api/members/check-line', // ⭐️ LINE LIFF — เช็คสถานะสมัครก่อนเปิดฟอร์ม ยังไม่มี token (memberRoutes.js)
   '/api/members/register-line', // ⭐️ LINE LIFF — สมัคร/ผูกบัญชี ยังไม่มี token ตอนเรียก (memberRoutes.js)
   '/api/auth/line-login',   // ⭐️ LINE LIFF auto-login — เรียกก่อน login ยังไม่มี JWT (authRoutes.js)
-  '/api/line/webhook',      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
+  '/api/line/webhook',
+  '/api/pos-admin/login',  // ⭐️ POS Admin login — targets specific tenant DB      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
@@ -667,6 +673,7 @@ function requireCsrf(req, res, next) {
 }
 
 app.use(authenticateToken);
+app.use(tenantDB); // ⭐️ Multi-tenant: set req.db to tenant's database pool
 app.use(requirePasswordChange);
 app.use(requireCsrf);
 
@@ -677,7 +684,8 @@ app.use('/api/members', require('./src/routes/memberRoutes'));
 // ⭐️ เครื่องมือล้างข้อมูลทดสอบ ADMIN — บล็อกบน production ในตัว controller เอง (src/controllers/adminController.js)
 app.use('/api/admin/reset', require('./src/routes/adminRoutes'));
 app.use('/api/tenants', require('./src/routes/tenantRoutes'));
-app.use('/api/admin/dashboard', require('./src/routes/adminDashboard'));  // ⭐️ SUPER ADMIN: Dashboard  // ⭐️ MULTI-TENANT: CRUD tenants
+app.use('/api/admin/dashboard', require('./src/routes/adminDashboard'));
+app.use('/api/pos-admin', require('./src/routes/posAdminRoutes'));  // ⭐️ Per-tenant POS Admin management  // ⭐️ SUPER ADMIN: Dashboard  // ⭐️ MULTI-TENANT: CRUD tenants
 // ⭐️ LINE webhook — ตอบ Rich Menu / ข้อความ + ลงเวลาทำงานผ่าน LINE (src/controllers/lineWebhookController.js)
 // /api/line/webhook อยู่ใน PUBLIC_PATHS แล้ว จึงข้าม JWT/CSRF (กันปลอมด้วย X-Line-Signature แทน)
 app.use('/api/line', require('./src/routes/lineRoutes'));
@@ -784,7 +792,7 @@ io.on('connection', (socket) => {
 
 app.get('/api/categories', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM categories');
+    const [rows] = await getDb(req).query('SELECT * FROM categories');
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -800,12 +808,12 @@ app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) =>
   // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างหมวดหมู่ซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
   const idempotencyKey = req.headers['idempotency-key'];
   try {
-    const [result] = await pool.query('INSERT INTO categories (name, idempotency_key) VALUES (?, ?)', [name, idempotencyKey || null]);
+    const [result] = await getDb(req).query('INSERT INTO categories (name, idempotency_key) VALUES (?, ?)', [name, idempotencyKey || null]);
     res.status(201).json({ id: result.insertId, name });
   } catch (error) {
     // 🐛 FIX — retry หลัง server restart: row เดิมยังอยู่ใน DB (UNIQUE idempotency_key) → ตอบ "สำเร็จซ้ำ" แทน error
     if (isIdempotentDuplicate(error)) {
-      const [rows] = await pool.query('SELECT id FROM categories WHERE idempotency_key = ?', [idempotencyKey]);
+      const [rows] = await getDb(req).query('SELECT id FROM categories WHERE idempotency_key = ?', [idempotencyKey]);
       if (rows.length > 0) return res.status(201).json({ id: rows[0].id, name, message: 'เพิ่มหมวดหมู่สำเร็จ (request ซ้ำ — ไม่ได้สร้างซ้ำ)', duplicated: true });
       return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
     }
@@ -818,7 +826,7 @@ app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) =>
 // ⭐️ Export หมวดหมู่ CSV/Excel — แก้ไขนอกระบบแล้วนำเข้ากลับผ่าน POST /api/categories/import ด้านล่าง
 app.get('/api/categories/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT id, name FROM categories ORDER BY id');
+    const [rows] = await getDb(req).query('SELECT id, name FROM categories ORDER BY id');
     await sendTableExport(res, {
       filename: `categories-export_${Date.now()}`, sheetName: 'หมวดหมู่',
       headers: ['id', 'name'], rows: rows.map(r => [r.id, r.name]),
@@ -845,10 +853,10 @@ app.post('/api/categories/import', requireRole('ADMIN'), uploadLimiter, csvUploa
           const id = row.id ? Number(row.id) : null;
           if (!name) { skipped++; continue; }
           if (id) {
-            const [r] = await pool.query('UPDATE categories SET name = ? WHERE id = ?', [name, id]);
+            const [r] = await getDb(req).query('UPDATE categories SET name = ? WHERE id = ?', [name, id]);
             if (r.affectedRows > 0) updated++; else skipped++;
           } else {
-            await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
+            await getDb(req).query('INSERT INTO categories (name) VALUES (?)', [name]);
             inserted++;
           }
         }
@@ -863,7 +871,7 @@ app.post('/api/categories/import', requireRole('ADMIN'), uploadLimiter, csvUploa
 
 app.delete('/api/categories/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
+    await getDb(req).query('DELETE FROM categories WHERE id = ?', [req.params.id]);
     res.json({ message: "ลบหมวดหมู่สำเร็จ" });
   } catch (error) {
     console.error('[500]', error.message);
@@ -998,7 +1006,7 @@ app.get('/api/products', async (req, res) => {
 
     query += ` ORDER BY p.name`;
 
-    const [rows] = await pool.query(query, params);
+    const [rows] = await getDb(req).query(query, params);
 
     // ⭐️ Enrich with expiry and discount info
     // 🐛 FIX (root cause ของ "badge ขึ้น 40% OFF แต่ราคาไม่ลด") — เดิมส่วนลดคิดจาก JS getProductExpiry(p)
@@ -1036,7 +1044,7 @@ app.get('/api/products/highlights', async (req, res) => {
       WHEN DATEDIFF(DATE(p.expiry_date), CURDATE()) = 1 THEN 'near_expiry'
       ELSE 'ok' END`;
     // ยอดนิยม — ขายดีรวมทั้งหน้าร้าน (sale_items) + พรีออเดอร์ที่ COMPLETED (order_items)
-    const [popular] = await pool.query(`
+    const [popular] = await getDb(req).query(`
       SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status, ps.sold
       FROM products p
       LEFT JOIN categories c ON p.category_id=c.id
@@ -1053,7 +1061,7 @@ app.get('/api/products/highlights', async (req, res) => {
     // มีโปร — โปรระดับสินค้าช่วงวันที่ (promo_percent) ที่กำลัง active + สินค้าใกล้หมดอายุ (near_expiry) + มีสต๊อก
     const promoActiveExpr = `(p.promo_percent > 0 AND p.promo_start IS NOT NULL AND p.promo_end IS NOT NULL
       AND CURDATE() BETWEEN p.promo_start AND p.promo_end)`;
-    const [promo] = await pool.query(`
+    const [promo] = await getDb(req).query(`
       SELECT p.*, c.name AS category_name, ${expiryCase} AS expiry_status, ${promoActiveExpr} AS promo_active
       FROM products p
       LEFT JOIN categories c ON p.category_id=c.id
@@ -1075,7 +1083,7 @@ app.get('/api/products/highlights', async (req, res) => {
 app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(productValidator), async (req, res) => {
   const { barcode, name, category_id, price, cost = 0, stock = 0, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required, min_stock } = req.body;
   try {
-    const [result] = await pool.query(
+    const [result] = await getDb(req).query(
       'INSERT INTO products (barcode, name, category_id, price, cost, stock, image_url, vendor_id, gp_rate, promo_percent, promo_start, promo_end, is_reward_item, points_required, min_stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [barcode || null, name, category_id || null, price, cost || 0, stock, image_url || null, vendor_id || null, gp_rate || 0, promo_percent || 0, promo_start || null, promo_end || null, is_reward_item ? 1 : 0, points_required || 0, (min_stock === undefined || min_stock === null || min_stock === '') ? 10 : min_stock]
     );
@@ -1097,7 +1105,7 @@ app.post('/api/products', requireRole('ADMIN', 'MANAGER'), validateRequest(produ
 // ปกติแต่ import กลับจะกลายเป็น "เพิ่มใหม่" เสมอ (ไม่มี id ให้จับคู่อัปเดตของเดิม)
 app.get('/api/products/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT id, barcode, name, category_id, price, cost, stock, min_stock FROM products WHERE is_active = 1 ORDER BY id'
     );
     await sendTableExport(res, {
@@ -1135,13 +1143,13 @@ app.post('/api/products/import', requireRole('ADMIN'), uploadLimiter, csvUpload.
 
           try {
             if (id) {
-              const [r] = await pool.query(
+              const [r] = await getDb(req).query(
                 'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, stock=?, min_stock=? WHERE id=?',
                 [barcode, name, category_id, price, cost, stock, min_stock, id]
               );
               if (r.affectedRows > 0) updated++; else skipped++;
             } else {
-              await pool.query(
+              await getDb(req).query(
                 'INSERT INTO products (barcode, name, category_id, price, cost, stock, min_stock) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [barcode, name, category_id, price, cost, stock, min_stock]
               );
@@ -1170,7 +1178,7 @@ app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(pr
     }
 
     // ⭐️ Task 5 — เก็บค่าเดิมไว้เทียบใน audit log (รวม cost เผื่อ client ไม่ส่ง cost มา จะได้ไม่ทับเป็น 0)
-    const [oldRows] = await pool.query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, is_reward_item, points_required, min_stock FROM products WHERE id = ?', [req.params.id]);
+    const [oldRows] = await getDb(req).query('SELECT barcode, name, category_id, price, cost, image_url, vendor_id, gp_rate, expiry_date, discount_percent, is_reward_item, points_required, min_stock FROM products WHERE id = ?', [req.params.id]);
     const finalCost = (cost === undefined || cost === null || cost === '') ? (oldRows[0]?.cost ?? 0) : cost;
     // ⭐️ reward fields: ถ้า client ไม่ส่งมา คงค่าเดิมไว้ (กันฟอร์มที่ยังไม่อัปเดตทับเป็น 0)
     const finalIsReward = (is_reward_item === undefined) ? (oldRows[0]?.is_reward_item ?? 0) : (is_reward_item ? 1 : 0);
@@ -1178,7 +1186,7 @@ app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(pr
     // ⭐️ Day 3 — เช่นเดียวกับ points_required: ไม่ส่งมา = คงค่าเดิม (เดิม 10 จาก default ตอนสร้าง)
     const finalMinStock = (min_stock === undefined || min_stock === null || min_stock === '') ? (oldRows[0]?.min_stock ?? 10) : min_stock;
 
-    await pool.query(
+    await getDb(req).query(
       'UPDATE products SET barcode=?, name=?, category_id=?, price=?, cost=?, image_url=?, vendor_id=?, gp_rate=?, expiry_date=?, discount_percent=?, promo_percent=?, promo_start=?, promo_end=?, is_reward_item=?, points_required=?, min_stock=? WHERE id=?',
       [barcode || null, name, category_id || null, price, finalCost, image_url || null, vendor_id || null, gp_rate || null, expiry_date || null, discount_percent || 40, promo_percent || 0, promo_start || null, promo_end || null, finalIsReward, finalPointsRequired, finalMinStock, req.params.id]
     );
@@ -1195,7 +1203,7 @@ app.put('/api/products/:id', requireRole('ADMIN', 'MANAGER'), validateRequest(pr
 
 app.delete('/api/products/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    await pool.query('DELETE FROM products WHERE id=?', [req.params.id]);
+    await getDb(req).query('DELETE FROM products WHERE id=?', [req.params.id]);
     res.json({ message: "ลบสินค้าสำเร็จ" });
   } catch (error) {
     console.error('[500]', error.message);
@@ -1248,11 +1256,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     //   เงื่อนไข attendance ยกมาจาก GET /api/attendance/today ให้ตรงกัน (รองรับ row เก่าที่เก็บเป็น UTC)
     let hasActiveWorkSession = false;
     if (user.role === 'ADMIN' || user.role === 'CASHIER') {
-      const [workRows] = await pool.query(
+      const [workRows] = await getDb(req).query(
         `SELECT
            EXISTS(SELECT 1 FROM shifts WHERE cashier_id = ? AND status = 'OPEN') AS has_open_shift,
            EXISTS(SELECT 1 FROM attendance WHERE user_id = ?
-                    AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
+                    AND DATE(check_in) = CURDATE()
                     AND check_out IS NULL) AS has_open_attendance`,
         [user.id, user.id]
       );
@@ -1307,14 +1315,14 @@ app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
     }
 
     // Fetch user to get fresh data
-    const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    const [users] = await getDb(req).query('SELECT * FROM users WHERE id = ?', [decoded.id]);
     if (users.length === 0) {
       return unauthorized(res, 'ไม่พบผู้ใช้งาน');
     }
 
     // ⭐️ Security remediation — rotate: revoke the refresh token just used, issue a fresh one
     if (decoded.jti && decoded.exp) {
-      await pool.query(
+      await getDb(req).query(
         'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
         [decoded.jti, decoded.id, decoded.exp]
       );
@@ -1367,7 +1375,7 @@ app.get('/api/auth/socket-token', (req, res) => {
 app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req, res) => {
   try {
     if (req.user?.jti && req.user?.exp) {
-      await pool.query(
+      await getDb(req).query(
         'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
         [req.user.jti, req.user.id, req.user.exp]
       );
@@ -1376,7 +1384,7 @@ app.post('/api/auth/logout', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (r
     if (refreshToken) {
       const decoded = jwt.decode(refreshToken);
       if (decoded?.jti && decoded?.exp) {
-        await pool.query(
+        await getDb(req).query(
           'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
           [decoded.jti, decoded.id, decoded.exp]
         );
@@ -1397,7 +1405,7 @@ app.get('/api/users/search', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (
 
   try {
     // ค้นหาทั้งจาก student_id และ phone_number + แนบข้อมูลกลุ่มสมาชิก (ให้ POS โชว์ badge สิทธิ์ลด)
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       `SELECT u.id, u.student_id, u.full_name, u.phone_number, u.points, u.role, u.group_id,
               mg.name AS group_name, mg.code AS group_code, mg.default_discount_percent AS group_default_discount
        FROM users u LEFT JOIN member_groups mg ON u.group_id = mg.id
@@ -1410,7 +1418,7 @@ app.get('/api/users/search', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (
     // rule รายหมวดหมู่ของกลุ่มนี้ (ให้ POS คำนวณ preview ต่อชิ้นได้ตรงกับ backend)
     let group_rules = [];
     if (member.group_id) {
-      const [ruleRows] = await pool.query(
+      const [ruleRows] = await getDb(req).query(
         'SELECT category_id, discount_percent FROM group_discount_rules WHERE group_id = ?',
         [member.group_id]
       );
@@ -1435,13 +1443,13 @@ app.post('/api/users/verify-phone', async (req, res) => {
 
   try {
     if (req.user.role === 'MEMBER') {
-      const [ownRows] = await pool.query('SELECT phone_number FROM users WHERE id = ?', [req.user.id]);
+      const [ownRows] = await getDb(req).query('SELECT phone_number FROM users WHERE id = ?', [req.user.id]);
       if (ownRows[0]?.phone_number !== phone_number) {
         return forbidden(res, 'สิทธิ์ไม่เพียงพอ');
       }
     }
 
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT full_name FROM users WHERE phone_number = ?',
       [phone_number]
     );
@@ -1461,7 +1469,7 @@ app.post('/api/users/verify-phone', async (req, res) => {
 // safe for any authenticated role since it can only ever return the caller's own data.
 app.get('/api/users/me', async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT id, student_id, full_name, phone_number, points, role, profile_image_url FROM users WHERE id = ?',
       [req.user.id]
     );
@@ -1486,7 +1494,7 @@ app.post('/api/users/register', registerLimiter, validateRequest(userRegisterVal
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(phone_number, salt);
 
-    const [result] = await pool.query(
+    const [result] = await getDb(req).query(
       'INSERT INTO users (student_id, password, full_name, phone_number, role, points) VALUES (?, ?, ?, ?, ?, 0)',
       [student_id, hashedPassword, full_name, phone_number, 'MEMBER']
     );
@@ -1519,7 +1527,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
   }
 
   try {
-    const [users] = await pool.query('SELECT id FROM users WHERE student_id = ? AND phone_number = ? AND is_active = TRUE', [student_id, phone_number]);
+    const [users] = await getDb(req).query('SELECT id FROM users WHERE student_id = ? AND phone_number = ? AND is_active = TRUE', [student_id, phone_number]);
 
     // ⭐️ ไม่ยืนยัน/ปฏิเสธว่ามีบัญชีนี้จริงไหม (กัน enumeration) — ตอบข้อความเดียวกันเสมอ
     if (users.length === 0) {
@@ -1531,8 +1539,8 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 ชั่วโมง
 
     // ล้าง token เก่าของ user คนนี้ทิ้งก่อน (ให้ใช้ได้แค่ token ล่าสุด)
-    await pool.query('DELETE FROM password_resets WHERE user_id = ?', [userId]);
-    await pool.query(
+    await getDb(req).query('DELETE FROM password_resets WHERE user_id = ?', [userId]);
+    await getDb(req).query(
       'INSERT INTO password_resets (user_id, reset_token, expires_at) VALUES (?, ?, ?)',
       [userId, resetToken, expiresAt]
     );
@@ -1550,7 +1558,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
 
 app.get('/api/auth/reset-token/:token', resetPasswordLimiter, async (req, res) => {
   try {
-    const [tokens] = await pool.query(
+    const [tokens] = await getDb(req).query(
       'SELECT 1 FROM password_resets WHERE reset_token = ? AND expires_at > NOW() AND used_at IS NULL',
       [req.params.token]
     );
@@ -1574,7 +1582,7 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
   }
 
   try {
-    const [tokens] = await pool.query(
+    const [tokens] = await getDb(req).query(
       'SELECT user_id FROM password_resets WHERE reset_token = ? AND expires_at > NOW() AND used_at IS NULL',
       [reset_token]
     );
@@ -1585,9 +1593,9 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
 
     // Update both password and password_hash columns for compatibility
     // ⭐️ Security remediation — clear must_change_password + bump token_valid_after (invalidate stale tokens)
-    await pool.query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [hashedPassword, hashedPassword, userId]);
+    await getDb(req).query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [hashedPassword, hashedPassword, userId]);
     // ⭐️ token ใช้ครั้งเดียว — mark used_at กันเอาไปใช้ซ้ำ
-    await pool.query('UPDATE password_resets SET used_at = NOW() WHERE reset_token = ?', [reset_token]);
+    await getDb(req).query('UPDATE password_resets SET used_at = NOW() WHERE reset_token = ?', [reset_token]);
 
     await logAudit(pool, 'PASSWORD_RESET', userId, { via: 'reset_token' }, 'USER', userId);
 
@@ -1603,7 +1611,7 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
 // ADMIN เห็น token ได้เพราะเป็นคนกลางที่ต้องคัดลอกลิงก์ไปส่งให้นักเรียนเอง (ผ่าน LINE/บอกปากเปล่า)
 app.get('/api/admin/password-resets', requireRole('ADMIN'), async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       `SELECT pr.id, pr.user_id, pr.reset_token, pr.created_at, pr.expires_at,
               u.student_id, u.full_name, u.phone_number
        FROM password_resets pr
@@ -1621,10 +1629,10 @@ app.get('/api/admin/password-resets', requireRole('ADMIN'), async (req, res) => 
 
 app.delete('/api/admin/password-resets/:id', requireRole('ADMIN'), async (req, res) => {
   try {
-    const [existing] = await pool.query('SELECT user_id FROM password_resets WHERE id = ?', [req.params.id]);
+    const [existing] = await getDb(req).query('SELECT user_id FROM password_resets WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return notFound(res, "ไม่พบคำขอนี้ (อาจถูกใช้งานหรือลบไปแล้ว)");
 
-    await pool.query('DELETE FROM password_resets WHERE id = ?', [req.params.id]);
+    await getDb(req).query('DELETE FROM password_resets WHERE id = ?', [req.params.id]);
 
     await logAudit(pool, 'REJECT_PASSWORD_RESET', req.user.id, { password_reset_id: req.params.id }, 'USER', existing[0].user_id);
 
@@ -1648,7 +1656,7 @@ app.put('/api/users/:id/profile', async (req, res) => {
   }
 
   try {
-    const conn = await pool.getConnection();
+    const conn = await getDb(req).getConnection();
 
     // 1. เช็คก่อนว่าเบอร์โทรใหม่นี้ ไปซ้ำกับของคนอื่นในระบบไหม (ถ้ามีการเปลี่ยนเบอร์)
     let phoneChanged = false;
@@ -1702,7 +1710,7 @@ app.post('/api/users/:id/profile-photo', uploadLimiter, profilePhotoUpload.singl
     await validateImageDimensions(req.file.buffer, 200, 200, 4000, 4000);
     const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
     const photoUrl = await saveImage(req.file.buffer, 'profile-photos', `user_${userId}_${Date.now()}`, ext);
-    await pool.query('UPDATE users SET profile_image_url = ? WHERE id = ?', [photoUrl, userId]);
+    await getDb(req).query('UPDATE users SET profile_image_url = ? WHERE id = ?', [photoUrl, userId]);
     res.json({ photo_url: photoUrl });
   } catch (error) {
     console.error('[500]', error.message);
@@ -1716,7 +1724,7 @@ app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
     // ⭐️ ทริค: ใช้ AS username เพื่อหลอกหน้าเว็บ React ให้ยังใช้งานได้โดยไม่ต้องไปแก้โค้ดฝั่งหน้าเว็บอีกรอบ
     // คืนทุก role รวม MEMBER (สมัครผ่าน LINE) — ไม่มี WHERE role หรือ is_active กรองเลย
     // ⭐️ ไม่ใช้ SELECT * เพราะ users มี password/password_hash อยู่ในตาราง — ห้ามส่งออกไป frontend เด็ดขาด
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users ORDER BY created_at DESC'
     );
     res.json(rows);
@@ -1732,7 +1740,7 @@ app.get('/api/users', requireRole('ADMIN'), async (req, res) => {
 // จะไม่แก้ student_id ของแถวที่ผูก LINE แล้วเช่นกัน (ดู PUT /api/users/:id ที่ล็อกฟิลด์นี้ไว้)
 app.get('/api/users/export', requireRole('ADMIN'), async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT id, student_id, full_name, phone_number, role, points, is_active FROM users ORDER BY created_at DESC'
     );
     await sendTableExport(res, {
@@ -1750,7 +1758,7 @@ app.get('/api/users/export', requireRole('ADMIN'), async (req, res) => {
 //   คืนเฉพาะ CASHIER/MANAGER (คนที่ลงชื่อเข้า-ออกงาน/เปิดปิดกะจริง) ตัด ADMIN ออกทั้งหมด
 app.get('/api/staff-list', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       `SELECT id, full_name, role FROM users WHERE role IN ('CASHIER', 'MANAGER') AND is_active = TRUE ORDER BY full_name`
     );
     res.json(rows);
@@ -1774,8 +1782,8 @@ app.post('/api/users', requireRole('ADMIN'), async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const [result] = await pool.query(
-      'INSERT INTO users (username, password, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?)',
+    const [result] = await getDb(req).query(
+      'INSERT INTO users (student_id, password, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?)',
       [username, hashedPassword, hashedPassword, full_name, role]
     );
 
@@ -1797,7 +1805,7 @@ app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     return badRequest(res, 'กรุณาระบุชื่อ, รหัสนักศึกษา และบทบาทให้ครบถ้วน');
   }
   try {
-    const [existingRows] = await pool.query('SELECT is_active, student_id, line_user_id FROM users WHERE id = ?', [req.params.id]);
+    const [existingRows] = await getDb(req).query('SELECT is_active, student_id, line_user_id FROM users WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
 
     // 🐛 FIX — สมาชิกที่ผูกบัญชี LINE แล้ว (line_user_id ไม่ null) ห้ามแก้ student_id: สมัครผ่าน LIFF
@@ -1810,14 +1818,14 @@ app.put('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
     // ⭐️ is_active/points เป็น optional — ไม่ส่งมาก็คงค่าเดิมไว้ (ฟอร์มแก้ไขปัจจุบันไม่ได้มีสวิตช์ is_active)
     const nextIsActive = is_active !== undefined ? is_active : existingRows[0].is_active;
 
-    await pool.query(
+    await getDb(req).query(
       'UPDATE users SET full_name = ?, student_id = ?, phone_number = ?, role = ?, points = COALESCE(?, points), is_active = ? WHERE id = ?',
       [full_name, nextStudentId, phone_number || null, role, points === undefined || points === null || points === '' ? null : points, nextIsActive, req.params.id]
     );
 
     await logAudit(pool, 'UPDATE_USER', req.user.id, { full_name, student_id, phone_number, role, points }, 'USER', req.params.id);
 
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT id, student_id, student_id AS username, full_name, phone_number, role, points, line_user_id, is_active, created_at FROM users WHERE id = ?',
       [req.params.id]
     );
@@ -1844,7 +1852,7 @@ app.put('/api/users/:id/change-password', async (req, res) => {
     }
 
     // Get user
-    const [users] = await pool.query('SELECT password, password_hash FROM users WHERE id = ?', [id]);
+    const [users] = await getDb(req).query('SELECT password, password_hash FROM users WHERE id = ?', [id]);
     if (users.length === 0) {
       return notFound(res, 'User not found');
     }
@@ -1871,7 +1879,7 @@ app.put('/api/users/:id/change-password', async (req, res) => {
     const newHash = await bcrypt.hash(new_password, 10);
     // Update both password and password_hash columns for compatibility
     // ⭐️ Security remediation — clear must_change_password + bump token_valid_after (invalidate stale tokens)
-    await pool.query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [newHash, newHash, id]);
+    await getDb(req).query('UPDATE users SET password = ?, password_hash = ?, must_change_password = FALSE, token_valid_after = NOW() WHERE id = ?', [newHash, newHash, id]);
 
     // Audit log
     await logAudit(pool, 'PASSWORD_CHANGED', user_id, { via: 'change_password_modal' }, 'USER', id);
@@ -1888,10 +1896,10 @@ app.put('/api/users/update-role', requireRole('ADMIN'), validateRequest(updateRo
   const { student_id, role } = req.body;
   try {
     // ⭐️ Task 5 — เก็บ role เดิมไว้เทียบใน audit log
-    const [oldRows] = await pool.query('SELECT id, role FROM users WHERE student_id = ?', [student_id]);
+    const [oldRows] = await getDb(req).query('SELECT id, role FROM users WHERE student_id = ?', [student_id]);
 
     // ⭐️ Security remediation — bump token_valid_after so tokens issued under the old role stop working
-    const [result] = await pool.query(
+    const [result] = await getDb(req).query(
       'UPDATE users SET role = ?, token_valid_after = NOW() WHERE student_id = ?',
       [role, student_id]
     );
@@ -1914,7 +1922,7 @@ app.delete('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     // เราจะไม่ใช้ DELETE FROM users จริงๆ เพราะจะทำให้บิลเก่าพัง
     // แต่เราจะใช้วิธีปิดสถานะ (Soft Delete) แทน
-    await pool.query('UPDATE users SET is_active = FALSE WHERE id = ?', [req.params.id]);
+    await getDb(req).query('UPDATE users SET is_active = FALSE WHERE id = ?', [req.params.id]);
     res.json({ message: "ระงับการใช้งานพนักงานสำเร็จ" });
   } catch (error) {
     console.error('[500]', error.message);
@@ -1926,7 +1934,7 @@ app.delete('/api/users/:id', requireRole('ADMIN'), async (req, res) => {
 // ⭐️ ปลดระงับ (unsuspend) — คืนสถานะ is_active=TRUE ให้ user ที่เคยถูก soft-delete
 app.put('/api/users/:id/reactivate', requireRole('ADMIN'), async (req, res) => {
   try {
-    const [result] = await pool.query('UPDATE users SET is_active = TRUE WHERE id = ?', [req.params.id]);
+    const [result] = await getDb(req).query('UPDATE users SET is_active = TRUE WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
     await logAudit(pool, 'REACTIVATE_USER', req.user.id, { target_user_id: req.params.id }, 'USER', req.params.id);
     res.json({ message: 'ปลดระงับการใช้งานสำเร็จ' });
@@ -1947,7 +1955,7 @@ app.delete('/api/users/:id/permanent', requireRole('ADMIN'), async (req, res) =>
   if (targetId === req.user.id) return badRequest(res, 'ลบบัญชีตัวเองไม่ได้');
   const deleteWorkHistory = req.body?.deleteWorkHistory === true;
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     const [userRows] = await conn.query('SELECT id, role FROM users WHERE id = ?', [targetId]);
     if (userRows.length === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
@@ -2000,14 +2008,14 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
     const placeholders = usernames.map(() => '?').join(',');
 
     // 1. ใครอยู่ใน CSV แต่ไม่มีในระบบ → สร้างใหม่ (รวมทั้ง inactive ด้วย เพราะอาจถูก soft-delete ไปก่อน)
-    const [existing] = await pool.query(`SELECT student_id, is_active FROM users WHERE student_id IN (${placeholders})`, usernames);
+    const [existing] = await getDb(req).query(`SELECT student_id, is_active FROM users WHERE student_id IN (${placeholders})`, usernames);
     const existingSet = new Set(existing.map(u => u.student_id));
     // ⭐️ คนที่มีอยู่แล้วแต่ถูก soft-delete → reactivate แทนสร้างใหม่
     const inactiveInCsv = existing.filter(u => !u.is_active).map(u => u.student_id);
     const toCreate = rows.filter(r => r.username && !existingSet.has(r.username));
 
     // 2. ใครอยู่ในระบบแต่ไม่มีใน CSV (ไม่ใช่ ADMIN) → ปิดการใช้งาน
-    const [toDeactivate] = await pool.query(
+    const [toDeactivate] = await getDb(req).query(
       `SELECT id, student_id AS username, full_name, role FROM users WHERE role != 'ADMIN' AND is_active = TRUE AND student_id NOT IN (${placeholders})`,
       usernames
     );
@@ -2021,7 +2029,7 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
     for (const row of toCreate) {
       const phone = (row.phone_number || row.username).trim();
       const hashed = await bcrypt.hash(phone, 10);
-      await pool.query(
+      await getDb(req).query(
         'INSERT INTO users (student_id, full_name, phone_number, password, role, is_active) VALUES (?, ?, ?, ?, \'MEMBER\', TRUE)',
         [row.username.trim(), (row.full_name || row.username).trim(), row.phone_number?.trim() || null, hashed]
       );
@@ -2033,7 +2041,7 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
     for (const u of toReactivate) {
       const row = rows.find(r => r.username === u.student_id);
       if (!row) continue;
-      await pool.query(
+      await getDb(req).query(
         'UPDATE users SET is_active = TRUE, full_name = ?, phone_number = ? WHERE student_id = ?',
         [(row.full_name || u.student_id).trim(), row.phone_number?.trim() || null, u.student_id]
       );
@@ -2043,7 +2051,7 @@ app.post('/api/users/sync-csv', requireRole('ADMIN'), async (req, res) => {
     // ปิดการใช้งานคนที่ไม่มีใน CSV
     if (toDeactivate.length > 0) {
       const ids = toDeactivate.map(u => u.id);
-      await pool.query(`UPDATE users SET is_active = FALSE WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+      await getDb(req).query(`UPDATE users SET is_active = FALSE WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
     }
 
     res.json({
@@ -2078,7 +2086,7 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
     // 🐛 FIX (root cause) — เดิม CONVERT_TZ(...,'+00:00','+07:00') แปลงเวลาซ้ำ (opened_at เป็น
     // TIMESTAMP + session tz +07:00 จัดการให้แล้ว) บวก 7 ชม.เกิน ทำให้ช่วง 17:00–23:59 ทุกวัน เช็ค
     // กะซ้อนพลาด (มองว่า opened_at อยู่ "พรุ่งนี้" เทียบกับ todayStr ที่ถูกต้อง) เปิดกะซ้ำได้โดยระบบไม่รู้
-    const [existing] = await pool.query(
+    const [existing] = await getDb(req).query(
       "SELECT id FROM shifts WHERE cashier_id = ? AND DATE(opened_at) = ? AND status = 'OPEN'",
       [cashier_id, todayStr]
     );
@@ -2089,7 +2097,7 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
 
     // ⭐️ Sprint 2 — B6: Store idempotency_key
     const idempotencyKey = req.headers['idempotency-key'];
-    const [result] = await pool.query(
+    const [result] = await getDb(req).query(
       'INSERT INTO shifts (cashier_id, opening_cash, opening_cash_breakdown, open_photo, idempotency_key, opened_at) VALUES (?, ?, ?, ?, ?, NOW())',
       [cashier_id, opening_cash, cash_breakdown ? JSON.stringify(cash_breakdown) : null, open_photo, idempotencyKey || null]
     );
@@ -2100,7 +2108,7 @@ app.post('/api/shifts/open', requireRole('CASHIER', 'ADMIN'), async (req, res) =
     // 🐛 FIX — retry หลัง server restart: แคช idempotency หาย แต่กะเคยเปิดแล้ว (UNIQUE shifts.idempotency_key)
     // → ตอบ "สำเร็จซ้ำ" พร้อม shift_id เดิม แทน error 500 (กันเปิดกะซ้ำ)
     if (isIdempotentDuplicate(error)) {
-      const [existingShifts] = await pool.query('SELECT id FROM shifts WHERE idempotency_key = ?', [idempotencyKey || null]);
+      const [existingShifts] = await getDb(req).query('SELECT id FROM shifts WHERE idempotency_key = ?', [idempotencyKey || null]);
       if (existingShifts.length > 0) return res.status(201).json({ shift_id: existingShifts[0].id, message: 'เปิดกะการขายสำเร็จ (request ซ้ำ — ไม่ได้เปิดซ้ำ)', duplicated: true, opened_at: formatBangkokTime(new Date()) });
       return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
     }
@@ -2119,7 +2127,7 @@ app.get('/api/shifts/last-closed', requireRole('CASHIER', 'ADMIN'), async (req, 
     return forbidden(res, "ดูได้เฉพาะยอดปิดกะของตัวเองเท่านั้น");
   }
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       "SELECT actual_cash, closing_cash_breakdown FROM shifts WHERE cashier_id = ? AND status = 'CLOSED' ORDER BY closed_at DESC LIMIT 1",
       [cashier_id]
     );
@@ -2140,7 +2148,7 @@ app.get('/api/shifts/current', requireRole('CASHIER', 'ADMIN'), async (req, res)
   }
   try {
     // ⭐️ แก้เป็น 'OPEN' (ฟันหนูเดี่ยว)
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       "SELECT * FROM shifts WHERE cashier_id = ? AND status = 'OPEN'",
       [cashier_id]
     );
@@ -2164,7 +2172,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
 
   try {
     // 🐛 FIX — เลือกกะที่เปิดล่าสุด (เดิมไม่มี ORDER BY — ถ้ามีกะ OPEN ค้างข้ามวันหลายใบ จะปิดผิดใบ)
-    const [shifts] = await pool.query(
+    const [shifts] = await getDb(req).query(
       "SELECT id, opening_cash, opened_at FROM shifts WHERE cashier_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1",
       [cashier_id]
     );
@@ -2176,7 +2184,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
     const currentShift = shifts[0];
 
     // สรุปยอดขายทุกช่องทางในกะนี้ (ไม่ใช่แค่เงินสด) — นับเฉพาะบิลที่ COMPLETED
-    const [sales] = await pool.query(
+    const [sales] = await getDb(req).query(
       `SELECT
          COUNT(*) as bill_count,
          COALESCE(SUM(total_amount), 0) as total_sales,
@@ -2204,7 +2212,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
     // ⭐️ Sprint 2 — D1: ALL closes now go to PENDING_CLOSE (dual-control workflow)
     // Manager must verify and approve via PUT /api/shifts/:id/approve
     const idempotencyKey = req.headers['idempotency-key'];
-    await pool.query(
+    await getDb(req).query(
       `UPDATE shifts
        SET expected_cash = ?, actual_cash = ?, difference = ?, status = 'PENDING_CLOSE',
            discrepancy_amount = ?, discrepancy_flag = 0, note = ?, discrepancy_category = ?,
@@ -2229,7 +2237,7 @@ app.post('/api/shifts/close', requireRole('CASHIER', 'ADMIN'), validateRequest(s
     // แจ้งเฉพาะตอน "ข้าม threshold ครั้งแรก") จึงเช็คสต๊อกปัจจุบันทั้งร้านทีเดียวแทน รวมเป็น LINE alert
     // เดียวถ้ามีของใกล้หมด — เตือนซ้ำได้ทุกครั้งที่ปิดกะแม้ยังไม่มีใครตัดสต๊อกเพิ่มตั้งแต่ครั้งก่อน
     // ไม่รอ (await) ก่อนตอบ response — cashier ไม่ควรรอ LINE API เพื่อดูผลปิดกะ
-    pool.query('SELECT name, stock, min_stock FROM products WHERE is_active = TRUE AND stock <= min_stock ORDER BY stock ASC')
+    getDb(req).query('SELECT name, stock, min_stock FROM products WHERE is_active = TRUE AND stock <= min_stock ORDER BY stock ASC')
       .then(([lowStockRows]) => {
         if (lowStockRows.length > 0) {
           sendLowStockAlert(lowStockRows).catch(err => console.error('[LINE] sendLowStockAlert error:', err.message));
@@ -2275,7 +2283,7 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, 
 
   try {
     // Verify password of approver
-    const [users] = await pool.query("SELECT password FROM users WHERE id = ?", [approverId]);
+    const [users] = await getDb(req).query("SELECT password FROM users WHERE id = ?", [approverId]);
     if (users.length === 0) {
       return unauthorized(res, "ไม่พบผู้ใช้นี้");
     }
@@ -2286,7 +2294,7 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, 
     }
 
     // Verify shift exists and is PENDING_CLOSE
-    const [shifts] = await pool.query(
+    const [shifts] = await getDb(req).query(
       "SELECT id, cashier_id, status FROM shifts WHERE id = ?",
       [shiftId]
     );
@@ -2300,7 +2308,7 @@ app.put('/api/shifts/:id/approve', requireRole('ADMIN', 'MANAGER'), async (req, 
     }
 
     // Approve close: PENDING_CLOSE → CLOSED
-    await pool.query(
+    await getDb(req).query(
       `UPDATE shifts
        SET status = 'CLOSED', closed_at = CURRENT_TIMESTAMP,
            approved_by = ?, approval_notes = ?, approved_at = CURRENT_TIMESTAMP
@@ -2344,7 +2352,7 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, r
 
   try {
     // Verify shift exists and is PENDING_CLOSE
-    const [shifts] = await pool.query(
+    const [shifts] = await getDb(req).query(
       "SELECT id, cashier_id, status FROM shifts WHERE id = ?",
       [shiftId]
     );
@@ -2359,7 +2367,7 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, r
 
     // Reject close: PENDING_CLOSE → OPEN (reopen for cashier correction)
     // Clear close-related data
-    await pool.query(
+    await getDb(req).query(
       `UPDATE shifts
        SET status = 'OPEN', actual_cash = NULL, difference = NULL,
            close_photo = NULL, closing_cash_breakdown = NULL,
@@ -2396,7 +2404,7 @@ app.put('/api/shifts/:id/reject', requireRole('ADMIN', 'MANAGER'), async (req, r
 
 app.get('/api/shifts/pending', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query(`
+    const [rows] = await getDb(req).query(`
       SELECT
         sh.id, sh.cashier_id, u.full_name as cashier_name,
         sh.opening_cash, sh.expected_cash, sh.actual_cash,
@@ -2435,12 +2443,12 @@ app.post('/api/schedules', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
     }
 
     // ⭐️ upsert แบบ manual (ไม่มี unique key): มีอยู่แล้ว = update, ยังไม่มี = insert
-    const [existing] = await pool.query('SELECT id FROM schedules WHERE cashier_id = ? AND work_date = ?', [cashier_id, work_date]);
+    const [existing] = await getDb(req).query('SELECT id FROM schedules WHERE cashier_id = ? AND work_date = ?', [cashier_id, work_date]);
     if (existing.length > 0) {
-      await pool.query('UPDATE schedules SET expected_start = ?, expected_end = ? WHERE id = ?', [expected_start, expected_end, existing[0].id]);
+      await getDb(req).query('UPDATE schedules SET expected_start = ?, expected_end = ? WHERE id = ?', [expected_start, expected_end, existing[0].id]);
       return res.json({ message: "แก้ไขตารางเวลาสำเร็จ", id: existing[0].id });
     }
-    const [result] = await pool.query(
+    const [result] = await getDb(req).query(
       'INSERT INTO schedules (cashier_id, work_date, expected_start, expected_end) VALUES (?, ?, ?, ?)',
       [cashier_id, work_date, expected_start, expected_end]
     );
@@ -2454,7 +2462,7 @@ app.post('/api/schedules', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
 
 app.delete('/api/schedules/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    const [result] = await pool.query('DELETE FROM schedules WHERE id = ?', [req.params.id]);
+    const [result] = await getDb(req).query('DELETE FROM schedules WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return notFound(res, 'ไม่พบตารางเวลานี้');
     res.json({ message: 'ลบตารางเวลาสำเร็จ' });
   } catch (error) {
@@ -2472,7 +2480,7 @@ app.get('/api/schedules', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req
     if (cashier_id) { query += ' AND s.cashier_id = ?'; params.push(cashier_id); }
     if (date) { query += ' AND s.work_date = ?'; params.push(date); }
     query += ' ORDER BY s.work_date DESC';
-    const [rows] = await pool.query(query, params);
+    const [rows] = await getDb(req).query(query, params);
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -2511,7 +2519,7 @@ app.post('/api/attendance/check-in', requireRole('CASHIER', 'MANAGER'), async (r
   const { check_in_photo } = req.body;
   if (!check_in_photo) return badRequest(res, "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อเข้างาน");
   try {
-    const [openRows] = await pool.query(
+    const [openRows] = await getDb(req).query(
       `SELECT id FROM attendance
        WHERE user_id = ?
          AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
@@ -2521,7 +2529,7 @@ app.post('/api/attendance/check-in', requireRole('CASHIER', 'MANAGER'), async (r
     // ⭐️ ถ้าลงชื่อเข้างานวันนี้แล้วและยังไม่ได้ออกงาน ห้ามลงชื่อซ้ำ
     if (openRows.length > 0) return badRequest(res, "ลงชื่อเข้างานวันนี้ไปแล้ว ยังไม่ได้ลงชื่อออกงาน");
 
-    const [result] = await pool.query('INSERT INTO attendance (user_id, check_in_photo) VALUES (?, ?)', [req.user.id, check_in_photo]);
+    const [result] = await getDb(req).query('INSERT INTO attendance (user_id, check_in_photo) VALUES (?, ?)', [req.user.id, check_in_photo]);
     res.status(201).json({ message: "ลงชื่อเข้างานสำเร็จ", id: result.insertId });
   } catch (error) {
     console.error('[500]', error.message);
@@ -2536,7 +2544,7 @@ app.put('/api/attendance/check-out', requireRole('CASHIER', 'MANAGER'), async (r
   if (!check_out_photo) return badRequest(res, "กรุณาถ่ายรูปยืนยันสถานที่ก่อนลงชื่อออกงาน");
   try {
     // ⭐️ เช็คทั้ง CURDATE() (Bangkok หลัง fix tz) และ CONVERT_TZ (กัน row เก่าที่เก็บเป็น UTC)
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       `SELECT id FROM attendance
        WHERE user_id = ?
          AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
@@ -2546,7 +2554,7 @@ app.put('/api/attendance/check-out', requireRole('CASHIER', 'MANAGER'), async (r
     );
     if (rows.length === 0) return badRequest(res, "ยังไม่ได้ลงชื่อเข้างานวันนี้");
 
-    await pool.query('UPDATE attendance SET check_out = NOW(), check_out_photo = ? WHERE id = ?', [check_out_photo, rows[0].id]);
+    await getDb(req).query('UPDATE attendance SET check_out = NOW(), check_out_photo = ? WHERE id = ?', [check_out_photo, rows[0].id]);
     res.json({ message: "ลงชื่อออกงานสำเร็จ" });
   } catch (error) {
     console.error('[500]', error.message);
@@ -2557,7 +2565,7 @@ app.put('/api/attendance/check-out', requireRole('CASHIER', 'MANAGER'), async (r
 
 app.get('/api/attendance/today', async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       `SELECT * FROM attendance
        WHERE user_id = ?
          AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
@@ -2600,7 +2608,7 @@ app.get('/api/attendance', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
       ) combined
       ORDER BY check_in DESC LIMIT 200
     `;
-    const [rows] = await pool.query(query, [...attParams, ...shiftParams]);
+    const [rows] = await getDb(req).query(query, [...attParams, ...shiftParams]);
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -2614,12 +2622,12 @@ app.put('/api/attendance/:id', requireRole('ADMIN', 'MANAGER'), async (req, res)
   try {
     if (source === 'SHIFT') {
       // แก้กะ (CASHIER): map check_in->opened_at, check_out->closed_at
-      await pool.query(
+      await getDb(req).query(
         'UPDATE shifts SET opened_at = COALESCE(?, opened_at), closed_at = COALESCE(?, closed_at), note = COALESCE(?, note) WHERE id = ?',
         [check_in || null, check_out || null, note || null, req.params.id]
       );
     } else {
-      await pool.query(
+      await getDb(req).query(
         'UPDATE attendance SET check_in = COALESCE(?, check_in), check_out = COALESCE(?, check_out), note = COALESCE(?, note) WHERE id = ?',
         [check_in || null, check_out || null, note || null, req.params.id]
       );
@@ -2637,9 +2645,9 @@ app.delete('/api/attendance/:id', requireRole('ADMIN', 'MANAGER'), async (req, r
   try {
     if (source === 'SHIFT') {
       // ไม่ลบ shift จริง แค่ reset เวลาออกงานออก (กัน FK issues)
-      await pool.query('UPDATE shifts SET closed_at = NULL, status = \'OPEN\' WHERE id = ?', [req.params.id]);
+      await getDb(req).query('UPDATE shifts SET closed_at = NULL, status = \'OPEN\' WHERE id = ?', [req.params.id]);
     } else {
-      await pool.query('DELETE FROM attendance WHERE id = ?', [req.params.id]);
+      await getDb(req).query('DELETE FROM attendance WHERE id = ?', [req.params.id]);
     }
     res.json({ message: "ลบรายการสำเร็จ" });
   } catch (error) {
@@ -2652,33 +2660,33 @@ app.delete('/api/attendance/:id', requireRole('ADMIN', 'MANAGER'), async (req, r
 // ⭐️ ตรรกะตัดออกงาน/ปิดกะอัตโนมัติ (แยกเป็นฟังก์ชันเพื่อให้ทั้ง endpoint และ cron เรียกใช้ร่วมกันได้)
 async function runAutoCheckoutStale(io) {
   // ⭐️ attendance ที่ค้าง (ADMIN ลืมลงชื่อออกงานข้ามวัน)
-  const [staleAttendance] = await pool.query(
+  const [staleAttendance] = await getDb(req).query(
     `SELECT a.id, a.user_id, u.full_name FROM attendance a JOIN users u ON a.user_id = u.id WHERE a.check_out IS NULL AND DATE(a.check_in) < CURDATE()`
   );
   for (const a of staleAttendance) {
-    await pool.query(`UPDATE attendance SET check_out = check_in, note = 'ระบบตัดออกงานอัตโนมัติ (ลืมลงชื่อออก) กรุณาตรวจสอบ' WHERE id = ?`, [a.id]);
+    await getDb(req).query(`UPDATE attendance SET check_out = check_in, note = 'ระบบตัดออกงานอัตโนมัติ (ลืมลงชื่อออก) กรุณาตรวจสอบ' WHERE id = ?`, [a.id]);
     const msg = `${a.full_name} ลืมลงชื่อออกงาน ระบบตัดให้อัตโนมัติแล้ว กรุณาตรวจสอบ/แก้ไขเวลาที่ถูกต้อง`;
-    await pool.query('INSERT INTO notifications (user_id, message) VALUES (NULL, ?)', [msg]);
+    await getDb(req).query('INSERT INTO notifications (user_id, message) VALUES (NULL, ?)', [msg]);
   }
 
   // ⭐️ กะที่ค้าง (CASHIER ลืมปิดกะข้ามวัน) — ปิดให้โดยสมมติว่าเงินตรง (ไม่รู้ยอดจริง) ต้องให้ ADMIN ตรวจสอบทีหลัง
-  const [staleShifts] = await pool.query(
+  const [staleShifts] = await getDb(req).query(
     `SELECT sh.id, sh.opening_cash, sh.opened_at, u.full_name FROM shifts sh JOIN users u ON sh.cashier_id = u.id WHERE sh.status = 'OPEN' AND DATE(sh.opened_at) < CURDATE()`
   );
   for (const sh of staleShifts) {
-    const [salesRows] = await pool.query(
+    const [salesRows] = await getDb(req).query(
       // 🐛 FIX — filter status='COMPLETED' ด้วย (เดิมนับ VOIDED/HOLD เข้าเงินสดคาดการณ์) ให้ตรงกับ
       // สูตรปิดกะปกติ (manual close) ที่ filter ไว้แล้ว
       `SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE cashier_id = (SELECT cashier_id FROM shifts WHERE id = ?) AND payment_method = 'CASH' AND status = 'COMPLETED' AND created_at >= ?`,
       [sh.id, sh.opened_at]
     );
     const expectedCash = Number(sh.opening_cash) + Number(salesRows[0].total);
-    await pool.query(
+    await getDb(req).query(
       `UPDATE shifts SET status = 'CLOSED', closed_at = NOW(), expected_cash = ?, actual_cash = ?, difference = 0, auto_closed = TRUE, note = 'ระบบปิดกะอัตโนมัติ (ลืมปิดกะ) สมมติเงินตรงตามยอดคาดการณ์ กรุณาตรวจนับจริงย้อนหลัง' WHERE id = ?`,
       [expectedCash, expectedCash, sh.id]
     );
     const msg = `กะของ ${sh.full_name} ลืมปิดข้ามวัน ระบบปิดให้อัตโนมัติแล้ว (สมมติเงินตรง) กรุณาตรวจนับเงินจริงย้อนหลัง`;
-    await pool.query('INSERT INTO notifications (user_id, message) VALUES (NULL, ?)', [msg]);
+    await getDb(req).query('INSERT INTO notifications (user_id, message) VALUES (NULL, ?)', [msg]);
   }
 
   if (io && staleAttendance.length + staleShifts.length > 0) io.emit('notifications_updated', { message: 'มีการตัดออกงาน/ปิดกะอัตโนมัติ กรุณาตรวจสอบ' });
@@ -2701,7 +2709,7 @@ app.post('/api/holidays', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { holiday_date, note } = req.body;
   if (!holiday_date) return badRequest(res, "กรุณาระบุวันที่");
   try {
-    await pool.query('INSERT INTO holidays (holiday_date, note) VALUES (?, ?)', [holiday_date, note || null]);
+    await getDb(req).query('INSERT INTO holidays (holiday_date, note) VALUES (?, ?)', [holiday_date, note || null]);
     res.status(201).json({ message: "เพิ่มวันหยุดสำเร็จ" });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return badRequest(res, "วันที่นี้ถูกตั้งเป็นวันหยุดไปแล้ว");
@@ -2713,7 +2721,7 @@ app.post('/api/holidays', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
 
 app.get('/api/holidays', async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT id, DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date, note FROM holidays ORDER BY holiday_date DESC");
+    const [rows] = await getDb(req).query("SELECT id, DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date, note FROM holidays ORDER BY holiday_date DESC");
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -2725,7 +2733,7 @@ app.get('/api/holidays', async (req, res) => {
 // ⭐️ Phase A (refactor) — /api/reports/attendance ย้ายไปที่ reportController.js/reportRoutes.js แล้ว
 
 app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
     const [rows] = await conn.query('SELECT id, assigned_to, status FROM orders WHERE id = ? FOR UPDATE', [req.params.id]);
@@ -2770,7 +2778,7 @@ app.post('/api/orders/:id/assign', requireRole('ADMIN', 'CASHIER', 'MANAGER'), a
 app.put('/api/orders/:id/resubmit-slip', authenticateToken, async (req, res) => {
   const { slip_image } = req.body;
   if (!slip_image) return badRequest(res, "กรุณาแนบสลิปใหม่");
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
     const [orders] = await conn.query('SELECT * FROM orders WHERE id = ? AND status = ? FOR UPDATE', [req.params.id, 'SLIP_REJECTED']);
@@ -2848,7 +2856,7 @@ app.post('/api/sales/checkout', requireRole('CASHIER'), checkoutLimiter, validat
   const cashier_id = req.user.id;
   if (!items || items.length === 0) return badRequest(res, "ตะกร้าสินค้าว่างเปล่า");
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
 
   try {
     await conn.beginTransaction();
@@ -3190,7 +3198,7 @@ app.post('/api/sales/sync-offline', requireRole('CASHIER'), syncOfflineLimiter, 
 
   for (const offlineSale of sales) {
     const { client_offline_id, payment_method, amount_received, total_amount, items, created_at_offline } = offlineSale;
-    const conn = await pool.getConnection();
+    const conn = await getDb(req).getConnection();
     let inTransaction = false;
 
     try {
@@ -3340,7 +3348,7 @@ app.get('/api/sales/history', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async 
       ORDER BY created_at DESC
     `;
 
-    const [rows] = await pool.query(query, params);
+    const [rows] = await getDb(req).query(query, params);
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -3354,14 +3362,14 @@ app.get('/api/sales/history/:id', requireRole('CASHIER', 'MANAGER', 'ADMIN'), as
     const { source } = req.query; // 'PREORDER' = ดูจาก order_items, อื่นๆ = sale_items (บิลหน้าร้าน)
     let rows;
     if (source === 'PREORDER') {
-      [rows] = await pool.query(`
+      [rows] = await getDb(req).query(`
         SELECT oi.quantity, oi.price, oi.subtotal, p.name as product_name
         FROM order_items oi
         JOIN products p ON oi.product_id = p.id
         WHERE oi.order_id = ?
       `, [req.params.id]);
     } else {
-      [rows] = await pool.query(`
+      [rows] = await getDb(req).query(`
         SELECT si.quantity, si.price, si.subtotal, p.name as product_name
         FROM sale_items si
         JOIN products p ON si.product_id = p.id
@@ -3379,7 +3387,7 @@ app.get('/api/sales/history/:id', requireRole('CASHIER', 'MANAGER', 'ADMIN'), as
 app.post('/api/sales/:id/void', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const saleId = req.params.id;
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
 
@@ -3452,7 +3460,7 @@ app.post('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) =>
 
   if (!items || items.length === 0) return badRequest(res, "ตะกร้าว่างเปล่า");
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
 
@@ -3497,7 +3505,7 @@ app.post('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) =>
 
 app.get('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM sales WHERE status = "HOLD"');
+    const [rows] = await getDb(req).query('SELECT * FROM sales WHERE status = "HOLD"');
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -3508,7 +3516,7 @@ app.get('/api/sales/hold', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
 
 app.delete('/api/sales/hold/:id', requireRole('CASHIER', 'ADMIN'), async (req, res) => {
   const saleId = req.params.id;
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
     // ต้องลบรายการสินค้าในบิลออกก่อน (ตารางลูก) แล้วค่อยลบตัวบิลหลัก (ตารางแม่)
@@ -3562,14 +3570,14 @@ app.post('/api/members/import', requireRole('ADMIN'), uploadLimiter, csvUpload.s
             ? String(row.role).trim().toUpperCase() : null;
 
           if (role) {
-            await pool.query(
+            await getDb(req).query(
               `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
                VALUES (?, ?, ?, ?, ?, ?)
                ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number), role = VALUES(role)`,
               [student_id, password, full_name, phone_number || null, role, mustChangePassword]
             );
           } else {
-            await pool.query(
+            await getDb(req).query(
               `INSERT INTO users (student_id, password, full_name, phone_number, role, must_change_password)
                VALUES (?, ?, ?, ?, 'MEMBER', ?)
                ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone_number = VALUES(phone_number)`,
@@ -3600,7 +3608,7 @@ app.post('/api/members/import', requireRole('ADMIN'), uploadLimiter, csvUpload.s
 
 app.get('/api/shifts/pending-approval', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query(`
+    const [rows] = await getDb(req).query(`
       SELECT sh.id, sh.cashier_id, u.full_name as cashier_name, sh.opening_cash, sh.expected_cash,
              sh.actual_cash, sh.difference, sh.discrepancy_amount, sh.opened_at, sh.closed_at, sh.note
       FROM shifts sh
@@ -3633,7 +3641,7 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
     return badRequest(res, 'กรุณาระบุอัตราค่าจ้างต่อชั่วโมงที่ถูกต้อง (ตัวเลข ≥ 0)');
   }
   try {
-    const [result] = await pool.query('UPDATE users SET hourly_rate = ? WHERE id = ? AND role IN (\'CASHIER\',\'MANAGER\',\'ADMIN\')', [rate, id]);
+    const [result] = await getDb(req).query('UPDATE users SET hourly_rate = ? WHERE id = ? AND role IN (\'CASHIER\',\'MANAGER\',\'ADMIN\')', [rate, id]);
     if (result.affectedRows === 0) return notFound(res, 'ไม่พบพนักงานนี้');
     res.json({ message: 'อัปเดตอัตราค่าจ้างสำเร็จ', hourly_rate: rate });
   } catch (error) {
@@ -3662,7 +3670,7 @@ app.put('/api/users/:id/hourly-rate', requireRole('ADMIN'), async (req, res) => 
 app.put('/api/users/:id/group', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   const { group_id } = req.body;
   try {
-    await pool.query('UPDATE users SET group_id = ? WHERE id = ?', [group_id || null, req.params.id]);
+    await getDb(req).query('UPDATE users SET group_id = ? WHERE id = ?', [group_id || null, req.params.id]);
     res.json({ message: 'กำหนดกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
@@ -3676,11 +3684,11 @@ app.put('/api/users/:id/group', requireRole('ADMIN', 'MANAGER'), async (req, res
 // — ปลดแล้ว student_id กลับมาแก้ไขได้ตามปกติ (ดู PUT /api/users/:id ด้านบนที่ล็อกฟิลด์นี้ไว้ตอนมี line_user_id)
 app.put('/api/users/:id/unlink-line', requireRole('ADMIN'), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT line_user_id, full_name FROM users WHERE id = ?', [req.params.id]);
+    const [rows] = await getDb(req).query('SELECT line_user_id, full_name FROM users WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return notFound(res, 'ไม่พบผู้ใช้งานนี้');
     if (!rows[0].line_user_id) return badRequest(res, 'สมาชิกคนนี้ยังไม่ได้ผูกบัญชี LINE');
 
-    await pool.query('UPDATE users SET line_user_id = NULL WHERE id = ?', [req.params.id]);
+    await getDb(req).query('UPDATE users SET line_user_id = NULL WHERE id = ?', [req.params.id]);
     await logAudit(pool, 'UNLINK_LINE', req.user.id, { target_full_name: rows[0].full_name }, 'USER', req.params.id);
     res.json({ message: `ปลดผูกบัญชี LINE ของ ${rows[0].full_name} แล้ว` });
   } catch (error) {
@@ -3694,7 +3702,7 @@ app.put('/api/users/:id/unlink-line', requireRole('ADMIN'), async (req, res) => 
 // =========================================
 app.get('/api/products/rewards', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await getDb(req).query(
       'SELECT id, name, price, image_url, points_required, stock FROM products WHERE is_reward_item = 1 AND is_active = 1 AND stock > 0 ORDER BY points_required ASC'
     );
     res.json(rows);
@@ -3716,7 +3724,7 @@ app.patch('/api/products/:id/stock', requireRole('CASHIER', 'ADMIN'), async (req
 
   try {
     // ใช้ GREATEST เพื่อป้องกันไม่ให้สต๊อกติดลบในกรณีที่ตัดของเสียมากกว่าที่มี
-    const [result] = await pool.query(
+    const [result] = await getDb(req).query(
       'UPDATE products SET stock = GREATEST(0, stock + ?) WHERE id = ?',
       [adjustment, req.params.id]
     );
@@ -3740,7 +3748,7 @@ app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN', 'MANAGER'), 
   try {
     // ⭐️ Day 3 — เกณฑ์ต่อสินค้า (products.min_stock) แทน hardcode <=10 ทุกตัว ให้ตรงกับที่ใช้ตัดสินใจ
     // ส่งแจ้งเตือน LINE (ดู notifyIfLowStock/sendLowStockAlert)
-    const [rows] = await pool.query('SELECT id, barcode, name, stock, min_stock FROM products WHERE stock <= min_stock AND is_active = TRUE ORDER BY stock ASC');
+    const [rows] = await getDb(req).query('SELECT id, barcode, name, stock, min_stock FROM products WHERE stock <= min_stock AND is_active = TRUE ORDER BY stock ASC');
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -3764,7 +3772,7 @@ app.get('/api/inventory/low-stock', requireRole('CASHIER', 'ADMIN', 'MANAGER'), 
 // (ข้อมูลธุรกิจภายใน) ให้ MEMBER เห็นได้ด้วย ไม่ใช่ข้อมูลสำหรับลูกค้า
 app.get('/api/suppliers', requireRole('CASHIER', 'MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM suppliers');
+    const [rows] = await getDb(req).query('SELECT * FROM suppliers');
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -3779,12 +3787,12 @@ app.post('/api/suppliers', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
   // ⭐️ เก็บ idempotency_key (กัน offline queue retry แล้วสร้างซัพพลายเออร์ซ้ำ) — มี UNIQUE ที่คอลัมน์นี้ใน DB
   const idempotencyKey = req.headers['idempotency-key'];
   try {
-    const [result] = await pool.query('INSERT INTO suppliers (name, contact_info, idempotency_key) VALUES (?, ?, ?)', [name, contact_info, idempotencyKey || null]);
+    const [result] = await getDb(req).query('INSERT INTO suppliers (name, contact_info, idempotency_key) VALUES (?, ?, ?)', [name, contact_info, idempotencyKey || null]);
     res.status(201).json({ id: result.insertId, message: "เพิ่มซัพพลายเออร์สำเร็จ" });
   } catch (error) {
     // 🐛 FIX — retry หลัง server restart: row เดิมยังอยู่ใน DB (UNIQUE idempotency_key) → ตอบ "สำเร็จซ้ำ" แทน error
     if (isIdempotentDuplicate(error)) {
-      const [rows] = await pool.query('SELECT id FROM suppliers WHERE idempotency_key = ?', [idempotencyKey]);
+      const [rows] = await getDb(req).query('SELECT id FROM suppliers WHERE idempotency_key = ?', [idempotencyKey]);
       if (rows.length > 0) return res.status(201).json({ id: rows[0].id, message: 'เพิ่มซัพพลายเออร์สำเร็จ (request ซ้ำ — ไม่ได้สร้างซ้ำ)', duplicated: true });
       return res.status(200).json({ message: 'ทำรายการสำเร็จแล้ว (request นี้ถูกส่งซ้ำ)', duplicated: true });
     }
@@ -3796,7 +3804,7 @@ app.post('/api/suppliers', requireRole('ADMIN', 'MANAGER'), async (req, res) => 
 
 app.get('/api/suppliers/export', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT id, name, contact_info FROM suppliers ORDER BY id');
+    const [rows] = await getDb(req).query('SELECT id, name, contact_info FROM suppliers ORDER BY id');
     await sendTableExport(res, {
       filename: `suppliers-export_${Date.now()}`, sheetName: 'ซัพพลายเออร์',
       headers: ['id', 'name', 'contact_info'], rows: rows.map(r => [r.id, r.name, r.contact_info || '']),
@@ -3822,10 +3830,10 @@ app.post('/api/suppliers/import', requireRole('ADMIN'), uploadLimiter, csvUpload
           const id = row.id ? Number(row.id) : null;
           if (!name) { skipped++; continue; }
           if (id) {
-            const [r] = await pool.query('UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?', [name, contact || null, id]);
+            const [r] = await getDb(req).query('UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?', [name, contact || null, id]);
             if (r.affectedRows > 0) updated++; else skipped++;
           } else {
-            await pool.query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact || null]);
+            await getDb(req).query('INSERT INTO suppliers (name, contact_info) VALUES (?, ?)', [name, contact || null]);
             inserted++;
           }
         }
@@ -3841,7 +3849,7 @@ app.post('/api/suppliers/import', requireRole('ADMIN'), uploadLimiter, csvUpload
 app.delete('/api/suppliers/:id', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     // ลบข้อมูลซัพพลายเออร์ตาม ID
-    await pool.query('DELETE FROM suppliers WHERE id = ?', [req.params.id]);
+    await getDb(req).query('DELETE FROM suppliers WHERE id = ?', [req.params.id]);
     res.json({ message: "ลบข้อมูลซัพพลายเออร์สำเร็จ" });
   } catch (error) {
     // ดัก Error กรณีที่ซัพพลายเออร์เจ้านี้เคยส่งของให้เราแล้ว (มีบิลผูกอยู่)
@@ -3858,7 +3866,7 @@ app.post('/api/purchases', requireRole('CASHIER', 'ADMIN'), async (req, res) => 
   const { supplier_id, user_id, items } = req.body;
   if (!items || items.length === 0) return badRequest(res, "ไม่มีรายการสินค้า");
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
 
@@ -3955,7 +3963,7 @@ app.post('/api/orders', requireRole('MEMBER', 'CASHIER', 'MANAGER', 'ADMIN'), va
     return forbidden(res, 'บัญชีพนักงานไม่มีสิทธิ์ใช้แต้มสมาชิก (แต้มสงวนสำหรับสมาชิกเท่านั้น)');
   }
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
 
@@ -4125,14 +4133,14 @@ app.get('/api/orders', async (req, res) => {
     }
     query += ` ORDER BY o.created_at DESC`;
 
-    const [orders] = await pool.query(query, params);
+    const [orders] = await getDb(req).query(query, params);
 
     // 🐛 FIX (N+1) — เดิมยิง query ทีละออเดอร์ในลูป: ออเดอร์ N ใบ = N query ทุกครั้งที่โหลด
     // (OrderManagement poll ทุก 5 วิ + หน้า MyOrders/OrderDetail). ดึง items ทั้งหมดครั้งเดียว
     // ด้วย IN แล้ว group ใน JS — 1 query เสมอ ไม่ว่า N เท่าไร
     if (orders.length > 0) {
       const orderIds = orders.map(o => o.id);
-      const [allItems] = await pool.query(`
+      const [allItems] = await getDb(req).query(`
         SELECT oi.*, p.name as product_name, p.image_url 
         FROM order_items oi 
         JOIN products p ON oi.product_id = p.id 
@@ -4166,7 +4174,7 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
   //         PENDING_VERIFY → REFUND_REQUESTED (โอนแล้วแต่ไม่เอาแล้ว)
   //         PENDING_VERIFY/WAITING_CASH/WAITING_ACCEPT/any → CANCELLED (สลิปปลอม/ยกเลิก)
 
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
 
@@ -4326,11 +4334,11 @@ app.put('/api/orders/:id/status', requireRole('ADMIN', 'CASHIER', 'MANAGER'), as
     // ⭐️ Day 3 — พรีออเดอร์พร้อมรับ: แจ้งลูกค้าตรงผ่าน LINE ด้วย (แยกจากแจ้งเตือนในแอปด้านบน ซึ่งลูกค้า
     // ต้องเปิดแอปถึงจะเห็น) ไม่รอ (await) ก่อนตอบ response — ไม่ควรให้ LINE API ช้าทำให้ staff รอ
     if (status === 'READY') {
-      pool.query('SELECT line_user_id FROM users WHERE id = ?', [order.user_id])
+      getDb(req).query('SELECT line_user_id FROM users WHERE id = ?', [order.user_id])
         .then(async ([userRows]) => {
           const lineUserId = userRows[0]?.line_user_id;
           if (!lineUserId) return; // notifyIfLowStock-style fail-soft: ไม่มีผูกบัญชี LINE ก็ข้ามเงียบๆ
-          const [itemRows] = await pool.query(
+          const [itemRows] = await getDb(req).query(
             'SELECT p.name, oi.quantity FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?',
             [orderId]
           );
@@ -4363,7 +4371,7 @@ app.get('/api/notifications', async (req, res) => {
     const query = isStaff
       ? 'SELECT * FROM notifications WHERE user_id IS NULL OR user_id = ? ORDER BY created_at DESC LIMIT 50'
       : 'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50';
-    const [rows] = await pool.query(query, [req.user.id]);
+    const [rows] = await getDb(req).query(query, [req.user.id]);
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -4383,7 +4391,7 @@ app.put('/api/notifications/:id/read', async (req, res) => {
     const query = isStaff
       ? 'UPDATE notifications SET is_read = 1 WHERE id = ? AND (user_id IS NULL OR user_id = ?)'
       : 'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?';
-    const [result] = await pool.query(query, [req.params.id, req.user.id]);
+    const [result] = await getDb(req).query(query, [req.params.id, req.user.id]);
     if (result.affectedRows === 0) {
       return notFound(res, 'ไม่พบการแจ้งเตือนนี้');
     }
@@ -4403,7 +4411,7 @@ app.put('/api/notifications/read-all', async (req, res) => {
     const query = isStaff
       ? 'UPDATE notifications SET is_read = 1 WHERE user_id IS NULL OR user_id = ?'
       : 'UPDATE notifications SET is_read = 1 WHERE user_id = ?';
-    await pool.query(query, [req.user.id]);
+    await getDb(req).query(query, [req.user.id]);
     res.json({ message: "อ่านแจ้งเตือนทั้งหมดแล้ว" });
   } catch (error) {
     console.error('[500]', error.message);
@@ -4415,7 +4423,7 @@ app.put('/api/notifications/read-all', async (req, res) => {
 // ⭐️ API ดึงจำนวนออเดอร์ที่รอจัดการ (แสดงเลข Badge แดงๆ) — ย้ายมาไว้ก่อน จะได้ลบ route ซ้ำด้านล่างได้สะดวก
 app.get('/api/orders/pending-count', requireRole('ADMIN', 'CASHIER', 'MANAGER'), async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT COUNT(id) as count FROM orders WHERE status IN ('PENDING_VERIFY', 'WAITING_CASH', 'WAITING_ACCEPT', 'PREPARING')");
+    const [rows] = await getDb(req).query("SELECT COUNT(id) as count FROM orders WHERE status IN ('PENDING_VERIFY', 'WAITING_CASH', 'WAITING_ACCEPT', 'PREPARING')");
     res.json({ count: rows[0].count || 0 });
   } catch (error) {
     console.error('[500]', error.message);
@@ -4428,7 +4436,7 @@ app.get('/api/orders/pending-count', requireRole('ADMIN', 'CASHIER', 'MANAGER'),
 app.put('/api/orders/:id/cancel-by-user', authenticateToken, async (req, res) => {
   const orderId = req.params.id;
   const { refund_info } = req.body;
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
 
   try {
     await conn.beginTransaction();
@@ -4494,7 +4502,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'MANAGE
     }
 
     // ⭐️ ตรวจว่า order มีจริงและเป็นของ user ก่อน
-    const [orders] = await pool.query(
+    const [orders] = await getDb(req).query(
       'SELECT id, status FROM orders WHERE id = ? AND user_id = ?',
       [id, req.user.id]
     );
@@ -4530,7 +4538,7 @@ app.post('/api/orders/:id/upload-slip', requireRole('MEMBER', 'CASHIER', 'MANAGE
     // 🐛 FIX — เดิมอัปเดตตรงๆ ไม่มี transaction: ตอน SLIP_REJECTED คืนสต๊อกไปแล้ว พอลูกค้าส่งสลิปใหม่
     // (สถานะกลับ PENDING_VERIFY) ไม่มีใครตัดสต๊อกคืน → พอออเดอร์เดินต่อถึง COMPLETED สินค้าหลุดออก
     // โดยไม่หักสต๊อก (ขายเกินได้). ทำใน transaction + ล็อกแถว FOR UPDATE กันส่งซ้ำ/ตัดสต๊อกซ้ำ
-    const conn = await pool.getConnection();
+    const conn = await getDb(req).getConnection();
     let wasRejected = false; // hoist ออกมา — ต้องใช้นอก transaction เพื่อตัดสินใจยิง event realtime
     try {
       await conn.beginTransaction();
@@ -4625,7 +4633,7 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), upload
     // ของเรา/ไม่มีอยู่จริง: CASHIER ใช้ได้เฉพาะกะของตัวเอง (cashier_id จาก JWT — ไม่เชื่อจาก body),
     // ADMIN อัปโหลดให้กะใครก็ได้ (จัดการกะ) — ตาราง shifts ใช้ cashier_id ไม่ใช่ user_id
     const isAdmin = req.user.role === 'ADMIN';
-    const [shiftRows] = await pool.query(
+    const [shiftRows] = await getDb(req).query(
       isAdmin
         ? 'SELECT id FROM shifts WHERE id = ?'
         : 'SELECT id FROM shifts WHERE id = ? AND cashier_id = ?',
@@ -4643,7 +4651,7 @@ app.post('/api/shifts/:id/upload-photo', requireRole('CASHIER', 'ADMIN'), upload
     // 🐛 FIX — เดิมใช้ `WHERE id = ? AND user_id = ?` แต่ตาราง shifts ไม่มีคอลัมน์ user_id
     // (เป็น cashier_id) → SQL error ทุกครั้ง (ER_BAD_FIELD_ERROR) + 400 พร้อมข้อความ error ดิบรั่ว
     // อัปเดตด้วย cashier_id + ล็อก scope ตามสิทธิ์อีกชั้น (เผื่อกะถูกลบ/เปลี่ยนเจ้าของระหว่างเช็ค)
-    await pool.query(
+    await getDb(req).query(
       isAdmin
         ? 'UPDATE shifts SET close_photo = ? WHERE id = ?'
         : 'UPDATE shifts SET close_photo = ? WHERE id = ? AND cashier_id = ?',
@@ -4707,7 +4715,7 @@ app.get('/api/media', async (req, res) => {
 app.delete('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
   try {
     // ปิดการเช็ค Foreign Key ชั่วคราว เพื่อให้ลบข้อมูลที่ผูกกันอยู่ได้
-    await pool.query('SET FOREIGN_KEY_CHECKS = 0');
+    await getDb(req).query('SET FOREIGN_KEY_CHECKS = 0');
 
     // รายชื่อตารางที่ต้องการล้างข้อมูลทิ้ง (ไม่รวม users และ settings)
     // ⭐️ เอา 'members' ออก — ตารางนี้ไม่มีอยู่จริงในสคีมา (ดูจุดที่ลบ /api/members/* ใน HOTFIX 3)
@@ -4725,11 +4733,11 @@ app.delete('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
 
     // วนลูปใช้คำสั่ง TRUNCATE ล้างข้อมูลและรีเซ็ต AUTO_INCREMENT เป็น 1
     for (let table of tablesToClear) {
-      await pool.query(`TRUNCATE TABLE ${table}`);
+      await getDb(req).query(`TRUNCATE TABLE ${table}`);
     }
 
     // เปิดการเช็ค Foreign Key กลับมาเหมือนเดิม
-    await pool.query('SET FOREIGN_KEY_CHECKS = 1');
+    await getDb(req).query('SET FOREIGN_KEY_CHECKS = 1');
 
     res.json({ message: "เคลียร์ข้อมูลสำเร็จ! ข้อมูลสินค้าและบิลหายไปแล้ว (แต่ยังคง User ไว้) 🎉" });
   } catch (error) {
@@ -4745,7 +4753,7 @@ app.delete('/api/clear-data', requireRole('ADMIN'), async (req, res) => {
 app.get('/api/seed-data', requireSetupKey, async (req, res) => {
   // ⭐️ Security remediation — bootstrap/dev-only endpoint, must not be reachable in production regardless of SETUP_KEY
   if (IS_PRODUCTION) return res.status(404).end();
-  const conn = await pool.getConnection();
+  const conn = await getDb(req).getConnection();
   try {
     await conn.beginTransaction();
 
@@ -4873,10 +4881,10 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-    await pool.query("DELETE FROM users WHERE student_id = 'admin'");
+    await getDb(req).query("DELETE FROM users WHERE student_id = 'admin'");
 
     // ⭐️ เปลี่ยนจาก username เป็น student_id
-    await pool.query(
+    await getDb(req).query(
       "INSERT INTO users (student_id, password, full_name, role, is_active, must_change_password) VALUES (?, ?, 'ผู้จัดการระบบ', 'ADMIN', 1, TRUE)",
       ['admin', hashedPassword]
     );
@@ -4908,7 +4916,7 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 
 app.get('/api/admin/backups', requireRole('ADMIN'), async (req, res) => {
   try {
-    const [backups] = await pool.query(`
+    const [backups] = await getDb(req).query(`
       SELECT id, filename, backup_date, file_size_mb, status, created_at, restored_at,
              (cloud_public_id IS NOT NULL) AS cloud_backed
       FROM backups
@@ -4951,7 +4959,7 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
   }
 
   try {
-    const [backups] = await pool.query(
+    const [backups] = await getDb(req).query(
       'SELECT * FROM backups WHERE id = ? AND status = ?',
       [id, 'SUCCESS']
     );
@@ -4979,7 +4987,7 @@ app.post('/api/admin/backups/:id/restore', requireRole('ADMIN'), async (req, res
     }
 
     // Log restore
-    await pool.query(
+    await getDb(req).query(
       'UPDATE backups SET restored_at = NOW(), restored_by = ? WHERE id = ?',
       [req.user.id, id]
     );
@@ -5077,7 +5085,7 @@ app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req
       countParams.push(`%${search}%`, parseInt(search) || 0);
     }
 
-    const [countResult] = await pool.query(countQuery, countParams);
+    const [countResult] = await getDb(req).query(countQuery, countParams);
     const total = countResult[0].total;
 
     // Pagination
@@ -5085,7 +5093,7 @@ app.get('/api/audit-logs', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async (req
     query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const [logs] = await pool.query(query, params);
+    const [logs] = await getDb(req).query(query, params);
 
     res.json({
       logs,
@@ -5109,7 +5117,7 @@ app.get('/api/audit-logs/:id', requireRole('ADMIN', 'CASHIER', 'MEMBER'), async 
   const currentUser = req.user;
 
   try {
-    const [logs] = await pool.query(
+    const [logs] = await getDb(req).query(
       `SELECT * FROM audit_logs WHERE id = ? ${currentUser.role !== 'ADMIN' ? 'AND user_id = ?' : ''}`,
       currentUser.role !== 'ADMIN' ? [id, currentUser.id] : [id]
     );
@@ -5150,7 +5158,7 @@ app.get('/api/audit-logs/export/csv', requireRole('ADMIN'), async (req, res) => 
 
     query += ' ORDER BY al.created_at DESC';
 
-    const [logs] = await pool.query(query, params);
+    const [logs] = await getDb(req).query(query, params);
 
     // Convert to CSV
     const headers = ['ID', 'User', 'Action', 'Resource Type', 'Description', 'Amount', 'Status', 'Timestamp'];
@@ -5322,7 +5330,7 @@ server.listen(PORT, '0.0.0.0', () => {
   // UTC/ไทย ไม่มีเวลาตายตัว ไม่ต้องแปลงโซน) แจ้งเตือน cashiers ผ่าน socket (products_expired)
   cron.schedule('0 * * * *', async () => {
     try {
-      const [expiredToday] = await pool.query(`
+      const [expiredToday] = await getDb(req).query(`
         SELECT id, name FROM products
         WHERE expiry_date = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
         AND is_active = 1
@@ -5344,7 +5352,7 @@ server.listen(PORT, '0.0.0.0', () => {
   // กับ NOW() (เวลาไทยเหมือนกัน) ยิงกี่โมงก็ได้ผลถูกต้อง
   cron.schedule('30 19 * * *', async () => {
     try {
-      const [result] = await pool.query('DELETE FROM revoked_tokens WHERE expires_at < NOW()');
+      const [result] = await getDb(req).query('DELETE FROM revoked_tokens WHERE expires_at < NOW()');
       console.log(`🧹 ล้าง revoked_tokens ที่หมดอายุแล้ว: ${result.affectedRows} แถว`);
     } catch (e) { console.error('❌ revoked_tokens cleanup cron ล้มเหลว:', e.message); }
   });
@@ -5355,14 +5363,14 @@ server.listen(PORT, '0.0.0.0', () => {
   // ผู้จัดการแต่ละคนเป็นรายบุคคลโดยตรง ตาม role ไม่ใช่กลุ่มแชท
   cron.schedule('0 10 * * *', async () => {
     try {
-      const [lowStock] = await pool.query(
+      const [lowStock] = await getDb(req).query(
         'SELECT name, stock, min_stock FROM products WHERE is_active = 1 AND stock <= min_stock ORDER BY stock ASC'
       );
       if (lowStock.length === 0) {
         console.log('📦 [CRON] เช็คสต๊อกประจำวัน (17:00) — ไม่มีสินค้าใกล้หมด');
         return;
       }
-      const [managers] = await pool.query(
+      const [managers] = await getDb(req).query(
         "SELECT line_user_id FROM users WHERE role = 'MANAGER' AND is_active = 1 AND line_user_id IS NOT NULL"
       );
       if (managers.length === 0) {
@@ -5385,7 +5393,7 @@ server.listen(PORT, '0.0.0.0', () => {
   const PICKUP_REMINDER_THRESHOLD_HOURS = 2;
   cron.schedule('0 * * * *', async () => {
     try {
-      const [staleOrders] = await pool.query(
+      const [staleOrders] = await getDb(req).query(
         `SELECT o.id, u.line_user_id FROM orders o
          JOIN users u ON u.id = o.user_id
          WHERE o.status = 'READY' AND (o.pickup_reminder_sent = 0 OR o.pickup_reminder_sent IS NULL)
@@ -5404,7 +5412,7 @@ server.listen(PORT, '0.0.0.0', () => {
       }
       // 🐛 FIX (N+1) — เดิม UPDATE ทีละออเดอร์ในลูป — batch ครั้งเดียวด้วย IN แทน
       if (sentIds.length > 0) {
-        await pool.query(`UPDATE orders SET pickup_reminder_sent = 1 WHERE id IN (${sentIds.map(() => '?').join(',')})`, sentIds);
+        await getDb(req).query(`UPDATE orders SET pickup_reminder_sent = 1 WHERE id IN (${sentIds.map(() => '?').join(',')})`, sentIds);
       }
       if (staleOrders.length > 0) console.log(`🏃 [CRON] เตือนมารับของแล้ว ${staleOrders.length} ออเดอร์`);
     } catch (e) { console.error('❌ pickup reminder cron ล้มเหลว:', e.message); }

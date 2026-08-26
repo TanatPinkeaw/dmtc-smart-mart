@@ -12,7 +12,7 @@
 // สมาชิกจริงแบบกู้คืนไม่ได้ (โดยเฉพาะ resetMembers ที่ DELETE ทิ้งถาวร) กดพลาดบน prod = ข้อมูล
 // สมาชิกจริงหายทั้งระบบ — เปิดใช้บน production ได้เฉพาะเมื่อมีคนตั้งค่า env var
 // ALLOW_DATA_RESET=true บน deployment นั้นๆ อย่างจงใจเท่านั้น (ไม่ใช่ default ที่เปิดเอง)
-const pool = require('../config/db');
+// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
 const config = require('../config/config');
 const { serverError, notFound, conflict } = require('../utils/http');
 const { logAudit } = require('../utils/auditLog');
@@ -84,7 +84,7 @@ async function unlinkAllLine(req, res) {
     return notFound(res, 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้');
   }
   try {
-    const [result] = await pool.query("UPDATE users SET line_user_id = NULL WHERE role = 'MEMBER'");
+    const [result] = await req.db.query("UPDATE users SET line_user_id = NULL WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_UNLINK_LINE', req.user.id, { affected: result.affectedRows });
     res.json({ success: true, message: `ปลดผูกบัญชี LINE ของสมาชิกแล้ว ${result.affectedRows} รายการ`, affected: result.affectedRows });
   } catch (error) {
@@ -118,7 +118,7 @@ async function resetMembers(req, res) {
   // ⭐️ รับทั้ง deleteWorkHistory (ชื่อใหม่) และ deleteAttendance (ชื่อเดิม เผื่อ frontend รุ่นเก่า cache อยู่)
   const deleteWorkHistory = req.body?.deleteWorkHistory === true || req.body?.deleteAttendance === true;
   const skipBlocked = req.body?.skipBlocked === true;
-  const conn = await pool.getConnection();
+  const conn = await req.db.getConnection();
   try {
     // ⭐️ กลุ่ม 3: หาสมาชิกที่มีประวัติทำงาน staff ติดอยู่ (attendance/shifts/schedules) ก่อน — ถ้ามีและ
     // caller ยังไม่ระบุจะเอาแบบไหน ให้หยุดถามผ่าน popup ก่อน
@@ -184,7 +184,7 @@ async function resetMemberPoints(req, res) {
     return notFound(res, 'ปิดใช้งานเครื่องมือรีเซ็ตข้อมูลบน production — ตั้งค่า environment variable ALLOW_DATA_RESET=true บน deployment นี้ก่อนถึงจะใช้ได้');
   }
   try {
-    const [result] = await pool.query("UPDATE users SET points = 0 WHERE role = 'MEMBER'");
+    const [result] = await req.db.query("UPDATE users SET points = 0 WHERE role = 'MEMBER'");
     await logAdminReset('ADMIN_RESET_MEMBER_POINTS', req.user.id, { affected: result.affectedRows });
     res.json({ success: true, message: `รีเซ็ตแต้มสะสมของสมาชิกแล้ว ${result.affectedRows} บัญชี`, affected: result.affectedRows });
   } catch (error) {
@@ -229,7 +229,7 @@ async function resetProducts(req, res) {
   }
   const deleteTransactionHistory = req.body?.deleteTransactionHistory === true;
   const skipBlocked = req.body?.skipBlocked === true;
-  const conn = await pool.getConnection();
+  const conn = await req.db.getConnection();
   try {
     const blockedRows = await findProductHistoryBlockers(conn);
 

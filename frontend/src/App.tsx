@@ -31,7 +31,15 @@ import Schedules from './pages/Schedules'; // ⭐️ หน้าตั้งต
 import AttendanceManagement from './pages/AttendanceManagement';
 import Layout from './components/Layout';
 import Notifications from './pages/Notifications'; // 👈 นำเข้าหน้าใหม่
-import VendorSales from './pages/VendorSales'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
+import VendorSales from './pages/VendorSales';
+import PosAdminLogin from './pages/pos-admin/PosAdminLogin';
+import PosAdminLayout from './pages/pos-admin/PosAdminLayout';
+import PosAdminDashboard from './pages/pos-admin/PosAdminDashboard';
+import PosAdminProducts from './pages/pos-admin/PosAdminProducts';
+import PosAdminCategories from './pages/pos-admin/PosAdminCategories';
+import PosAdminUsers from './pages/pos-admin/PosAdminUsers';
+import PosAdminSettings from './pages/pos-admin/PosAdminSettings';
+import PosAdminReports from './pages/pos-admin/PosAdminReports'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
 import Summary from './pages/Summary'; // ⭐️ หน้าสรุปข้อมูล (ชั่วโมงทำงาน/มาสาย/ค่าจ้าง) — ADMIN เท่านั้น
 import AccountingSummary from './pages/AccountingSummary'; // ⭐️ สรุปบัญชีสหกรณ์ — หมวดหมู่/ยอดจ่ายคืนผู้ฝากขาย/Export Excel
 import BackupManagement from './pages/BackupManagement'; // ⭐️ หน้าสำรอง & กู้คืนข้อมูล — ADMIN เท่านั้น

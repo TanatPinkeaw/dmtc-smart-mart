@@ -1,7 +1,7 @@
 // utils/storeConfig.js — Helper ดึง store name จาก settings/tenant config แทน hardcoded
 // ใช้ร่วมกันทั้ง email templates, LINE messages, receipt, etc.
 
-const pool = require('../config/db');
+const defaultPool = require('../config/db'); // ⭐️ Fallback for cron/legacy; route handlers pass db via req.db
 
 // Cache store names to avoid hitting DB on every request
 const storeNameCache = new Map();
@@ -12,7 +12,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
  * @param {number|null} tenantId - tenant_id (null = default tenant)
  * @returns {Promise<string>} store name
  */
-async function getStoreName(tenantId = null) {
+async function getStoreName(tenantId = null, db = null) {
   const cacheKey = tenantId || 'default';
   const cached = storeNameCache.get(cacheKey);
   if (cached && Date.now() - cached.time < CACHE_TTL_MS) {
@@ -21,7 +21,7 @@ async function getStoreName(tenantId = null) {
 
   try {
     const tid = tenantId || 1;
-    const [rows] = await pool.query(
+    const [rows] = await (db || defaultPool).query(
       'SELECT store_name FROM settings WHERE tenant_id = ? LIMIT 1',
       [tid]
     );
@@ -38,7 +38,7 @@ async function getStoreName(tenantId = null) {
  * @param {number|null} tenantId
  * @returns {Promise<object>}
  */
-async function getTenantConfig(tenantId = null) {
+async function getTenantConfig(tenantId = null, db = null) {
   const tid = tenantId || 1;
   const [rows] = await pool.query('SELECT * FROM tenants WHERE id = ?', [tid]);
   return rows[0] || { name: 'DMTC Mart', slug: 'dmtc-mart', plan: 'free' };
@@ -49,8 +49,8 @@ async function getTenantConfig(tenantId = null) {
  * @param {number|null} tenantId
  * @returns {Promise<string|null>}
  */
-async function getLiffId(tenantId = null) {
-  const config = await getTenantConfig(tenantId);
+async function getLiffId(tenantId = null, db = null) {
+  const config = await getTenantConfig(tenantId, db);
   return config.line_liff_id || null;
 }
 

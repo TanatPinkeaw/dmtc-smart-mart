@@ -9,10 +9,21 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 
-// Config from env or defaults
-const DB_HOST = process.env.DB_HOST || 'localhost';
-const DB_USER = process.env.DB_USER || 'root';
-const DB_PASSWORD = process.env.DB_PASSWORD || '';
+// ⭐️ Use config module (single source of truth) instead of reading process.env directly
+const config = require('../config/config');
+
+// ⭐️ SSL support for cloud databases (e.g. Aiven) — same pattern as config/db.js
+let sslOption;
+if (config.DB_SSL) {
+  if (config.DB_SSL_CA) {
+    const ca = config.DB_SSL_CA.includes('BEGIN CERTIFICATE')
+      ? config.DB_SSL_CA
+      : Buffer.from(config.DB_SSL_CA, 'base64').toString('utf8');
+    sslOption = { ca, rejectUnauthorized: true };
+  } else {
+    sslOption = { rejectUnauthorized: false };
+  }
+}
 
 async function provisionTenant(shopName, adminUsername, adminPassword) {
   // Generate DB name from shop name (safe for MySQL)
@@ -28,10 +39,11 @@ async function provisionTenant(shopName, adminUsername, adminPassword) {
   
   // Connect to MySQL (no database selected)
   const conn = await mysql.createConnection({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    multipleStatements: true
+    host: config.DB_HOST,
+    user: config.DB_USER,
+    password: config.DB_PASSWORD,
+    multipleStatements: true,
+    ...(sslOption ? { ssl: sslOption } : {})
   });
   
   try {
@@ -44,7 +56,7 @@ async function provisionTenant(shopName, adminUsername, adminPassword) {
     
     // 3. Read and execute schema
     console.log(`2️⃣ สร้าง tables...`);
-    const schemaPath = path.join(__dirname, '../schema.sql');
+    const schemaPath = path.join(__dirname, '../../schema.sql');
     if (fs.existsSync(schemaPath)) {
       const schema = fs.readFileSync(schemaPath, 'utf8');
       // Split by semicolons and execute each statement
@@ -67,7 +79,7 @@ async function provisionTenant(shopName, adminUsername, adminPassword) {
     console.log(`3️⃣ สร้าง admin user...`);
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
     await conn.query(
-      'INSERT INTO users (student_id, password, full_name, role) VALUES (?, ?, ?, ?)',
+      'INSERT INTO users (student_id, password, full_name, role, is_active) VALUES (?, ?, ?, ?, 1)',
       [adminUsername, hashedPassword, `Admin ${shopName}`, 'ADMIN']
     );
     

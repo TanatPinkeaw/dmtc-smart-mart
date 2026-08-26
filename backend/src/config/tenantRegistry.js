@@ -2,15 +2,31 @@
 // เชื่อมต่อ database หลัก (master) เพื่อดึงรายชื่อ tenants + database names
 
 const mysql = require('mysql2/promise');
+// ⭐️ Use config module (single source of truth) instead of reading process.env directly
+const config = require('./config');
+
+// ⭐️ SSL support for cloud databases (e.g. Aiven) — same pattern as config/db.js
+let sslOption;
+if (config.DB_SSL) {
+  if (config.DB_SSL_CA) {
+    const ca = config.DB_SSL_CA.includes('BEGIN CERTIFICATE')
+      ? config.DB_SSL_CA
+      : Buffer.from(config.DB_SSL_CA, 'base64').toString('utf8');
+    sslOption = { ca, rejectUnauthorized: true };
+  } else {
+    sslOption = { rejectUnauthorized: false };
+  }
+}
 
 // Master database config (เก็บข้อมูล tenants ทั้งหมด)
 const MASTER_DB_CONFIG = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  host: config.DB_HOST || 'localhost',
+  user: config.DB_USER || 'root',
+  password: config.DB_PASSWORD || '',
   database: process.env.MASTER_DB || 'pos_master',
   waitForConnections: true,
-  connectionLimit: 5
+  connectionLimit: 5,
+  ...(sslOption ? { ssl: sslOption } : {})
 };
 
 let masterPool = null;
@@ -138,16 +154,18 @@ async function updateLastLogin(dbName) {
   await pool.query('UPDATE tenants SET last_login = NOW() WHERE db_name = ?', [dbName]);
 }
 
-// Get database connection for a specific tenant
+// ⭐️ Get connection pool for a specific tenant (reuses existing pool via tenantDB.getOrCreatePool)
+// NOTE: Direct callers should prefer tenantDB.getOrCreatePool() which maintains a pool cache.
+// This function creates a NEW pool each time — use only for one-off admin operations.
 async function getTenantConnection(dbName) {
-  const mysql = require('mysql2/promise');
-  return mysql.createConnection({
+  return mysql.createPool({
     host: MASTER_DB_CONFIG.host,
     user: MASTER_DB_CONFIG.user,
     password: MASTER_DB_CONFIG.password,
     database: dbName,
     waitForConnections: true,
-    connectionLimit: 10
+    connectionLimit: 10,
+    ...(sslOption ? { ssl: sslOption } : {})
   });
 }
 

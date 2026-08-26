@@ -2,6 +2,20 @@
 // อ่าน db_name จาก JWT → เชื่อมต่อ database ของ tenant นั้น → ใส่ req.db
 
 const { getTenantByDbName, getTenantConnection } = require('../config/tenantRegistry');
+const config = require('../config/config');
+
+// ⭐️ SSL support for cloud databases (e.g. Aiven) — same pattern as config/db.js
+let sslOption;
+if (config.DB_SSL) {
+  if (config.DB_SSL_CA) {
+    const ca = config.DB_SSL_CA.includes('BEGIN CERTIFICATE')
+      ? config.DB_SSL_CA
+      : Buffer.from(config.DB_SSL_CA, 'base64').toString('utf8');
+    sslOption = { ca, rejectUnauthorized: true };
+  } else {
+    sslOption = { rejectUnauthorized: false };
+  }
+}
 
 // Pool cache — เก็บ connection pool แยกตาม dbName เพื่อไม่ต้องสร้างใหม่ทุก request
 const poolCache = new Map();
@@ -12,12 +26,13 @@ async function getOrCreatePool(dbName) {
   }
   
   const pool = require('mysql2/promise').createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
+    host: config.DB_HOST || 'localhost',
+    user: config.DB_USER || 'root',
+    password: config.DB_PASSWORD || '',
     database: dbName,
     waitForConnections: true,
-    connectionLimit: 10
+    connectionLimit: 10,
+    ...(sslOption ? { ssl: sslOption } : {})
   });
   
   poolCache.set(dbName, pool);

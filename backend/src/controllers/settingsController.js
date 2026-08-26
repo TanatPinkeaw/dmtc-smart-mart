@@ -7,13 +7,13 @@
 //   DECIMAL(10,4) — ค่าละเอียดเกิน 4 ตำแหน่งจะถูกปัดเงียบๆ จึงปัด+เช็คก่อนบันทึก (เคยเป็นบั๊ก)
 // ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ ไม่เปลี่ยน path/พฤติกรรม (mount /api/settings)
-const pool = require('../config/db');
+// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
 const { serverError, badRequest } = require('../utils/http');
 
 // GET /api/settings/store — ข้อมูลร้านทั้งแถว (เปิดให้ทุก role ที่ล็อกอิน ใช้โชว์หัวใบเสร็จ ฯลฯ)
 async function getStore(req, res) {
   try {
-    const [rows] = await pool.query('SELECT * FROM settings WHERE id = 1');
+    const [rows] = await req.db.query('SELECT * FROM settings WHERE id = 1');
     res.json(rows[0]);
   } catch (error) {
     console.error('[500]', error.message);
@@ -25,7 +25,7 @@ async function getStore(req, res) {
 async function updateStore(req, res) {
   const { store_name, tax_id, address, receipt_footer } = req.body;
   try {
-    await pool.query(
+    await req.db.query(
       'UPDATE settings SET store_name = ?, tax_id = ?, address = ?, receipt_footer = ? WHERE id = 1',
       [store_name, tax_id, address, receipt_footer]
     );
@@ -39,7 +39,7 @@ async function updateStore(req, res) {
 // GET /api/settings/receipt — เอาแค่ข้อความท้ายใบเสร็จ (หน้าใบเสร็จเรียกใช้)
 async function getReceipt(req, res) {
   try {
-    const [rows] = await pool.query('SELECT receipt_footer FROM settings WHERE id = 1');
+    const [rows] = await req.db.query('SELECT receipt_footer FROM settings WHERE id = 1');
     res.json({ receipt_footer: rows[0].receipt_footer });
   } catch (error) {
     console.error('[500]', error.message);
@@ -51,8 +51,8 @@ async function getReceipt(req, res) {
 // เปิดให้ทุก role ที่ล็อกอิน เพราะ CASHIER ต้องรู้อัตราตอนคิดเงิน (default 20 บาท/แต้ม, 1 บาท/แต้ม)
 async function getLoyalty(req, res) {
   try {
-    const [[s]] = await pool.query('SELECT points_earn_amount_per_point, points_redeem_value_per_point FROM settings WHERE id = 1');
-    const [groups] = await pool.query('SELECT id, name, code, default_discount_percent FROM member_groups ORDER BY id');
+    const [[s]] = await req.db.query('SELECT points_earn_amount_per_point, points_redeem_value_per_point FROM settings WHERE id = 1');
+    const [groups] = await req.db.query('SELECT id, name, code, default_discount_percent FROM member_groups ORDER BY id');
     res.json({
       points_earn_amount_per_point: Number(s?.points_earn_amount_per_point) || 20,
       points_redeem_value_per_point: Number(s?.points_redeem_value_per_point) || 1,
@@ -78,7 +78,7 @@ async function updateLoyalty(req, res) {
   const redeemRounded = Math.round(redeem * 10000) / 10000;
   if (redeemRounded <= 0) return badRequest(res, 'มูลค่าต่อแต้มละเอียดเกินไป (รองรับสูงสุด 4 ตำแหน่งทศนิยม เช่น 0.0001)');
   try {
-    await pool.query(
+    await req.db.query(
       'UPDATE settings SET points_earn_amount_per_point = ?, points_redeem_value_per_point = ? WHERE id = 1',
       [Math.round(earn), redeemRounded]
     );

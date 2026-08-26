@@ -14,7 +14,7 @@
 //
 // endpoint ทั้งคู่อยู่ใน PUBLIC_PATHS (ดู server.js) เพราะเรียกก่อน login เสมอ — LIFF ยังไม่มี JWT
 // ของระบบนี้ตอนเปิดหน้ามาครั้งแรก
-const pool = require('../config/db');
+// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
 const { getStoreName } = require('../utils/storeConfig');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -43,7 +43,7 @@ async function attachGroupInfo(row) {
   const member = { ...row };
   let group_rules = [];
   if (member.group_id) {
-    const [ruleRows] = await pool.query(
+    const [ruleRows] = await req.db.query(
       'SELECT category_id, discount_percent FROM group_discount_rules WHERE group_id = ?',
       [member.group_id]
     );
@@ -65,7 +65,7 @@ async function checkLineStatus(req, res) {
     return badRequest(res, 'line_user_id ไม่ถูกต้อง');
   }
   try {
-    const [rows] = await pool.query(`${MEMBER_WITH_GROUP_SELECT} WHERE u.line_user_id = ? LIMIT 1`, [line_user_id]);
+    const [rows] = await req.db.query(`${MEMBER_WITH_GROUP_SELECT} WHERE u.line_user_id = ? LIMIT 1`, [line_user_id]);
     if (rows.length === 0) {
       return res.json({ registered: false });
     }
@@ -88,7 +88,7 @@ async function lookupMember(req, res) {
     return badRequest(res, 'กรุณาระบุรหัสนักศึกษา เบอร์โทร หรือ LINE user id');
   }
   try {
-    const [rows] = await pool.query(
+    const [rows] = await req.db.query(
       `${MEMBER_WITH_GROUP_SELECT} WHERE u.student_id = ? OR u.phone_number = ? OR u.line_user_id = ? LIMIT 1`,
       [identifier, identifier, identifier]
     );
@@ -106,7 +106,7 @@ async function lookupMember(req, res) {
 async function registerViaLine(req, res) {
   const { student_id, full_name, phone_number, line_user_id } = req.body;
 
-  const conn = await pool.getConnection();
+  const conn = await req.db.getConnection();
   try {
     await conn.beginTransaction();
 

@@ -20,7 +20,7 @@
 // หมายเหตุ: ระบบลงเวลาทำงาน (clock-in/out) ผ่าน LINE ถูกถอดออกแล้ว — จัดการผ่านเว็บแพลตฟอร์มแทน
 // ⭐️ โทนคำตอบทั้งหมด: สุภาพแต่เป็นกันเอง (ลงท้ายด้วย "ครับ/น้า/น้าค้าบ" ผสมกัน) ตามที่ผู้ใช้ระบุไว้
 const crypto = require('crypto');
-const pool = require('../config/db');
+// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
 const config = require('../config/config');
 const { replyLineMessage } = require('../services/lineService');
 
@@ -65,7 +65,7 @@ function verifySignature(rawBody, signature) {
 
 async function findUserByLine(lineUserId) {
   if (!lineUserId) return null;
-  const [rows] = await pool.query(
+  const [rows] = await req.db.query(
     'SELECT id, student_id, full_name, role, points, line_user_id FROM users WHERE line_user_id = ? LIMIT 1',
     [lineUserId]
   );
@@ -96,7 +96,7 @@ function handlePoints(user) {
 async function handlePreorderStatus(user) {
   if (!user) return notRegisteredReply();
   const placeholders = ORDER_TERMINAL_STATUSES.map(() => '?').join(',');
-  const [rows] = await pool.query(
+  const [rows] = await req.db.query(
     `SELECT id, total_amount, status, created_at FROM orders
      WHERE user_id = ? AND status NOT IN (${placeholders})
      ORDER BY id DESC`,
@@ -122,7 +122,7 @@ function handleOrderHistoryLink(user) {
 
 // ⭐️ Feature 3 — โปรโมชั่น: อัปเดตคำตอบตามสเปกใหม่ (สุภาพแต่เป็นกันเอง) ทั้ง 2 กรณี
 async function handlePromotions() {
-  const [rows] = await pool.query(
+  const [rows] = await req.db.query(
     `SELECT name, discount_type, discount_value FROM promotions
      WHERE is_active = 1
        AND (start_date IS NULL OR start_date <= CURDATE())

@@ -6,15 +6,15 @@
 // จุดสำคัญ: ลบกลุ่มปลอดภัย — users.group_id เป็น ON DELETE SET NULL, rules เป็น ON DELETE CASCADE
 // ═══════════════════════════════════════════════════════════════════════════════════
 // ⭐️ Phase B (refactor) — ย้ายออกจาก server.js ตรงๆ (mount /api/member-groups) พฤติกรรม/path เดิม
-const pool = require('../config/db');
+// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
 const { buildGroupUpdateSql } = require('../utils/memberGroupUpdate');
 const { serverError, badRequest } = require('../utils/http');
 
 // GET /api/member-groups — กลุ่มทั้งหมดพร้อม rules (nest rules เข้าใต้แต่ละกลุ่ม)
 async function list(req, res) {
   try {
-    const [groups] = await pool.query('SELECT * FROM member_groups ORDER BY id');
-    const [rules] = await pool.query(
+    const [groups] = await req.db.query('SELECT * FROM member_groups ORDER BY id');
+    const [rules] = await req.db.query(
       `SELECT r.id, r.group_id, r.category_id, r.discount_percent, c.name AS category_name
        FROM group_discount_rules r LEFT JOIN categories c ON r.category_id = c.id ORDER BY r.group_id, c.name`
     );
@@ -32,7 +32,7 @@ async function create(req, res) {
   const { name, code, default_discount_percent, description } = req.body;
   if (!name || !code) return badRequest(res, 'ต้องระบุชื่อและรหัสกลุ่ม');
   try {
-    const [result] = await pool.query(
+    const [result] = await req.db.query(
       'INSERT INTO member_groups (name, code, default_discount_percent, description) VALUES (?, ?, ?, ?)',
       [name, String(code).toUpperCase().trim(), Number(default_discount_percent) || 0, description || null]
     );
@@ -52,7 +52,7 @@ async function update(req, res) {
   try {
     const upd = buildGroupUpdateSql(req.body, req.params.id);
     if (!upd) return badRequest(res, 'ไม่มีข้อมูลที่ต้องการอัปเดต');
-    await pool.query(upd.sql, upd.values);
+    await req.db.query(upd.sql, upd.values);
     res.json({ message: 'อัปเดตกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
@@ -63,7 +63,7 @@ async function update(req, res) {
 // DELETE /api/member-groups/:id — ลบกลุ่ม (users.group_id SET NULL, rules CASCADE)
 async function remove(req, res) {
   try {
-    await pool.query('DELETE FROM member_groups WHERE id = ?', [req.params.id]);
+    await req.db.query('DELETE FROM member_groups WHERE id = ?', [req.params.id]);
     res.json({ message: 'ลบกลุ่มสมาชิกสำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);
@@ -76,7 +76,7 @@ async function addRule(req, res) {
   const { category_id, discount_percent } = req.body;
   if (!category_id) return badRequest(res, 'ต้องเลือกหมวดหมู่');
   try {
-    await pool.query(
+    await req.db.query(
       `INSERT INTO group_discount_rules (group_id, category_id, discount_percent) VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE discount_percent = VALUES(discount_percent)`,
       [req.params.id, category_id, Number(discount_percent) || 0]
@@ -91,7 +91,7 @@ async function addRule(req, res) {
 // DELETE /api/member-groups/:id/rules/:ruleId — ลบ rule รายหมวดหมู่
 async function removeRule(req, res) {
   try {
-    await pool.query('DELETE FROM group_discount_rules WHERE id = ? AND group_id = ?', [req.params.ruleId, req.params.id]);
+    await req.db.query('DELETE FROM group_discount_rules WHERE id = ? AND group_id = ?', [req.params.ruleId, req.params.id]);
     res.json({ message: 'ลบส่วนลดรายหมวดหมู่สำเร็จ' });
   } catch (error) {
     console.error('[500]', error.message);

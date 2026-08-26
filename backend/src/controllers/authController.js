@@ -17,7 +17,7 @@
 //     userId จากผลที่ยืนยันแล้วเท่านั้น (ปลอดภัย)
 //   • ถ้าไม่ได้ตั้ง (เช่น dev/ยังไม่ config) → fallback ไปเชื่อ line_user_id ดิบตามสเปก (เปิดใช้เฉพาะ
 //     ตอนที่ยอมรับความเสี่ยงนี้) — แนะนำอย่างยิ่งให้ตั้ง LINE_LIFF_CHANNEL_ID บน production
-const pool = require('../config/db');
+// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
 const crypto = require('crypto');
 const config = require('../config/config');
 const { serverError, badRequest, unauthorized } = require('../utils/http');
@@ -77,7 +77,7 @@ async function lineLogin(req, res) {
   }
 
   try {
-    const [users] = await pool.query(
+    const [users] = await req.db.query(
       'SELECT * FROM users WHERE line_user_id = ? AND is_active = TRUE LIMIT 1',
       [lineUserId]
     );
@@ -93,11 +93,11 @@ async function lineLogin(req, res) {
     // มีค่า true; สมาชิก LINE ปกติเป็น MEMBER ได้ false อยู่แล้ว)
     let hasActiveWorkSession = false;
     if (user.role === 'ADMIN' || user.role === 'CASHIER') {
-      const [workRows] = await pool.query(
+      const [workRows] = await req.db.query(
         `SELECT
            EXISTS(SELECT 1 FROM shifts WHERE cashier_id = ? AND status = 'OPEN') AS has_open_shift,
            EXISTS(SELECT 1 FROM attendance WHERE user_id = ?
-                    AND (DATE(check_in) = CURDATE() OR DATE(CONVERT_TZ(check_in, '+00:00', '+07:00')) = CURDATE())
+                    AND DATE(check_in) = CURDATE()
                     AND check_out IS NULL) AS has_open_attendance`,
         [user.id, user.id]
       );
