@@ -32,11 +32,17 @@ async function getOrCreatePool(dbName) {
     database: dbName,
     waitForConnections: true,
     connectionLimit: 10,
+    connectTimeout: 8000,  // ⭐️ fail fast if DB unreachable (default 10s)
     ...(sslOption ? { ssl: sslOption } : {})
   });
   
   poolCache.set(dbName, pool);
   return pool;
+}
+
+// ⭐️ ลบ broken pool จาก cache เพื่อให้สร้างใหม่ได้ในภายหลัง
+function removePoolFromCache(dbName) {
+  poolCache.delete(dbName);
 }
 
 /**
@@ -69,4 +75,4 @@ async function getTenantInfo(dbName) {
   return getTenantByDbName(dbName);
 }
 
-module.exports = { tenantDB, getTenantInfo, getOrCreatePool };
+module.exports = { tenantDB, getTenantInfo, getOrCreatePool, removePoolFromCache };

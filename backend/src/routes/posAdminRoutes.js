@@ -11,8 +11,17 @@ router.post('/login', async (req, res) => {
   const { username, password, db_name } = req.body;
   if (!username || !password || !db_name) return badRequest(res, 'ต้องระบุ username, password, และ db_name');
   try {
-    const { getOrCreatePool } = require('../middleware/tenantDB');
-    const tenantPool = await getOrCreatePool(db_name);
+    const { getOrCreatePool, removePoolFromCache } = require('../middleware/tenantDB');
+    let tenantPool;
+    try {
+      tenantPool = await getOrCreatePool(db_name);
+      // ⭐️ Validate pool actually connects (catch bad db_name early)
+      await tenantPool.query('SELECT 1');
+    } catch (poolErr) {
+      // ⭐️ Remove broken pool from cache so next attempt creates fresh pool
+      removePoolFromCache(db_name);
+      throw poolErr; // re-throw to outer catch
+    }
     const [users] = await tenantPool.query('SELECT * FROM users WHERE student_id = ? AND is_active = TRUE LIMIT 1', [username]);
     if (users.length === 0) return unauthorized(res, 'รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง');
     const user = users[0];
@@ -22,8 +31,17 @@ router.post('/login', async (req, res) => {
     res.json({ success: true, user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role }, store_name: settings[0]?.store_name || 'POS Store', db_name });
   } catch (err) {
     console.error('[POS_ADMIN_LOGIN]', err.code || 'NO_CODE', err.message);
-    if (err.code === 'ER_BAD_DB_ERROR' || err.code === 'ECONNREFUSED' || String(err.message).includes('getaddrinfo')) {
-      return badRequest(res, 'ไม่พบฐานข้อมูลร้านนี้ (db_name ไม่ถูกต้อง)');
+    // ⭐️ ครอบคลุมทุก connection/DB error ที่เป็นไปได้
+    const code = err.code || '';
+    const msg = String(err.message || '');
+    const isConnectionError = ['ECONNREFUSED','ECONNRESET','ETIMEDOUT','EPIPE','PROTOCOL_CONNECTION_LOST'].includes(code) || msg.includes('getaddrinfo') || msg.includes('connect') || msg.includes('timeout');
+    const isDBError = ['ER_BAD_DB_ERROR','ER_ACCESS_DENIED_ERROR','ER_DBACCESS_DENIED_ERROR'].includes(code);
+    const isTableError = ['ER_NO_SUCH_TABLE','ER_NO_SUCH_INDEX'].includes(code);
+    if (isConnectionError || isDBError) {
+      return badRequest(res, 'ไม่พบฐานข้อมูลร้านนี้ (db_name: ' + db_name + ') — กรุณาตรวจสอบว่าร้านนี้ถูกสร้างแล้ว');
+    }
+    if (isTableError) {
+      return badRequest(res, 'ฐานข้อมูลร้านนี้ยังไม่สมบูรณ์ — ตารางบางตารางหายไป กรุณาติดต่อผู้ดูแลระบบ');
     }
     serverError(res);
   }
