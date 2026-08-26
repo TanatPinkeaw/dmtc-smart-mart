@@ -20,7 +20,13 @@ router.post('/login', async (req, res) => {
     if (user.role !== 'ADMIN' && user.role !== 'MANAGER') return unauthorized(res, 'ไม่มีสิทธิ์เข้าถึงหน้าจัดการร้าน');
     const [settings] = await tenantPool.query('SELECT store_name FROM settings LIMIT 1');
     res.json({ success: true, user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role }, store_name: settings[0]?.store_name || 'POS Store', db_name });
-  } catch (err) { console.error('[POS_ADMIN_LOGIN]', err.message); serverError(res); }
+  } catch (err) {
+    console.error('[POS_ADMIN_LOGIN]', err.code || 'NO_CODE', err.message);
+    if (err.code === 'ER_BAD_DB_ERROR' || err.code === 'ECONNREFUSED' || String(err.message).includes('getaddrinfo')) {
+      return badRequest(res, 'ไม่พบฐานข้อมูลร้านนี้ (db_name ไม่ถูกต้อง)');
+    }
+    serverError(res);
+  }
 });
 
 router.get('/stats', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
