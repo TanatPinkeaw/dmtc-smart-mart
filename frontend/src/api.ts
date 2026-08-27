@@ -223,6 +223,21 @@ api.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${bearerToken}`;
     }
 
+    // ⭐️ POS Admin Bearer token — reads from localStorage (set by PosAdminLogin.tsx)
+    // Only applies to /pos-admin/ routes; main app uses cookie auth
+    if (path.startsWith('/pos-admin/') && !path.startsWith('/pos-admin/login')) {
+      try {
+        const posToken = localStorage.getItem('pos_admin_token');
+        const posCsrf = localStorage.getItem('pos_admin_csrf');
+        if (posToken) {
+          config.headers['Authorization'] = `Bearer ${posToken}`;
+        }
+        if (posCsrf && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase() || '')) {
+          config.headers['X-CSRF-Token'] = posCsrf;
+        }
+      } catch { /* localStorage blocked */ }
+    }
+
     // ⭐️ Security remediation — แนบ CSRF token เฉพาะ request ที่เปลี่ยนแปลงข้อมูล (backend ก็เช็คแค่เท่านี้)
     const method = config.method?.toUpperCase() || '';
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {

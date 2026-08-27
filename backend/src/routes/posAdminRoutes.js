@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const { requireRole } = require('../middleware/guards');
 const { serverError, badRequest, unauthorized } = require('../utils/http');
+const { generateAccessToken } = require('../utils/authTokens');
+const crypto = require('crypto');
 
 router.post('/login', async (req, res) => {
   const { username, password, db_name } = req.body;
@@ -28,7 +30,16 @@ router.post('/login', async (req, res) => {
     if (!(await bcrypt.compare(password, user.password))) return unauthorized(res, 'รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง');
     if (user.role !== 'ADMIN' && user.role !== 'MANAGER') return unauthorized(res, 'ไม่มีสิทธิ์เข้าถึงหน้าจัดการร้าน');
     const [settings] = await tenantPool.query('SELECT store_name FROM settings LIMIT 1');
-    res.json({ success: true, user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role }, store_name: settings[0]?.store_name || 'POS Store', db_name });
+          // ⭐️ Generate JWT with csrf claim — frontend will send as Bearer token
+      const csrfToken = crypto.randomUUID();
+      const token = generateAccessToken({
+        id: user.id,
+        role: user.role,
+        full_name: user.full_name,
+        must_change_password: !!user.must_change_password,
+        db_name,
+      }, csrfToken);
+      res.json({ success: true, token, csrfToken, user: { id: user.id, student_id: user.student_id, full_name: user.full_name, role: user.role }, store_name: settings[0]?.store_name || 'POS Store', db_name });
   } catch (err) {
     console.error('[POS_ADMIN_LOGIN]', err.code || 'NO_CODE', err.message);
     // ⭐️ ครอบคลุมทุก connection/DB error ที่เป็นไปได้

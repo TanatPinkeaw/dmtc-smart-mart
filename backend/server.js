@@ -659,7 +659,7 @@ function authenticateToken(req, res, next) {
 // PUBLIC_PATHS ยกเว้นได้ทั้งหมดรวม /api/auth/refresh — endpoint นั้น gate ด้วย refresh_token cookie
 // อยู่แล้ว (bearer ของ cookie เท่านั้นที่เรียกได้) และ CSRF ยิงมาที่มันได้แค่ rotate token ของ
 // เจ้าของ session เอง ไม่มีทางอ่าน response หรือเข้าถึงข้อมูลอะไรเพิ่ม จึงไม่คุ้มความซับซ้อนที่ต้องเพิ่ม
-const CSRF_EXEMPT_PATHS = PUBLIC_PATHS;
+const CSRF_EXEMPT_PATHS = [...PUBLIC_PATHS, '/api/pos-admin/']; // ⭐️ POS Admin uses Bearer JWT + inline CSRF from token
 function requireCsrf(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (CSRF_EXEMPT_PATHS.some(p => req.path.startsWith(p))) return next();

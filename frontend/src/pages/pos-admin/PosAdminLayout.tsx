@@ -21,7 +21,7 @@ export default function PosAdminLayout() {
   }, []);
 
   const logout = () => {
-    ['pos_admin_user','pos_admin_db','pos_admin_store'].forEach(k => localStorage.removeItem(k));
+    ['pos_admin_user','pos_admin_db','pos_admin_store','pos_admin_token','pos_admin_csrf'].forEach(k => localStorage.removeItem(k));
     navigate('/pos-admin/login');
   };
 

@@ -34,6 +34,8 @@ export default function PosAdminLogin() {
       localStorage.setItem('pos_admin_user', JSON.stringify(data.user));
       localStorage.setItem('pos_admin_db', data.db_name);
       localStorage.setItem('pos_admin_store', data.store_name);
+      localStorage.setItem('pos_admin_token', data.token);
+      localStorage.setItem('pos_admin_csrf', data.csrfToken);
       navigate('/pos-admin/dashboard');
     } catch {
       setError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');

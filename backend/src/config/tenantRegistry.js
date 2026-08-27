@@ -24,6 +24,9 @@ const MASTER_DB_CONFIG = {
   user: config.DB_USER || 'root',
   password: config.DB_PASSWORD || '',
   database: process.env.MASTER_DB || 'pos_master',
+  port: config.DB_PORT || 3306,
+  charset: 'utf8mb4',
+  timezone: '+07:00',
   waitForConnections: true,
   connectionLimit: 5,
   ...(sslOption ? { ssl: sslOption } : {})
@@ -163,6 +166,9 @@ async function getTenantConnection(dbName) {
     user: MASTER_DB_CONFIG.user,
     password: MASTER_DB_CONFIG.password,
     database: dbName,
+    port: config.DB_PORT || 3306,
+    charset: 'utf8mb4',
+    timezone: '+07:00',
     waitForConnections: true,
     connectionLimit: 10,
     ...(sslOption ? { ssl: sslOption } : {})
