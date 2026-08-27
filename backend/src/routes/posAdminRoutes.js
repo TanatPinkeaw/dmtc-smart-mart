@@ -124,4 +124,80 @@ router.get('/reports/top-selling', requireRole('ADMIN', 'MANAGER'), async (req, 
   try { const [r] = await req.db.query("SELECT p.name,SUM(si.quantity) as qty,SUM(si.subtotal) as revenue FROM sale_items si JOIN sales s ON si.sale_id=s.id JOIN products p ON si.product_id=p.id WHERE s.status='COMPLETED' GROUP BY p.name ORDER BY qty DESC LIMIT 10"); res.json(r); } catch (e) { serverError(res); }
 });
 
+// ⭐️ Users CRUD — Create
+router.post('/users', requireRole('ADMIN'), async (req, res) => {
+  const { student_id, full_name, password, role, phone_number } = req.body;
+  if (!student_id || !full_name || !password) return badRequest(res, 'ต้องระบุ student_id, full_name, และ password');
+  const validRoles = ['ADMIN', 'MANAGER', 'CASHIER', 'MEMBER'];
+  const userRole = validRoles.includes(role) ? role : 'MEMBER';
+  try {
+    const hashedPw = await bcrypt.hash(password, 10);
+    const [r] = await req.db.query(
+      'INSERT INTO users (student_id, full_name, password, role, phone_number) VALUES (?,?,?,?,?)',
+      [student_id, full_name, hashedPw, userRole, phone_number || null]
+    );
+    res.status(201).json({ id: r.insertId, message: 'เพิ่มผู้ใช้สำเร็จ' });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return badRequest(res, 'รหัสนักศึกษานี้มีอยู่แล้ว');
+    serverError(res);
+  }
+});
+
+// ⭐️ Users CRUD — Update
+router.put('/users/:id', requireRole('ADMIN'), async (req, res) => {
+  const { full_name, role, phone_number, password } = req.body;
+  try {
+    if (password) {
+      const hashedPw = await bcrypt.hash(password, 10);
+      await req.db.query('UPDATE users SET full_name=?,role=?,phone_number=?,password=? WHERE id=?',
+        [full_name, role, phone_number || null, hashedPw, req.params.id]);
+    } else {
+      await req.db.query('UPDATE users SET full_name=?,role=?,phone_number=? WHERE id=?',
+        [full_name, role, phone_number || null, req.params.id]);
+    }
+    res.json({ message: 'แก้ไขสำเร็จ' });
+  } catch (e) { serverError(res); }
+});
+
+// ⭐️ Users CRUD — Toggle active
+router.put('/users/:id/toggle', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const [[user]] = await req.db.query('SELECT is_active FROM users WHERE id=?', [req.params.id]);
+    if (!user) return badRequest(res, 'ไม่พบผู้ใช้');
+    const newStatus = user.is_active ? 0 : 1;
+    await req.db.query('UPDATE users SET is_active=? WHERE id=?', [newStatus, req.params.id]);
+    res.json({ message: newStatus ? 'เปิดใช้งานแล้ว' : 'ปิดใช้งานแล้ว', is_active: newStatus });
+  } catch (e) { serverError(res); }
+});
+
+// ⭐️ Categories CRUD — Update
+router.put('/categories/:id', requireRole('ADMIN'), async (req, res) => {
+  const { name } = req.body;
+  if (!name) return badRequest(res, 'ต้องระบุชื่อ');
+  try {
+    await req.db.query('UPDATE categories SET name=? WHERE id=?', [name, req.params.id]);
+    res.json({ message: 'แก้ไขสำเร็จ' });
+  } catch (e) { serverError(res); }
+});
+
+// ⭐️ Dashboard — Weekly sales (last 7 days)
+router.get('/stats/weekly', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [r] = await req.db.query(
+      "SELECT DATE(created_at) as date, COUNT(*) as bills, COALESCE(SUM(total_amount),0) as total FROM sales WHERE status='COMPLETED' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY DATE(created_at) ORDER BY date ASC"
+    );
+    res.json(r);
+  } catch (e) { serverError(res); }
+});
+
+// ⭐️ Dashboard — Low stock products
+router.get('/stats/low-stock', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
+  try {
+    const [r] = await req.db.query(
+      'SELECT id, name, stock, min_stock FROM products WHERE is_active=1 AND stock <= COALESCE(min_stock, 5) ORDER BY stock ASC LIMIT 10'
+    );
+    res.json(r);
+  } catch (e) { serverError(res); }
+});
+
 module.exports = router;

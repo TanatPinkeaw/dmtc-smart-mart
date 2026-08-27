@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const NAV = [
   { path: '/pos-admin/dashboard', label: 'แดชบอร์ด', icon: '📊' },
@@ -13,17 +13,25 @@ const NAV = [
 export default function PosAdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [ready, setReady] = useState(false);
   const storeName = localStorage.getItem('pos_admin_store') || 'POS Admin';
   const user = JSON.parse(localStorage.getItem('pos_admin_user') || '{}');
 
   useEffect(() => {
-    if (!localStorage.getItem('pos_admin_user')) navigate('/pos-admin/login');
-  }, []);
+    if (!localStorage.getItem('pos_admin_token')) {
+      navigate('/pos-admin/login', { replace: true });
+      return;
+    }
+    setReady(true);
+  }, [navigate]);
 
   const logout = () => {
-    ['pos_admin_user','pos_admin_db','pos_admin_store','pos_admin_token','pos_admin_csrf'].forEach(k => localStorage.removeItem(k));
+    ['pos_admin_user','pos_admin_db','pos_admin_store','pos_admin_token','pos_admin_csrf']
+      .forEach(k => localStorage.removeItem(k));
     navigate('/pos-admin/login');
   };
+
+  if (!ready) return null;
 
   return (
     <div className="min-h-screen flex bg-gray-100">
