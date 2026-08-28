@@ -4912,7 +4912,7 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
   const { getAllTenants, addTenant, initMasterDB } = require('./src/config/tenantRegistry');
   const { provisionTenant } = require('./src/scripts/provisionTenant');
-  const { pool: existingPool } = require('./src/config/db');
+  const existingPool = require('./src/config/db');
   const { shopName, adminUsername, adminPassword } = req.body;
 
   if (!shopName || !adminUsername || !adminPassword) {
