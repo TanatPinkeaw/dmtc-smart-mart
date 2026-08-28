@@ -118,6 +118,8 @@ async function getAllTenants() {
       // bootstrap ไม่สำเร็จ (เช่น user ไม่มีสิทธิ์ CREATE DATABASE) — log ไว้แล้วให้ query ด้านล่าง throw ซ้ำเอง
       console.error(`[TENANT_REGISTRY] bootstrap also failed (${bootErr.code || 'NO_CODE'}: ${bootErr.message})`);
     }
+    // Reset pool so getMasterPool() creates a fresh one pointing to the now-existing DB
+    if (masterPool) { try { await masterPool.end(); } catch (_) {} masterPool = null; }
     return await _queryTenants();
   }
 }
