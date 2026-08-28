@@ -49,6 +49,7 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
       user: config.DB_USER,
       password: config.DB_PASSWORD,
       multipleStatements: true,
+      connectTimeout: 10000,
       ...(sslOption ? { ssl: sslOption } : {})
     });
   }
@@ -72,8 +73,13 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
     console.log('[PROVISION] Parsed', statements.length, 'statements from schema.sql');
       var successCount = 0, failCount = 0;
       for (var si = 0; si < statements.length; si++) {
-        var stmt = statements[si].trim();
-        if (!stmt || stmt.startsWith('--')) continue;
+        // Strip single-line comments (-- ...) from each line before executing
+        var stmtLines = statements[si].split(String.fromCharCode(10)).map(function(line) {
+          var ci = line.indexOf('--');
+          return ci >= 0 ? line.substring(0, ci) : line;
+        });
+        var stmt = stmtLines.join(String.fromCharCode(10)).trim();
+        if (!stmt) continue;
         try {
           await conn.query(stmt);
           successCount++;
