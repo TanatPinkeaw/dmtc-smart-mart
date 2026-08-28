@@ -552,7 +552,8 @@ const PUBLIC_PATHS = [
   '/api/auth/line-login',   // ⭐️ LINE LIFF auto-login — เรียกก่อน login ยังไม่มี JWT (authRoutes.js)
   '/api/line/webhook',
   '/api/pos-admin/login',
-  '/api/provision-first-tenant',  // Bootstrap: SETUP_KEY protected, not JWT  // ⭐️ POS Admin login — targets specific tenant DB      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
+  '/api/provision-first-tenant',
+  // ⭐️ POS Admin login — targets specific tenant DB      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
@@ -4937,7 +4938,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     });
   } catch (error) {
     console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
-    serverError(res);
+    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE' });
   }
 });
 
