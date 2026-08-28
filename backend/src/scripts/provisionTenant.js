@@ -70,22 +70,26 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
       // Split by semicolons and execute each statement
       const statements = schema.split(';').filter(s => s.trim());
     console.log('[PROVISION] Parsed', statements.length, 'statements from schema.sql');
-      for (const stmt of statements) {
-        if (stmt.trim() && !stmt.trim().startsWith('--')) {
-          try {
-            await conn.query(stmt);
-          } catch (err) {
-            // Skip duplicate table errors
-            if (err.code !== 'ER_TABLE_EXISTS_OK') {
-              console.warn(`   ⚠️ Statement skipped: ${err.message}`);
-            }
+      var successCount = 0, failCount = 0;
+      for (var si = 0; si < statements.length; si++) {
+        var stmt = statements[si].trim();
+        if (!stmt || stmt.startsWith('--')) continue;
+        try {
+          await conn.query(stmt);
+          successCount++;
+        } catch (err) {
+          failCount++;
+          if (err.code !== 'ER_TABLE_EXISTS_OK') {
+            console.warn(`   ⚠️ Statement #${si+1} failed (${err.code}): ${err.message}`);
+            console.warn(`   SQL: ${stmt.substring(0, 120)}...`);
           }
         }
       }
+      console.log(`[PROVISION] Schema: ${successCount} OK, ${failCount} failed out of ${statements.length} statements`);
     }
     
     // 4. Create admin user
-    console.log(`3️⃣ สร้าง admin user...`);
+    console.log(`3️⃣ สร้าง admin user... (checking users table exists)`);
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
     await conn.query(
       'INSERT INTO users (student_id, password, full_name, role, is_active) VALUES (?, ?, ?, ?, 1)',
