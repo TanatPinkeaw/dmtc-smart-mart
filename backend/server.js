@@ -4934,7 +4934,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     }
 
     // Step 3: Provision tenant (create DB + tables + admin user)
-    steps.push('provisionTenant'); var dbPool = require('./src/config/db'); var warnings = []; var origWarn = console.warn; console.warn = function() { warnings.push(Array.from(arguments).join(" ")); origWarn.apply(console, arguments); }; var result = await provisionTenant(shopName, adminUsername, adminPassword, dbPool); console.warn = origWarn;
+    steps.push('provisionTenant'); var dbPool = require('./src/config/db'); var warnings = []; var origWarn = console.warn; var origLog = console.log; console.warn = function() { warnings.push("[WARN] " + Array.from(arguments).join(" ")); origWarn.apply(console, arguments); }; console.log = function() { var msg = Array.from(arguments).join(" "); if (msg.indexOf("[PROVISION]") !== -1) warnings.push("[LOG] " + msg); origLog.apply(console, arguments); }; var result = await provisionTenant(shopName, adminUsername, adminPassword, dbPool); console.warn = origWarn; console.log = origLog;
 
     // Step 4: Register in master DB
     steps.push('addTenant'); var tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');

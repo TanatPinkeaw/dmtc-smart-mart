@@ -93,6 +93,10 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
         }
       }
       console.log("[PROVISION] Schema: " + successCount + " OK, " + failCount + " failed");
+      var [tableRows] = await conn.query("SHOW TABLES");
+      console.log("[PROVISION] Tables created:", tableRows.map(function(r) { return Object.values(r)[0]; }).join(", "));
+      var [dbRows] = await conn.query("SELECT DATABASE() as db");
+      console.log("[PROVISION] Current database:", dbRows[0].db);
     }
     
     // 4. Create admin user
