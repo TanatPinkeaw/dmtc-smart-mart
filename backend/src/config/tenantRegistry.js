@@ -43,41 +43,33 @@ function getMasterPool() {
 
 // Initialize master database (สร้าง table tenants ถ้ายังไม่มี)
 async function initMasterDB() {
-  console.log('[initMasterDB] Starting — DB:', MASTER_DB_CONFIG.database, 'SSL:', !!sslOption);
-  const conn = await mysql.createConnection({
-    host: MASTER_DB_CONFIG.host,
-    user: MASTER_DB_CONFIG.user,
-    password: MASTER_DB_CONFIG.password,
-    multipleStatements: true,
-    ...(sslOption ? { ssl: sslOption } : {})
-  });
-  
-  try {
-    // Create master database
-    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${MASTER_DB_CONFIG.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    await conn.query(`USE \`${MASTER_DB_CONFIG.database}\``);
-    
-    // Create tenants registry table
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS tenants (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        shop_name VARCHAR(255) NOT NULL,
-        db_name VARCHAR(100) NOT NULL UNIQUE,
-        admin_username VARCHAR(50) NOT NULL,
-        plan ENUM('free','basic','pro','enterprise') DEFAULT 'free',
-        max_users INT DEFAULT 5,
-        max_products INT DEFAULT 500,
-        is_active TINYINT(1) DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_login TIMESTAMP NULL,
-        deleted_at TIMESTAMP NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-    
-    console.log('[initMasterDB] ✅ Master database initialized — DB:', MASTER_DB_CONFIG.database);
-  } finally {
-    await conn.end();
-  }
+  // Use existing pool (from config/db.js) to create master DB — avoids ETIMEDOUT on standalone connections
+  var existingPool = require("./db").pool;
+  console.log("[initMasterDB] Using existing pool to create master DB:", MASTER_DB_CONFIG.database);
+
+  // 1. Create master database via existing pool (connects to defaultdb)
+  await existingPool.query("CREATE DATABASE IF NOT EXISTS `" + MASTER_DB_CONFIG.database + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+  console.log("[initMasterDB] Database created/exists:", MASTER_DB_CONFIG.database);
+
+  // 2. Reset masterPool so it reconnects to the new database
+  if (masterPool) { try { await masterPool.end(); } catch (_) {} masterPool = null; }
+
+  // 3. Create tenants registry table via master pool
+  var freshPool = getMasterPool();
+  await freshPool.query("CREATE TABLE IF NOT EXISTS tenants (" +
+    "id INT AUTO_INCREMENT PRIMARY KEY, " +
+    "shop_name VARCHAR(255) NOT NULL, " +
+    "db_name VARCHAR(100) NOT NULL UNIQUE, " +
+    "admin_username VARCHAR(50) NOT NULL, " +
+    "plan ENUM('free','basic','pro','enterprise') DEFAULT 'free', " +
+    "max_users INT DEFAULT 5, " +
+    "max_products INT DEFAULT 500, " +
+    "is_active TINYINT(1) DEFAULT 1, " +
+    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+    "last_login TIMESTAMP NULL, " +
+    "deleted_at TIMESTAMP NULL" +
+  ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  console.log("[initMasterDB] ✅ Master database initialized — DB:", MASTER_DB_CONFIG.database);
 }
 
 // Get tenant by database name
