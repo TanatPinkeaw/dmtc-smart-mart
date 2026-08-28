@@ -43,6 +43,7 @@ function getMasterPool() {
 
 // Initialize master database (สร้าง table tenants ถ้ายังไม่มี)
 async function initMasterDB() {
+  console.log('[initMasterDB] Starting — DB:', MASTER_DB_CONFIG.database, 'SSL:', !!sslOption);
   const conn = await mysql.createConnection({
     host: MASTER_DB_CONFIG.host,
     user: MASTER_DB_CONFIG.user,
@@ -73,7 +74,7 @@ async function initMasterDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
     
-    console.log('✅ Master database initialized');
+    console.log('[initMasterDB] ✅ Master database initialized — DB:', MASTER_DB_CONFIG.database);
   } finally {
     await conn.end();
   }

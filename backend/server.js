@@ -4906,8 +4906,9 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 // =========================================
 // ⭐️ Protected by SETUP_KEY + only works when no tenants exist yet (one-time bootstrap)
 // Usage: POST /api/provision-first-tenant  with header X-Setup-Key: <key>
+// ⭐️ Explicitly init master DB first — self-heal in getAllTenants may silently fail
 app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
-  const { getAllTenants, addTenant } = require('./src/config/tenantRegistry');
+  const { getAllTenants, addTenant, initMasterDB } = require('./src/config/tenantRegistry');
   const { provisionTenant } = require('./src/scripts/provisionTenant');
   const { shopName, adminUsername, adminPassword } = req.body;
 
@@ -4916,6 +4917,11 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
   }
 
   try {
+    // Step 0: Ensure master DB + tenants table exist (may not exist on fresh Aiven)
+    console.log('[PROVISION-FIRST-TENANT] Ensuring master DB exists...');
+    await initMasterDB();
+    console.log('[PROVISION-FIRST-TENANT] Master DB ready');
+
     // Only allow when no tenants exist yet (one-time bootstrap)
     const existing = await getAllTenants();
     if (existing.length > 0) {
@@ -4938,6 +4944,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     });
   } catch (error) {
     console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
+    console.error('[PROVISION-FIRST-TENANT] Stack:', error.stack);
     res.status(500).json({ error: error.message, code: error.code || 'NO_CODE' });
   }
 });
