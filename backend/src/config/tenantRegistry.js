@@ -47,7 +47,8 @@ async function initMasterDB() {
     host: MASTER_DB_CONFIG.host,
     user: MASTER_DB_CONFIG.user,
     password: MASTER_DB_CONFIG.password,
-    multipleStatements: true
+    multipleStatements: true,
+    ...(sslOption ? { ssl: sslOption } : {})
   });
   
   try {
