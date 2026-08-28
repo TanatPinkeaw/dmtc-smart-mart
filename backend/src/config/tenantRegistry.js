@@ -34,9 +34,11 @@ const MASTER_DB_CONFIG = {
 
 let masterPool = null;
 
+// Return the existing pool from db.js (reuses warm connections to Aiven)
+// All master queries MUST use pos_master.tablename (fully-qualified) since this pool connects to defaultdb
 function getMasterPool() {
   if (!masterPool) {
-    masterPool = mysql.createPool(MASTER_DB_CONFIG);
+    masterPool = require("./db");
   }
   return masterPool;
 }
@@ -76,7 +78,7 @@ async function initMasterDB() {
 // Get tenant by database name
 async function getTenantByDbName(dbName) {
   const pool = getMasterPool();
-  const [rows] = await pool.query('SELECT * FROM tenants WHERE db_name = ?', [dbName]);
+  const [rows] = await pool.query('SELECT * FROM `pos_master`.tenants WHERE db_name = ?', [dbName]);
   return rows[0] || null;
 }
 
@@ -85,7 +87,7 @@ async function getTenantByDbName(dbName) {
 let deletedAtMigration = null;
 async function ensureDeletedAtColumn() {
   if (!deletedAtMigration) {
-    deletedAtMigration = getMasterPool().query('ALTER TABLE `tenants` ADD COLUMN deleted_at TIMESTAMP NULL')
+    deletedAtMigration = getMasterPool().query('ALTER TABLE `pos_master`.tenants ADD COLUMN deleted_at TIMESTAMP NULL')
       .then(() => console.log('✅ tenants.deleted_at ready'))
       .catch((err) => {
         if (err && err.code === 'ER_DUP_FIELDNAME') return; // มีคอลัมน์อยู่แล้ว — ปกติ
@@ -122,7 +124,7 @@ async function getAllTenants() {
 async function _queryTenants() {
   await ensureDeletedAtColumn();
   const pool = getMasterPool();
-  const [rows] = await pool.query('SELECT * FROM tenants WHERE deleted_at IS NULL ORDER BY created_at DESC');
+  const [rows] = await pool.query('SELECT * FROM `pos_master`.tenants WHERE deleted_at IS NULL ORDER BY created_at DESC');
   return rows;
 }
 
@@ -130,7 +132,7 @@ async function _queryTenants() {
 async function addTenant(shopName, dbName, adminUsername, plan = 'free') {
   const pool = getMasterPool();
   const [result] = await pool.query(
-    'INSERT INTO tenants (shop_name, db_name, admin_username, plan) VALUES (?, ?, ?, ?)',
+    'INSERT INTO `pos_master`.tenants (shop_name, db_name, admin_username, plan) VALUES (?, ?, ?, ?)',
     [shopName, dbName, adminUsername, plan]
   );
   return result.insertId;
@@ -142,7 +144,7 @@ async function softDeleteTenant(id) {
   await ensureDeletedAtColumn();
   const pool = getMasterPool();
   const [result] = await pool.query(
-    'UPDATE tenants SET deleted_at = NOW(), is_active = 0 WHERE id = ? AND deleted_at IS NULL',
+    'UPDATE `pos_master`.tenants SET deleted_at = NOW(), is_active = 0 WHERE id = ? AND deleted_at IS NULL',
     [id]
   );
   return result.affectedRows > 0;
@@ -151,7 +153,7 @@ async function softDeleteTenant(id) {
 // Update tenant last login
 async function updateLastLogin(dbName) {
   const pool = getMasterPool();
-  await pool.query('UPDATE tenants SET last_login = NOW() WHERE db_name = ?', [dbName]);
+  await pool.query('UPDATE `pos_master`.tenants SET last_login = NOW() WHERE db_name = ?', [dbName]);
 }
 
 // ⭐️ Get connection pool for a specific tenant (reuses existing pool via tenantDB.getOrCreatePool)
