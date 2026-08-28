@@ -4925,7 +4925,19 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     step.push('init_master_db');
     var masterDb = process.env.MASTER_DB || 'pos_master';
     await existingPool.query('CREATE DATABASE IF NOT EXISTS `' + masterDb + '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-    await existingPool.query('CREATE TABLE IF NOT EXISTS `' + masterDb + '`.tenants (id INT AUTO_INCREMENT PRIMARY KEY, shop_name VARCHAR(255) NOT NULL, db_name VARCHAR(100) NOT NULL UNIQUE, admin_username VARCHAR(50) NOT NULL, plan ENUM(\"free\",\"basic\",\"pro\",\"enterprise\") DEFAULT \"free\", max_users INT DEFAULT 5, max_products INT DEFAULT 500, is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_login TIMESTAMP NULL, deleted_at TIMESTAMP NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+    await existingPool.query('CREATE TABLE IF NOT EXISTS `' + masterDb + '`.tenants (' +
+      'id INT AUTO_INCREMENT PRIMARY KEY, ' +
+      'shop_name VARCHAR(255) NOT NULL, ' +
+      'db_name VARCHAR(100) NOT NULL UNIQUE, ' +
+      'admin_username VARCHAR(50) NOT NULL, ' +
+      "plan ENUM('" + "'free','basic','pro','enterprise'" + "') DEFAULT '" + "'free'" + "', " +
+      'max_users INT DEFAULT 5, ' +
+      'max_products INT DEFAULT 500, ' +
+      'is_active TINYINT(1) DEFAULT 1, ' +
+      'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ' +
+      'last_login TIMESTAMP NULL, ' +
+      'deleted_at TIMESTAMP NULL' +
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
     // Step 2: Check for existing tenants
     step.push('check_tenants');
