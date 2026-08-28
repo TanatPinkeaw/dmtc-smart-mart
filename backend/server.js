@@ -4938,7 +4938,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     });
   } catch (error) {
     console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
-    serverError(res);
+    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE' });
   }
 });
 
