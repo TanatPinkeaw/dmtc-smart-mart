@@ -73,25 +73,25 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
     console.log('[PROVISION] Parsed', statements.length, 'statements from schema.sql');
       var successCount = 0, failCount = 0;
       for (var si = 0; si < statements.length; si++) {
-        // Strip single-line comments (-- ...) from each line before executing
-        var stmtLines = statements[si].split(String.fromCharCode(10)).map(function(line) {
-          var ci = line.indexOf('--');
-          return ci >= 0 ? line.substring(0, ci) : line;
-        });
-        var stmt = stmtLines.join(String.fromCharCode(10)).trim();
+        // Strip all -- comments (line comments) and collapse whitespace
+        var stmt = statements[si].replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim();
         if (!stmt) continue;
+        // Find first SQL keyword (CREATE/ALTER/INSERT/DROP) and extract from there
+        // This skips non-SQL text like comment fragments from schema.sql
+        var kwMatch = stmt.match(/(CREATE|ALTER|INSERT|DROP|SET|UPDATE|DELETE)/i);
+        if (!kwMatch) continue;
+        stmt = stmt.substring(kwMatch.index);
         try {
           await conn.query(stmt);
           successCount++;
         } catch (err) {
           failCount++;
-          if (err.code !== 'ER_TABLE_EXISTS_OK') {
-            console.warn(`   ⚠️ Statement #${si+1} failed (${err.code}): ${err.message}`);
-            console.warn(`   SQL: ${stmt.substring(0, 120)}...`);
+          if (err.code !== "ER_TABLE_EXISTS_OK") {
+            console.warn("   Warning: #" + (si+1) + " (" + err.code + "): " + err.message);
           }
         }
       }
-      console.log(`[PROVISION] Schema: ${successCount} OK, ${failCount} failed out of ${statements.length} statements`);
+      console.log("[PROVISION] Schema: " + successCount + " OK, " + failCount + " failed");
     }
     
     // 4. Create admin user
