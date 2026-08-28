@@ -811,7 +811,7 @@ app.post('/api/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) =>
   const idempotencyKey = req.headers['idempotency-key'];
   try {
     const [result] = await getDb(req).query('INSERT INTO categories (name, idempotency_key) VALUES (?, ?)', [name, idempotencyKey || null]);
-    res.status(201).json({ id: result.insertId, name });
+    res.status(201).json({ warnings, id: result.insertId, name });
   } catch (error) {
     // 🐛 FIX — retry หลัง server restart: row เดิมยังอยู่ใน DB (UNIQUE idempotency_key) → ตอบ "สำเร็จซ้ำ" แทน error
     if (isIdempotentDuplicate(error)) {
@@ -4934,7 +4934,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     }
 
     // Step 3: Provision tenant (create DB + tables + admin user)
-    steps.push('provisionTenant'); var dbPool = require('./src/config/db'); var result = await provisionTenant(shopName, adminUsername, adminPassword, dbPool);
+    steps.push('provisionTenant'); var dbPool = require('./src/config/db'); var warnings = []; var origWarn = console.warn; console.warn = function() { warnings.push(Array.from(arguments).join(" ")); origWarn.apply(console, arguments); }; var result = await provisionTenant(shopName, adminUsername, adminPassword, dbPool); console.warn = origWarn;
 
     // Step 4: Register in master DB
     steps.push('addTenant'); var tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');
@@ -4950,7 +4950,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
   } catch (error) {
     console.error('[PROVISION-FIRST-TENANT] Step:', steps.join(' -> '));
     console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
-    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE', step: steps.join(' -> ') });
+    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE', step: steps.join(' -> '), warnings: warnings || [] });
   }
 });
 
