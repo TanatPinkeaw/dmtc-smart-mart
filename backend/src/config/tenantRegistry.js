@@ -43,20 +43,17 @@ function getMasterPool() {
 
 // Initialize master database (สร้าง table tenants ถ้ายังไม่มี)
 async function initMasterDB() {
-  // Use existing pool (from config/db.js) to create master DB — avoids ETIMEDOUT on standalone connections
+  // Use existing pool (from config/db.js) for everything — no new connections needed
   var existingPool = require("./db");
-  console.log("[initMasterDB] Using existing pool to create master DB:", MASTER_DB_CONFIG.database);
+  var dbName = MASTER_DB_CONFIG.database;
+  console.log("[initMasterDB] Creating master DB:", dbName);
 
-  // 1. Create master database via existing pool (connects to defaultdb)
-  await existingPool.query("CREATE DATABASE IF NOT EXISTS `" + MASTER_DB_CONFIG.database + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-  console.log("[initMasterDB] Database created/exists:", MASTER_DB_CONFIG.database);
+  // 1. Create master database via existing pool
+  await existingPool.query("CREATE DATABASE IF NOT EXISTS `" + dbName + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+  console.log("[initMasterDB] Database created/exists:", dbName);
 
-  // 2. Reset masterPool so it reconnects to the new database
-  if (masterPool) { try { await masterPool.end(); } catch (_) {} masterPool = null; }
-
-  // 3. Create tenants registry table via master pool
-  var freshPool = getMasterPool();
-  await freshPool.query("CREATE TABLE IF NOT EXISTS tenants (" +
+  // 2. Create tenants table via existing pool using fully-qualified name
+  await existingPool.query("CREATE TABLE IF NOT EXISTS `" + dbName + "`.tenants (" +
     "id INT AUTO_INCREMENT PRIMARY KEY, " +
     "shop_name VARCHAR(255) NOT NULL, " +
     "db_name VARCHAR(100) NOT NULL UNIQUE, " +
@@ -69,7 +66,11 @@ async function initMasterDB() {
     "last_login TIMESTAMP NULL, " +
     "deleted_at TIMESTAMP NULL" +
   ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-  console.log("[initMasterDB] ✅ Master database initialized — DB:", MASTER_DB_CONFIG.database);
+  console.log("[initMasterDB] Tenants table created/exists");
+
+  // 3. Reset masterPool so it picks up the newly-created database on next use
+  if (masterPool) { try { await masterPool.end(); } catch (_) {} masterPool = null; }
+  console.log("[initMasterDB] Master pool reset");
 }
 
 // Get tenant by database name
