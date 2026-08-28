@@ -71,7 +71,7 @@ async function initMasterDB() {
   console.log("[initMasterDB] Tenants table created/exists");
 
   // 3. Reset masterPool so it picks up the newly-created database on next use
-  if (masterPool) { try { await masterPool.end(); } catch (_) {} masterPool = null; }
+  masterPool = null; // Reset reference (pool from db.js must never be closed)
   console.log("[initMasterDB] Master pool reset");
 }
 
@@ -115,7 +115,7 @@ async function getAllTenants() {
       console.error(`[TENANT_REGISTRY] bootstrap also failed (${bootErr.code || 'NO_CODE'}: ${bootErr.message})`);
     }
     // Reset pool so getMasterPool() creates a fresh one pointing to the now-existing DB
-    if (masterPool) { try { await masterPool.end(); } catch (_) {} masterPool = null; }
+    masterPool = null; // Reset reference (pool from db.js must never be closed)
     return await _queryTenants();
   }
 }
