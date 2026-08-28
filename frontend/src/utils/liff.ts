@@ -11,19 +11,7 @@ import liff from '@line/liff';
 
 export { liff };
 
-// LIFF ID: 读取 tenant config first, fallback to env var, then hardcoded default
-export const LIFF_ID: string = (() => {
-  // Try to get from tenant config stored in localStorage
-  try {
-    const tenantConfig = localStorage.getItem('tenant_config');
-    if (tenantConfig) {
-      const config = JSON.parse(tenantConfig);
-      if (config.line_liff_id) return config.line_liff_id;
-    }
-  } catch {}
-  // Fallback to env var
-  return import.meta.env.VITE_LIFF_ID || '2010928001-sEGaB0XN';
-})();
+export const LIFF_ID: string = import.meta.env.VITE_LIFF_ID || '2010928001-sEGaB0XN';
 
 // ⭐️ Deep-link — Rich Menu เปิด https://liff.line.me/<id>?path=/register (หรือ /pre-order) LIFF จะพา
 // มาที่ Endpoint URL ของแอปพร้อม query ?path=... ติดมาด้วย. "จับค่า path ตั้งแต่ตอน bundle โหลดครั้งแรก"

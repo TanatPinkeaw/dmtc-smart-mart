@@ -14,8 +14,7 @@
 //
 // endpoint ทั้งคู่อยู่ใน PUBLIC_PATHS (ดู server.js) เพราะเรียกก่อน login เสมอ — LIFF ยังไม่มี JWT
 // ของระบบนี้ตอนเปิดหน้ามาครั้งแรก
-// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
-const { getStoreName } = require('../utils/storeConfig');
+const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { serverError, badRequest, notFound } = require('../utils/http');
@@ -43,7 +42,7 @@ async function attachGroupInfo(row) {
   const member = { ...row };
   let group_rules = [];
   if (member.group_id) {
-    const [ruleRows] = await req.db.query(
+    const [ruleRows] = await pool.query(
       'SELECT category_id, discount_percent FROM group_discount_rules WHERE group_id = ?',
       [member.group_id]
     );
@@ -65,7 +64,7 @@ async function checkLineStatus(req, res) {
     return badRequest(res, 'line_user_id ไม่ถูกต้อง');
   }
   try {
-    const [rows] = await req.db.query(`${MEMBER_WITH_GROUP_SELECT} WHERE u.line_user_id = ? LIMIT 1`, [line_user_id]);
+    const [rows] = await pool.query(`${MEMBER_WITH_GROUP_SELECT} WHERE u.line_user_id = ? LIMIT 1`, [line_user_id]);
     if (rows.length === 0) {
       return res.json({ registered: false });
     }
@@ -88,7 +87,7 @@ async function lookupMember(req, res) {
     return badRequest(res, 'กรุณาระบุรหัสนักศึกษา เบอร์โทร หรือ LINE user id');
   }
   try {
-    const [rows] = await req.db.query(
+    const [rows] = await pool.query(
       `${MEMBER_WITH_GROUP_SELECT} WHERE u.student_id = ? OR u.phone_number = ? OR u.line_user_id = ? LIMIT 1`,
       [identifier, identifier, identifier]
     );
@@ -106,7 +105,7 @@ async function lookupMember(req, res) {
 async function registerViaLine(req, res) {
   const { student_id, full_name, phone_number, line_user_id } = req.body;
 
-  const conn = await req.db.getConnection();
+  const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
@@ -153,7 +152,7 @@ async function registerViaLine(req, res) {
     // การสมัครสมาชิกที่สำเร็จแล้วจริงๆ กลายเป็น error response — pushLineMessage เองก็ fail-soft
     // อยู่แล้ว (คืน false ไม่ throw) แต่กัน unhandled rejection ไว้อีกชั้นด้วย .catch เผื่ออนาคต
     pushLineMessage(line_user_id, [
-      { type: 'text', text: `🎉 ลงทะเบียนสมาชิก ${await getStoreName(user.tenant_id)} เรียบร้อยแล้ว! สามารถเช็กบัตรสมาชิกและแต้มสะสมผ่านเมนูได้เลยครับ` },
+      { type: 'text', text: '🎉 ลงทะเบียนสมาชิก DMTC Smart Mart เรียบร้อยแล้ว! สามารถเช็กบัตรสมาชิกและแต้มสะสมผ่านเมนูได้เลยครับ' },
     ]).catch(err => console.error('[LINE] ส่งข้อความยืนยันสมัครสมาชิกไม่สำเร็จ:', err.message));
 
     // ⭐️ เดิม: ห้ามส่ง raw JWT ออกทาง response body เด็ดขาด (ป้องกัน XSS ขโมย token) ใช้ pattern

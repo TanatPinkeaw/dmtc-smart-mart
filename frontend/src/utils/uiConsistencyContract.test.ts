@@ -102,15 +102,11 @@ describe('ปุ่ม — ปุ่ม gradient ต้องใช้ ui/Button
     'pages/OrderManagement.tsx', 'pages/Inventory.tsx', 'pages/AttendanceManagement.tsx',
     'pages/Shift.tsx', 'pages/Notifications.tsx',
     'components/common/ErrorBoundary.tsx', 'components/settings/LoyaltySettingsPanel.tsx',
-    'components/preorder/OrderDetailModal.tsx',
-    'pages/pos-admin/PosAdminSettings.tsx', 'pages/pos-admin/PosAdminProducts.tsx', 'pages/pos-admin/PosAdminUsers.tsx', 'components/dashboard/DetailModal.tsx',
+    'components/preorder/OrderDetailModal.tsx', 'components/dashboard/DetailModal.tsx',
     'components/dashboard/CloseShiftModal.tsx', 'components/pos/RewardModal.tsx',
     'components/pos/CartPanel.tsx', 'components/preorder/CartPanel.tsx',
     'components/auth/ChangePasswordModal.tsx', 'components/dashboard/PendingShiftClosesWidget.tsx',
     'components/Layout.tsx', 'components/preorder/MyOrdersModal.tsx', 'pages/Schedules.tsx',
-    'pages/pos-admin/PosAdminProducts.tsx', 'pages/pos-admin/PosAdminUsers.tsx',
-    'pages/pos-admin/PosAdminCategories.tsx', 'pages/pos-admin/PosAdminSettings.tsx',
-    'pages/pos-admin/PosAdminLayout.tsx',
     'pages/AccountingSummary.tsx', 'components/settings/MemberGroupsPanel.tsx',
   ];
 
@@ -275,7 +271,6 @@ describe('โมดัล — shell ต้องใช้ ui/Modal (ห้าม
     'components/dashboard/CloseShiftModal.tsx', 'components/auth/ChangePasswordModal.tsx',
     'components/preorder/MyOrdersModal.tsx', 'components/preorder/OrderDetailModal.tsx',
     'components/preorder/UploadSlipModal.tsx',
-    'pages/pos-admin/PosAdminProducts.tsx', 'pages/pos-admin/PosAdminUsers.tsx',
   ];
 
   test('Modal title ต้องเป็น font-display (Prompt — หัวข้อโมดัลภาษาเดียวทั้งแอป)', () => {
@@ -388,7 +383,6 @@ describe('empty state — ต้องใช้ ui/EmptyState (ห้ามเ�
     'components/pos/RewardModal.tsx',
     'pages/Dashboard.tsx', 'pages/AttendanceManagement.tsx', 'pages/Settings.tsx',
     'pages/Register.tsx', 'pages/Schedules.tsx',
-    'pages/pos-admin/PosAdminDashboard.tsx', 'pages/pos-admin/PosAdminProducts.tsx', 'pages/pos-admin/PosAdminUsers.tsx', 'pages/pos-admin/PosAdminCategories.tsx',
   ];
 
   test('ไฟล์ที่อพยพแล้ว import EmptyState จาก ui/EmptyState', () => {

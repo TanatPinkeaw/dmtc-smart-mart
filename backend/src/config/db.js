@@ -321,63 +321,6 @@ const initDB = async () => {
         FOREIGN KEY (user_id) REFERENCES users(id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
-    
-    // MULTI-TENANT: create tenants table
-    try {
-      await connection.query(
-        'CREATE TABLE IF NOT EXISTS tenants (' +
-        'id INT AUTO_INCREMENT PRIMARY KEY, ' +
-        'name VARCHAR(255) NOT NULL, ' +
-        'slug VARCHAR(100) NOT NULL, ' +
-        'logo_url TEXT DEFAULT NULL, ' +
-        "primary_color VARCHAR(7) DEFAULT '#10b981', " +
-        'line_channel_id VARCHAR(50) DEFAULT NULL, ' +
-        'line_liff_id VARCHAR(100) DEFAULT NULL, ' +
-        'line_channel_secret VARCHAR(100) DEFAULT NULL, ' +
-        'domain VARCHAR(255) DEFAULT NULL, ' +
-        "plan ENUM('free','basic','pro','enterprise') DEFAULT 'free', " +
-        'max_users INT DEFAULT 10, ' +
-        'max_products INT DEFAULT 500, ' +
-        'is_active TINYINT(1) DEFAULT 1, ' +
-        'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ' +
-        'UNIQUE KEY slug (slug), ' +
-        'UNIQUE KEY domain (domain)' +
-        ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
-      );
-      console.log('tenants table ready');
-    } catch (err) {
-      console.error('tenants table creation failed:', err.message);
-    }
-
-    // MULTI-TENANT: add tenant_id to key tables
-    const tenantTables = ['users', 'categories', 'products', 'orders', 'sales', 'settings', 'promotions', 'suppliers', 'notifications', 'member_groups', 'point_transactions'];
-    for (const table of tenantTables) {
-      try {
-        await connection.query('ALTER TABLE ' + table + ' ADD COLUMN tenant_id INT DEFAULT NULL');
-      } catch (alterErr) {
-        if (alterErr.code !== 'ER_DUP_FIELDNAME') console.error('tenant_id patch failed for', table, alterErr.message);
-      }
-    }
-
-    // Seed default tenant
-    try {
-      await connection.query("INSERT IGNORE INTO tenants (id, name, slug, plan, max_users, max_products) VALUES (1, 'DMTC Mart', 'dmtc-mart', 'pro', 50, 5000)");
-      console.log('Default tenant seeded');
-    } catch (err) {
-      console.error('Default tenant seed failed:', err.message);
-    }
-
-    // Backfill tenant_id = 1 for existing data
-    try {
-      const bt = ['users', 'categories', 'products', 'orders', 'sales', 'settings', 'promotions', 'suppliers', 'notifications', 'member_groups', 'point_transactions'];
-      for (const t of bt) {
-        await connection.query('UPDATE ' + t + ' SET tenant_id = 1 WHERE tenant_id IS NULL');
-      }
-      console.log('Backfilled tenant_id = 1');
-    } catch (err) {
-      console.error('Backfill failed:', err.message);
-    }
-
     // ⭐️ Defensive patch (index): log viewer filter `user_id + action + DATE(created_at)` พร้อมกันบ่อย —
     // เดิม index แยก 3 ตัว ใช้ได้ทีละตัว — composite ตัวเดียวครอบทั้ง 3 (โต๊ะนี้ใหญ่สุดในระบบ)
     try {

@@ -185,63 +185,6 @@ module.exports = {
   // POST /api/members/register-line — สมัคร/ผูกบัญชีผ่าน LINE LIFF (memberController.js)
   // เหมือน userRegisterValidator ทุกอย่าง + line_user_id บังคับ (LIFF SDK ให้มาเสมอ ไม่มีทางเป็นค่าว่าง
   // ถ้า LIFF init สำเร็จ — ถ้าไม่มีแปลว่าเรียกผิดทาง ไม่ใช่ผ่าน LIFF จริง)
-  // POS Admin — POST /api/pos-admin/login
-  posAdminLoginValidator: Joi.object({
-    username: Joi.string().trim().min(1).max(50).required(),
-    password: Joi.string().min(1).max(200).required(),
-    db_name: Joi.string().trim().min(1).max(100).required(),
-  }),
-
-  // POS Admin — POST /api/pos-admin/products
-  posProductCreateValidator: Joi.object({
-    barcode: Joi.string().trim().max(50).allow(null, '').optional(),
-    name: Joi.string().trim().min(1).max(200).required(),
-    category_id: Joi.number().integer().positive().allow(null).optional(),
-    price: Joi.number().precision(2).min(0).optional(),
-    cost: Joi.number().precision(2).min(0).optional(),
-    stock: Joi.number().integer().min(0).optional(),
-  }),
-
-  // POS Admin — PUT /api/pos-admin/products/:id
-  posProductUpdateValidator: Joi.object({
-    barcode: Joi.string().trim().max(50).allow(null, '').optional(),
-    name: Joi.string().trim().min(1).max(200).optional(),
-    category_id: Joi.number().integer().positive().allow(null).optional(),
-    price: Joi.number().precision(2).min(0).optional(),
-    cost: Joi.number().precision(2).min(0).optional(),
-    stock: Joi.number().integer().min(0).optional(),
-  }),
-
-  // POS Admin — POST /api/pos-admin/users
-  posUserCreateValidator: Joi.object({
-    student_id: Joi.string().trim().min(1).max(50).required(),
-    full_name: Joi.string().trim().min(1).max(200).required(),
-    password: Joi.string().min(1).max(200).required(),
-    role: Joi.string().valid('ADMIN', 'MANAGER', 'CASHIER', 'MEMBER').optional(),
-    phone_number: Joi.string().trim().max(20).allow(null, '').optional(),
-  }),
-
-  // POS Admin — PUT /api/pos-admin/users/:id
-  posUserUpdateValidator: Joi.object({
-    full_name: Joi.string().trim().min(1).max(200).required(),
-    role: Joi.string().valid('ADMIN', 'MANAGER', 'CASHIER', 'MEMBER').required(),
-    phone_number: Joi.string().trim().max(20).allow(null, '').optional(),
-    password: Joi.string().min(1).max(200).allow(null, '').optional(),
-  }),
-
-  // POS Admin — PUT /api/pos-admin/settings
-  posSettingsValidator: Joi.object({
-    store_name: Joi.string().trim().min(1).max(255).required(),
-    tax_id: Joi.string().trim().max(50).allow(null, '').optional(),
-    address: Joi.string().trim().max(1000).allow(null, '').optional(),
-    receipt_footer: Joi.string().trim().max(1000).allow(null, '').optional(),
-  }),
-
-  // POS Admin — POST /api/pos-admin/categories
-  posCategoryCreateValidator: Joi.object({
-    name: Joi.string().trim().min(1).max(100).required(),
-  }),
-
   registerLineValidator: Joi.object({
     student_id: Joi.string().trim().min(1).max(50).required(),
     full_name: Joi.string().trim().min(1).max(200).required(),

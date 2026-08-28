@@ -20,7 +20,7 @@
 // หมายเหตุ: ระบบลงเวลาทำงาน (clock-in/out) ผ่าน LINE ถูกถอดออกแล้ว — จัดการผ่านเว็บแพลตฟอร์มแทน
 // ⭐️ โทนคำตอบทั้งหมด: สุภาพแต่เป็นกันเอง (ลงท้ายด้วย "ครับ/น้า/น้าค้าบ" ผสมกัน) ตามที่ผู้ใช้ระบุไว้
 const crypto = require('crypto');
-// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
+const pool = require('../config/db');
 const config = require('../config/config');
 const { replyLineMessage } = require('../services/lineService');
 
@@ -63,9 +63,9 @@ function verifySignature(rawBody, signature) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-async function findUserByLine(lineUserId, db) {
+async function findUserByLine(lineUserId) {
   if (!lineUserId) return null;
-  const [rows] = await db.query(
+  const [rows] = await pool.query(
     'SELECT id, student_id, full_name, role, points, line_user_id FROM users WHERE line_user_id = ? LIMIT 1',
     [lineUserId]
   );
@@ -93,10 +93,10 @@ function handlePoints(user) {
 // ⭐️ Feature 2 — เช็คสถานะการจอง (แทนที่ "เช็คยอดปันผล" เดิม) — ดึงออเดอร์ที่ยัง active/pending
 // ⭐️ ข้อความตามสเปกใหม่ (สุภาพแต่เป็นกันเอง) เป็น template ต่อ "หนึ่ง" ออเดอร์ — ถ้ามีหลายออเดอร์
 // พร้อมกัน ใช้ template เดิมซ้ำต่อรายการ คั่นด้วยบรรทัดว่าง (ไม่มีสเปกแยกสำหรับเคสหลายออเดอร์)
-async function handlePreorderStatus(user, db) {
+async function handlePreorderStatus(user) {
   if (!user) return notRegisteredReply();
   const placeholders = ORDER_TERMINAL_STATUSES.map(() => '?').join(',');
-  const [rows] = await db.query(
+  const [rows] = await pool.query(
     `SELECT id, total_amount, status, created_at FROM orders
      WHERE user_id = ? AND status NOT IN (${placeholders})
      ORDER BY id DESC`,
@@ -121,8 +121,8 @@ function handleOrderHistoryLink(user) {
 }
 
 // ⭐️ Feature 3 — โปรโมชั่น: อัปเดตคำตอบตามสเปกใหม่ (สุภาพแต่เป็นกันเอง) ทั้ง 2 กรณี
-async function handlePromotions(db) {
-  const [rows] = await db.query(
+async function handlePromotions() {
+  const [rows] = await pool.query(
     `SELECT name, discount_type, discount_value FROM promotions
      WHERE is_active = 1
        AND (start_date IS NULL OR start_date <= CURDATE())
@@ -148,14 +148,14 @@ function handleContact() {
 
 // ⭐️ map ข้อความ (จาก Rich Menu หรือที่พิมพ์เอง) → handler. ลำดับสำคัญ: เช็คคำเฉพาะก่อนคำกว้าง
 // (เช่น "สถานะการจอง" มีคำว่า "จอง" ต้องเข้าสถานะการจอง ไม่ใช่ลิงก์สั่งจอง — จึงเช็คสถานะก่อน)
-async function routeIncoming(raw, user, db) {
+async function routeIncoming(raw, user) {
   const t = (raw || '').trim();
   if (!t) return null;
   if (/(ประวัติการซื้อ|ใบเสร็จ|ประวัติ)/.test(t)) return handleOrderHistoryLink(user);
-  if (/(สถานะการจอง|เช็คสถานะสินค้า|สถานะสินค้า|สถานะการสั่ง|สถานะ|ปันผล)/.test(t)) return handlePreorderStatus(user, db);
+  if (/(สถานะการจอง|เช็คสถานะสินค้า|สถานะสินค้า|สถานะการสั่ง|สถานะ|ปันผล)/.test(t)) return handlePreorderStatus(user);
   if (/(บัตรสมาชิก|สมาชิก)/.test(t)) return handleMemberCard(user);
   if (/(แต้ม|คะแนน)/.test(t)) return handlePoints(user);
-  if (/(โปรโมชั่น|โปรโมชัน|โปร)/.test(t)) return handlePromotions(db);
+  if (/(โปรโมชั่น|โปรโมชัน|โปร)/.test(t)) return handlePromotions();
   if (/(จอง|สั่งซื้อล่วงหน้า|สั่งซื้อ|พรีออเดอร์|preorder|pre-order)/i.test(t)) {
     return text(`🛒 สั่งซื้อล่วงหน้า / จองสินค้า\nเปิดลิงก์นี้เพื่อสั่งได้เลยครับ:\n${PREORDER_URL}`);
   }
@@ -163,10 +163,10 @@ async function routeIncoming(raw, user, db) {
   return null; // ข้อความอื่นๆ — ไม่ตอบ (กันสแปม/echo)
 }
 
-async function handleEvent(event, db) {
+async function handleEvent(event) {
   const replyToken = event.replyToken;
   const lineUserId = event.source && event.source.userId;
-  const user = await findUserByLine(lineUserId, db);
+  const user = await findUserByLine(lineUserId);
 
   if (event.type === 'follow') {
     return replyLineMessage(replyToken, [
@@ -178,13 +178,13 @@ async function handleEvent(event, db) {
     // ⭐️ ไม่มี DateTimePicker แล้ว (เปลี่ยนเป็นลิงก์ LIFF ไปเว็บแทน) — postback ที่เหลือ (ถ้ามีปุ่มอื่น
     // ในอนาคตที่ส่ง data มา) ตีความเป็นคำสั่งข้อความปกติผ่าน routeIncoming เหมือนเดิม
     const data = (event.postback && event.postback.data) || '';
-    const reply = await routeIncoming(data, user, db);
+    const reply = await routeIncoming(data, user);
     if (reply) await replyLineMessage(replyToken, Array.isArray(reply) ? reply : [reply]);
     return;
   }
 
   if (event.type === 'message' && event.message && event.message.type === 'text') {
-    const reply = await routeIncoming(event.message.text, user, db);
+    const reply = await routeIncoming(event.message.text, user);
     if (reply) await replyLineMessage(replyToken, Array.isArray(reply) ? reply : [reply]);
   }
 }
@@ -211,7 +211,7 @@ async function handleWebhook(req, res) {
   const events = Array.isArray(req.body && req.body.events) ? req.body.events : [];
   for (const event of events) {
     try {
-      await handleEvent(event, req.db);
+      await handleEvent(event);
     } catch (err) {
       console.error('[LINE webhook] จัดการ event ล้มเหลว:', err.message);
     }

@@ -2,10 +2,7 @@
 //    ทำอะไร: รวมกลุ่มลิงก์จาก navConfig (MEMBER/STAFF/STORE/SYSTEM) โชว์เฉพาะที่ role มีสิทธิ์ + ปุ่มออกจากระบบ
 import { Bell, Store, ClipboardList, LogOut, Home } from 'lucide-react';
 import { NavItem } from './NavItem';
-import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS, ADMIN_ITEMS } from './navConfig';
-
-// ⭐️ ชื่อร้านจาก tenant config (เก็บลง localStorage ตอน login สำเร็จ) — แทนชื่อแบรนด์ hardcoded
-const storeName: string = (() => { try { return localStorage.getItem('store_name') || 'ร้านค้า'; } catch { return 'ร้านค้า'; } })();
+import { MEMBER_ITEMS, STAFF_ITEMS, STORE_ITEMS_SIDEBAR, SYSTEM_ITEMS } from './navConfig';
 
 interface SidebarProps {
   isStaff: boolean;
@@ -29,10 +26,10 @@ export function Sidebar({
     <aside className="hidden md:flex w-56 lg:w-60 bg-white border-r border-brand-border shadow-sm flex-col shrink-0 z-40">
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-brand-border">
-        <img src="/logo-192.png" alt={storeName} className="w-9 h-9 rounded-xl shrink-0 object-contain" />
+        <img src="/logo-192.png" alt="DMTC Mart" className="w-9 h-9 rounded-xl shrink-0 object-contain" />
         <div>
-          <p className="text-sm font-bold text-gray-900">{storeName}</p>
-          <p className="text-[10px] text-gray-400">ระบบ POS ร้านค้า</p>
+          <p className="text-sm font-bold text-gray-900">DMTC Mart</p>
+          <p className="text-[10px] text-gray-400">สหกรณ์โรงเรียน</p>
         </div>
       </div>
 
@@ -68,16 +65,6 @@ export function Sidebar({
             ))}
             {/* ⭐️ งานระบบ (สำรอง/กู้คืน) เฉพาะ ADMIN */}
             {isAdmin && SYSTEM_ITEMS.map(item => (
-              <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
-            ))}
-          </>
-        )}
-
-        {/* ⭐️ Super Admin — ควบคุม POS ทุกร้าน (multi-tenant) เฉพาะ ADMIN */}
-        {isAdmin && (
-          <>
-            <div className="pt-2 pb-1"><p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ผู้ดูแลระบบ</p></div>
-            {ADMIN_ITEMS.map(item => (
               <NavItem key={item.to} to={item.to} icon={<item.icon size={18} />} label={item.label} />
             ))}
           </>

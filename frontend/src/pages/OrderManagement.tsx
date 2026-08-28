@@ -50,7 +50,6 @@ function getSlipImagePath(createdAt: string, filename: string): string {
 const STAFF_STATUS_LABEL: Record<string, string> = {
   PENDING_VERIFY: 'รอตรวจสลิป',
   WAITING_CASH: 'รอรับเงินสด',
-  WAITING_ACCEPT: 'รอพนักงานรับงาน',
   PREPARING: 'กำลังเตรียมของ',
   READY: 'พร้อมให้มารับ',
   COMPLETED: 'รับของแล้ว',
@@ -175,7 +174,6 @@ export default function OrderManagement() {
     switch (status) {
       case 'PENDING_VERIFY': return <><Eye size={18}/> ดูรายละเอียด & ตรวจสลิป</>;
       case 'WAITING_CASH': return <><Eye size={18}/> ดูรายละเอียด & รับเงินสด</>;
-      case 'WAITING_ACCEPT': return <><Eye size={18}/> ดูรายละเอียด & รับงาน</>;
       case 'PREPARING': return <><Eye size={18}/> ดูรายละเอียด & อัปเดตเตรียมของ</>;
       case 'READY': return <><Eye size={18}/> ดูรายละเอียด & ยืนยันลูกค้ามารับ</>;
       default: return <><Eye size={18}/> ดูรายละเอียดบิล</>;
@@ -588,7 +586,7 @@ export default function OrderManagement() {
                 {selectedOrder.status === 'SLIP_REJECTED' && (
                   <>
                     <p className="text-sm font-bold text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">⚠️ รอลูกค้าส่งสลิปใหม่ — พอลูกค้าส่งสลิปใหม่มาให้กดตรวจสอบ</p>
-                    <Button variant="info" size="lg" className="w-full" onClick={() => handleUpdateStatus(selectedOrder.id, 'WAITING_ACCEPT')} disabled={loading}>🔍 ยืนยันสลิปใหม่ → รอพนักงานรับ</Button>
+                    <Button variant="info" size="lg" className="w-full" onClick={() => handleUpdateStatus(selectedOrder.id, 'PENDING_VERIFY')} disabled={loading}>🔍 ตรวจสลิปใหม่</Button>
                     <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-full hover:bg-gray-300 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิกบิล</button>
                   </>
                 )}
@@ -596,17 +594,7 @@ export default function OrderManagement() {
                 {/* CASH: ยืนยัน order */}
                 {selectedOrder.status === 'WAITING_CASH' && (
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <Button variant="orange" size="lg" className="flex-1" onClick={() => handleUpdateStatus(selectedOrder.id, 'WAITING_ACCEPT')} disabled={loading}>✅ ยืนยัน → รอพนักงานรับงาน</Button>
-                    <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="bg-gray-400 text-white font-bold px-4 py-3 rounded-full hover:bg-gray-500 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิก</button>
-                  </div>
-                )}
-
-                {/* WAITING_ACCEPT: รอพนักงานรับงาน — ปุ่มรับงาน (assign) */}
-                {selectedOrder.status === 'WAITING_ACCEPT' && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Button variant="success" size="lg" className="flex-1" onClick={() => handleClaim(selectedOrder.id)} disabled={claiming}>
-                      <CheckCircle size={20}/> {claiming ? 'กำลังรับงาน...' : '✋ รับงานนี้ → เริ่มเตรียมของ'}
-                    </Button>
+                    <Button variant="orange" size="lg" className="flex-1" onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')} disabled={loading}>✅ ยืนยัน → เริ่มเตรียมของ</Button>
                     <button onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED', true)} disabled={loading} className="bg-gray-400 text-white font-bold px-4 py-3 rounded-full hover:bg-gray-500 transition-colors duration-150 active:scale-[0.98] text-sm">ยกเลิก</button>
                   </div>
                 )}

@@ -76,12 +76,11 @@ interface SaleRow { id: number; source?: string; total_amount?: number; payment_
 interface BillItem { product_name: string; quantity: number; subtotal: number; }
 
 export default function Settings() {
-
   const socket = useSocket();
 
   // ⭐️ 1. เพิ่ม 'PROMOTIONS' ใน Tabs
   // ⭐️ FIX — เพิ่มแท็บ 'PASSWORD_RESETS' คิวคำขอรีเซ็ตรหัสผ่านที่ ADMIN ต้องอนุมัติ/ส่งลิงก์เอง
-  const [activeTab, setActiveTab] = useState<'STORE' | 'HISTORY' | 'USERS' | 'CATEGORIES' | 'SUPPLIERS' | 'PRODUCTS' | 'PROMOTIONS' | 'LOYALTY' | 'GROUPS' | 'PASSWORD_RESETS' | 'TENANTS'>('STORE');
+  const [activeTab, setActiveTab] = useState<'STORE' | 'HISTORY' | 'USERS' | 'CATEGORIES' | 'SUPPLIERS' | 'PRODUCTS' | 'PROMOTIONS' | 'LOYALTY' | 'GROUPS' | 'PASSWORD_RESETS'>('STORE');
 
   // ⭐️ 2. เพิ่ม 'EDIT_USER' และ 'ADD_PROMOTION' ใน Modals
   const [activeModal, setActiveModal] = useState<'ADD_PRODUCT' | 'EDIT_PRODUCT' | 'ADD_CATEGORY' | 'ADD_SUPPLIER' | 'ADD_USER' | 'EDIT_USER' | 'ADD_PROMOTION' | null>(null);

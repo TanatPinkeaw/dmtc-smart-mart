@@ -32,8 +32,6 @@ const SUITES = [
   { name: 'server-guard-rails',  file: 'tests/serverGuardRails.test.js' },
   { name: 'order-realtime',  file: 'tests/orderRealtime.test.js' },
   { name: 'richmenu',     file: 'src/scripts/setup-richmenu.test.js' },
-  { name: 'pos-admin',    file: 'tests/posAdminContract.test.js' },
-  { name: 'multi-tenant', file: 'tests/multiTenantContract.test.js' },
 ];
 
 const args = process.argv.slice(2);

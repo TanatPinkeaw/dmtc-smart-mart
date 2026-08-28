@@ -47,7 +47,7 @@ let sessionExpired = false;
 export function isSessionExpired() { return sessionExpired; }
 
 // endpoint ที่ยังต้องเรียกได้เสมอ แม้ session ตายแล้ว (ไม่งั้นล็อกอินใหม่ไม่ได้เลย)
-const ALWAYS_ALLOWED_PATHS = ['/auth/login', '/auth/line-login', '/auth/refresh', '/auth/logout', '/auth/csrf-token', '/health', '/version', '/pos-admin/'];
+const ALWAYS_ALLOWED_PATHS = ['/auth/login', '/auth/line-login', '/auth/refresh', '/auth/logout', '/auth/csrf-token', '/health', '/version'];
 
 function forceLogout() {
   if (sessionExpiredHandled) return;
@@ -65,19 +65,7 @@ function forceLogout() {
   //   cookie) แล้ว Login.tsx จะ "หยุด" auto-login รอบใหม่ทันที ไม่วิ่งวนไม่จบ — flag อยู่ใน
   //   sessionStorage เพราะต้องรอดข้าม full page reload (window.location.href) ที่ useRef/ตัวแปร JS
   //   หายหมด
-  try { sessionStorage.setItem('liff_loop_breaker', 'true');
-    // Store tenant config for LIFF ID lookup
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user.tenant_id) {
-          fetch(`/api/tenants/${user.tenant_id}`).then(r => r.json()).then(config => {
-            localStorage.setItem('tenant_config', JSON.stringify(config));
-          }).catch(() => {});
-        }
-      }
-    } catch {} } catch { /* storage ถูกบล็อก — ข้าม */ }
+  try { sessionStorage.setItem('liff_loop_breaker', 'true'); } catch { /* storage ถูกบล็อก — ข้าม */ }
 
   setBearerToken(null); // ⭐️ session ตายแล้ว — ล้าง bearer token ทิ้งด้วย (ถ้ามี)
 
@@ -114,11 +102,6 @@ async function reauthViaLiff(): Promise<string | null> {
     setBearerToken(data.access_token);
     if (data?.csrfToken) csrfToken = data.csrfToken;
     if (data?.user) localStorage.setItem('user', JSON.stringify(data.user));
-      // Store store_name for UI display
-      try {
-        const tenantConfig = await fetch(`/api/tenants/${data.user.tenant_id || 1}`).then(r => r.json());
-        if (tenantConfig.name) localStorage.setItem('store_name', tenantConfig.name);
-      } catch {}
     return data.access_token;
   } catch {
     return null;
@@ -223,21 +206,6 @@ api.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${bearerToken}`;
     }
 
-    // ⭐️ POS Admin Bearer token — reads from localStorage (set by PosAdminLogin.tsx)
-    // Only applies to /pos-admin/ routes; main app uses cookie auth
-    if (path.startsWith('/pos-admin/') && !path.startsWith('/pos-admin/login')) {
-      try {
-        const posToken = localStorage.getItem('pos_admin_token');
-        const posCsrf = localStorage.getItem('pos_admin_csrf');
-        if (posToken) {
-          config.headers['Authorization'] = `Bearer ${posToken}`;
-        }
-        if (posCsrf && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase() || '')) {
-          config.headers['X-CSRF-Token'] = posCsrf;
-        }
-      } catch { /* localStorage blocked */ }
-    }
-
     // ⭐️ Security remediation — แนบ CSRF token เฉพาะ request ที่เปลี่ยนแปลงข้อมูล (backend ก็เช็คแค่เท่านี้)
     const method = config.method?.toUpperCase() || '';
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
@@ -330,7 +298,7 @@ api.interceptors.response.use(
     // ของเดิมปล่อยให้ตกไปเข้า auto-refresh ด้านล่าง: กรอกรหัสผ่านผิดที่หน้า login → 401 → ไปลอง
     // refresh → 401 อีก → เด้ง Swal "เซสชันหมดอายุ" ใส่หน้า login ทั้งที่ผู้ใช้แค่พิมพ์รหัสผิด
     // (แถมยัง set sessionExpired ทิ้งไว้ด้วย) ปล่อยให้หน้าที่เรียกไป handle error เองดีกว่า
-    const NO_REFRESH_PATHS = ['/auth/login', '/auth/line-login', '/users/register', '/auth/forgot-password', '/auth/reset-password', '/pos-admin/login'];
+    const NO_REFRESH_PATHS = ['/auth/login', '/auth/line-login', '/users/register', '/auth/forgot-password', '/auth/reset-password'];
     if (error.response?.status === 401 && NO_REFRESH_PATHS.some(p => (originalRequest?.url || '').startsWith(p))) {
       return Promise.reject(error);
     }

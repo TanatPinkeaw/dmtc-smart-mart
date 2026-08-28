@@ -20,8 +20,6 @@ import { type ErrorLike } from '../utils/errorMessage';
 import { liff, ensureLiffInit, looksLikeLineInApp, getLiffTargetPath, getLiffExtraParams } from '../utils/liff';
 
 export default function Login() {
-  // ⭐️ ชื่อร้านจาก tenant config (เก็บลง localStorage ตอน login สำเร็จ) — แทนชื่อแบรนด์ hardcoded
-  const storeName: string = (() => { try { return localStorage.getItem('store_name') || 'ร้านค้า'; } catch { return 'ร้านค้า'; } })();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -190,7 +188,7 @@ export default function Login() {
     return (
       <div className="min-h-dvh bg-neutral-bg flex flex-col items-center justify-center gap-5 px-5">
         <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center shadow-lg overflow-hidden">
-          <img src="/logo-192.png" alt={storeName} className="w-full h-full object-contain p-2" />
+          <img src="/logo-192.png" alt="DMTC Mart" className="w-full h-full object-contain p-2" />
         </div>
         <div className="flex items-center gap-2 text-gray-600 font-medium text-sm">
           <span className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
@@ -207,10 +205,10 @@ export default function Login() {
         {/* Brand — ⭐️ FIX: ใช้โลโก้จริงของร้านแทนกล่องไอคอน ShoppingBag เดิม */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center mb-4 shadow-lg overflow-hidden">
-            <img src="/logo-192.png" alt={storeName} className="w-full h-full object-contain p-2" />
+            <img src="/logo-192.png" alt="DMTC Mart" className="w-full h-full object-contain p-2" />
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">{storeName}</h1>
-          <p className="mt-1 text-sm text-gray-500 font-medium">ระบบ POS ร้านค้า</p>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">DMTC Mart</h1>
+          <p className="mt-1 text-sm text-gray-500 font-medium">ระบบ POS สหกรณ์โรงเรียน</p>
         </div>
 
         {/* Card */}

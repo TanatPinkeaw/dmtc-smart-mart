@@ -82,8 +82,7 @@ async function dumpDatabaseToSql(pool) {
     const [tables] = await conn.query('SHOW TABLES');
     const tableNames = tables.map(t => t[tableKey]);
 
-    const storeName = await getStoreName();
-    let sql = `-- ${storeName} backup — ${new Date().toISOString()} (database: ${dbName})\n`;
+    let sql = `-- DMTC Mart backup — ${new Date().toISOString()} (database: ${dbName})\n`;
     sql += `SET FOREIGN_KEY_CHECKS=0;\n`;
     sql += `SET NAMES utf8mb4;\n\n`;
 

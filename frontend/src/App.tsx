@@ -23,23 +23,14 @@ import Shift from './pages/Shift';
 import POS from './pages/POS';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
-import Settings from './pages/Settings';
-import SuperAdmin from './pages/SuperAdmin'; // ⭐️ SUPER ADMIN: Dashboard 
+import Settings from './pages/Settings'; 
 import Preorder from './pages/PreOrder'; 
 import OrderManagement from './pages/OrderManagement'; // ⭐️ 1. นำเข้าหน้าตรวจสลิป/จัดการออเดอร์
 import Schedules from './pages/Schedules'; // ⭐️ หน้าตั้งตารางเวลาทำงาน (ADMIN)
 import AttendanceManagement from './pages/AttendanceManagement';
 import Layout from './components/Layout';
 import Notifications from './pages/Notifications'; // 👈 นำเข้าหน้าใหม่
-import VendorSales from './pages/VendorSales';
-import PosAdminLogin from './pages/pos-admin/PosAdminLogin';
-import PosAdminLayout from './pages/pos-admin/PosAdminLayout';
-import PosAdminDashboard from './pages/pos-admin/PosAdminDashboard';
-import PosAdminProducts from './pages/pos-admin/PosAdminProducts';
-import PosAdminCategories from './pages/pos-admin/PosAdminCategories';
-import PosAdminUsers from './pages/pos-admin/PosAdminUsers';
-import PosAdminSettings from './pages/pos-admin/PosAdminSettings';
-import PosAdminReports from './pages/pos-admin/PosAdminReports'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
+import VendorSales from './pages/VendorSales'; // ⭐️ หน้ายอดฝากขายของฉัน (สำหรับ MEMBER ที่ฝากขายสินค้า)
 import Summary from './pages/Summary'; // ⭐️ หน้าสรุปข้อมูล (ชั่วโมงทำงาน/มาสาย/ค่าจ้าง) — ADMIN เท่านั้น
 import AccountingSummary from './pages/AccountingSummary'; // ⭐️ สรุปบัญชีสหกรณ์ — หมวดหมู่/ยอดจ่ายคืนผู้ฝากขาย/Export Excel
 import BackupManagement from './pages/BackupManagement'; // ⭐️ หน้าสำรอง & กู้คืนข้อมูล — ADMIN เท่านั้น
@@ -192,8 +183,7 @@ function App() {
           {/* ⭐️ ปิดช่องโหว่: /settings + /attendance-management เดิมเป็น RequireStaff (CASHIER พิมพ์ URL เข้าได้)
               เปลี่ยนเป็น RequireManager = ADMIN/MANAGER เท่านั้น */}
           <Route path="/attendance-management" element={<RequireManager><AttendanceManagement /></RequireManager>} />
-          <Route path="/super-admin" element={<SuperAdmin />} />
-        <Route path="/settings" element={<RequireManager><Settings /></RequireManager>} />
+          <Route path="/settings" element={<RequireManager><Settings /></RequireManager>} />
           {/* ⭐️ /summary เปิดให้ MANAGER ด้วย แต่ตารางเงินเดือน (payroll) ยังซ่อนเฉพาะ ADMIN ในหน้า Summary เอง */}
           <Route path="/summary" element={<RequireManager><Summary /></RequireManager>} />
           <Route path="/accounting-summary" element={<RequireManager><AccountingSummary /></RequireManager>} />
@@ -207,17 +197,6 @@ function App() {
           <Route path="/notifications" element={<Notifications />} /> {/* 👈 เพิ่มบรรทัดนี้ */}
           <Route path="/my-sales" element={<VendorSales />} /> {/* ⭐️ ยอดฝากขายของฉัน */}
           <Route path="/profile" element={<Profile />} /> {/* ⭐️ เดิมเป็น modal — ย้ายมาเป็นหน้าเต็ม */}
-        </Route>
-
-        {/* ⭐️ POS Admin — หน้าจัดการร้านแยกตาม tenant (ไม่ต้อง login หลัก) */}
-        <Route path="/pos-admin/login" element={<PosAdminLogin />} />
-        <Route path="/pos-admin" element={<PosAdminLayout />}>
-          <Route path="dashboard" element={<PosAdminDashboard />} />
-          <Route path="products" element={<PosAdminProducts />} />
-          <Route path="categories" element={<PosAdminCategories />} />
-          <Route path="users" element={<PosAdminUsers />} />
-          <Route path="settings" element={<PosAdminSettings />} />
-          <Route path="reports" element={<PosAdminReports />} />
         </Route>
 
       </Routes>

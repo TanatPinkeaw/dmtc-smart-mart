@@ -34,7 +34,6 @@ import { PageHeader } from '../components/layout/PageHeader';
 const ORDER_STATUS_LABELS: Record<string, string> = {
   PENDING_VERIFY: 'รอตรวจสลิป',
   WAITING_CASH: 'รอรับเงินสด',
-  WAITING_ACCEPT: 'รอพนักงานรับงาน',
   SLIP_REJECTED: 'สลิปไม่ผ่าน รอส่งใหม่',
   PREPARING: 'กำลังเตรียมของ',
   READY: 'พร้อมให้มารับ',

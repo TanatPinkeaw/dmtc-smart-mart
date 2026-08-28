@@ -10,8 +10,7 @@
 // โมดูลตามโดเมน ให้หาโค้ด/ดูแลง่ายขึ้น — ย้ายทีละ batch เล็ก ไม่เปลี่ยนพฤติกรรม/ไม่เปลี่ยน path ใดๆ
 // (mount ที่ /api/reports ใน server.js) แต่ละ handler ยกมาจาก server.js ตรงๆ dependency require จาก
 // module กลางเดียวกับที่ server.js ใช้ (pool, money utils) กัน logic เพี้ยนไปคนละแบบ
-// ⭐️ Multi-tenant: pool removed — use req.db (injected by tenantDB middleware)
-const { getStoreName } = require('../utils/storeConfig');
+const pool = require('../config/db');
 const { toSatang, fromSatang } = require('../utils/money');
 const { serverError, badRequest, forbidden, notFound } = require('../utils/http');
 const { sendDailyReport } = require('../scripts/dailyReport'); // ⭐️ Sprint 1 — D4
@@ -42,7 +41,7 @@ async function weeklySales(req, res) {
     // ควรใช้ created_at ตรงๆ ให้ตรงกับ query อื่นในไฟล์นี้ที่ทำถูกอยู่แล้ว (dashboard วันนี้/sales-channel/
     // comparison ล้วนใช้ DATE(created_at)=CURDATE() ไม่มี CONVERT_TZ) — CURDATE()/NOW() ก็เป็นเวลาไทยแล้ว
     // DATE_FORMAT คืน string ตรงๆ (ไม่ผ่าน JS Date object) key จึงตรงกับฝั่ง "7 วันล่าสุด" ที่สร้างเป็น string
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT d, COALESCE(SUM(total), 0) as total FROM (
         SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as d, total_amount as total FROM sales
           WHERE status = 'COMPLETED' AND created_at >= CURDATE() - INTERVAL 7 DAY
@@ -88,7 +87,7 @@ async function hourlySales(req, res) {
       ? `DATE(completed_at) = CURDATE()`
       : `completed_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`;
 
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT hour, SUM(total) as total, COUNT(DISTINCT day) as day_count
       FROM (
         SELECT HOUR(created_at) as hour,
@@ -108,7 +107,7 @@ async function hourlySales(req, res) {
 
     // ⭐️ หารด้วยจำนวนวันที่มีข้อมูลจริงทั้งช่วง (ไม่ใช่จำนวนวันที่ชั่วโมงนั้นมียอด) กันเฉลี่ยเพี้ยน
     // ถ้าช่วงนั้นมีแค่บางวันที่ขายของช่วงเช้า — ใช้จำนวนวันที่ "มีบิลอย่างน้อย 1 ใบทั้งวัน" เป็นตัวหาร
-    const [[{ active_days } = { active_days: 0 }]] = await req.db.query(`
+    const [[{ active_days } = { active_days: 0 }]] = await pool.query(`
       SELECT COUNT(DISTINCT day) as active_days FROM (
         SELECT DATE(created_at) as day FROM sales WHERE status='COMPLETED' AND ${dateClauseSales}
         UNION
@@ -136,7 +135,7 @@ async function attendance(req, res) {
     const monthClause = month ? `AND DATE_FORMAT(work_date, '%Y-%m') = ?` : '';
     const params = month ? [month] : [];
 
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT user_id, full_name, work_date, expected_start, actual_time,
         CASE WHEN actual_time IS NULL THEN NULL
              ELSE TIMESTAMPDIFF(MINUTE, CONCAT(work_date, ' ', expected_start), actual_time)
@@ -168,7 +167,7 @@ async function dashboard(req, res) {
   try {
     // ⭐️ รวมยอดขายหน้าร้าน (sales) กับบิลจากการจองที่ลูกค้ามารับแล้ว (orders สถานะ COMPLETED)
     // นับ orders เข้าวันที่ "มารับจริง" (completed_at) ไม่ใช่วันที่จอง (created_at)
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT
         COALESCE(SUM(cnt), 0) as total_bills,
         COALESCE(SUM(total), 0) as total_sales,
@@ -210,7 +209,7 @@ async function dashboard(req, res) {
 async function topSelling(req, res) {
   try {
     // ⭐️ รวมรายการจาก sale_items (ขายหน้าร้าน) กับ order_items (บิลจองที่ COMPLETED แล้ว)
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT product_id, name, SUM(quantity) as total_quantity, SUM(revenue) as total_revenue
       FROM (
         SELECT p.id as product_id, p.name as name, si.quantity as quantity, si.subtotal as revenue
@@ -278,7 +277,7 @@ async function vendorSales(req, res) {
     }
     query += ` GROUP BY u.id, u.student_id, u.full_name ORDER BY vendor_earnings DESC`;
 
-    const [rows] = await req.db.query(query, params);
+    const [rows] = await pool.query(query, params);
     res.json(rows);
   } catch (error) {
     console.error('[500]', error.message);
@@ -296,7 +295,7 @@ async function vendorSalesDetail(req, res) {
       return forbidden(res, "ดูได้เฉพาะยอดฝากขายของตัวเองเท่านั้น");
     }
 
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT
         p.id as product_id,
         p.name as product_name,
@@ -323,7 +322,7 @@ async function vendorSalesDetail(req, res) {
 // GET /api/reports/void-summary — จำนวน/ยอดบิลที่ยกเลิกวันนี้
 async function voidSummary(req, res) {
   try {
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT COUNT(id) as void_count, COALESCE(SUM(total_amount), 0) as void_amount
       FROM sales
       WHERE status = 'VOIDED' AND DATE(created_at) = CURDATE()
@@ -339,7 +338,7 @@ async function voidSummary(req, res) {
 async function shiftAnomalies(req, res) {
   try {
     // tolerance ±20 บาท ถือว่าปกติ เกินกว่านี้ = ผิดปกติ
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT sh.id, sh.difference, sh.closed_at, u.full_name as cashier_name
       FROM shifts sh
       JOIN users u ON sh.cashier_id = u.id
@@ -358,7 +357,7 @@ async function salesComparison(req, res) {
   try {
     // ยอดต่อวัน = sales (created_at) + orders COMPLETED (completed_at)
     const dayTotal = async (dateExpr) => {
-      const [rows] = await req.db.query(`
+      const [rows] = await pool.query(`
         SELECT
           (SELECT COALESCE(SUM(total_amount),0) FROM sales WHERE status='COMPLETED' AND DATE(created_at) = ${dateExpr})
           +
@@ -390,7 +389,7 @@ async function salesByCashier(req, res) {
   try {
     // ⭐️ หมวด 6: JOIN sales.shift_id = shifts.id แม่นกว่าเทียบช่วงเวลา (รองรับเปิดกะซ้อนเวลากันหลายคน)
     // บิลเก่าก่อนมีคอลัมน์ shift_id จะไม่ถูกนับในรายงานนี้ (shift_id เป็น NULL)
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT
         sh.id as shift_id, u.id as cashier_id, u.full_name as cashier_name,
         sh.opened_at, sh.closed_at, sh.status as shift_status,
@@ -412,7 +411,7 @@ async function salesByCashier(req, res) {
 // GET /api/reports/open-shifts — กะที่เปิดอยู่ตอนนี้ทั้งหมด
 async function openShifts(req, res) {
   try {
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT sh.id, sh.opening_cash, sh.opened_at, u.full_name as cashier_name
       FROM shifts sh
       JOIN users u ON sh.cashier_id = u.id
@@ -429,7 +428,7 @@ async function openShifts(req, res) {
 // GET /api/reports/pending-orders — จำนวน/ยอดออเดอร์ที่ยังไม่จบ (ไม่ใช่ COMPLETED/CANCELLED) แยกตาม status
 async function pendingOrders(req, res) {
   try {
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT status, COUNT(id) as count, COALESCE(SUM(total_amount),0) as total
       FROM orders
       WHERE status NOT IN ('COMPLETED', 'CANCELLED')
@@ -445,8 +444,8 @@ async function pendingOrders(req, res) {
 // GET /api/reports/sales-channel — ยอดวันนี้ แยกหน้าร้าน vs พรีออเดอร์
 async function salesChannel(req, res) {
   try {
-    const [walkin] = await req.db.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE status='COMPLETED' AND DATE(created_at)=CURDATE()`);
-    const [preorder] = await req.db.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status='COMPLETED' AND DATE(completed_at)=CURDATE()`);
+    const [walkin] = await pool.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales WHERE status='COMPLETED' AND DATE(created_at)=CURDATE()`);
+    const [preorder] = await pool.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM orders WHERE status='COMPLETED' AND DATE(completed_at)=CURDATE()`);
     res.json({ walkin_sales: Number(walkin[0].total), preorder_sales: Number(preorder[0].total) });
   } catch (error) {
     console.error('[500]', error.message);
@@ -460,7 +459,7 @@ async function grossProfit(req, res) {
     // กำไรขั้นต้น = subtotal - (cost * qty) - GP ที่ต้องคืน vendor (เฉพาะสินค้าฝากขาย)
     // GP สหกรณ์ = subtotal * gp_rate/100 คือส่วนที่สหกรณ์ได้ ส่วน vendor_earnings คืน vendor
     // กำไรจริงของสหกรณ์: สินค้าปกติ = subtotal - cost*qty ; สินค้าฝากขาย = subtotal * gp_rate/100
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT COALESCE(SUM(
         CASE
           WHEN p.vendor_id IS NOT NULL THEN si.subtotal * (p.gp_rate / 100)
@@ -494,7 +493,7 @@ async function profitSummary(req, res) {
       CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal - it.subtotal*p.gp_rate/100 ELSE 0 END AS vendor_payout,
       CASE WHEN p.vendor_id IS NULL THEN it.subtotal - p.cost*it.quantity ELSE 0 END AS profit_own,
       CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal*p.gp_rate/100 ELSE 0 END AS profit_gp`;
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT period,
              SUM(revenue) AS revenue,
              SUM(cogs_own) AS cogs_own,
@@ -541,7 +540,7 @@ async function profitSummary(req, res) {
 // GET /api/reports/dead-stock — สินค้าที่มีสต๊อกแต่ไม่ขายเลยใน 30 วันล่าสุด (top 20 by stock)
 async function deadStock(req, res) {
   try {
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT p.id, p.name, p.stock
       FROM products p
       WHERE p.is_active = TRUE AND p.stock > 0
@@ -564,7 +563,7 @@ async function deadStock(req, res) {
 // GET /api/reports/vendor-summary — สรุปยอดฝากขายทุก vendor รวม (ADMIN/MANAGER เท่านั้น ไม่ scope ตัวเอง)
 async function vendorSummary(req, res) {
   try {
-    const [rows] = await req.db.query(`
+    const [rows] = await pool.query(`
       SELECT
         u.id as vendor_id, u.full_name as vendor_name,
         SUM(si.quantity) as total_items_sold,
@@ -596,19 +595,19 @@ async function payroll(req, res) {
     // พนักงานทั้งหมด (CASHIER + MANAGER + ADMIN) พร้อมอัตราค่าจ้างต่อชั่วโมงปัจจุบัน
     // ⭐️ Update — เพิ่ม MANAGER (ผู้ใช้ attendance clock-in/out ตัวจริงตอนนี้แทน ADMIN) คง ADMIN ไว้
     //   เผื่อมีข้อมูลชั่วโมงเก่าก่อนเปลี่ยนสิทธิ์ (ไม่งั้นประวัติค่าจ้างเดือนที่ผ่านมาของ ADMIN จะหายจากตาราง)
-    const [staff] = await req.db.query(
+    const [staff] = await pool.query(
       `SELECT id, full_name, role, hourly_rate FROM users WHERE role IN ('CASHIER','MANAGER','ADMIN') AND is_active = TRUE ORDER BY full_name`
     );
 
     // ชั่วโมงทำงาน: CASHIER นับจาก shifts ที่ปิดสมบูรณ์แล้ว (status='CLOSED'), MANAGER/ADMIN นับจาก attendance
-    const [shiftMinutes] = await req.db.query(
+    const [shiftMinutes] = await pool.query(
       `SELECT cashier_id as user_id, SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
        FROM shifts
        WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND DATE_FORMAT(opened_at, '%Y-%m') = ?
        GROUP BY cashier_id`,
       [month]
     );
-    const [attendanceMinutes] = await req.db.query(
+    const [attendanceMinutes] = await pool.query(
       `SELECT user_id, SUM(TIMESTAMPDIFF(MINUTE, check_in, check_out)) as total_minutes
        FROM attendance
        WHERE check_out IS NOT NULL AND DATE_FORMAT(check_in, '%Y-%m') = ?
@@ -617,7 +616,7 @@ async function payroll(req, res) {
     );
 
     // มาสาย: ใช้ตรรกะเดียวกับ /api/reports/attendance (เทียบ schedules.expected_start กับเวลาจริง) ยกเว้นวันหยุด
-    const [lateRows] = await req.db.query(
+    const [lateRows] = await pool.query(
       `SELECT user_id, work_date, actual_time,
          CASE WHEN actual_time IS NULL THEN NULL
               ELSE TIMESTAMPDIFF(MINUTE, CONCAT(work_date, ' ', expected_start), actual_time)
@@ -683,17 +682,17 @@ async function myHours(req, res) {
     const month = resolveMonth(req.query); // 'YYYY-MM'
     const userId = req.user.id;
 
-    const [users] = await req.db.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
+    const [users] = await pool.query('SELECT full_name, role, hourly_rate FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return notFound(res, 'ไม่พบข้อมูลผู้ใช้');
     const me = users[0];
 
-    const [[shiftRow]] = await req.db.query(
+    const [[shiftRow]] = await pool.query(
       `SELECT SUM(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as total_minutes
        FROM shifts
        WHERE cashier_id = ? AND status = 'CLOSED' AND closed_at IS NOT NULL AND DATE_FORMAT(opened_at, '%Y-%m') = ?`,
       [userId, month]
     );
-    const [[attendanceRow]] = await req.db.query(
+    const [[attendanceRow]] = await pool.query(
       `SELECT SUM(TIMESTAMPDIFF(MINUTE, check_in, check_out)) as total_minutes
        FROM attendance
        WHERE user_id = ? AND check_out IS NOT NULL AND DATE_FORMAT(check_in, '%Y-%m') = ?`,
@@ -727,7 +726,7 @@ async function monthlyOverview(req, res) {
     const month = resolveMonth(req.query);
 
     // ยอดขายรวมเดือนนี้ (sales หน้าร้าน + orders จองที่มารับแล้ว)
-    const [salesRows] = await req.db.query(
+    const [salesRows] = await pool.query(
       `SELECT COALESCE(SUM(cnt), 0) as total_bills, COALESCE(SUM(total), 0) as total_sales
        FROM (
          SELECT COUNT(id) as cnt, SUM(total_amount) as total
@@ -740,7 +739,7 @@ async function monthlyOverview(req, res) {
     );
 
     // สมาชิก: รวมทั้งหมด + สมัครใหม่เดือนนี้
-    const [memberRows] = await req.db.query(
+    const [memberRows] = await pool.query(
       `SELECT
          (SELECT COUNT(*) FROM users WHERE role = 'MEMBER') as total_members,
          (SELECT COUNT(*) FROM users WHERE role = 'MEMBER' AND DATE_FORMAT(created_at, '%Y-%m') = ?) as new_members`,
@@ -748,17 +747,17 @@ async function monthlyOverview(req, res) {
     );
 
     // สต๊อกใกล้หมด (ข้อมูลปัจจุบัน ไม่ผูกกับเดือนที่เลือก)
-    const [lowStockRows] = await req.db.query(
+    const [lowStockRows] = await pool.query(
       `SELECT COUNT(*) as count FROM products WHERE is_active = TRUE AND stock <= 5`
     );
 
     // ออเดอร์จองที่ยังค้างอยู่ (ข้อมูลปัจจุบัน)
-    const [pendingOrderRows] = await req.db.query(
+    const [pendingOrderRows] = await pool.query(
       `SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('COMPLETED', 'CANCELLED')`
     );
 
     // บิลยกเลิกเดือนนี้
-    const [voidRows] = await req.db.query(
+    const [voidRows] = await pool.query(
       `SELECT COUNT(*) as void_count, COALESCE(SUM(total_amount), 0) as void_amount
        FROM sales WHERE status = 'VOIDED' AND DATE_FORMAT(created_at, '%Y-%m') = ?`,
       [month]
@@ -832,7 +831,7 @@ async function exportSalesCsv(req, res) {
       // type ที่ mysql2 parse เป็น JS Date object แล้วโค้ด JS อ่านด้วย .toISOString() (UTC) อีกที
       // เพี้ยนได้ถ้า Node process ไม่ได้รันที่ UTC พอดี — เปลี่ยนเป็น DATE_FORMAT คืน string ตรงๆ
       // ตัด JS Date object ออกจากสมการทั้งหมด (เหมือน weekly-sales)
-      const [rows] = await req.db.query(`
+      const [rows] = await pool.query(`
         SELECT day, SUM(bill_count) AS bills, SUM(total_sales) AS total_sales,
                SUM(cash_sales) AS cash_sales, SUM(qr_sales) AS qr_sales
         FROM (
@@ -872,7 +871,7 @@ async function exportSalesCsv(req, res) {
       }
       // 🐛 FIX (root cause) — เดิม CONVERT_TZ(...,'+00:00','+07:00') แปลงเวลาซ้ำ (session tz +07:00
       // จัดการให้แล้ว) บวก 7 ชม.เกิน ตัดออกให้ตรงกับจุดอื่นที่แก้ไปแล้ว
-      const [rows] = await req.db.query(`
+      const [rows] = await pool.query(`
         SELECT * FROM (
           SELECT DATE_FORMAT(s.created_at,'%Y-%m-%d %H:%i') AS dt,
                  'POS' AS channel, s.id AS bill_no,
@@ -917,7 +916,7 @@ async function exportSalesCsv(req, res) {
       const coopIncome = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal * p.gp_rate/100 ELSE it.subtotal - p.cost*it.quantity END`;
       const vendorEarn = `CASE WHEN p.vendor_id IS NOT NULL THEN it.subtotal - it.subtotal*p.gp_rate/100 ELSE 0 END`;
       // 🐛 FIX (root cause) — เดิม CONVERT_TZ(...,'+00:00','+07:00') แปลงเวลาซ้ำ ตัดออกเหมือนด้านบน
-      const [rows] = await req.db.query(`
+      const [rows] = await pool.query(`
         SELECT * FROM (
           SELECT DATE_FORMAT(s.created_at,'%Y-%m-%d %H:%i') AS dt,
                  'POS' AS channel, s.id AS bill_no, p.name AS product, c.name AS category,
@@ -966,7 +965,7 @@ async function exportSalesCsv(req, res) {
     if (format === 'excel') {
       const ExcelJS = require('exceljs');
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = await getStoreName(req.user?.tenant_id);
+      workbook.creator = 'DMTC Mart';
       workbook.created = new Date();
       for (const sec of sectionOrder) {
         const sheet = workbook.addWorksheet(sec.sheetName);
