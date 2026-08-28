@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { InlineAlert } from '../../components/ui/InlineAlert';
+import { FieldLabel } from '../../components/ui/FieldLabel';
+import { inputCls } from '../../components/ui/fieldStyles';
 
 interface Product { id: number; barcode: string | null; name: string; price: number; cost: number; stock: number; min_stock: number | null; is_active: boolean; category_id: number | null; category_name: string | null; image_url: string | null; }
 interface Category { id: number; name: string; }
@@ -54,7 +60,7 @@ export default function PosAdminProducts() {
           <h1 className="text-2xl font-bold">จัดการสินค้า ({products.length})</h1>
           {lowStockCount > 0 && <p className="text-sm text-orange-600 mt-1">⚠️ สินค้าใกล้หมด {lowStockCount} รายการ</p>}
         </div>
-        <button onClick={openAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-700">+ เพิ่มสินค้า</button>
+        <Button variant="success" size="sm" onClick={openAdd}>+ เพิ่มสินค้า</Button>
       </div>
 
       <div className="flex gap-3 mb-4">
@@ -68,7 +74,7 @@ export default function PosAdminProducts() {
       {loading ? <p className="text-gray-500">กำลังโหลด...</p> : (
         <div className="bg-white rounded-2xl shadow overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>
+            <thead className="bg-gray-50 text-gray-600 text-xs"><tr>
               <th className="p-3 text-left">บาร์โค้ด</th><th className="p-3 text-left">ชื่อสินค้า</th>
               <th className="p-3 text-left">หมวด</th><th className="p-3 text-right">ราคา</th>
               <th className="p-3 text-right">ต้นทุน</th><th className="p-3 text-right">สต๊อก</th>
@@ -90,47 +96,44 @@ export default function PosAdminProducts() {
                     </span>
                   </td>
                   <td className="p-3 text-center space-x-2">
-                    <button onClick={() => openEdit(p)} className="text-blue-600 hover:underline text-xs">แก้</button>
-                    <button onClick={() => del(p.id)} className="text-red-600 hover:underline text-xs">ลบ</button>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>แก้</Button>
+                    <Button variant="ghost" size="sm" onClick={() => del(p.id)}>ลบ</Button>
                   </td>
                 </tr>
               );
             })}</tbody>
           </table>
-          {filtered.length === 0 && <p className="p-6 text-center text-gray-400">ไม่พบสินค้า</p>}
+          {filtered.length === 0 && <EmptyState compact title="ไม่พบสินค้า" />}
         </div>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold mb-4">{editProd ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}</h2>
-            {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+        <Modal title={editProd ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"} onClose={() => setShowModal(false)} widthClassName="sm:max-w-lg">
+            {error && <div className="px-5 pb-3"><InlineAlert tone="error">{error}</InlineAlert></div>}
             <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs font-medium mb-1">บาร์โค้ด</label>
-              <input value={form.barcode} onChange={e => setForm({...form, barcode: e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="ไม่บังคับ" /></div>
-              <div><label className="block text-xs font-medium mb-1">ชื่อสินค้า *</label>
-              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
-              <div><label className="block text-xs font-medium mb-1">หมวดหมู่</label>
-              <select value={form.category_id} onChange={e => setForm({...form, category_id: e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm">
+              <div><FieldLabel size="xs">บาร์โค้ด</FieldLabel>
+              <input value={form.barcode} onChange={e => setForm({...form, barcode: e.target.value})} className={`w-full ${inputCls}`} placeholder="ไม่บังคับ" /></div>
+              <div><FieldLabel size="xs">ชื่อสินค้า *</FieldLabel>
+              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className={`w-full ${inputCls}`} /></div>
+              <div><FieldLabel size="xs">หมวดหมู่</FieldLabel>
+              <select value={form.category_id} onChange={e => setForm({...form, category_id: e.target.value})} className={`w-full ${inputCls}`}>
                 <option value="">ไม่มีหมวด</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select></div>
-              <div><label className="block text-xs font-medium mb-1">ราคาขาย (฿)</label>
-              <input type="number" step="0.01" value={form.price} onChange={e => setForm({...form, price: +e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
-              <div><label className="block text-xs font-medium mb-1">ต้นทุน (฿)</label>
-              <input type="number" step="0.01" value={form.cost} onChange={e => setForm({...form, cost: +e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
-              <div><label className="block text-xs font-medium mb-1">สต๊อก</label>
-              <input type="number" value={form.stock} onChange={e => setForm({...form, stock: +e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
-              <div><label className="block text-xs font-medium mb-1">สต๊อกขั้นต่ำ (แจ้งเตือน)</label>
-              <input type="number" value={form.min_stock} onChange={e => setForm({...form, min_stock: +e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
+              <div><FieldLabel size="xs">ราคาขาย (฿)</FieldLabel>
+              <input type="number" step="0.01" value={form.price} onChange={e => setForm({...form, price: +e.target.value})} className={`w-full ${inputCls}`} /></div>
+              <div><FieldLabel size="xs">ต้นทุน (฿)</FieldLabel>
+              <input type="number" step="0.01" value={form.cost} onChange={e => setForm({...form, cost: +e.target.value})} className={`w-full ${inputCls}`} /></div>
+              <div><FieldLabel size="xs">สต๊อก</FieldLabel>
+              <input type="number" value={form.stock} onChange={e => setForm({...form, stock: +e.target.value})} className={`w-full ${inputCls}`} /></div>
+              <div><FieldLabel size="xs">สต๊อกขั้นต่ำ (แจ้งเตือน)</FieldLabel>
+              <input type="number" value={form.min_stock} onChange={e => setForm({...form, min_stock: +e.target.value})} className={`w-full ${inputCls}`} /></div>
               <div className="col-span-2 flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 border rounded-xl py-2 text-sm font-medium">ยกเลิก</button>
-                <button type="submit" className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-emerald-700">{editProd ? 'บันทึก' : 'เพิ่ม'}</button>
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowModal(false)}>ยกเลิก</Button>
+                <Button type="submit" variant="success" className="flex-1">{editProd ? 'บันทึก' : 'เพิ่ม'}</Button>
               </div>
             </form>
-          </div>
-        </div>
+      </Modal>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Button } from '../../components/ui/Button';
 import { useEffect, useState } from 'react';
 
 const NAV = [
@@ -52,7 +53,7 @@ export default function PosAdminLayout() {
         </nav>
         <div className="p-4 border-t">
           <p className="text-xs text-gray-400 mb-2">{user.full_name} ({user.role})</p>
-          <button onClick={logout} className="w-full text-sm text-red-600 hover:bg-red-50 py-2 rounded-xl">ออกจากระบบ</button>
+          <Button variant="outline-danger" size="sm" className="w-full" onClick={logout}>ออกจากระบบ</Button>
         </div>
       </aside>
       <main className="flex-1 p-6 overflow-auto">

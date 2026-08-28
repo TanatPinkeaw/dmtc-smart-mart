@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 interface Stats { users: number; products: number; today_sales: number; }
 interface WeeklySale { date: string; bills: number; total: number; }
@@ -47,7 +48,7 @@ export default function PosAdminDashboard() {
         <div className="bg-white rounded-2xl shadow p-6">
           <h2 className="text-lg font-semibold mb-4">📈 ยอดขาย 7 วันล่าสุด</h2>
           {weekly.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">ยังไม่มีข้อมูล</p>
+            <EmptyState compact title="ยังไม่มีข้อมูล" />
           ) : (
             <div className="space-y-2">
               {weekly.map(d => (
@@ -69,7 +70,7 @@ export default function PosAdminDashboard() {
         <div className="bg-white rounded-2xl shadow p-6">
           <h2 className="text-lg font-semibold mb-4">⚠️ สินค้าใกล้หมด</h2>
           {lowStock.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">สินค้าทั้งหมดมีสต๊อกเพียงพอ</p>
+            <EmptyState compact title="สินค้าทั้งหมดมีสต๊อกเพียงพอ" />
           ) : (
             <div className="space-y-2">
               {lowStock.map(p => (

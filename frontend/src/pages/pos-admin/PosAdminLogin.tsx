@@ -5,8 +5,12 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { InlineAlert } from '../../components/ui/InlineAlert';
+import { FieldLabel } from '../../components/ui/FieldLabel';
 
-export default function PosAdminLogin() {
+import { Button } from '../../components/ui/Button';
+
+function PosAdminLogin() {
   const [dbName, setDbName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -58,14 +62,14 @@ export default function PosAdminLogin() {
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6">
           {error && (
-            <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+            <InlineAlert tone="error" className="mb-4">
               {error}
-            </div>
+            </InlineAlert>
           )}
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสร้าน (db_name)</label>
+              <FieldLabel>รหัสร้าน (db_name)</FieldLabel>
               <input
                 type="text" required value={dbName} onChange={e => setDbName(e.target.value)}
                 placeholder="เช่น dmtc-mart"
@@ -74,7 +78,7 @@ export default function PosAdminLogin() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสนักศึกษา</label>
+              <FieldLabel>รหัสนักศึกษา</FieldLabel>
               <input
                 type="text" required value={username} onChange={e => setUsername(e.target.value)}
                 placeholder="รหัสนักศึกษา"
@@ -83,7 +87,7 @@ export default function PosAdminLogin() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">รหัสผ่าน</label>
+              <FieldLabel>รหัสผ่าน</FieldLabel>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
@@ -97,15 +101,14 @@ export default function PosAdminLogin() {
               </div>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full mt-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-md hover:shadow-lg hover:from-emerald-600 hover:to-teal-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+            <Button type="submit" disabled={loading} variant="primary" className="w-full mt-1">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   กำลังเข้าสู่ระบบ...
                 </span>
               ) : 'เข้าสู่ระบบ'}
-            </button>
+            </Button>
           </form>
         </div>
 
@@ -120,3 +123,5 @@ export default function PosAdminLogin() {
     </div>
   );
 }
+
+export default PosAdminLogin;

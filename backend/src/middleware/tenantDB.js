@@ -32,7 +32,7 @@ async function getOrCreatePool(dbName) {
     database: dbName,
     port: config.DB_PORT || 3306,  // ⭐️ ต้องมี port เหมือน db.js (Aiven ใช้ port ไม่ใช่ 3306)
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 20, // ⭐️ เพิ่มจาก 10 → 20 สำหรับเป้าหมาย 100 users (Pool cache แยกตาม tenant)
     connectTimeout: 8000,
     charset: 'utf8mb4',    // ⭐️ ตรงกับ db.js
     timezone: '+07:00',    // ⭐️ ตรงกับ db.js — สำคัญต่อ reports/NOW()

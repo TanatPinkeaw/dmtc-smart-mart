@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { InlineAlert } from '../../components/ui/InlineAlert';
+import { FieldLabel } from '../../components/ui/FieldLabel';
+import { inputCls } from '../../components/ui/fieldStyles';
 
 interface User {
   id: number; student_id: string; full_name: string;
@@ -60,7 +66,7 @@ export default function PosAdminUsers() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">จัดการผู้ใช้ ({users.length})</h1>
-        <button onClick={openAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-700">+ เพิ่มผู้ใช้</button>
+        <Button variant="success" size="sm" onClick={openAdd}>+ เพิ่มผู้ใช้</Button>
       </div>
 
       {/* Filters */}
@@ -75,7 +81,7 @@ export default function PosAdminUsers() {
       {loading ? <p className="text-gray-500">กำลังโหลด...</p> : (
         <div className="bg-white rounded-2xl shadow overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>
+            <thead className="bg-gray-50 text-gray-600 text-xs"><tr>
               <th className="p-3 text-left">รหัสนักศึกษา</th><th className="p-3 text-left">ชื่อ</th>
               <th className="p-3 text-left">เบอร์โทร</th><th className="p-3 text-left">บทบาท</th>
               <th className="p-3 text-right">แต้ม</th><th className="p-3 text-center">สถานะ</th>
@@ -94,43 +100,40 @@ export default function PosAdminUsers() {
                   </button>
                 </td>
                 <td className="p-3 text-center">
-                  <button onClick={() => openEdit(u)} className="text-blue-600 hover:underline text-xs mr-2">แก้ไข</button>
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(u)}>แก้ไข</Button>
                 </td>
               </tr>
             ))}</tbody>
           </table>
-          {filtered.length === 0 && <p className="p-6 text-center text-gray-400">ไม่พบผู้ใช้</p>}
+          {filtered.length === 0 && <EmptyState compact title="ไม่พบผู้ใช้" />}
         </div>
       )}
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold mb-4">{editUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้ใหม่'}</h2>
-            {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+        <Modal title={editUser ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้ใหม่"} onClose={() => setShowModal(false)}>
+            {error && <div className="px-5 pb-3"><InlineAlert tone="error">{error}</InlineAlert></div>}
             <form onSubmit={submit} className="space-y-3">
               {!editUser && (
-                <div><label className="block text-sm font-medium mb-1">รหัสนักศึกษา</label>
-                <input value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})} required className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
+                <div><FieldLabel>รหัสนักศึกษา</FieldLabel>
+                <input value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})} required className={`w-full ${inputCls}`} /></div>
               )}
-              <div><label className="block text-sm font-medium mb-1">ชื่อ-นามสกุล</label>
-              <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} required className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
-              <div><label className="block text-sm font-medium mb-1">เบอร์โทรศัพท์</label>
-              <input value={form.phone_number} onChange={e => setForm({...form, phone_number: e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm" placeholder="ไม่บังคับ" /></div>
-              <div><label className="block text-sm font-medium mb-1">รหัสผ่าน {editUser && '(เว้นว่างถ้าไม่เปลี่ยน)'}</label>
-              <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required={!editUser} className="w-full border rounded-xl px-3 py-2 text-sm" /></div>
-              <div><label className="block text-sm font-medium mb-1">บทบาท</label>
-              <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="w-full border rounded-xl px-3 py-2 text-sm">
+              <div><FieldLabel>ชื่อ-นามสกุล</FieldLabel>
+              <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} required className={`w-full ${inputCls}`} /></div>
+              <div><FieldLabel>เบอร์โทรศัพท์</FieldLabel>
+              <input value={form.phone_number} onChange={e => setForm({...form, phone_number: e.target.value})} className={`w-full ${inputCls}`} placeholder="ไม่บังคับ" /></div>
+              <div><FieldLabel>รหัสผ่าน {editUser && "(เว้นว่างถ้าไม่เปลี่ยน)"}</FieldLabel>
+              <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required={!editUser} className={`w-full ${inputCls}`} /></div>
+              <div><FieldLabel>บทบาท</FieldLabel>
+              <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className={`w-full ${inputCls}`}>
                 {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select></div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 border rounded-xl py-2 text-sm font-medium">ยกเลิก</button>
-                <button type="submit" className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-emerald-700">{editUser ? 'บันทึก' : 'เพิ่ม'}</button>
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowModal(false)}>ยกเลิก</Button>
+                <Button type="submit" variant="success" className="flex-1">{editUser ? 'บันทึก' : 'เพิ่ม'}</Button>
               </div>
             </form>
-          </div>
-        </div>
+      </Modal>
       )}
     </div>
   );

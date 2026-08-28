@@ -28,7 +28,7 @@ const MASTER_DB_CONFIG = {
   charset: 'utf8mb4',
   timezone: '+07:00',
   waitForConnections: true,
-  connectionLimit: 5,
+  connectionLimit: 10, // ⭐️ เพิ่มจาก 5 → 10 สำหรับ master pool ( tenant registry operations)
   ...(sslOption ? { ssl: sslOption } : {})
 };
 

@@ -4,12 +4,18 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const router = express.Router();
-const { requireRole } = require('../middleware/guards');
+const { requireRole, validateRequest } = require('../middleware/guards');
+const {
+  posAdminLoginValidator, posProductCreateValidator, posProductUpdateValidator,
+  posUserCreateValidator, posUserUpdateValidator, posSettingsValidator,
+  posCategoryCreateValidator
+} = require('../validators');
 const { serverError, badRequest, unauthorized } = require('../utils/http');
 const { generateAccessToken } = require('../utils/authTokens');
+const { logAudit } = require('../utils/auditLog');
 const crypto = require('crypto');
 
-router.post('/login', async (req, res) => {
+router.post('/login', validateRequest(posAdminLoginValidator), async (req, res) => {
   const { username, password, db_name } = req.body;
   if (!username || !password || !db_name) return badRequest(res, 'ต้องระบุ username, password, และ db_name');
   try {
@@ -73,34 +79,40 @@ router.get('/products', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   catch (e) { serverError(res); }
 });
 
-router.post('/products', requireRole('ADMIN'), async (req, res) => {
+router.post('/products', requireRole('ADMIN'), validateRequest(posProductCreateValidator), async (req, res) => {
   const { barcode, name, category_id, price, cost, stock } = req.body;
-  if (!name) return badRequest(res, 'ต้องระบุชื่อสินค้า');
-  try { const [r] = await req.db.query('INSERT INTO products (barcode,name,category_id,price,cost,stock) VALUES (?,?,?,?,?,?)', [barcode||null,name,category_id||null,price||0,cost||0,stock||0]); res.status(201).json({ id: r.insertId }); }
-  catch (e) { if (e.code==='ER_DUP_ENTRY') return badRequest(res,'บาร์โค้ดซ้ำ'); serverError(res); }
+  try { const [r] = await req.db.query('INSERT INTO products (barcode,name,category_id,price,cost,stock) VALUES (?,?,?,?,?,?)', [barcode||null,name,category_id||null,price||0,cost||0,stock||0]);
+        logAudit(req.db, 'POS_CREATE_PRODUCT', req.user.id, { name, price, stock }, 'PRODUCT', r.insertId).catch(() => {});
+        res.status(201).json({ id: r.insertId }); }
+      catch (e) { if (e.code==='ER_DUP_ENTRY') return badRequest(res,'บาร์โค้ดซ้ำ'); serverError(res); }
 });
 
-router.put('/products/:id', requireRole('ADMIN'), async (req, res) => {
-  const { barcode, name, category_id, price, cost, stock } = req.body;
-  try { await req.db.query('UPDATE products SET barcode=?,name=?,category_id=?,price=?,cost=?,stock=? WHERE id=?', [barcode||null,name,category_id||null,price,cost,stock,req.params.id]); res.json({ message: 'สำเร็จ' }); }
-  catch (e) { serverError(res); }
+router.put('/products/:id', requireRole('ADMIN'), validateRequest(posProductUpdateValidator), async (req, res) => {
+  const { barcode, name, category_id, price, cost, stock } = req.body;      try { await req.db.query('UPDATE products SET barcode=?,name=?,category_id=?,price=?,cost=?,stock=? WHERE id=?', [barcode||null,name,category_id||null,price,cost,stock,req.params.id]);
+        logAudit(req.db, 'POS_UPDATE_PRODUCT', req.user.id, { name, price, stock }, 'PRODUCT', req.params.id).catch(() => {});
+        res.json({ message: 'สำเร็จ' }); }
+      catch (e) { serverError(res); }
 });
 
-router.delete('/products/:id', requireRole('ADMIN'), async (req, res) => {
-  try { await req.db.query('DELETE FROM products WHERE id=?', [req.params.id]); res.json({ message: 'ลบสำเร็จ' }); } catch (e) { serverError(res); }
+router.delete('/products/:id', requireRole('ADMIN'), async (req, res) => {      try { await req.db.query('DELETE FROM products WHERE id=?', [req.params.id]);
+        logAudit(req.db, 'POS_DELETE_PRODUCT', req.user.id, {}, 'PRODUCT', req.params.id).catch(() => {});
+        res.json({ message: 'ลบสำเร็จ' }); } catch (e) { serverError(res); }
 });
 
 router.get('/categories', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try { const [r] = await req.db.query('SELECT * FROM categories ORDER BY id'); res.json(r); } catch (e) { serverError(res); }
 });
 
-router.post('/categories', requireRole('ADMIN'), async (req, res) => {
-  const { name } = req.body; if (!name) return badRequest(res, 'ต้องระบุชื่อ');
-  try { const [r] = await req.db.query('INSERT INTO categories (name) VALUES (?)', [name]); res.status(201).json({ id: r.insertId }); } catch (e) { serverError(res); }
+router.post('/categories', requireRole('ADMIN'), validateRequest(posCategoryCreateValidator), async (req, res) => {
+  const { name } = req.body;
+  try { const [r] = await req.db.query('INSERT INTO categories (name) VALUES (?)', [name]);
+    logAudit(req.db, 'POS_CREATE_CATEGORY', req.user.id, { name }, 'CATEGORY', r.insertId).catch(() => {});
+    res.status(201).json({ id: r.insertId }); } catch (e) { serverError(res); }
 });
 
-router.delete('/categories/:id', requireRole('ADMIN'), async (req, res) => {
-  try { await req.db.query('DELETE FROM categories WHERE id=?', [req.params.id]); res.json({ message: 'ลบสำเร็จ' }); } catch (e) { serverError(res); }
+router.delete('/categories/:id', requireRole('ADMIN'), async (req, res) => {    try { await req.db.query('DELETE FROM categories WHERE id=?', [req.params.id]);
+      logAudit(req.db, 'POS_DELETE_CATEGORY', req.user.id, {}, 'CATEGORY', req.params.id).catch(() => {});
+      res.json({ message: 'ลบสำเร็จ' }); } catch (e) { serverError(res); }
 });
 
 router.get('/users', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
@@ -111,9 +123,11 @@ router.get('/settings', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   try { const [r] = await req.db.query('SELECT * FROM settings WHERE id=1'); res.json(r[0]||{}); } catch (e) { serverError(res); }
 });
 
-router.put('/settings', requireRole('ADMIN'), async (req, res) => {
+router.put('/settings', requireRole('ADMIN'), validateRequest(posSettingsValidator), async (req, res) => {
   const { store_name, tax_id, address, receipt_footer } = req.body;
-  try { await req.db.query('UPDATE settings SET store_name=?,tax_id=?,address=?,receipt_footer=? WHERE id=1', [store_name,tax_id,address,receipt_footer]); res.json({ message: 'สำเร็จ' }); } catch (e) { serverError(res); }
+  try { await req.db.query('UPDATE settings SET store_name=?,tax_id=?,address=?,receipt_footer=? WHERE id=1', [store_name,tax_id,address,receipt_footer]);
+    logAudit(req.db, 'POS_UPDATE_SETTINGS', req.user.id, { store_name, tax_id, address, receipt_footer }, 'SETTINGS', 1).catch(() => {});
+    res.json({ message: 'สำเร็จ' }); } catch (e) { serverError(res); }
 });
 
 router.get('/reports/daily', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
@@ -125,17 +139,16 @@ router.get('/reports/top-selling', requireRole('ADMIN', 'MANAGER'), async (req, 
 });
 
 // ⭐️ Users CRUD — Create
-router.post('/users', requireRole('ADMIN'), async (req, res) => {
+router.post('/users', requireRole('ADMIN'), validateRequest(posUserCreateValidator), async (req, res) => {
   const { student_id, full_name, password, role, phone_number } = req.body;
-  if (!student_id || !full_name || !password) return badRequest(res, 'ต้องระบุ student_id, full_name, และ password');
-  const validRoles = ['ADMIN', 'MANAGER', 'CASHIER', 'MEMBER'];
-  const userRole = validRoles.includes(role) ? role : 'MEMBER';
+  const userRole = role || 'MEMBER';
   try {
     const hashedPw = await bcrypt.hash(password, 10);
     const [r] = await req.db.query(
       'INSERT INTO users (student_id, full_name, password, role, phone_number) VALUES (?,?,?,?,?)',
       [student_id, full_name, hashedPw, userRole, phone_number || null]
     );
+    logAudit(req.db, 'POS_CREATE_USER', req.user.id, { student_id, full_name, role: userRole }, 'USER', r.insertId).catch(() => {});
     res.status(201).json({ id: r.insertId, message: 'เพิ่มผู้ใช้สำเร็จ' });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return badRequest(res, 'รหัสนักศึกษานี้มีอยู่แล้ว');
@@ -144,7 +157,7 @@ router.post('/users', requireRole('ADMIN'), async (req, res) => {
 });
 
 // ⭐️ Users CRUD — Update
-router.put('/users/:id', requireRole('ADMIN'), async (req, res) => {
+router.put('/users/:id', requireRole('ADMIN'), validateRequest(posUserUpdateValidator), async (req, res) => {
   const { full_name, role, phone_number, password } = req.body;
   try {
     if (password) {
@@ -155,6 +168,7 @@ router.put('/users/:id', requireRole('ADMIN'), async (req, res) => {
       await req.db.query('UPDATE users SET full_name=?,role=?,phone_number=? WHERE id=?',
         [full_name, role, phone_number || null, req.params.id]);
     }
+    logAudit(req.db, 'POS_UPDATE_USER', req.user.id, { full_name, role, phone_number, password_changed: !!password }, 'USER', req.params.id).catch(() => {});
     res.json({ message: 'แก้ไขสำเร็จ' });
   } catch (e) { serverError(res); }
 });
@@ -166,18 +180,19 @@ router.put('/users/:id/toggle', requireRole('ADMIN'), async (req, res) => {
     if (!user) return badRequest(res, 'ไม่พบผู้ใช้');
     const newStatus = user.is_active ? 0 : 1;
     await req.db.query('UPDATE users SET is_active=? WHERE id=?', [newStatus, req.params.id]);
+    logAudit(req.db, 'POS_TOGGLE_USER', req.user.id, { is_active: !!newStatus }, 'USER', req.params.id).catch(() => {});
     res.json({ message: newStatus ? 'เปิดใช้งานแล้ว' : 'ปิดใช้งานแล้ว', is_active: newStatus });
   } catch (e) { serverError(res); }
 });
 
 // ⭐️ Categories CRUD — Update
-router.put('/categories/:id', requireRole('ADMIN'), async (req, res) => {
+router.put('/categories/:id', requireRole('ADMIN'), validateRequest(posCategoryCreateValidator), async (req, res) => {
   const { name } = req.body;
-  if (!name) return badRequest(res, 'ต้องระบุชื่อ');
-  try {
-    await req.db.query('UPDATE categories SET name=? WHERE id=?', [name, req.params.id]);
-    res.json({ message: 'แก้ไขสำเร็จ' });
-  } catch (e) { serverError(res); }
+    try {
+      await req.db.query('UPDATE categories SET name=? WHERE id=?', [name, req.params.id]);
+      logAudit(req.db, 'POS_UPDATE_CATEGORY', req.user.id, { name }, 'CATEGORY', req.params.id).catch(() => {});
+      res.json({ message: 'แก้ไขสำเร็จ' });
+    } catch (e) { serverError(res); }
 });
 
 // ⭐️ Dashboard — Weekly sales (last 7 days)

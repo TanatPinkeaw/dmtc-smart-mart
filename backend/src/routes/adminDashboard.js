@@ -3,7 +3,9 @@
 const express = require('express');
 const { requireRole } = require('../middleware/guards');
 const router = express.Router();
-const { getAllTenants, addTenant, getMasterPool, softDeleteTenant, ensureDeletedAtColumn } = require('../config/tenantRegistry');
+const { getAllTenants, addTenant, getMasterPool, softDeleteTenant, ensureDeletedAtColumn, getTenantByDbName } = require('../config/tenantRegistry');
+const { removePoolFromCache } = require('../middleware/tenantDB');
+const logAudit = require('../utils/auditLog').logAudit;
 const { provisionTenant } = require('../scripts/provisionTenant');
 
 // GET /api/admin/dashboard — Overview stats
@@ -96,8 +98,15 @@ router.put('/tenant/:id/toggle', requireRole('ADMIN'), async (req, res) => {
 // DELETE /api/admin/dashboard/tenant/:id — Soft delete (ซ่อนจากรายการ + ปิดใช้งาน, ข้อมูล tenant DB ยังอยู่)
 router.delete('/tenant/:id', requireRole('ADMIN'), async (req, res) => {
   try {
+    // ⭐️ Get tenant info BEFORE soft delete (to evict pool cache)
+    const masterPool = getMasterPool();
+    const [[tenant]] = await masterPool.query('SELECT db_name FROM tenants WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!tenant) return res.status(404).json({ error: 'ไม่พบ tenant หรือถูกลบไปแล้ว' });
     const deleted = await softDeleteTenant(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'ไม่พบ tenant หรือถูกลบไปแล้ว' });
+    // ⭐️ Evict pool from cache to prevent memory leak
+    removePoolFromCache(tenant.db_name);
+    logAudit(getMasterPool(), 'POS_ADMIN_DELETE_TENANT', req.user.id, { db_name: tenant.db_name }, 'TENANT', req.params.id).catch(() => {});
     res.json({ message: 'ลบร้านค้าสำเร็จ (soft delete — ข้อมูล database ยังเก็บไว้)' });
   } catch (error) {
     console.error(`[ADMIN_DASHBOARD][DELETE tenant] ${error.code || 'NO_CODE'}:`, error.message);
