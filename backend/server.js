@@ -4934,7 +4934,7 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     }
 
     // Step 3: Provision tenant (create DB + tables + admin user)
-    steps.push('provisionTenant'); var result = await provisionTenant(shopName, adminUsername, adminPassword);
+    steps.push('provisionTenant'); var dbPool = require('./src/config/db'); var result = await provisionTenant(shopName, adminUsername, adminPassword, dbPool);
 
     // Step 4: Register in master DB
     steps.push('addTenant'); var tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');

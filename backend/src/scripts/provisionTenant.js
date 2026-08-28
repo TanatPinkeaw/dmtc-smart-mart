@@ -25,7 +25,8 @@ if (config.DB_SSL) {
   }
 }
 
-async function provisionTenant(shopName, adminUsername, adminPassword) {
+// ⭐️ Accept optional pool parameter — reuse existing connections when available (Aiven limits new TCP connections)
+async function provisionTenant(shopName, adminUsername, adminPassword, existingPool) {
   // Generate DB name from shop name (safe for MySQL)
   const dbName = 'pos_' + shopName
     .toLowerCase()
@@ -37,14 +38,20 @@ async function provisionTenant(shopName, adminUsername, adminPassword) {
   console.log(`📦 กำลังสร้างระบบสำหรับ: ${shopName}`);
   console.log(`   Database: ${dbName}`);
   
-  // Connect to MySQL (no database selected)
-  const conn = await mysql.createConnection({
-    host: config.DB_HOST,
-    user: config.DB_USER,
-    password: config.DB_PASSWORD,
-    multipleStatements: true,
-    ...(sslOption ? { ssl: sslOption } : {})
-  });
+  // Use existing pool if provided, otherwise create standalone connection
+  let conn, usePool = false;
+  if (existingPool) {
+    conn = await existingPool.getConnection();
+    usePool = true;
+  } else {
+    conn = await mysql.createConnection({
+      host: config.DB_HOST,
+      user: config.DB_USER,
+      password: config.DB_PASSWORD,
+      multipleStatements: true,
+      ...(sslOption ? { ssl: sslOption } : {})
+    });
+  }
   
   try {
     // 1. Create database
@@ -104,7 +111,7 @@ async function provisionTenant(shopName, adminUsername, adminPassword) {
     
     return { dbName, adminUsername, adminPassword };
   } finally {
-    await conn.end();
+    if (usePool) { conn.release(); } else { await conn.end(); }
   }
 }
 
