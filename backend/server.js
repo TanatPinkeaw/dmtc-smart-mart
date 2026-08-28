@@ -551,7 +551,8 @@ const PUBLIC_PATHS = [
   '/api/members/register-line', // ⭐️ LINE LIFF — สมัคร/ผูกบัญชี ยังไม่มี token ตอนเรียก (memberRoutes.js)
   '/api/auth/line-login',   // ⭐️ LINE LIFF auto-login — เรียกก่อน login ยังไม่มี JWT (authRoutes.js)
   '/api/line/webhook',
-  '/api/pos-admin/login',  // ⭐️ POS Admin login — targets specific tenant DB      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
+  '/api/pos-admin/login',
+  '/api/provision-first-tenant',  // Bootstrap: SETUP_KEY protected, not JWT  // ⭐️ POS Admin login — targets specific tenant DB      // ⭐️ LINE webhook — LINE server ยิงเข้ามา ไม่มี JWT; กันปลอมด้วย X-Line-Signature แทน (lineRoutes.js)
   // ⭐️ SECURITY FIX (วิกฤต #1) — เอา '/uploads' ออกจาก public แล้ว สลิป/รูปเข้างานต้องผ่าน
   //    GET /api/media ที่มี JWT คุม (ไฟล์รูปสินค้าที่เคยพึ่ง static ให้ไปเสิร์ฟผ่าน /api/media เช่นกัน)
 ];
@@ -4899,6 +4900,48 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 });
 
 // =========================================
+// =========================================
+// API สร้างร้านแรก (Bootstrap — ใช้ครั้งเดียวตอน deploy ครั้งแรก)
+// =========================================
+// ⭐️ Protected by SETUP_KEY + only works when no tenants exist yet (one-time bootstrap)
+// Usage: POST /api/provision-first-tenant  with header X-Setup-Key: <key>
+app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
+  const { getAllTenants, addTenant } = require('./src/config/tenantRegistry');
+  const { provisionTenant } = require('./src/scripts/provisionTenant');
+  const { shopName, adminUsername, adminPassword } = req.body;
+
+  if (!shopName || !adminUsername || !adminPassword) {
+    return badRequest(res, 'ต้องระบุ shopName, adminUsername, adminPassword');
+  }
+
+  try {
+    // Only allow when no tenants exist yet (one-time bootstrap)
+    const existing = await getAllTenants();
+    if (existing.length > 0) {
+      return conflict(res, 'มีร้านอยู่แล้ว ' + existing.length + ' ร้าน — ห้ามใช้ endpoint นี้ซ้ำ (ใช้ /api/admin/dashboard/create แทน)');
+    }
+
+    // 1. Provision tenant (create DB + tables + admin user)
+    const result = await provisionTenant(shopName, adminUsername, adminPassword);
+
+    // 2. Register in master DB
+    const tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');
+
+    console.log('[PROVISION-FIRST-TENANT] Created "' + shopName + '" (id=' + tenantId + ', db=' + result.dbName + ')');
+    res.status(201).json({
+      message: 'สร้างร้านแรกสำเร็จ!',
+      tenant_id: tenantId,
+      dbName: result.dbName,
+      shopName,
+      admin: { username: adminUsername, password: adminPassword },
+    });
+  } catch (error) {
+    console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
+    serverError(res);
+  }
+});
+
+
 // BACKUP & SCHEDULED JOBS (หมวด 13 + auto-checkout)
 // =========================================
 // ⭐️ Refactor — เดิมมี backup 2 ระบบซ้อนกัน: runBackup() (docker exec mysqldump, ใช้ไม่ได้นอก
