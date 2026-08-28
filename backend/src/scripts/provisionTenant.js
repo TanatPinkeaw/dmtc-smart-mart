@@ -88,6 +88,7 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
           failCount++;
           if (err.code !== "ER_TABLE_EXISTS_OK") {
             console.warn("   Warning: #" + (si+1) + " (" + err.code + "): " + err.message);
+            console.warn("   SQL: " + stmt.substring(0, 300));
           }
         }
       }
