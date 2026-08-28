@@ -62,8 +62,8 @@ CREATE TABLE `users` (
   `profile_image_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `group_id` int DEFAULT NULL,
   `line_user_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
   `tenant_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
   UNIQUE KEY `student_id` (`student_id`),
   UNIQUE KEY `phone_number` (`phone_number`),
   KEY `fk_users_group` (`group_id`)
@@ -73,8 +73,8 @@ CREATE TABLE `categories` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `idempotency_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
   `tenant_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
   UNIQUE KEY `idempotency_key` (`idempotency_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `suppliers` (
@@ -113,8 +113,8 @@ CREATE TABLE `settings` (
   `receipt_footer` text COLLATE utf8mb4_unicode_ci,
   `points_earn_amount_per_point` int DEFAULT '20',
   `points_redeem_value_per_point` decimal(10,2) DEFAULT '1.00',
+  `tenant_id` int DEFAULT NULL,
   PRIMARY KEY (`id`),
-  `tenant_id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `products` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -136,8 +136,8 @@ CREATE TABLE `products` (
   `is_reward_item` tinyint(1) DEFAULT '0',
   `points_required` int DEFAULT '0',
   `min_stock` int DEFAULT '10',
-  PRIMARY KEY (`id`),
   `tenant_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
   UNIQUE KEY `barcode` (`barcode`),
   KEY `category_id` (`category_id`),
   KEY `vendor_id` (`vendor_id`),
@@ -194,8 +194,8 @@ CREATE TABLE `sales` (
   `group_discount_amount` decimal(10,2) DEFAULT '0.00',
   `client_offline_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `is_offline_sale` tinyint(1) DEFAULT '0',
-  PRIMARY KEY (`id`),
   `tenant_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   UNIQUE KEY `client_offline_id` (`client_offline_id`),
   KEY `cashier_id` (`cashier_id`),
@@ -268,8 +268,8 @@ CREATE TABLE `orders` (
   `idempotency_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `ready_at` timestamp NULL DEFAULT NULL,
   `pickup_reminder_sent` tinyint(1) DEFAULT '0',
-  PRIMARY KEY (`id`),
   `tenant_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
   UNIQUE KEY `idempotency_key` (`idempotency_key`),
   KEY `user_id` (`user_id`),
   KEY `idx_orders_status_created` (`status`,`created_at`),
