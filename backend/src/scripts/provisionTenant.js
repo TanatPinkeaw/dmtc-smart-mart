@@ -78,7 +78,7 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
         if (!stmt) continue;
         // Find first SQL keyword (CREATE/ALTER/INSERT/DROP) and extract from there
         // This skips non-SQL text like comment fragments from schema.sql
-        var kwMatch = stmt.match(/(CREATE|ALTER|INSERT|DROP|SET|UPDATE|DELETE)/i);
+        var kwMatch = stmt.match(/\b(CREATE|ALTER|INSERT|DROP|SET|UPDATE|DELETE)\b/i);
         if (!kwMatch) continue;
         stmt = stmt.substring(kwMatch.index);
         try {
