@@ -64,10 +64,12 @@ async function provisionTenant(shopName, adminUsername, adminPassword, existingP
     // 3. Read and execute schema
     console.log(`2️⃣ สร้าง tables...`);
     const schemaPath = path.join(__dirname, '../../schema.sql');
+    console.log('[PROVISION] Schema path:', schemaPath, 'exists:', fs.existsSync(schemaPath));
     if (fs.existsSync(schemaPath)) {
       const schema = fs.readFileSync(schemaPath, 'utf8');
       // Split by semicolons and execute each statement
       const statements = schema.split(';').filter(s => s.trim());
+    console.log('[PROVISION] Parsed', statements.length, 'statements from schema.sql');
       for (const stmt of statements) {
         if (stmt.trim() && !stmt.trim().startsWith('--')) {
           try {
