@@ -4907,55 +4907,38 @@ app.get('/api/create-admin', requireSetupKey, async (req, res) => {
 // ⭐️ Protected by SETUP_KEY + only works when no tenants exist yet (one-time bootstrap)
 // Usage: POST /api/provision-first-tenant  with header X-Setup-Key: <key>
 // ⭐️ Explicitly init master DB first — self-heal in getAllTenants may silently fail
+// =========================================
+// PROVISION FIRST TENANT (one-time bootstrap)
+// =========================================
+// ⭐️ Protected by SETUP_KEY + only works when no tenants exist yet (one-time bootstrap)
 // Usage: POST /api/provision-first-tenant  with header X-Setup-Key: <key>
-// One-time bootstrap: creates master DB + first tenant + admin user
 app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
   const { getAllTenants, addTenant, initMasterDB } = require('./src/config/tenantRegistry');
   const { provisionTenant } = require('./src/scripts/provisionTenant');
-  const existingPool = require('./src/config/db');
   const { shopName, adminUsername, adminPassword } = req.body;
 
   if (!shopName || !adminUsername || !adminPassword) {
     return badRequest(res, 'ต้องระบุ shopName, adminUsername, adminPassword');
   }
 
-  const step = [];
   try {
-    // Step 1: Create master DB + tenants table using the EXISTING pool (no new connections)
-    step.push('init_master_db');
-    var masterDb = process.env.MASTER_DB || 'pos_master';
-    await existingPool.query('CREATE DATABASE IF NOT EXISTS `' + masterDb + '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-    await existingPool.query('CREATE TABLE IF NOT EXISTS `' + masterDb + '`.tenants (' +
-      'id INT AUTO_INCREMENT PRIMARY KEY, ' +
-      'shop_name VARCHAR(255) NOT NULL, ' +
-      'db_name VARCHAR(100) NOT NULL UNIQUE, ' +
-      'admin_username VARCHAR(50) NOT NULL, ' +
-      "plan ENUM('" + "'free','basic','pro','enterprise'" + "') DEFAULT '" + "'free'" + "', " +
-      'max_users INT DEFAULT 5, ' +
-      'max_products INT DEFAULT 500, ' +
-      'is_active TINYINT(1) DEFAULT 1, ' +
-      'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ' +
-      'last_login TIMESTAMP NULL, ' +
-      'deleted_at TIMESTAMP NULL' +
-    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+    // Step 1: Ensure master DB + tenants table exist
+    await initMasterDB();
 
-    // Step 2: Check for existing tenants
-    step.push('check_tenants');
+    // Step 2: Check for existing tenants (one-time only)
     var existing;
     try { existing = await getAllTenants(); } catch (e) { existing = []; }
     if (existing.length > 0) {
-      return conflict(res, 'มีร้านอยู่แล้ว ' + existing.length + ' ร้าน — ห้ามใช้ endpoint นี้ซ้ำ (ใช้ /api/admin/dashboard/create แทน)');
+      return conflict(res, 'มีร้านอยู่แล้ว ' + existing.length + ' ร้าน — ห้ามใช้ endpoint นี้ซ้ำ');
     }
 
     // Step 3: Provision tenant (create DB + tables + admin user)
-    step.push('provision_tenant');
     var result = await provisionTenant(shopName, adminUsername, adminPassword);
 
     // Step 4: Register in master DB
-    step.push('add_tenant');
     var tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');
 
-    console.log('[PROVISION-FIRST-TENANT] Created "' + shopName + '" (id=' + tenantId + ', db=' + result.dbName + ')');
+    console.log('[PROVISION-FIRST-TENANT] Created ' + shopName + ' (id=' + tenantId + ', db=' + result.dbName + ')');
     res.status(201).json({
       message: 'สร้างร้านแรกสำเร็จ!',
       tenant_id: tenantId,
@@ -4964,9 +4947,8 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
       admin: { username: adminUsername, password: adminPassword },
     });
   } catch (error) {
-    console.error('[PROVISION-FIRST-TENANT] Step:', step.join(' -> '));
     console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
-    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE', step: step.join(' -> ') });
+    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE' });
   }
 });
 
