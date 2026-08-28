@@ -4921,22 +4921,23 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
     return badRequest(res, 'ต้องระบุ shopName, adminUsername, adminPassword');
   }
 
+  var steps = [];
   try {
     // Step 1: Ensure master DB + tenants table exist
-    await initMasterDB();
+    steps.push('initMasterDB'); await initMasterDB();
 
     // Step 2: Check for existing tenants (one-time only)
-    var existing;
+    steps.push('getAllTenants'); var existing;
     try { existing = await getAllTenants(); } catch (e) { existing = []; }
     if (existing.length > 0) {
       return conflict(res, 'มีร้านอยู่แล้ว ' + existing.length + ' ร้าน — ห้ามใช้ endpoint นี้ซ้ำ');
     }
 
     // Step 3: Provision tenant (create DB + tables + admin user)
-    var result = await provisionTenant(shopName, adminUsername, adminPassword);
+    steps.push('provisionTenant'); var result = await provisionTenant(shopName, adminUsername, adminPassword);
 
     // Step 4: Register in master DB
-    var tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');
+    steps.push('addTenant'); var tenantId = await addTenant(shopName, result.dbName, adminUsername, 'pro');
 
     console.log('[PROVISION-FIRST-TENANT] Created ' + shopName + ' (id=' + tenantId + ', db=' + result.dbName + ')');
     res.status(201).json({
@@ -4947,8 +4948,9 @@ app.post('/api/provision-first-tenant', requireSetupKey, async (req, res) => {
       admin: { username: adminUsername, password: adminPassword },
     });
   } catch (error) {
+    console.error('[PROVISION-FIRST-TENANT] Step:', steps.join(' -> '));
     console.error('[PROVISION-FIRST-TENANT] Error:', error.code || 'NO_CODE', error.message);
-    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE' });
+    res.status(500).json({ error: error.message, code: error.code || 'NO_CODE', step: steps.join(' -> ') });
   }
 });
 
