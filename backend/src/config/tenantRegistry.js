@@ -44,7 +44,7 @@ function getMasterPool() {
 // Initialize master database (สร้าง table tenants ถ้ายังไม่มี)
 async function initMasterDB() {
   // Use existing pool (from config/db.js) to create master DB — avoids ETIMEDOUT on standalone connections
-  var existingPool = require("./db").pool;
+  var existingPool = require("./db");
   console.log("[initMasterDB] Using existing pool to create master DB:", MASTER_DB_CONFIG.database);
 
   // 1. Create master database via existing pool (connects to defaultdb)
